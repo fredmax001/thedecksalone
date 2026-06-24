@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminDashboard from './pages/AdminDashboard';
 import AuthCallback from './pages/AuthCallback';
 import Layout from './components/Layout';
+import DashboardLayout from './components/DashboardLayout';
 import Home from './pages/Home';
 import Discover from './pages/Discover';
 import Rankings from './pages/Rankings';
@@ -14,9 +15,18 @@ import MixHub from './pages/MixHub';
 import Events from './pages/Events';
 import HallOfFame from './pages/HallOfFame';
 import Battles from './pages/Battles';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
+
+/* ─── Dashboard pages ─── */
+import DashboardOverview from './pages/dashboard/Overview';
+import DashboardBookings from './pages/dashboard/Bookings';
+import DashboardMessages from './pages/dashboard/Messages';
+import DashboardMixes from './pages/dashboard/Mixes';
+import DashboardAnalytics from './pages/dashboard/Analytics';
+import DashboardEarnings from './pages/dashboard/Earnings';
+import DashboardProfile from './pages/dashboard/Profile';
+import DashboardSettings from './pages/dashboard/Settings';
 
 function AuthInitializer() {
   const init = useAuthStore((state) => state.init);
@@ -42,6 +52,20 @@ export default function App() {
           <Route path="admin" element={<AdminDashboard />} />
         </Route>
 
+        {/* DJ Dashboard — protected, custom layout (no public navbar/footer) */}
+        <Route element={<ProtectedRoute fallback="/login" />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="dashboard" element={<DashboardOverview />} />
+            <Route path="dashboard/bookings" element={<DashboardBookings />} />
+            <Route path="dashboard/messages" element={<DashboardMessages />} />
+            <Route path="dashboard/mixes" element={<DashboardMixes />} />
+            <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
+            <Route path="dashboard/earnings" element={<DashboardEarnings />} />
+            <Route path="dashboard/profile" element={<DashboardProfile />} />
+            <Route path="dashboard/settings" element={<DashboardSettings />} />
+          </Route>
+        </Route>
+
         {/* Public site */}
         <Route element={<Layout />}>
           <Route index element={<Home />} />
@@ -53,12 +77,6 @@ export default function App() {
           <Route path="events" element={<Events />} />
           <Route path="hall-of-fame" element={<HallOfFame />} />
           <Route path="battles" element={<Battles />} />
-
-          {/* Protected dashboard for DJs and regular users */}
-          <Route element={<ProtectedRoute fallback="/login" />}>
-            <Route path="dashboard" element={<Dashboard />} />
-          </Route>
-
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
         </Route>
