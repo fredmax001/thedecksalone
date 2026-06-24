@@ -22,6 +22,7 @@ const battleRoutes = require('./routes/battles');
 const dashboardRoutes = require('./routes/dashboard');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,6 +78,7 @@ app.use('/api/battles', battleRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/messages', authMiddleware, messageRoutes);
 
 // 404 handler
 app.use((req, res) => {

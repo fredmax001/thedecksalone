@@ -8,18 +8,21 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import api from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
-interface Message {
+interface MessageItem {
   id: string;
   content: string;
   senderId: string;
+  receiverId: string;
+  bookingId?: string;
+  readAt?: string;
   createdAt: string;
-  read: boolean;
 }
 
 interface Conversation {
@@ -31,98 +34,116 @@ interface Conversation {
   unreadCount: number;
 }
 
+interface PartnerInfo {
+  id: string;
+  name: string;
+  avatar: string | null;
+}
+
 export default function Messages() {
   const { user } = useAuthStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [partner, setPartner] = useState<PartnerInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // NOTE: The messages API is not yet implemented on the backend.
-  // This page shows the UI structure. When the backend is ready,
-  // replace the mock data with real API calls.
-
+  // Fetch conversations on mount
   useEffect(() => {
-    // TODO: Replace with real API call
-    // GET /api/messages/conversations
-    setConversations([
-      {
-        userId: '1',
-        name: 'Alice Johnson',
-        avatar: '',
-        lastMessage: 'Hey, are you available for my wedding on July 15th?',
-        lastMessageAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        unreadCount: 2,
-      },
-      {
-        userId: '2',
-        name: 'Bob Smith',
-        avatar: '',
-        lastMessage: 'Thanks for the great set last night!',
-        lastMessageAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        unreadCount: 0,
-      },
-    ]);
-    setLoading(false);
+    fetchConversations();
   }, []);
 
+  // Fetch messages when conversation changes
   useEffect(() => {
     if (activeConversation) {
-      // TODO: Replace with real API call
-      // GET /api/messages/:userId
-      setMessages([
-        {
-          id: '1',
-          content: 'Hey, are you available for my wedding on July 15th?',
-          senderId: activeConversation,
-          createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-          read: true,
-        },
-        {
-          id: '2',
-          content: 'Hi! Yes, I am available. Can you share more details about the venue and time?',
-          senderId: user?.id || '',
-          createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          read: true,
-        },
-        {
-          id: '3',
-          content: 'It\'s at the Grand Ballroom, starting at 6 PM. About 200 guests.',
-          senderId: activeConversation,
-          createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-          read: false,
-        },
-      ]);
+      fetchMessages(activeConversation);
+      // Poll every 10 seconds
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => {
+        fetchMessages(activeConversation, true);
+      }, 10000);
     }
-  }, [activeConversation, user?.id]);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [activeConversation]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const fetchConversations = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.get('/messages/conversations');
+      if (res.data.success) {
+        setConversations(res.data.data || []);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load conversations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMessages = async (userId: string, silent = false) => {
+    try {
+      if (!silent) setLoadingMessages(true);
+      const res = await api.get(`/messages/${userId}`);
+      if (res.data.success) {
+        setMessages(res.data.data || []);
+        setPartner(res.data.partner || null);
+      }
+    } catch (err: any) {
+      if (!silent) setError(err.response?.data?.error || 'Failed to load messages');
+    } finally {
+      if (!silent) setLoadingMessages(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !activeConversation) return;
 
-    const newMessage: Message = {
-      id: String(Date.now()),
+    const tempMessage: MessageItem = {
+      id: `temp-${Date.now()}`,
       content: input.trim(),
       senderId: user?.id || '',
+      receiverId: activeConversation,
       createdAt: new Date().toISOString(),
-      read: false,
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [...prev, tempMessage]);
     setInput('');
     setSending(true);
 
-    // TODO: POST /api/messages
-    // await api.post('/messages', { recipientId: activeConversation, content: input.trim() });
-
-    setTimeout(() => setSending(false), 500);
+    try {
+      const res = await api.post('/messages', {
+        receiverId: activeConversation,
+        content: input.trim(),
+      });
+      if (res.data.success) {
+        // Replace temp message with real one
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempMessage.id ? res.data.data : m))
+        );
+        // Refresh conversation list
+        fetchConversations();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send message');
+      // Remove temp message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+    } finally {
+      setSending(false);
+    }
   };
 
   const filteredConversations = conversations.filter((c) =>
@@ -130,6 +151,25 @@ export default function Messages() {
   );
 
   const activeConv = conversations.find((c) => c.userId === activeConversation);
+
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return formatTime(dateStr);
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
@@ -142,11 +182,13 @@ export default function Messages() {
             Communicate with clients and fans.
           </p>
         </div>
-        <Badge variant="outline" className="border-yellow-500/30 text-yellow-500">
-          <MessageSquare className="w-3 h-3 mr-1" />
-          Backend API needed
-        </Badge>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-xl bg-red/10 border border-red/30 text-red text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="flex-1 flex gap-4 min-h-0">
         {/* Conversation List */}
@@ -170,7 +212,9 @@ export default function Messages() {
             ) : filteredConversations.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="w-8 h-8 text-text-muted mx-auto mb-2" />
-                <p className="text-sm text-text-secondary">No conversations yet</p>
+                <p className="text-sm text-text-secondary">
+                  {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+                </p>
               </div>
             ) : (
               filteredConversations.map((conv) => (
@@ -183,7 +227,7 @@ export default function Messages() {
                   )}
                 >
                   <Avatar className="w-10 h-10 flex-shrink-0">
-                    <AvatarImage src={conv.avatar} />
+                    <AvatarImage src={conv.avatar || undefined} />
                     <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                       {conv.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -196,6 +240,7 @@ export default function Messages() {
                       )}
                     </div>
                     <p className="text-xs text-text-secondary truncate">{conv.lastMessage}</p>
+                    <p className="text-[10px] text-text-muted mt-0.5">{formatDate(conv.lastMessageAt)}</p>
                   </div>
                 </button>
               ))
@@ -205,45 +250,55 @@ export default function Messages() {
 
         {/* Chat Thread */}
         <Card className="flex-1 bg-black-surface border-dark-gray flex flex-col min-w-0 hidden md:flex">
-          {activeConversation && activeConv ? (
+          {activeConversation && partner ? (
             <>
               <div className="p-4 border-b border-dark-gray flex items-center gap-3">
                 <Avatar className="w-8 h-8">
-                  <AvatarImage src={activeConv.avatar} />
+                  <AvatarImage src={partner.avatar || undefined} />
                   <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
-                    {activeConv.name.slice(0, 2).toUpperCase()}
+                    {partner.name.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-sm font-medium text-text-primary">{activeConv.name}</p>
-                  <p className="text-xs text-text-muted">Online</p>
+                  <p className="text-sm font-medium text-text-primary">{partner.name}</p>
+                  <p className="text-xs text-text-muted">{activeConv?.unreadCount ? `${activeConv.unreadCount} unread` : 'Online'}</p>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map((msg) => {
-                  const isMe = msg.senderId === user?.id;
-                  return (
-                    <div key={msg.id} className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
-                      <div
-                        className={cn(
-                          'max-w-[70%] px-4 py-2.5 rounded-2xl text-sm',
-                          isMe
-                            ? 'bg-gold text-black rounded-tr-sm'
-                            : 'bg-black-elevated text-text-primary rounded-tl-sm'
-                        )}
-                      >
-                        <p>{msg.content}</p>
-                        <div className={cn('flex items-center gap-1 mt-1 text-[10px]', isMe ? 'text-black/60' : 'text-text-muted')}>
-                          <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {isMe && (
-                            msg.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="w-6 h-6 text-gold animate-spin" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-sm text-text-muted">No messages yet. Start a conversation!</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isMe = msg.senderId === user?.id;
+                    return (
+                      <div key={msg.id} className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
+                        <div
+                          className={cn(
+                            'max-w-[70%] px-4 py-2.5 rounded-2xl text-sm',
+                            isMe
+                              ? 'bg-gold text-black rounded-tr-sm'
+                              : 'bg-black-elevated text-text-primary rounded-tl-sm'
                           )}
+                        >
+                          <p>{msg.content}</p>
+                          <div className={cn('flex items-center gap-1 mt-1 text-[10px]', isMe ? 'text-black/60' : 'text-text-muted')}>
+                            <span>{formatTime(msg.createdAt)}</span>
+                            {isMe && (
+                              msg.readAt ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
                 <div ref={messagesEndRef} />
               </div>
 

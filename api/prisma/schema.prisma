@@ -26,6 +26,8 @@ model User {
   reviews       Review[]
   votes         BattleVote[]
   payments      Payment[] @relation("ClientPayments")
+  sentMessages  Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
   @@map("users")
   @@index([email])
   @@index([username])
@@ -146,6 +148,7 @@ model Booking {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   payments      Payment[]
+  messages      Message[]
   client        User      @relation("ClientBookings", fields: [clientId], references: [id])
   dj            DjProfile @relation("DjBookings", fields: [djId], references: [id])
   @@map("bookings")
@@ -153,6 +156,29 @@ model Booking {
   @@index([djId])
   @@index([status])
   @@index([eventDate])
+}
+
+model Message {
+  id                String   @id @default(cuid())
+  senderId          String
+  receiverId        String
+  content           String   @db.Text
+  bookingId         String?
+  readAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedBySender   Boolean  @default(false)
+  deletedByReceiver Boolean  @default(false)
+
+  sender   User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  booking  Booking? @relation(fields: [bookingId], references: [id])
+
+  @@map("messages")
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([bookingId])
+  @@index([createdAt])
 }
 
 model Payment {
