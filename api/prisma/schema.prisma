@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String?
+  googleId      String?  @unique
+  phone         String?  @unique
+  phoneVerified Boolean  @default(false)
+  phoneOtp      String?  // Temporary OTP for phone verification
+  phoneOtpExpiry DateTime? // OTP expiration timestamp
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  djProfile     DjProfile?
+  bookingsAsClient Booking[] @relation("ClientBookings")
+  reviews       Review[]
+  votes         BattleVote[]
+  payments      Payment[] @relation("ClientPayments")
+  @@map("users")
+  @@index([email])
+  @@index([phone])
+  @@index([googleId])
+  @@index([role])
+}
+
+model DjProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  stageName       String
+  fullName        String
+  bio             String?
+  avatar          String?
+  coverBanner     String?
+  yearsActive     Int?
+  country         String   @default("Sierra Leone")
+  city            String?
+  genres          String[]
+  awards          String[]
+  equipment       String[]
+  languages       String[] @default(["English"])
+  bookingFeeMin   Float?
+  bookingFeeMax   Float?
+  currency        String   @default("SLE")
+  availability    String?
+  website         String?
+  whatsappNumber  String?
+  verified        Boolean  @default(false)
+  isPublic        Boolean  @default(true)
+  totalFollowers  Int      @default(0)
+  totalStreams    Int      @default(0)
+  totalMixes      Int      @default(0)
+  totalEvents     Int      @default(0)
+  totalBookings   Int      @default(0)
+  averageRating   Float    @default(0)
+  rankingScore    Float    @default(0)
+  digitalScore    Float    @default(0)
+  industryScore   Float    @default(0)
+  communityScore  Float    @default(0)
+  rankingPosition Int      @default(0)
+  badges          String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mixes           Mix[]
+  bookingsAsDj    Booking[] @relation("DjBookings")
+  reviews         Review[] @relation("DjReviews")
+  events          Event[]
+  streamingPlatforms StreamingPlatform[]
+  rankingHistory  RankingHistory[]
+  battleEntries   BattleEntry[]
+  @@map("dj_profiles")
+  @@index([userId])
+  @@index([city])
+  @@index([verified])
+  @@index([rankingScore])
+  @@index([isPublic])
+}
+
+model StreamingPlatform {
+  id        String @id @default(cuid())
+  djId      String
+  platform  String
+  url       String
+  followers Int    @default(0)
+  streams   Int    @default(0)
+  uploads   Int    @default(0)
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  @@map("streaming_platforms")
+  @@index([djId])
+}
+
+model Mix {
+  id          String   @id @default(cuid())
+  djId        String
+  title       String
+  description String?
+  coverImage  String?
+  audioUrl    String?
+  duration    Int?
+  genre       String
+  tags        String[]
+  category    String
+  plays       Int      @default(0)
+  likes       Int      @default(0)
+  downloads   Int      @default(0)
+  isPublic    Boolean  @default(true)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  dj          DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  @@map("mixes")
+  @@index([djId])
+  @@index([category])
+  @@index([genre])
+  @@index([featured])
+  @@index([createdAt])
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  clientId      String
+  djId          String
+  eventType     String
+  eventDate     DateTime
+  eventLocation String
+  duration      Int
+  budget        Float
+  finalPrice    Float?
+  deposit       Float?
+  status        BookingStatus @default(PENDING)
+  notes         String?
+  requirements  String?
+  rating        Int?
+  review        String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  payments      Payment[]
+  client        User      @relation("ClientBookings", fields: [clientId], references: [id])
+  dj            DjProfile @relation("DjBookings", fields: [djId], references: [id])
+  @@map("bookings")
+  @@index([clientId])
+  @@index([djId])
+  @@index([status])
+  @@index([eventDate])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  bookingId     String
+  clientId      String
+  djId          String
+  amount        Float
+  currency      String        @default("SLE")
+  type          PaymentType   @default(DEPOSIT)
+  status        PaymentStatus @default(PENDING)
+  provider      String?       // e.g., "paystack", "stripe", "manual"
+  providerRef   String?       // Transaction ID from payment provider
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client        User          @relation("ClientPayments", fields: [clientId], references: [id])
+  @@map("payments")
+  @@index([bookingId])
+  @@index([clientId])
+  @@index([status])
+  @@index([providerRef])
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  djId          String?
+  title         String
+  description   String?
+  type          String
+  date          DateTime
+  location      String
+  city          String
+  venue         String?
+  image         String?
+  isOpenSlot    Boolean  @default(false)
+  slots         Int      @default(0)
+  filledSlots   Int      @default(0)
+  compensation  Float?
+  requirements  String?
+  status        String   @default("upcoming")
+  // Sound It Salone integration fields
+  soundItSaloneEventId String? // Links to Sound It Salone event platform
+  soundItSaloneUrl     String? // Public URL on Sound It Salone
+  isSyncedToSalone     Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  dj            DjProfile? @relation(fields: [djId], references: [id])
+  @@map("events")
+  @@index([djId])
+  @@index([city])
+  @@index([date])
+  @@index([soundItSaloneEventId])
+  @@index([isSyncedToSalone])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  djId      String
+  rating    Int
+  comment   String?
+  eventType String?
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+  dj        DjProfile @relation("DjReviews", fields: [djId], references: [id])
+  @@unique([userId, djId])
+  @@map("reviews")
+  @@index([djId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+model Battle {
+  id          String   @id @default(cuid())
+  title       String
+  weekStart   DateTime
+  weekEnd     DateTime
+  status      String   @default("ACTIVE")
+  theme       String?  // e.g., "Amapiano Week", "Salone Vibes"
+  metricType  String   @default("COMPOSITE") // COMPOSITE, PLAYS, STREAMS, FOLLOWERS, LIKES
+  createdAt   DateTime @default(now())
+  entries     BattleEntry[]
+  @@map("battles")
+  @@index([status])
+  @@index([weekStart])
+}
+
+model BattleEntry {
+  id      String @id @default(cuid())
+  battleId String
+  djId    String
+  mixId   String?
+  // Metric scores at time of entry
+  baseScore     Float  @default(0) // Calculated from DJ metrics at entry time
+  voteScore     Float  @default(0) // Derived from user votes
+  finalScore    Float  @default(0) // baseScore + voteScore (weighted)
+  votes   Int    @default(0)
+  battle  Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  dj      DjProfile @relation(fields: [djId], references: [id])
+  votesCast BattleVote[]
+  @@map("battle_entries")
+  @@index([battleId])
+  @@index([djId])
+  @@index([finalScore])
+}
+
+model BattleVote {
+  id      String @id @default(cuid())
+  entryId String
+  userId  String
+  weight  Float  @default(1.0) // Future: weighted votes for verified users
+  entry   BattleEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user    User @relation(fields: [userId], references: [id])
+  @@unique([entryId, userId])
+  @@map("battle_votes")
+  @@index([entryId])
+  @@index([userId])
+}
+
+model RankingHistory {
+  id             String   @id @default(cuid())
+  djId           String
+  position       Int
+  score          Float
+  digitalScore   Float
+  industryScore  Float
+  communityScore Float
+  week           DateTime
+  dj             DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  @@map("ranking_history")
+  @@index([djId])
+  @@index([week])
+}
+
+enum Role {
+  USER
+  DJ
+  ADMIN
+  MODERATOR
+  FINANCE_ADMIN
+  VERIFICATION_ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  NEGOTIATING
+  CONFIRMED
+  DEPOSIT_PAID
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentType {
+  DEPOSIT
+  FULL_PAYMENT
+  REFUND
+  PLATFORM_FEE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}

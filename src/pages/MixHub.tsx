@@ -1,0 +1,372 @@
+import { useState, useRef, useCallback, useMemo, memo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Play,
+  Heart,
+  Clock,
+  ChevronRight,
+  Search,
+  Flame,
+  Loader2,
+} from 'lucide-react';
+import MixPlayer, { type MixTrack } from '@/components/MixPlayer';
+import { useMixes, useTrendingMixes, useMixCategories } from '@/hooks/useMixes';
+
+/* ──────────────────────── Animation helpers ──────────────────────── */
+const fadeUp = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0 },
+};
+
+/* ──────────────────────── Animated Waveform Background ──────────────────────── */
+const WaveformBar = memo(function WaveformBar({ delay }: { delay: number }) {
+  return (
+    <motion.div
+      className="w-[2px] bg-gold/15 rounded-full"
+      animate={{ height: [20, 40 + Math.random() * 60, 20] }}
+      transition={{
+        duration: 2 + Math.random() * 1,
+        delay,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
+    />
+  );
+});
+
+const AnimatedWaveform = memo(function AnimatedWaveform() {
+  const bars = Array.from({ length: 80 }, (_, i) => i);
+  return (
+    <div className="absolute inset-0 flex items-end justify-center gap-[2px] overflow-hidden pointer-events-none z-0 pb-8">
+      {bars.map((i) => (
+        <WaveformBar key={i} delay={i * 0.04} />
+      ))}
+    </div>
+  );
+});
+
+/* ──────────────────────── Helpers ──────────────────────── */
+function formatDuration(seconds: number): string {
+  if (!seconds) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatCompact(n: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+function toMixTrack(mix: any): MixTrack {
+  return {
+    id: mix.id,
+    title: mix.title,
+    dj: mix.dj?.stageName || 'Unknown DJ',
+    duration: mix.duration || 0,
+    cover: mix.coverImage || '/placeholder.jpg',
+    genre: mix.genre || mix.category || 'Mix',
+  };
+}
+
+/* ──────────────────────── MixCard Component ──────────────────────── */
+function MixCard({
+  mix,
+  onPlay,
+  index,
+  isNew,
+}: {
+  mix: MixTrack;
+  onPlay: (mix: MixTrack) => void;
+  index: number;
+  isNew?: boolean;
+}) {
+  const [liked, setLiked] = useState(false);
+
+  return (
+    <motion.div
+      variants={fadeUp}
+      initial="hidden"
+      animate="visible"
+      transition={{ delay: index * 0.06 }}
+      className="group"
+    >
+      <div className="relative overflow-hidden rounded-xl bg-black-elevated border border-white/5 hover:border-gold/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-card">
+        <div className="relative aspect-square overflow-hidden">
+          <img
+            src={mix.cover}
+            alt={mix.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+            onClick={() => onPlay(mix)}
+          >
+            <div className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform">
+              <Play size={20} className="text-black ml-0.5" />
+            </div>
+          </div>
+          {isNew && (
+            <motion.span
+              className="absolute top-2 left-2 px-2 py-0.5 bg-red text-white text-[10px] font-semibold uppercase rounded-full"
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              NEW
+            </motion.span>
+          )}
+        </div>
+
+        <div className="p-3">
+          <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">
+            {mix.title}
+          </h4>
+          <p className="text-xs text-gold mt-0.5">{mix.dj}</p>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-text-muted font-mono">{formatCompact(mix.plays || 0)} plays</span>
+              <span className="text-text-muted">|</span>
+              <span className="text-[10px] text-text-muted font-mono flex items-center gap-0.5">
+                <Clock size={10} />
+                {formatDuration(mix.duration)}
+              </span>
+            </div>
+            <button onClick={() => setLiked(!liked)} className="p-1 hover:bg-white/5 rounded-full transition-colors">
+              <Heart size={14} className={liked ? 'text-red fill-red' : 'text-text-muted'} />
+            </button>
+          </div>
+          <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-medium text-gold border border-gold/30 rounded-full">
+            {mix.genre}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ──────────────────────── Trending Card ──────────────────────── */
+function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: MixTrack) => void; index: number }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      initial="hidden"
+      animate="visible"
+      transition={{ delay: index * 0.08 }}
+      className="group flex-shrink-0 w-[260px] sm:w-[280px]"
+    >
+      <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
+        <img src={mix.cover} alt={mix.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+          onClick={() => onPlay(mix)}
+        >
+          <div className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform">
+            <Play size={20} className="text-black ml-0.5" />
+          </div>
+        </div>
+      </div>
+      <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">{mix.title}</h4>
+      <p className="text-xs text-gold mt-0.5">{mix.dj}</p>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-[10px] text-text-muted font-mono">{formatCompact(mix.plays || 0)} plays</span>
+        <span className="text-text-muted">|</span>
+        <span className="text-[10px] text-text-muted font-mono flex items-center gap-0.5">
+          <Clock size={10} />
+          {formatDuration(mix.duration)}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════ MAIN PAGE ═══════════════════════════ */
+export default function MixHub() {
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [currentTrack, setCurrentTrack] = useState<MixTrack | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showPlayer, setShowPlayer] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const { data: categories = [], isLoading: categoriesLoading } = useMixCategories();
+  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8);
+  const { data: latestData, isLoading: latestLoading } = useMixes({
+    category: activeCategory === 'all' ? undefined : activeCategory,
+    search: searchQuery || undefined,
+    sortBy: 'newest',
+    page,
+    limit: 12,
+  });
+
+  const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
+  const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
+  const allMixes = useMemo(() => [...trending, ...latest], [trending, latest]);
+
+  const handlePlay = useCallback((mix: MixTrack) => {
+    setCurrentTrack(mix);
+    setShowPlayer(true);
+  }, []);
+
+  const handleClosePlayer = useCallback(() => {
+    setShowPlayer(false);
+    setCurrentTrack(null);
+  }, []);
+
+  const handleNext = useCallback(() => {
+    if (!currentTrack || allMixes.length === 0) return;
+    const idx = allMixes.findIndex((m) => m.id === currentTrack.id);
+    const next = allMixes[(idx + 1) % allMixes.length];
+    setCurrentTrack(next);
+  }, [currentTrack, allMixes]);
+
+  const handlePrev = useCallback(() => {
+    if (!currentTrack || allMixes.length === 0) return;
+    const idx = allMixes.findIndex((m) => m.id === currentTrack.id);
+    const prev = allMixes[(idx - 1 + allMixes.length) % allMixes.length];
+    setCurrentTrack(prev);
+  }, [currentTrack, allMixes]);
+
+  const categoryButtons = useMemo(() => {
+    const base = [{ id: 'all', label: 'All', image: '' }];
+    const mapped = categories.map((cat: any) => ({
+      id: cat.id,
+      label: cat.name,
+      image: `/placeholder.jpg`,
+    }));
+    return [...base, ...mapped];
+  }, [categories]);
+
+  const isLoading = categoriesLoading || trendingLoading || latestLoading;
+  const featuredMix = trending[0];
+
+  return (
+    <div className="min-h-[100dvh] bg-black">
+      {/* Hero */}
+      <section ref={heroRef} className="relative w-full min-h-[420px] flex items-center overflow-hidden">
+        <AnimatedWaveform />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/50 to-black z-[1]" />
+
+        <div className="relative z-10 w-full max-w-container mx-auto px-6 py-24">
+          <div className="max-w-xl">
+            <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-gold text-xs font-semibold uppercase tracking-widest">
+              MIX HUB
+            </motion.span>
+            <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary uppercase tracking-tight mt-3">
+              DISCOVER & STREAM THE BEST MIXES
+            </motion.h1>
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="text-text-secondary text-base lg:text-lg mt-4 max-w-lg leading-relaxed">
+              From Salone classics to the hottest Afrobeats and Amapiano — stream, download, and share mixes from Sierra Leone&apos;s top DJs.
+            </motion.p>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="mt-6">
+              <div className="relative max-w-md">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search mixes, DJs, or genres..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  className="w-full h-11 pl-10 pr-4 bg-black-surface border border-dark-gray rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-colors"
+                />
+              </div>
+            </motion.div>
+          </div>
+
+          {featuredMix && (
+            <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.5 }} className="hidden lg:block absolute right-6 top-1/2 -translate-y-1/2 w-[360px]">
+              <div className="p-5 rounded-2xl border border-gold/20 cursor-pointer hover:border-gold/40 transition-colors" style={{ background: '#111111' }} onClick={() => handlePlay(featuredMix)}>
+                <span className="text-gold text-[10px] font-semibold uppercase tracking-wider">NOW TRENDING</span>
+                <div className="flex items-center gap-4 mt-3">
+                  <img src={featuredMix.cover} alt={featuredMix.title} className="w-24 h-24 rounded-lg object-cover" />
+                  <div className="min-w-0">
+                    <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">{featuredMix.title}</h4>
+                    <p className="text-xs text-gold mt-0.5">{featuredMix.dj}</p>
+                    <p className="text-[10px] text-text-muted mt-1 font-mono">{formatCompact(featuredMix.plays || 0)} plays</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </section>
+
+      {/* Loading */}
+      {isLoading && page === 1 && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 text-gold animate-spin" />
+        </div>
+      )}
+
+      {/* Category Navigation */}
+      <div className="sticky top-[72px] z-40 bg-black-elevated border-b border-white/5">
+        <div className="max-w-container mx-auto px-6 py-4">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+            {categoryButtons.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => { setActiveCategory(cat.id); setPage(1); }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-200 ${
+                  activeCategory === cat.id
+                    ? 'bg-gold/10 text-gold border border-gold/50'
+                    : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
+                }`}
+              >
+                {cat.image && <img src={cat.image} alt="" className="w-5 h-5 rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Trending Mixes */}
+      <section className="max-w-container mx-auto px-6 pt-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Flame size={14} className="text-red" />
+            <span className="text-xs font-semibold text-red uppercase tracking-wider">TRENDING NOW</span>
+          </div>
+        </div>
+        <div className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
+          {trending.map((mix, i) => (
+            <TrendingCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} />
+          ))}
+        </div>
+      </section>
+
+      {/* Latest Uploads */}
+      <section className="max-w-container mx-auto px-6 pt-12">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <span className="text-gold text-[10px] font-semibold uppercase tracking-wider">FRESH DROPS</span>
+            <h2 className="font-display text-2xl lg:text-3xl font-semibold text-text-primary uppercase tracking-tight mt-1">LATEST UPLOADS</h2>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {latest.map((mix, i) => (
+            <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
+          ))}
+        </div>
+        {(latestData?.meta?.totalPages || 0) > page && (
+          <div className="flex justify-center mt-8">
+            <button onClick={() => setPage((p) => p + 1)} className="px-6 py-2.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
+              Load More
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Player */}
+      <AnimatePresence>
+        {showPlayer && currentTrack && (
+          <MixPlayer track={currentTrack} onClose={handleClosePlayer} onNext={handleNext} onPrev={handlePrev} />
+        )}
+      </AnimatePresence>
+      {showPlayer && <div className="h-[80px]" />}
+    </div>
+  );
+}

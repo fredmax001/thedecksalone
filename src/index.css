@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --gold: #D4A24A;
+    --gold-light: #E8C570;
+    --gold-dark: #B88A3D;
+    --gold-glow: rgba(212, 162, 74, 0.15);
+    --black: #0A0A0A;
+    --black-elevated: #111111;
+    --black-surface: #181818;
+    --dark-gray: #1E1E1E;
+    --medium-gray: #2A2A2A;
+    --text-primary: #F5F5F5;
+    --text-secondary: #A3A3A3;
+    --text-muted: #6B6B6B;
+    --green: #22C55E;
+    --red: #EF4444;
+    --blue: #3B82F6;
+    --purple: #8B5CF6;
+    --orange: #F97316;
+
+    --background: 0 0% 4%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 96%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 40 60% 55%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 12%;
+    --input: 0 0% 9%;
+    --ring: 40 60% 55%;
+    --radius: 0.625rem;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 40 60% 55%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 40 60% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-black text-text-primary antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  ::selection {
+    background: rgba(212, 162, 74, 0.3);
+    color: #F5F5F5;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0A0A0A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A2A;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3A3A;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: 'Clash Display', system-ui, sans-serif;
+  }
+
+  .font-body {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono-data {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #D4A24A 0%, #E8C570 50%, #D4A24A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gold-gradient {
+    background: linear-gradient(135deg, #D4A24A 0%, #E8C570 50%, #D4A24A 100%);
+  }
+
+  .gold-shimmer {
+    background: linear-gradient(90deg, #D4A24A 0%, #E8C570 25%, #D4A24A 50%, #E8C570 75%, #D4A24A 100%);
+    background-size: 200% 100%;
+    animation: shimmer 3s linear infinite;
+  }
+
+  .glass-nav {
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-[0.15em] text-gold;
+  }
+
+  .container-main {
+    @apply max-w-container mx-auto px-4 sm:px-6 lg:px-8;
+  }
+}
+
+@layer utilities {
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-400 { animation-delay: 400ms; }
+  .animation-delay-500 { animation-delay: 500ms; }
+  .animation-delay-600 { animation-delay: 600ms; }
+  .animation-delay-700 { animation-delay: 700ms; }
+  .animation-delay-800 { animation-delay: 800ms; }
+  .animation-delay-1000 { animation-delay: 1000ms; }
+  .animation-delay-1200 { animation-delay: 1200ms; }
+  .animation-delay-1500 { animation-delay: 1500ms; }
+  .animation-delay-2000 { animation-delay: 2000ms; }
+}
