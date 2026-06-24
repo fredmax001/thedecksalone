@@ -29,11 +29,113 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { pricingGuide, trustPoints, faqData } from "@/lib/mockData";
 import { useDJs, useDJCities, useDJGenres } from "@/hooks/useDJs";
 import { useEventTypes } from "@/hooks/useEvents";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
+
+/* ───── Static Data (moved from mockData.ts) ───── */
+const pricingGuide = [
+  {
+    eventType: "Wedding",
+    icon: "ring",
+    priceRange: "SLE 5,000 – 25,000",
+    includes: [
+      "4-6 hour set",
+      "Consultation",
+      "Ceremony + reception music",
+      "MC services",
+    ],
+  },
+  {
+    eventType: "Club Night",
+    icon: "disc",
+    priceRange: "SLE 3,000 – 15,000",
+    includes: [
+      "3-5 hour set",
+      "Club sound system",
+      "Mix integration",
+      "Crowd reading",
+    ],
+  },
+  {
+    eventType: "Corporate",
+    icon: "briefcase",
+    priceRange: "SLE 8,000 – 30,000",
+    includes: [
+      "Background music",
+      "MC services",
+      "Professional setup",
+      "Branded presentation",
+    ],
+  },
+  {
+    eventType: "Festival",
+    icon: "mic",
+    priceRange: "SLE 15,000 – 100,000+",
+    includes: [
+      "1-2 hour set",
+      "Festival-grade equipment",
+      "Travel included",
+      "Sound check",
+    ],
+  },
+];
+
+const trustPoints = [
+  {
+    title: "Verified DJs Only",
+    icon: "shield-check",
+    description:
+      "Every DJ on our platform is identity-verified. No fake profiles, no surprises.",
+  },
+  {
+    title: "Secure Payments",
+    icon: "lock",
+    description:
+      "Your deposit is held securely. Released to the DJ only after your event is confirmed complete.",
+  },
+  {
+    title: "Transparent Pricing",
+    icon: "tag",
+    description:
+      "See exact pricing upfront. No hidden fees, no last-minute price changes.",
+  },
+  {
+    title: "Dispute Protection",
+    icon: "message-circle-warning",
+    description:
+      "If something goes wrong, our support team mediates and ensures fair resolution.",
+  },
+];
+
+const faqData = [
+  {
+    question: "How do I book a DJ through Sound It?",
+    answer:
+      "Search for DJs using our filters, select the one that fits your needs, and click 'Request Booking'. Fill out your event details and submit. The DJ will respond within 24 hours.",
+  },
+  {
+    question: "What payment methods are accepted?",
+    answer:
+      "We accept Orange Money, AfriMoney, credit/debit cards, and bank transfers. A 50% deposit is required to secure your booking.",
+  },
+  {
+    question: "Can I cancel or reschedule my booking?",
+    answer:
+      "Yes, cancellations made 14 days before the event receive a full deposit refund. Rescheduling is free up to 7 days before the event.",
+  },
+  {
+    question: "What happens if the DJ cancels?",
+    answer:
+      "If a DJ cancels, we'll help you find a suitable replacement DJ at the same rate, or provide a full refund including your deposit.",
+  },
+  {
+    question: "Do DJs bring their own equipment?",
+    answer:
+      "Most DJs bring their own equipment, which is included in their fee. For large events requiring additional sound/lighting, equipment rental can be arranged.",
+  },
+];
 
 /* ───── Types ───── */
 interface FilterState {

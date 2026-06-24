@@ -31,6 +31,7 @@ import { useDJ, useDJs } from "@/hooks/useDJs";
 import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
+import ShareButton from "@/components/ShareButton";
 import {
   AreaChart,
   Area,
@@ -1406,7 +1407,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
 /* ───── Main DJ Profile Page ───── */
 export default function DjProfile() {
   const { identifier } = useParams<{ identifier: string }>();
-  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState("overview");
   const [isBookingOpen, setIsBookingOpen] = useState(false);
 
@@ -1593,9 +1594,13 @@ export default function DjProfile() {
                 <MessageCircle size={16} />
                 <span className="hidden sm:inline">Message</span>
               </button>
-              <button className="px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors">
-                <Share2 size={16} />
-              </button>
+              <ShareButton
+                url={`${typeof window !== 'undefined' ? window.location.origin : ''}/dj/${dj.username || dj.id}`}
+                title={`Check out ${dj.stageName} on The Deck Salone`}
+                description={dj.bio?.slice(0, 160) || ''}
+                image={dj.avatar}
+                size="md"
+              />
               <button className="px-4 py-2.5 rounded-full bg-green text-white text-sm font-medium hover:bg-green/90 transition-colors">
                 <MessageCircle size={16} />
               </button>
