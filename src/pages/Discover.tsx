@@ -132,7 +132,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
               className="absolute bottom-3 right-3"
             >
               <Link
-                to={`/dj/${dj.id}`}
+                to={`/dj/${dj.username || dj.id}`}
                 className="inline-flex items-center px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold bg-black/60 backdrop-blur-sm hover:bg-gold hover:text-black transition-colors duration-200"
               >
                 Book
@@ -201,7 +201,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
 
         {/* View Profile */}
         <Link
-          to={`/dj/${dj.id}`}
+          to={`/dj/${dj.username || dj.id}`}
           className="block mt-3 text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
         >
           View Profile

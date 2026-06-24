@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { recalculateAllRankings, computeDjScore } = require('../utils/ranking');
+const { computeDjScore } = require('../utils/ranking');
 
 const router = express.Router();
 
@@ -37,26 +37,8 @@ router.get('/', async (req, res) => {
         orderBy: { rankingScore: 'desc' },
         skip,
         take: limitNum,
-        select: {
-          id: true,
-          stageName: true,
-          avatar: true,
-          city: true,
-          country: true,
-          genres: true,
-          rankingScore: true,
-          rankingPosition: true,
-          digitalScore: true,
-          industryScore: true,
-          communityScore: true,
-          totalStreams: true,
-          totalFollowers: true,
-          totalMixes: true,
-          totalBookings: true,
-          averageRating: true,
-          verified: true,
-          badges: true,
-          yearsActive: true,
+        include: {
+          user: { select: { username: true } },
         },
       }),
       prisma.djProfile.count({ where }),
@@ -65,6 +47,7 @@ router.get('/', async (req, res) => {
     // Assign positions if not set
     const ranked = djs.map((dj, index) => ({
       ...dj,
+      username: dj.user.username,
       rankingPosition: skip + index + 1,
     }));
 
@@ -86,31 +69,37 @@ router.get('/overview', async (req, res) => {
         where: { isPublic: true },
         orderBy: { rankingScore: 'desc' },
         take: 3,
-        select: { id: true, stageName: true, avatar: true, rankingScore: true, rankingPosition: true },
+        include: { user: { select: { username: true } } },
       }),
       prisma.djProfile.findMany({
         where: { isPublic: true },
         orderBy: { digitalScore: 'desc' },
         take: 3,
-        select: { id: true, stageName: true, avatar: true, digitalScore: true },
+        include: { user: { select: { username: true } } },
       }),
       prisma.djProfile.findMany({
         where: { isPublic: true },
         orderBy: { totalBookings: 'desc' },
         take: 3,
-        select: { id: true, stageName: true, avatar: true, totalBookings: true },
+        include: { user: { select: { username: true } } },
       }),
       prisma.djProfile.findMany({
         where: { isPublic: true },
         orderBy: { totalStreams: 'desc' },
         take: 3,
-        select: { id: true, stageName: true, avatar: true, totalStreams: true },
+        include: { user: { select: { username: true } } },
       }),
     ]);
 
+    const attachUsername = (dj) => ({ ...dj, username: dj.user.username });
     return res.json({
       success: true,
-      data: { topDjs, fastestRising, mostBooked, mostStreamed },
+      data: {
+        topDjs: topDjs.map(attachUsername),
+        fastestRising: fastestRising.map(attachUsername),
+        mostBooked: mostBooked.map(attachUsername),
+        mostStreamed: mostStreamed.map(attachUsername),
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -126,25 +115,6 @@ router.get('/:djId/history', async (req, res) => {
     });
 
     return res.json({ success: true, data: history });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// POST /api/rankings/recalculate - Recalculate all rankings (admin only)
-router.post('/recalculate', async (req, res) => {
-  try {
-    const { authMiddleware, requireRole } = require('../middleware/auth');
-    // Apply auth middleware inline
-    const auth = authMiddleware;
-    // This route should be protected - we'll let the caller handle auth via middleware
-    // For simplicity, we require the caller to use authMiddleware before this route
-
-    const ranked = await recalculateAllRankings();
-    return res.json({
-      success: true,
-      data: { message: 'Rankings recalculated', total: ranked.length },
-    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

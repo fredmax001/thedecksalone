@@ -10,9 +10,46 @@ const { authLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
+const RESERVED_USERNAMES = new Set([
+  'admin', 'api', 'dashboard', 'login', 'logout', 'dj', 'user', 'soundit',
+  'thedeck', 'moderator', 'support', 'help', 'about', 'contact', 'terms',
+  'privacy', 'settings',
+]);
+
+function isValidUsername(username) {
+  return (
+    typeof username === 'string' &&
+    username.length >= 3 &&
+    username.length <= 30 &&
+    /^[a-z0-9_-]+$/.test(username) &&
+    !RESERVED_USERNAMES.has(username.toLowerCase())
+  );
+}
+
+async function generateUsername(email) {
+  const prefix = (email.split('@')[0] || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '')
+    .slice(0, 20)
+    .replace(/^[-_]+|[-_]+$/g, '');
+  const base = prefix.length >= 3 ? prefix : 'user';
+
+  let attempt = 0;
+  while (attempt < 100) {
+    const candidate = attempt === 0 ? base : `${base}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+    if (!RESERVED_USERNAMES.has(candidate)) {
+      const existing = await prisma.user.findUnique({ where: { username: candidate } });
+      if (!existing) return candidate;
+    }
+    attempt += 1;
+  }
+  throw new Error('Unable to generate unique username');
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
+  username: z.string().optional(),
   phone: z.string().optional(),
   role: z.enum(['USER', 'DJ']).optional(),
 });
@@ -49,6 +86,7 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 
     const { email, password, phone, role } = parsed.data;
+    let { username } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -62,10 +100,23 @@ router.post('/register', authLimiter, async (req, res) => {
       }
     }
 
+    if (username) {
+      username = username.toLowerCase();
+      if (!isValidUsername(username)) {
+        return res.status(400).json({ success: false, error: 'Invalid or reserved username' });
+      }
+      const existingUsername = await prisma.user.findUnique({ where: { username } });
+      if (existingUsername) {
+        return res.status(409).json({ success: false, error: 'Username already taken' });
+      }
+    } else {
+      username = await generateUsername(email);
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, phone: phone || null, role: role || 'USER' },
-      select: { id: true, email: true, role: true, createdAt: true },
+      data: { email, username, password: hashedPassword, phone: phone || null, role: role || 'USER' },
+      select: { id: true, email: true, username: true, role: true, createdAt: true },
     });
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
@@ -99,7 +150,7 @@ router.post('/login', authLimiter, async (req, res) => {
     return res.json({
       success: true,
       data: {
-        user: { id: user.id, email: user.email, role: user.role },
+        user: { id: user.id, email: user.email, username: user.username, role: user.role },
         token,
       },
     });
@@ -269,6 +320,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       select: {
         id: true,
         email: true,
+        username: true,
         role: true,
         phone: true,
         phoneVerified: true,
@@ -279,6 +331,45 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
+    return res.json({ success: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+const updateProfileSchema = z.object({
+  username: z.string().min(3).max(30).optional(),
+});
+
+// PUT /api/auth/me - Update current user's profile (username, etc.)
+router.put('/me', authMiddleware, async (req, res) => {
+  try {
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { username } = parsed.data;
+    const updateData: any = {};
+
+    if (username !== undefined) {
+      const normalized = username.toLowerCase();
+      if (!isValidUsername(normalized)) {
+        return res.status(400).json({ success: false, error: 'Invalid or reserved username' });
+      }
+      const existing = await prisma.user.findUnique({ where: { username: normalized } });
+      if (existing && existing.id !== req.user.id) {
+        return res.status(409).json({ success: false, error: 'Username already taken' });
+      }
+      updateData.username = normalized;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: updateData,
+      select: { id: true, email: true, username: true, role: true, phone: true, phoneVerified: true, createdAt: true, djProfile: true },
+    });
+
     return res.json({ success: true, data: user });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });

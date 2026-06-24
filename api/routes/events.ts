@@ -149,8 +149,12 @@ router.post('/', authMiddleware, uploadEventImage.single('image'), async (req, r
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
+    const isAdmin = req.user.role === 'ADMIN';
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    const djId = dj ? dj.id : req.body.djId || null;
+    if (!dj && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Only DJs or admins can create events' });
+    }
+    const djId = isAdmin ? req.body.djId || null : dj.id;
 
     const data = parsed.data;
 
@@ -189,8 +193,10 @@ router.put('/:id', authMiddleware, uploadEventImage.single('image'), async (req,
       return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
+    const isAdmin = req.user.role === 'ADMIN';
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (event.djId && dj && event.djId !== dj.id && req.user.role !== 'ADMIN') {
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
@@ -221,8 +227,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
+    const isAdmin = req.user.role === 'ADMIN';
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (event.djId && dj && event.djId !== dj.id && req.user.role !== 'ADMIN') {
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
@@ -249,8 +257,10 @@ router.post('/:id/sync-to-salone', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
+    const isAdmin = req.user.role === 'ADMIN';
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (event.djId && dj && event.djId !== dj.id && req.user.role !== 'ADMIN') {
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 

@@ -165,7 +165,7 @@ function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
 
       <div className="hidden md:block shrink-0">
         <Link
-          to={`/dj/${dj.id}`}
+          to={`/dj/${dj.username || dj.id}`}
           className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
         >
           View

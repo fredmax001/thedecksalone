@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -80,6 +80,7 @@ interface Event {
 
 interface DJ {
   id: string;
+  username?: string;
   stageName: string;
   fullName?: string;
   avatar: string;
@@ -1342,7 +1343,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
         {similar.map((djItem: DJ, i: number) => (
           <motion.a
             key={djItem.id}
-            href={`/dj/${djItem.id}`}
+            href={`/dj/${djItem.username || djItem.id}`}
             className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -1404,7 +1405,8 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
 
 /* ───── Main DJ Profile Page ───── */
 export default function DjProfile() {
-  const { id } = useParams<{ id: string }>();
+  const { identifier } = useParams<{ identifier: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [isBookingOpen, setIsBookingOpen] = useState(false);
 
@@ -1413,7 +1415,14 @@ export default function DjProfile() {
     isLoading,
     isError,
     error,
-  } = useDJ(id);
+  } = useDJ(identifier);
+
+  // Redirect old /dj/{id} URLs to canonical /dj/{username}
+  useEffect(() => {
+    if (dj?.username && identifier && identifier.toLowerCase() !== dj.username.toLowerCase()) {
+      navigate(`/dj/${dj.username}`, { replace: true });
+    }
+  }, [dj, identifier, navigate]);
 
   const tabs = useMemo(
     () => [

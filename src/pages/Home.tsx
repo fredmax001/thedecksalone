@@ -369,7 +369,7 @@ function FeaturedDJsSection({ djs }: { djs: any[] }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {djs.map((dj, i) => (
             <FadeIn key={dj.id} delay={0.3 + i * 0.1}>
-              <Link to={`/dj/${dj.id}`} className="group block">
+              <Link to={`/dj/${dj.username || dj.id}`} className="group block">
                 <div className="bg-black-elevated border border-white/5 rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 hover:shadow-card">
                   {/* Image */}
                   <div className="relative aspect-square overflow-hidden">
@@ -503,7 +503,7 @@ function RankingsSection({ rankings }: { rankings: any[] }) {
         <div className="space-y-2">
           {rankings.map((dj, i) => (
             <FadeIn key={dj.id} delay={0.05 * i} direction="left">
-              <Link to={`/dj/${dj.id}`}>
+              <Link to={`/dj/${dj.username || dj.id}`}>
                 <div
                   className={`flex items-center gap-3 sm:gap-4 px-3 sm:px-6 py-4 rounded-xl transition-all duration-200 cursor-pointer ${
                     dj.rankingPosition <= 3

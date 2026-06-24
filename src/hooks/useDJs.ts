@@ -34,15 +34,15 @@ export function useDJs(filters: DJFilters = {}) {
   });
 }
 
-export function useDJ(id: string | undefined) {
+export function useDJ(identifier: string | undefined) {
   return useQuery({
-    queryKey: ['dj', id],
+    queryKey: ['dj', identifier],
     queryFn: async () => {
-      if (!id) return null;
-      const res = await api.get(`/djs/${id}`);
+      if (!identifier) return null;
+      const res = await api.get(`/djs/${identifier}`);
       return res.data.data;
     },
-    enabled: !!id,
+    enabled: !!identifier,
   });
 }
 

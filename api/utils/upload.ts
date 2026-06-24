@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure upload directories exist
+// Ensure upload directories exist (used for local fallback)
 const uploadDirs = {
   avatars: path.join(process.cwd(), 'uploads', 'avatars'),
   covers: path.join(process.cwd(), 'uploads', 'covers'),
@@ -16,19 +16,8 @@ Object.values(uploadDirs).forEach((dir) => {
   }
 });
 
-// Storage factory
-function createStorage(folder) {
-  return multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, uploadDirs[folder]);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      const ext = path.extname(file.originalname);
-      cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-    },
-  });
-}
+// Use memory storage so files can be processed (resize, validate, upload to S3) before persisting
+const memoryStorage = multer.memoryStorage();
 
 // File filter
 function fileFilter(allowedMimes) {
@@ -43,36 +32,36 @@ function fileFilter(allowedMimes) {
 
 // Upload configs
 const uploadAvatar = multer({
-  storage: createStorage('avatars'),
+  storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 const uploadCover = multer({
-  storage: createStorage('covers'),
+  storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 const uploadMixAudio = multer({
-  storage: createStorage('mixes'),
+  storage: memoryStorage,
   fileFilter: fileFilter(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac']),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
 });
 
 const uploadMixCover = multer({
-  storage: createStorage('covers'),
+  storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 const uploadEventImage = multer({
-  storage: createStorage('events'),
+  storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-// Serve uploads statically
+// Serve uploads statically (local fallback)
 function serveUploads(app) {
   app.use('/uploads', require('express').static(path.join(process.cwd(), 'uploads')));
 }

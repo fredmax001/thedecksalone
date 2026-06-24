@@ -61,6 +61,10 @@ export default function Dashboard() {
 
   const isDj = user?.role === 'DJ';
   const djProfile = user?.djProfile;
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const [newUsername, setNewUsername] = useState(user?.username || '');
+  const [usernameStatus, setUsernameStatus] = useState<{ message: string; type: 'success' | 'error' | '' }>({ message: '', type: '' });
+  const [updatingUsername, setUpdatingUsername] = useState(false);
 
   useEffect(() => {
     if (!isDj) {
@@ -313,6 +317,51 @@ export default function Dashboard() {
           </div>
         </FadeIn>
       </div>
+
+      {/* Username Settings */}
+      <FadeIn>
+        <div className="mt-10 bg-black-surface border border-dark-gray rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Profile URL</h2>
+          <p className="text-sm text-text-secondary mb-4">
+            Your public profile is at:{' '}
+            <span className="text-gold">thedeckslone.com/dj/{user?.username || '...'}</span>
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value.toLowerCase())}
+              placeholder="username"
+              className="flex-1 bg-black border border-dark-gray rounded-lg px-4 py-2.5 text-sm text-text-primary focus:border-gold focus:outline-none"
+            />
+            <button
+              onClick={async () => {
+                setUpdatingUsername(true);
+                setUsernameStatus({ message: '', type: '' });
+                try {
+                  const res = await api.put('/auth/me', { username: newUsername });
+                  if (res.data.success) {
+                    setAuth(res.data.data, localStorage.getItem('soundit_token') || '');
+                    setUsernameStatus({ message: 'Username updated', type: 'success' });
+                  }
+                } catch (err: any) {
+                  setUsernameStatus({ message: err.response?.data?.error || 'Update failed', type: 'error' });
+                }
+                setUpdatingUsername(false);
+              }}
+              disabled={updatingUsername || !newUsername || newUsername === user?.username}
+              className="px-5 py-2.5 bg-gold text-black text-sm font-semibold rounded-lg hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {updatingUsername ? 'Saving...' : 'Update Username'}
+            </button>
+          </div>
+          {usernameStatus.message && (
+            <p className={`mt-3 text-sm ${usernameStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+              {usernameStatus.message}
+            </p>
+          )}
+        </div>
+      </FadeIn>
     </div>
   );
 }

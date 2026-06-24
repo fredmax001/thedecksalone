@@ -7,6 +7,7 @@ export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR';
 export interface User {
   id: string;
   email: string;
+  username: string;
   role: UserRole;
   phone?: string;
   phoneVerified?: boolean;

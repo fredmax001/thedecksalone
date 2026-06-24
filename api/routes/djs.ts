@@ -3,6 +3,8 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadAvatar, uploadCover } = require('../utils/upload');
+const { processAvatar, processCover } = require('../utils/imageProcessor');
+const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
 
 const router = express.Router();
@@ -102,7 +104,7 @@ router.get('/', async (req, res) => {
         skip,
         take: limitNum,
         include: {
-          user: { select: { email: true } },
+          user: { select: { username: true } },
           streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
           _count: { select: { mixes: true, reviews: true } },
         },
@@ -112,7 +114,7 @@ router.get('/', async (req, res) => {
 
     return res.json({
       success: true,
-      data: djs,
+      data: djs.map((dj) => ({ ...dj, username: dj.user.username })),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
@@ -149,30 +151,41 @@ router.get('/genres', async (req, res) => {
   }
 });
 
-// GET /api/djs/:id - Get single DJ
-router.get('/:id', async (req, res) => {
+// GET /api/djs/:identifier - Get single DJ by id or username
+router.get('/:identifier', async (req, res) => {
   try {
-    const dj = await prisma.djProfile.findUnique({
-      where: { id: req.params.id },
-      include: {
-        user: { select: { email: true } },
-        mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
-        streamingPlatforms: true,
-        reviews: {
-          include: { user: { select: { email: true } } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        },
-        events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
-        _count: { select: { mixes: true, reviews: true, bookingsAsDj: true } },
+    const identifier = req.params.identifier;
+
+    const commonInclude = {
+      user: { select: { username: true } },
+      mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
+      streamingPlatforms: true,
+      reviews: {
+        include: { user: { select: { email: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
       },
+      events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
+      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true } },
+    };
+
+    let dj = await prisma.djProfile.findUnique({
+      where: { id: identifier },
+      include: commonInclude,
     });
+
+    if (!dj) {
+      dj = await prisma.djProfile.findFirst({
+        where: { user: { username: { equals: identifier, mode: 'insensitive' } } },
+        include: commonInclude,
+      });
+    }
 
     if (!dj) {
       return res.status(404).json({ success: false, error: 'DJ not found' });
     }
 
-    return res.json({ success: true, data: dj });
+    return res.json({ success: true, data: { ...dj, username: dj.user.username } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -193,11 +206,17 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
 
     const data = parsed.data;
 
+    let avatarUrl = null;
+    if (req.file) {
+      const { buffer, contentType } = await processAvatar(req.file.buffer);
+      avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
+    }
+
     const dj = await prisma.djProfile.create({
       data: {
         ...data,
         userId: req.user.id,
-        avatar: req.file ? `/uploads/avatars/${req.file.filename}` : null,
+        avatar: avatarUrl,
       },
     });
 

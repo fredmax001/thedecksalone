@@ -47,7 +47,7 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="discover" element={<Discover />} />
           <Route path="rankings" element={<Rankings />} />
-          <Route path="dj/:id" element={<DjProfile />} />
+          <Route path="dj/:identifier" element={<DjProfile />} />
           <Route path="booking" element={<Booking />} />
           <Route path="mixes" element={<MixHub />} />
           <Route path="events" element={<Events />} />

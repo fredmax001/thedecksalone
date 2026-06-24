@@ -11,6 +11,7 @@ datasource db {
 model User {
   id            String   @id @default(cuid())
   email         String   @unique
+  username      String   @unique @db.VarChar(30)
   password      String?
   googleId      String?  @unique
   phone         String?  @unique
@@ -27,6 +28,7 @@ model User {
   payments      Payment[] @relation("ClientPayments")
   @@map("users")
   @@index([email])
+  @@index([username])
   @@index([phone])
   @@index([googleId])
   @@index([role])

@@ -856,7 +856,7 @@ export default function Booking() {
                       {/* Actions */}
                       <div className="mt-auto pt-3 flex items-center gap-2">
                         <button
-                          onClick={() => navigate(`/dj/${dj.id}`)}
+                          onClick={() => navigate(`/dj/${dj.username || dj.id}`)}
                           className="flex-1 py-2 rounded-full border border-[rgba(255,255,255,0.15)] text-xs font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors"
                         >
                           View Profile
