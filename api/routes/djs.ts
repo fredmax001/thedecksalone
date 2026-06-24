@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
-const { uploadAvatar, uploadCover } = require('../utils/upload');
+const { uploadAvatar, uploadDjProfileImages } = require('../utils/upload');
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
@@ -28,7 +28,7 @@ const createDjSchema = z.object({
   bio: z.string().max(2000).optional(),
   yearsActive: z.number().int().min(0).max(50).optional(),
   city: z.string().max(100).optional(),
-  genres: z.array(z.string()).optional(),
+  genres: z.array(z.string()).max(5).optional(),
   awards: z.array(z.string()).optional(),
   equipment: z.array(z.string()).optional(),
   languages: z.array(z.string()).optional(),
@@ -46,7 +46,7 @@ const updateDjSchema = z.object({
   bio: z.string().max(2000).optional(),
   yearsActive: z.number().int().min(0).max(50).optional(),
   city: z.string().max(100).optional(),
-  genres: z.array(z.string()).optional(),
+  genres: z.array(z.string()).max(5).optional(),
   awards: z.array(z.string()).optional(),
   equipment: z.array(z.string()).optional(),
   languages: z.array(z.string()).optional(),
@@ -206,6 +206,11 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
 
     const data = parsed.data;
 
+    // Enforce genre limit
+    if (data.genres && data.genres.length > 5) {
+      return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
+    }
+
     let avatarUrl = null;
     if (req.file) {
       const { buffer, contentType } = await processAvatar(req.file.buffer);
@@ -232,7 +237,7 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
 });
 
 // PUT /api/djs/:id - Update DJ profile
-router.put('/:id', authMiddleware, uploadAvatar.single('avatar'), uploadCover.single('coverBanner'), async (req, res) => {
+router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
     if (!dj) {
@@ -248,11 +253,34 @@ router.put('/:id', authMiddleware, uploadAvatar.single('avatar'), uploadCover.si
     }
 
     const updateData = { ...parsed.data };
-    if (req.files?.avatar) {
-      updateData.avatar = `/uploads/avatars/${req.files.avatar[0].filename}`;
+
+    // Handle avatar upload with processing pipeline
+    if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
+      const file = req.files['avatar'][0];
+      const { buffer, contentType } = await processAvatar(file.buffer);
+      const avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
+      updateData.avatar = avatarUrl;
+      // Delete old avatar if exists
+      if (dj.avatar) {
+        await deleteFile(dj.avatar).catch(() => {});
+      }
     }
-    if (req.files?.coverBanner) {
-      updateData.coverBanner = `/uploads/covers/${req.files.coverBanner[0].filename}`;
+
+    // Handle cover banner upload with processing pipeline
+    if (req.files && req.files['coverBanner'] && req.files['coverBanner'][0]) {
+      const file = req.files['coverBanner'][0];
+      const { buffer, contentType } = await processCover(file.buffer);
+      const coverUrl = await uploadBuffer(buffer, 'covers', { contentType });
+      updateData.coverBanner = coverUrl;
+      // Delete old cover if exists
+      if (dj.coverBanner) {
+        await deleteFile(dj.coverBanner).catch(() => {});
+      }
+    }
+
+    // Enforce genre limit
+    if (updateData.genres && updateData.genres.length > 5) {
+      return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
     }
 
     const updated = await prisma.djProfile.update({

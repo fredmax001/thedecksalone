@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Loader2,
   Camera,
@@ -75,7 +75,13 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [djData, setDjData] = useState<any>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const isDj = user?.role === 'DJ';
   const djId = user?.djProfile?.id;
 
@@ -142,17 +148,55 @@ export default function Profile() {
       setSaving(true);
       setError(null);
 
-      const payload = {
-        ...form,
-        yearsActive: form.yearsActive ? parseInt(form.yearsActive) : undefined,
-        bookingFeeMin: form.bookingFeeMin ? parseFloat(form.bookingFeeMin) : undefined,
-        bookingFeeMax: form.bookingFeeMax ? parseFloat(form.bookingFeeMax) : undefined,
-      };
+      // Use FormData when images are present, otherwise JSON
+      const hasImages = avatarFile || coverFile;
+      let res;
 
-      const res = await api.put(`/djs/${djId}`, payload);
+      if (hasImages) {
+        const formData = new FormData();
+        if (form.stageName) formData.append('stageName', form.stageName);
+        if (form.fullName) formData.append('fullName', form.fullName);
+        if (form.bio) formData.append('bio', form.bio);
+        if (form.yearsActive) formData.append('yearsActive', form.yearsActive);
+        if (form.city) formData.append('city', form.city);
+        if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
+        if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
+        if (form.equipment.length) form.equipment.forEach((e) => formData.append('equipment', e));
+        if (form.languages.length) form.languages.forEach((l) => formData.append('languages', l));
+        if (form.bookingFeeMin) formData.append('bookingFeeMin', form.bookingFeeMin);
+        if (form.bookingFeeMax) formData.append('bookingFeeMax', form.bookingFeeMax);
+        if (form.currency) formData.append('currency', form.currency);
+        if (form.website) formData.append('website', form.website);
+        if (form.whatsappNumber) formData.append('whatsappNumber', form.whatsappNumber);
+        if (avatarFile) formData.append('avatar', avatarFile);
+        if (coverFile) formData.append('coverBanner', coverFile);
+
+        res = await api.put(`/djs/${djId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        const payload = {
+          ...form,
+          yearsActive: form.yearsActive ? parseInt(form.yearsActive) : undefined,
+          bookingFeeMin: form.bookingFeeMin ? parseFloat(form.bookingFeeMin) : undefined,
+          bookingFeeMax: form.bookingFeeMax ? parseFloat(form.bookingFeeMax) : undefined,
+        };
+        res = await api.put(`/djs/${djId}`, payload);
+      }
+
       if (res.data.success) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
+        // Clear file selections after successful save
+        setAvatarFile(null);
+        setAvatarPreview(null);
+        setCoverFile(null);
+        setCoverPreview(null);
+        // Refresh profile data
+        const refreshed = await api.get(`/djs/${djId}`);
+        if (refreshed.data.success) {
+          setDjData(refreshed.data.data);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to save profile');
@@ -330,25 +374,87 @@ export default function Profile() {
                 <Label className="text-text-secondary mb-3 block">Avatar</Label>
                 <div className="flex items-center gap-4">
                   <Avatar className="w-20 h-20 border-2 border-gold/30">
-                    <AvatarImage src={djData?.avatar} />
+                    <AvatarImage src={avatarPreview || djData?.avatar} />
                     <AvatarFallback className="bg-gold/20 text-gold text-xl font-bold">
                       {form.stageName?.slice(0, 2).toUpperCase() || 'DJ'}
                     </AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" className="border-dark-gray text-text-primary">
-                    <Camera className="w-4 h-4 mr-2" />
-                    Change Avatar
-                  </Button>
+                  <div>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setAvatarFile(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => setAvatarPreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      className="border-dark-gray text-text-primary"
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      {avatarFile ? 'Change Avatar' : 'Upload Avatar'}
+                    </Button>
+                    {avatarFile && (
+                      <p className="text-xs text-green mt-1">{avatarFile.name} selected</p>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-text-muted mt-2">Recommended: 400x400px square image</p>
               </div>
 
               <div className="border-t border-dark-gray pt-6">
                 <Label className="text-text-secondary mb-3 block">Cover Banner</Label>
-                <div className="w-full h-40 rounded-xl bg-black-elevated border border-dashed border-dark-gray flex flex-col items-center justify-center">
-                  <Camera className="w-8 h-8 text-text-muted mb-2" />
-                  <p className="text-sm text-text-secondary">Upload cover banner</p>
-                  <p className="text-xs text-text-muted">Recommended: 1920x1080px</p>
+                <div className="w-full h-40 rounded-xl bg-black-elevated border border-dashed border-dark-gray overflow-hidden relative">
+                  {coverPreview || djData?.coverBanner ? (
+                    <img
+                      src={coverPreview || djData?.coverBanner}
+                      alt="Cover banner"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <Camera className="w-8 h-8 text-text-muted mb-2" />
+                      <p className="text-sm text-text-secondary">Upload cover banner</p>
+                      <p className="text-xs text-text-muted">Recommended: 1920x1080px</p>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setCoverFile(file);
+                        const reader = new FileReader();
+                        reader.onloadend = () => setCoverPreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    className="border-dark-gray text-text-primary"
+                    onClick={() => coverInputRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    {coverFile ? 'Change Cover' : 'Upload Cover'}
+                  </Button>
+                  {coverFile && (
+                    <p className="text-xs text-green mt-1">{coverFile.name} selected</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -359,7 +465,12 @@ export default function Profile() {
           <Card className="bg-black-surface border-dark-gray">
             <CardContent className="p-6 space-y-6">
               <div>
-                <Label className="text-text-secondary mb-3 block">Genres (max 5)</Label>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-text-secondary block">Genres</Label>
+                  <span className={cn('text-xs', form.genres.length >= 5 ? 'text-gold' : 'text-text-muted')}>
+                    {form.genres.length}/5 selected
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {GENRES.map((genre) => (
                     <button

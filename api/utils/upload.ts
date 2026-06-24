@@ -61,6 +61,16 @@ const uploadEventImage = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
+// Combined upload for DJ profile update (avatar + cover)
+const uploadDjProfileImages = multer({
+  storage: memoryStorage,
+  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for any image
+}).fields([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'coverBanner', maxCount: 1 },
+]);
+
 // Serve uploads statically (local fallback)
 function serveUploads(app) {
   app.use('/uploads', require('express').static(path.join(process.cwd(), 'uploads')));
@@ -72,5 +82,6 @@ module.exports = {
   uploadMixAudio,
   uploadMixCover,
   uploadEventImage,
+  uploadDjProfileImages,
   serveUploads,
 };
