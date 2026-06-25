@@ -101,6 +101,22 @@ export default function Profile() {
     currency: 'SLE',
     website: '',
     whatsappNumber: '',
+    socialLinks: {
+      instagram: '',
+      twitter: '',
+      tiktok: '',
+      youtube: '',
+      facebook: '',
+    } as Record<string, string>,
+    streamingLinks: {
+      audiomack: '',
+      mixcloud: '',
+      soundcloud: '',
+      youtube: '',
+      hearthis: '',
+      appleMusic: '',
+      spotify: '',
+    } as Record<string, string>,
   });
 
   useEffect(() => {
@@ -130,6 +146,22 @@ export default function Profile() {
             currency: dj.currency || 'SLE',
             website: dj.website || '',
             whatsappNumber: dj.whatsappNumber || '',
+            socialLinks: dj.socialLinks || {
+              instagram: '',
+              twitter: '',
+              tiktok: '',
+              youtube: '',
+              facebook: '',
+            },
+            streamingLinks: dj.streamingLinks || {
+              audiomack: '',
+              mixcloud: '',
+              soundcloud: '',
+              youtube: '',
+              hearthis: '',
+              appleMusic: '',
+              spotify: '',
+            },
           });
         }
       } catch (err) {
@@ -168,6 +200,8 @@ export default function Profile() {
         if (form.currency) formData.append('currency', form.currency);
         if (form.website) formData.append('website', form.website);
         if (form.whatsappNumber) formData.append('whatsappNumber', form.whatsappNumber);
+        formData.append('socialLinks', JSON.stringify(form.socialLinks));
+        formData.append('streamingLinks', JSON.stringify(form.streamingLinks));
         if (avatarFile) formData.append('avatar', avatarFile);
         if (coverFile) formData.append('coverBanner', coverFile);
 
@@ -584,7 +618,7 @@ export default function Profile() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="social" className="mt-4">
+        <TabsContent value="social" className="mt-4 space-y-4">
           <Card className="bg-black-surface border-dark-gray">
             <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -607,9 +641,72 @@ export default function Profile() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-text-muted">
-                Social links and streaming platforms will be added here in a future update.
-              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black-surface border-dark-gray">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
+                Social Media
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+                  { key: 'twitter', label: 'X (Twitter)', placeholder: 'https://x.com/...' },
+                  { key: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@...' },
+                  { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/...' },
+                  { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <Label className="text-text-secondary mb-2 block">{label}</Label>
+                    <Input
+                      value={form.socialLinks[key] || ''}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          socialLinks: { ...form.socialLinks, [key]: e.target.value },
+                        })
+                      }
+                      placeholder={placeholder}
+                      className="bg-black-elevated border-dark-gray text-text-primary"
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black-surface border-dark-gray">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
+                Streaming Platforms
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'audiomack', label: 'Audiomack', placeholder: 'https://audiomack.com/...' },
+                  { key: 'mixcloud', label: 'Mixcloud', placeholder: 'https://mixcloud.com/...' },
+                  { key: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/...' },
+                  { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/...' },
+                  { key: 'hearthis', label: 'Hearthis.at', placeholder: 'https://hearthis.at/...' },
+                  { key: 'appleMusic', label: 'Apple Music', placeholder: 'https://music.apple.com/...' },
+                  { key: 'spotify', label: 'Spotify', placeholder: 'https://open.spotify.com/...' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <Label className="text-text-secondary mb-2 block">{label}</Label>
+                    <Input
+                      value={form.streamingLinks[key] || ''}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          streamingLinks: { ...form.streamingLinks, [key]: e.target.value },
+                        })
+                      }
+                      placeholder={placeholder}
+                      className="bg-black-elevated border-dark-gray text-text-primary"
+                    />
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -115,6 +115,10 @@ interface DJ {
   mixes: Mix[];
   reviews: Review[];
   events: Event[];
+  socialLinks?: Record<string, string>;
+  streamingLinks?: Record<string, string>;
+  website?: string;
+  whatsappNumber?: string;
 }
 
 interface RankingHistoryPoint {
@@ -559,7 +563,13 @@ function BookingModal({
 
 /* ───── Tab Components ───── */
 function OverviewTab({ dj }: { dj: DJ }) {
-  const hasSocialLinks = false; // backend does not return social links yet
+  const hasSocialLinks =
+    dj.socialLinks &&
+    Object.values(dj.socialLinks).some((v) => v && v.trim());
+
+  const hasStreamingLinks =
+    dj.streamingLinks &&
+    Object.values(dj.streamingLinks).some((v) => v && v.trim());
 
   return (
     <motion.div
@@ -680,32 +690,99 @@ function OverviewTab({ dj }: { dj: DJ }) {
         {/* Social Links */}
         {hasSocialLinks && (
           <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6">
-            <span className="section-label">Social Links</span>
-            <div className="mt-4 flex items-center gap-3">
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
-              >
-                <Instagram size={18} />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
-              >
-                <Twitter size={18} />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
-              >
-                <Facebook size={18} />
-              </a>
+            <span className="section-label">Social Media</span>
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              {dj.socialLinks?.instagram && (
+                <a
+                  href={dj.socialLinks.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  title="Instagram"
+                >
+                  <Instagram size={18} />
+                </a>
+              )}
+              {dj.socialLinks?.twitter && (
+                <a
+                  href={dj.socialLinks.twitter}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  title="X (Twitter)"
+                >
+                  <Twitter size={18} />
+                </a>
+              )}
+              {dj.socialLinks?.tiktok && (
+                <a
+                  href={dj.socialLinks.tiktok}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  title="TikTok"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px]">
+                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                  </svg>
+                </a>
+              )}
+              {dj.socialLinks?.youtube && (
+                <a
+                  href={dj.socialLinks.youtube}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  title="YouTube"
+                >
+                  <Play size={18} />
+                </a>
+              )}
+              {dj.socialLinks?.facebook && (
+                <a
+                  href={dj.socialLinks.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  title="Facebook"
+                >
+                  <Facebook size={18} />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Streaming Links */}
+        {hasStreamingLinks && (
+          <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6">
+            <span className="section-label">Streaming Platforms</span>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(
+                [
+                  { key: 'audiomack', label: 'Audiomack' },
+                  { key: 'mixcloud', label: 'Mixcloud' },
+                  { key: 'soundcloud', label: 'SoundCloud' },
+                  { key: 'youtube', label: 'YouTube' },
+                  { key: 'hearthis', label: 'Hearthis.at' },
+                  { key: 'appleMusic', label: 'Apple Music' },
+                  { key: 'spotify', label: 'Spotify' },
+                ] as const
+              ).map(
+                ({ key, label }) =>
+                  dj.streamingLinks?.[key] && (
+                    <a
+                      key={key}
+                      href={dj.streamingLinks[key]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-full bg-[#181818] border border-[rgba(255,255,255,0.08)] text-xs text-text-secondary hover:text-gold hover:border-gold/30 transition-colors"
+                    >
+                      <Music size={12} className="inline mr-1.5 text-gold" />
+                      {label}
+                    </a>
+                  )
+              )}
             </div>
           </div>
         )}
@@ -718,18 +795,27 @@ function OverviewTab({ dj }: { dj: DJ }) {
               <Mail size={16} className="text-gold" />
               <span>{dj.user.email}</span>
             </div>
-            {/* Phone/website hidden when missing */}
-            {false && (
-              <>
-                <div className="flex items-center gap-3 text-sm text-text-secondary">
-                  <Globe size={16} className="text-gold" />
-                  <span>-</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-text-secondary">
-                  <Phone size={16} className="text-gold" />
-                  <span>-</span>
-                </div>
-              </>
+            {dj.website && (
+              <a
+                href={dj.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 text-sm text-text-secondary hover:text-gold transition-colors"
+              >
+                <Globe size={16} className="text-gold" />
+                <span>{dj.website.replace(/^https?:\/\//, '')}</span>
+              </a>
+            )}
+            {dj.whatsappNumber && (
+              <a
+                href={`https://wa.me/${dj.whatsappNumber.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 text-sm text-text-secondary hover:text-gold transition-colors"
+              >
+                <Phone size={16} className="text-gold" />
+                <span>{dj.whatsappNumber}</span>
+              </a>
             )}
           </div>
         </div>
@@ -1590,10 +1676,22 @@ export default function DjProfile() {
               Book Now
             </button>
             <div className="flex gap-2">
-              <button className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2">
-                <MessageCircle size={16} />
-                <span className="hidden sm:inline">Message</span>
-              </button>
+              {dj.whatsappNumber ? (
+                <a
+                  href={`https://wa.me/${dj.whatsappNumber.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Phone size={16} />
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </a>
+              ) : (
+                <button className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2">
+                  <MessageCircle size={16} />
+                  <span className="hidden sm:inline">Message</span>
+                </button>
+              )}
               <ShareButton
                 url={`${typeof window !== 'undefined' ? window.location.origin : ''}/dj/${dj.username || dj.id}`}
                 title={`Check out ${dj.stageName} on The Deck Salone`}
@@ -1601,9 +1699,6 @@ export default function DjProfile() {
                 image={dj.avatar}
                 size="md"
               />
-              <button className="px-4 py-2.5 rounded-full bg-green text-white text-sm font-medium hover:bg-green/90 transition-colors">
-                <MessageCircle size={16} />
-              </button>
             </div>
           </motion.div>
         </div>

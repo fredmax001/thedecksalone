@@ -38,6 +38,22 @@ const createDjSchema = z.object({
   availability: z.string().optional(),
   website: z.string().url().optional().or(z.literal('')),
   whatsappNumber: z.string().max(20).optional(),
+  socialLinks: z.object({
+    instagram: z.string().url().optional().or(z.literal('')),
+    twitter: z.string().url().optional().or(z.literal('')),
+    tiktok: z.string().url().optional().or(z.literal('')),
+    youtube: z.string().url().optional().or(z.literal('')),
+    facebook: z.string().url().optional().or(z.literal('')),
+  }).optional(),
+  streamingLinks: z.object({
+    audiomack: z.string().url().optional().or(z.literal('')),
+    mixcloud: z.string().url().optional().or(z.literal('')),
+    soundcloud: z.string().url().optional().or(z.literal('')),
+    youtube: z.string().url().optional().or(z.literal('')),
+    hearthis: z.string().url().optional().or(z.literal('')),
+    appleMusic: z.string().url().optional().or(z.literal('')),
+    spotify: z.string().url().optional().or(z.literal('')),
+  }).optional(),
 });
 
 const updateDjSchema = z.object({
@@ -57,7 +73,38 @@ const updateDjSchema = z.object({
   website: z.string().url().optional().or(z.literal('')),
   whatsappNumber: z.string().max(20).optional(),
   isPublic: z.boolean().optional(),
+  socialLinks: z.object({
+    instagram: z.string().url().optional().or(z.literal('')),
+    twitter: z.string().url().optional().or(z.literal('')),
+    tiktok: z.string().url().optional().or(z.literal('')),
+    youtube: z.string().url().optional().or(z.literal('')),
+    facebook: z.string().url().optional().or(z.literal('')),
+  }).optional(),
+  streamingLinks: z.object({
+    audiomack: z.string().url().optional().or(z.literal('')),
+    mixcloud: z.string().url().optional().or(z.literal('')),
+    soundcloud: z.string().url().optional().or(z.literal('')),
+    youtube: z.string().url().optional().or(z.literal('')),
+    hearthis: z.string().url().optional().or(z.literal('')),
+    appleMusic: z.string().url().optional().or(z.literal('')),
+    spotify: z.string().url().optional().or(z.literal('')),
+  }).optional(),
 });
+
+// Helper to parse JSON fields from FormData (multer stores them as strings)
+function parseJsonFields(body) {
+  const parsed = { ...body };
+  ['socialLinks', 'streamingLinks'].forEach((key) => {
+    if (typeof parsed[key] === 'string') {
+      try {
+        parsed[key] = JSON.parse(parsed[key]);
+      } catch {
+        // leave as-is if invalid JSON
+      }
+    }
+  });
+  return parsed;
+}
 
 // GET /api/djs - List DJs with filtering
 router.get('/', async (req, res) => {
@@ -199,7 +246,7 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
       return res.status(409).json({ success: false, error: 'DJ profile already exists' });
     }
 
-    const parsed = createDjSchema.safeParse(req.body);
+    const parsed = createDjSchema.safeParse(parseJsonFields(req.body));
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
@@ -247,7 +294,7 @@ router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const parsed = updateDjSchema.safeParse(req.body);
+    const parsed = updateDjSchema.safeParse(parseJsonFields(req.body));
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }

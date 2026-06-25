@@ -57,6 +57,8 @@ model DjProfile {
   availability    String?
   website         String?
   whatsappNumber  String?
+  socialLinks     Json?    // { instagram, twitter, tiktok, youtube, facebook }
+  streamingLinks  Json?    // { audiomack, mixcloud, soundcloud, youtube, hearthis, appleMusic, spotify }
   verified        Boolean  @default(false)
   isPublic        Boolean  @default(true)
   totalFollowers  Int      @default(0)
