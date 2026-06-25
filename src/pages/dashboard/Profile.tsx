@@ -205,9 +205,7 @@ export default function Profile() {
         if (avatarFile) formData.append('avatar', avatarFile);
         if (coverFile) formData.append('coverBanner', coverFile);
 
-        res = await api.put(`/djs/${djId}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        res = await api.put(`/djs/${djId}`, formData);
       } else {
         const payload = {
           ...form,

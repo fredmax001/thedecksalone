@@ -1493,6 +1493,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
 /* ───── Main DJ Profile Page ───── */
 export default function DjProfile() {
   const { identifier } = useParams<{ identifier: string }>();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [isBookingOpen, setIsBookingOpen] = useState(false);

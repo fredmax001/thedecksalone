@@ -92,8 +92,10 @@ const updateDjSchema = z.object({
 });
 
 // Helper to parse JSON fields from FormData (multer stores them as strings)
-function parseJsonFields(body) {
+function parseFormFields(body) {
   const parsed = { ...body };
+
+  // Parse JSON fields
   ['socialLinks', 'streamingLinks'].forEach((key) => {
     if (typeof parsed[key] === 'string') {
       try {
@@ -103,6 +105,28 @@ function parseJsonFields(body) {
       }
     }
   });
+
+  // Coerce number fields from FormData strings
+  if (parsed.yearsActive !== undefined && parsed.yearsActive !== '') {
+    const n = parseInt(parsed.yearsActive, 10);
+    if (!isNaN(n)) parsed.yearsActive = n;
+  }
+  if (parsed.bookingFeeMin !== undefined && parsed.bookingFeeMin !== '') {
+    const n = parseFloat(parsed.bookingFeeMin);
+    if (!isNaN(n)) parsed.bookingFeeMin = n;
+  }
+  if (parsed.bookingFeeMax !== undefined && parsed.bookingFeeMax !== '') {
+    const n = parseFloat(parsed.bookingFeeMax);
+    if (!isNaN(n)) parsed.bookingFeeMax = n;
+  }
+
+  // Ensure array fields are arrays (multer may send single string for one item)
+  ['genres', 'awards', 'equipment', 'languages'].forEach((key) => {
+    if (parsed[key] !== undefined && !Array.isArray(parsed[key])) {
+      parsed[key] = [parsed[key]].filter(Boolean);
+    }
+  });
+
   return parsed;
 }
 
@@ -246,7 +270,7 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
       return res.status(409).json({ success: false, error: 'DJ profile already exists' });
     }
 
-    const parsed = createDjSchema.safeParse(parseJsonFields(req.body));
+    const parsed = createDjSchema.safeParse(parseFormFields(req.body));
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
@@ -294,7 +318,7 @@ router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const parsed = updateDjSchema.safeParse(parseJsonFields(req.body));
+    const parsed = updateDjSchema.safeParse(parseFormFields(req.body));
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }

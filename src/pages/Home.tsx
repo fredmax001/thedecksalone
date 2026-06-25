@@ -168,8 +168,13 @@ function HeroSection() {
   return (
     <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden">
       {/* Background */}
-      <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#0a0a0a] to-[#1a1a1a]">
-        <div className="absolute inset-0 bg-hero-overlay" />
+      <div className="absolute inset-0 z-0">
+        <img
+          src="/hero-bg.jpg"
+          alt="Hero background"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/70" />
       </div>
 
       {/* Animated Waveform Background */}
