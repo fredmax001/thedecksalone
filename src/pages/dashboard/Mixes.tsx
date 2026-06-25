@@ -60,6 +60,17 @@ const GENRES = [
   'Open Format',
 ];
 
+const CATEGORIES = [
+  'Salone Mix',
+  'Throwbacks',
+  'Afrobeats',
+  'Amapiano',
+  'Dancehall',
+  'Club Mixes',
+  'Wedding Mixes',
+  'Gospel',
+];
+
 export default function Mixes() {
   const { user } = useAuthStore();
   const [mixes, setMixes] = useState<Mix[]>([]);
@@ -69,6 +80,7 @@ export default function Mixes() {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     genre: '',
+    category: '',
     description: '',
     isPublic: true,
   });
@@ -107,8 +119,8 @@ export default function Mixes() {
       toast.error('Audio file required');
       return;
     }
-    if (!uploadForm.title || !uploadForm.genre) {
-      toast.error('Title and genre are required');
+    if (!uploadForm.title || !uploadForm.genre || !uploadForm.category) {
+      toast.error('Title, genre, and category are required');
       return;
     }
 
@@ -116,6 +128,7 @@ export default function Mixes() {
     const formData = new FormData();
     formData.append('title', uploadForm.title);
     formData.append('genre', uploadForm.genre);
+    formData.append('category', uploadForm.category);
     formData.append('description', uploadForm.description);
     formData.append('isPublic', String(uploadForm.isPublic));
     formData.append('audio', audioFile);
@@ -127,7 +140,7 @@ export default function Mixes() {
         toast.success('Mix uploaded successfully!');
         setMixes((prev) => [res.data.data, ...prev]);
         setIsUploadOpen(false);
-        setUploadForm({ title: '', genre: '', description: '', isPublic: true });
+        setUploadForm({ title: '', genre: '', category: '', description: '', isPublic: true });
         setAudioFile(null);
         setCoverFile(null);
       } else {
@@ -339,6 +352,21 @@ export default function Mixes() {
                     <option value="">Select genre</option>
                     {GENRES.map((g) => (
                       <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Category</Label>
+                  <select
+                    value={uploadForm.category}
+                    onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    required
+                  >
+                    <option value="">Select category</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Search, Headphones, User } from 'lucide-react';
+import { Menu, X, Search, User } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 
 const navLinks = [
@@ -54,14 +54,12 @@ export default function Navbar() {
       >
         <div className="container-main h-full flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <Headphones className="w-6 h-6 text-gold" />
-            <span className="font-display text-xl font-bold tracking-tight text-text-primary">
-              DECK
-            </span>
-            <span className="font-display text-xl font-bold tracking-tight text-gold">
-              SALONE
-            </span>
+          <Link to="/" className="flex items-center shrink-0">
+            <img
+              src="/logo.png"
+              alt="Deck Salone"
+              className="h-8 w-auto object-contain"
+            />
           </Link>
 
           {/* Desktop Nav Links */}

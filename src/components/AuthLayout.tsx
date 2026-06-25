@@ -29,9 +29,11 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
           transition={{ duration: 0.5, delay: 0.2 }}
           className="relative z-10"
         >
-          <span className="text-[20px] font-bold tracking-tight text-text-primary font-display uppercase">
-            DECK <span className="text-gold">SALONE</span>
-          </span>
+          <img
+            src="/logo.png"
+            alt="Deck Salone"
+            className="h-8 w-auto object-contain"
+          />
         </motion.div>
 
         {/* Center content */}
@@ -81,9 +83,11 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         <div className="w-full max-w-[440px]">
           {/* Mobile logo */}
           <div className="lg:hidden mb-8 text-center">
-            <span className="text-[20px] font-bold tracking-tight text-text-primary font-display uppercase">
-              DECK <span className="text-gold">SALONE</span>
-            </span>
+            <img
+              src="/logo.png"
+              alt="Deck Salone"
+              className="h-8 w-auto object-contain mx-auto"
+            />
           </div>
           {children}
         </div>

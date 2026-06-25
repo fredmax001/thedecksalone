@@ -38,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
 
       setAuth: (user, token) => {
         localStorage.setItem('soundit_token', token);
@@ -82,15 +82,19 @@ export const useAuthStore = create<AuthState>()(
 
       fetchMe: async () => {
         const token = localStorage.getItem('soundit_token');
-        if (!token) return;
+        if (!token) {
+          set({ isLoading: false });
+          return;
+        }
         try {
+          set({ isLoading: true });
           const res = await api.get('/auth/me');
           if (res.data.success) {
-            set({ user: res.data.data, token, isAuthenticated: true });
+            set({ user: res.data.data, token, isAuthenticated: true, isLoading: false });
           }
         } catch {
           localStorage.removeItem('soundit_token');
-          set({ user: null, token: null, isAuthenticated: false });
+          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
 
@@ -99,6 +103,8 @@ export const useAuthStore = create<AuthState>()(
         if (token) {
           set({ token, isAuthenticated: true });
           get().fetchMe();
+        } else {
+          set({ isLoading: false });
         }
       },
     }),

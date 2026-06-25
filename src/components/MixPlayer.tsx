@@ -25,6 +25,7 @@ export interface MixTrack {
   duration: number; // seconds
   cover: string;
   genre: string;
+  plays?: number;
 }
 
 interface MixPlayerProps {

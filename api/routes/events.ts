@@ -3,6 +3,8 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { uploadEventImage } = require('../utils/upload');
+const { processEventImage } = require('../utils/imageProcessor');
+const { uploadBuffer } = require('../utils/storage');
 
 const router = express.Router();
 
@@ -30,6 +32,7 @@ const createEventSchema = z.object({
   compensation: z.number().min(0).optional(),
   requirements: z.string().optional(),
   status: z.string().optional(),
+  ticketUrl: z.string().url().optional().or(z.literal('')),
   // Sound It Salone integration
   soundItSaloneEventId: z.string().optional(),
   soundItSaloneUrl: z.string().url().optional().or(z.literal('')),
@@ -49,6 +52,7 @@ const updateEventSchema = z.object({
   compensation: z.number().min(0).optional(),
   requirements: z.string().optional(),
   status: z.string().optional(),
+  ticketUrl: z.string().url().optional().or(z.literal('')),
   soundItSaloneEventId: z.string().optional(),
   soundItSaloneUrl: z.string().url().optional().or(z.literal('')),
   isSyncedToSalone: z.boolean().optional(),
@@ -158,12 +162,18 @@ router.post('/', authMiddleware, uploadEventImage.single('image'), async (req, r
 
     const data = parsed.data;
 
+    let imageUrl = null;
+    if (req.file) {
+      const { buffer, contentType, ext } = await processEventImage(req.file.buffer);
+      imageUrl = await uploadBuffer(buffer, 'events', { contentType, ext });
+    }
+
     const event = await prisma.event.create({
       data: {
         ...data,
         djId,
         date: new Date(data.date),
-        image: req.file ? `/uploads/events/${req.file.filename}` : null,
+        image: imageUrl,
       },
     });
 
@@ -202,7 +212,8 @@ router.put('/:id', authMiddleware, uploadEventImage.single('image'), async (req,
 
     const updateData = { ...parsed.data };
     if (req.file) {
-      updateData.image = `/uploads/events/${req.file.filename}`;
+      const { buffer, contentType, ext } = await processEventImage(req.file.buffer);
+      updateData.image = await uploadBuffer(buffer, 'events', { contentType, ext });
     }
     if (parsed.data.date) {
       updateData.date = new Date(parsed.data.date);

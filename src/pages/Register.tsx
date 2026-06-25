@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -109,6 +109,9 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [bioLength, setBioLength] = useState(0);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   /* ─── Step 1 Form ─── */
   const {
@@ -169,14 +172,19 @@ export default function Register() {
       // If DJ, create DJ profile
       if (role === 'DJ') {
         try {
-          await api.post('/djs', {
-            stageName: step1.stageName,
-            fullName: step1.fullName,
-            city: data.city,
-            genres: data.genres,
-            yearsActive: parseInt(data.yearsActive, 10),
-            bio: data.bio || '',
-          });
+          const formData = new FormData();
+          formData.append('stageName', step1.stageName);
+          formData.append('fullName', step1.fullName);
+          formData.append('city', data.city);
+          data.genres.forEach((g) => formData.append('genres', g));
+          formData.append('yearsActive', data.yearsActive);
+          if (data.bio) formData.append('bio', data.bio);
+          const avatarFromInput = avatarInputRef.current?.files?.[0];
+          if (avatarFromInput) formData.append('avatar', avatarFromInput);
+
+          await api.post('/djs', formData);
+          // Refresh auth user so djProfile is populated
+          await useAuthStore.getState().fetchMe();
         } catch (err: any) {
           setIsSubmitting(false);
           setError(err.response?.data?.error || 'Could not create DJ profile');
@@ -188,7 +196,7 @@ export default function Register() {
       setCompleted(true);
       setTimeout(() => navigate('/dashboard'), 1500);
     },
-    [register, navigate, watchStep1]
+    [register, navigate, watchStep1, avatarFile]
   );
 
   const toggleGenre = useCallback(
@@ -730,18 +738,38 @@ export default function Register() {
                 <label className="block text-sm font-medium text-text-primary mb-1.5">
                   Profile Photo
                 </label>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setAvatarFile(file);
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => setAvatarPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    } else {
+                      setAvatarPreview(null);
+                    }
+                  }}
+                />
                 <div
                   className="border-2 border-dashed border-medium-gray rounded-xl p-6 text-center hover:border-gold transition-colors cursor-pointer"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.click();
-                  }}
+                  onClick={() => avatarInputRef.current?.click()}
                 >
-                  <Upload className="w-8 h-8 text-gold mx-auto mb-2" />
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Profile preview"
+                      className="w-20 h-20 rounded-full object-cover mx-auto mb-2 border border-gold/30"
+                    />
+                  ) : (
+                    <Upload className="w-8 h-8 text-gold mx-auto mb-2" />
+                  )}
                   <p className="text-sm text-text-secondary">
-                    Click to upload photo
+                    {avatarPreview ? 'Change photo' : 'Click to upload photo'}
                   </p>
                   <p className="text-xs text-text-muted mt-1">
                     JPG, PNG (max 5MB)

@@ -223,6 +223,7 @@ model Event {
   compensation  Float?
   requirements  String?
   status        String   @default("upcoming")
+  ticketUrl     String? // Link to purchase tickets
   // Sound It Salone integration fields
   soundItSaloneEventId String? // Links to Sound It Salone event platform
   soundItSaloneUrl     String? // Public URL on Sound It Salone

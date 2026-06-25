@@ -2,7 +2,9 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
-const { uploadMixAudio, uploadMixCover } = require('../utils/upload');
+const { uploadMix } = require('../utils/upload');
+const { uploadBuffer } = require('../utils/storage');
+const { processCover } = require('../utils/imageProcessor');
 
 const router = express.Router();
 
@@ -25,7 +27,7 @@ const createMixSchema = z.object({
   category: z.string().min(1).max(100),
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
-  isPublic: z.boolean().optional(),
+  isPublic: z.coerce.boolean().optional(),
 });
 
 const updateMixSchema = z.object({
@@ -35,7 +37,7 @@ const updateMixSchema = z.object({
   category: z.string().min(1).max(100).optional(),
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
-  isPublic: z.boolean().optional(),
+  isPublic: z.coerce.boolean().optional(),
 });
 
 // GET /api/mixes - List mixes with filtering
@@ -160,7 +162,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/mixes - Create mix (auth required)
-router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.single('coverImage'), async (req, res) => {
+router.post('/', authMiddleware, uploadMix, async (req, res) => {
   try {
     const parsed = createMixSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -175,12 +177,29 @@ router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.
     const djId = dj ? dj.id : req.body.djId;
     const data = parsed.data;
 
+    const audioFile = req.files?.audio?.[0];
+    const coverFile = req.files?.coverImage?.[0];
+
+    let audioUrl = null;
+    let coverUrl = null;
+
+    if (audioFile) {
+      audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', {
+        contentType: audioFile.mimetype,
+        ext: audioFile.originalname.split('.').pop() || 'mp3',
+      });
+    }
+    if (coverFile) {
+      const { buffer, contentType, ext } = await processCover(coverFile.buffer);
+      coverUrl = await uploadBuffer(buffer, 'covers', { contentType, ext });
+    }
+
     const mix = await prisma.mix.create({
       data: {
         ...data,
         djId,
-        audioUrl: req.file ? `/uploads/mixes/${req.file.filename}` : null,
-        coverImage: req.files?.coverImage ? `/uploads/covers/${req.files.coverImage[0].filename}` : null,
+        audioUrl,
+        coverImage: coverUrl,
       },
     });
 
@@ -197,7 +216,7 @@ router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.
 });
 
 // PUT /api/mixes/:id - Update mix
-router.put('/:id', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.single('coverImage'), async (req, res) => {
+router.put('/:id', authMiddleware, uploadMix, async (req, res) => {
   try {
     const parsed = updateMixSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -218,11 +237,18 @@ router.put('/:id', authMiddleware, uploadMixAudio.single('audio'), uploadMixCove
     }
 
     const updateData = { ...parsed.data };
-    if (req.file) {
-      updateData.audioUrl = `/uploads/mixes/${req.file.filename}`;
+    const audioFile = req.files?.audio?.[0];
+    const coverFile = req.files?.coverImage?.[0];
+
+    if (audioFile) {
+      updateData.audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', {
+        contentType: audioFile.mimetype,
+        ext: audioFile.originalname.split('.').pop() || 'mp3',
+      });
     }
-    if (req.files?.coverImage) {
-      updateData.coverImage = `/uploads/covers/${req.files.coverImage[0].filename}`;
+    if (coverFile) {
+      const { buffer, contentType, ext } = await processCover(coverFile.buffer);
+      updateData.coverImage = await uploadBuffer(buffer, 'covers', { contentType, ext });
     }
 
     const updated = await prisma.mix.update({

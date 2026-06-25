@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard,
   Calendar,
+  CalendarDays,
   MessageSquare,
   Music,
   BarChart3,
@@ -15,7 +16,6 @@ import {
   Bell,
   Search,
   ChevronRight,
-  Headphones,
   CreditCard,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -37,6 +37,7 @@ const navItems = [
   { icon: Calendar, label: 'Bookings', path: '/dashboard/bookings' },
   { icon: MessageSquare, label: 'Messages', path: '/dashboard/messages' },
   { icon: Music, label: 'Mixes', path: '/dashboard/mixes' },
+  { icon: CalendarDays, label: 'Events', path: '/dashboard/events' },
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
@@ -124,14 +125,13 @@ export default function DashboardLayout() {
         'flex items-center gap-3 px-4 pt-6 pb-4',
         collapsed && 'justify-center px-2'
       )}>
-        <div className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center flex-shrink-0">
-          <Headphones className="w-5 h-5 text-black" />
-        </div>
+        <img
+          src="/logo.png"
+          alt="Deck Salone"
+          className="h-10 w-auto object-contain flex-shrink-0"
+        />
         {!collapsed && (
           <div className="overflow-hidden">
-            <p className="font-display font-bold text-text-primary uppercase tracking-wide text-sm truncate">
-              Deck Salone
-            </p>
             <p className="text-[10px] text-text-muted uppercase tracking-wider">DJ Studio</p>
           </div>
         )}

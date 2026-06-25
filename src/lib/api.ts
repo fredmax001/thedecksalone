@@ -15,16 +15,23 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Let the browser set multipart/form-data boundary for FormData
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally — but don't redirect on auth validation calls
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const isAuthCheck = error.config?.url?.includes('/auth/me');
       localStorage.removeItem('soundit_token');
-      window.location.href = '/login';
+      if (!isAuthCheck) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

@@ -8,7 +8,7 @@ import {
   Play,
   Heart,
   MessageCircle,
-  Share2,
+
   Music,
   Headphones,
   Calendar,
@@ -33,8 +33,6 @@ import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -77,11 +75,13 @@ interface Event {
   venue: string;
   city: string;
   status: string;
+  ticketUrl?: string | null;
 }
 
 interface DJ {
   id: string;
   username?: string;
+  userId?: string;
   stageName: string;
   fullName?: string;
   avatar: string;
@@ -208,12 +208,6 @@ const scaleIn = {
     scale: 1,
     transition: { duration: 0.4, delay: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
   },
-};
-
-const badgeColors: Record<string, string> = {
-  gold: "bg-gold text-black",
-  orange: "bg-orange text-black",
-  purple: "bg-purple text-white",
 };
 
 /* ───── Star Rating Component ───── */
@@ -1378,8 +1372,18 @@ function EventsTab({ dj }: { dj: DJ }) {
                   </div>
                 </div>
 
-                {/* Status */}
+                {/* Status / Tickets */}
                 <div className="flex items-center gap-3">
+                  {event.ticketUrl ? (
+                    <a
+                      href={event.ticketUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-gold-gradient text-black hover:scale-[1.02] transition-transform"
+                    >
+                      Get Tickets
+                    </a>
+                  ) : null}
                   <span
                     className={cn(
                       "px-3 py-1 rounded-full text-xs font-medium",
@@ -1496,14 +1500,23 @@ export default function DjProfile() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("overview");
+  const { user } = useAuthStore();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+
+  const handleMessageClick = () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/dj/${dj?.username || dj?.id || identifier}` } });
+      return;
+    }
+    navigate('/dashboard/messages', { state: { contactUserId: dj?.userId } });
+  };
 
   const {
     data: dj,
     isLoading,
     isError,
     error,
-  } = useDJ(identifier);
+  } = useDJ(identifier) as { data: DJ | undefined; isLoading: boolean; isError: boolean; error: Error | null };
 
   // Redirect old /dj/{id} URLs to canonical /dj/{username}
   useEffect(() => {
@@ -1687,15 +1700,9 @@ export default function DjProfile() {
                   <Phone size={16} />
                   <span className="hidden sm:inline">WhatsApp</span>
                 </a>
-              ) : (
+              ) : user?.id && dj.userId && user.id === dj.userId ? null : (
                 <button
-                  onClick={() => {
-                    if (!user) {
-                      navigate('/login');
-                      return;
-                    }
-                    navigate('/dashboard/messages');
-                  }}
+                  onClick={handleMessageClick}
                   className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2"
                 >
                   <MessageCircle size={16} />
@@ -1706,7 +1713,6 @@ export default function DjProfile() {
                 url={`${typeof window !== 'undefined' ? window.location.origin : ''}/dj/${dj.username || dj.id}`}
                 title={`Check out ${dj.stageName} on The Deck Salone`}
                 description={dj.bio?.slice(0, 160) || ''}
-                image={dj.avatar}
                 size="md"
               />
             </div>

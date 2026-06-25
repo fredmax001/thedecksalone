@@ -13,7 +13,7 @@ interface ShareButtonProps {
   url: string;
   title: string;
   description?: string;
-  image?: string;
+
   className?: string;
   size?: "sm" | "md" | "lg";
 }
@@ -33,7 +33,6 @@ export default function ShareButton({
   url,
   title,
   description = "",
-  image,
   className,
   size = "md",
 }: ShareButtonProps) {
@@ -48,7 +47,6 @@ export default function ShareButton({
 
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
-  const encodedDesc = encodeURIComponent(description);
 
   const shareOptions = [
     {

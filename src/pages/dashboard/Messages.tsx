@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
+import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,8 @@ interface PartnerInfo {
 
 export default function Messages() {
   const { user } = useAuthStore();
+  const location = useLocation();
+  const contactUserId = (location.state as { contactUserId?: string } | null)?.contactUserId;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
@@ -54,11 +57,53 @@ export default function Messages() {
   const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resolvedContactRef = useRef<string | null>(null);
 
   // Fetch conversations on mount
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  // Auto-select conversation from route state (e.g. Message button on DJ profile)
+  useEffect(() => {
+    if (!contactUserId || resolvedContactRef.current === contactUserId) return;
+
+    const existing = conversations.find((c) => c.userId === contactUserId);
+    if (existing) {
+      resolvedContactRef.current = contactUserId;
+      setActiveConversation(contactUserId);
+      return;
+    }
+
+    // Fetch partner info and create a placeholder conversation so the chat opens
+    api.get(`/messages/${contactUserId}`)
+      .then((res) => {
+        if (res.data.success && res.data.partner) {
+          const partner = res.data.partner;
+          setConversations((prev) => {
+            if (prev.some((c) => c.userId === partner.id)) return prev;
+            return [
+              {
+                userId: partner.id,
+                name: partner.name,
+                avatar: partner.avatar || undefined,
+                lastMessage: '',
+                lastMessageAt: new Date().toISOString(),
+                unreadCount: 0,
+              },
+              ...prev,
+            ];
+          });
+          setActiveConversation(contactUserId);
+        }
+      })
+      .catch(() => {
+        // Ignore — user will see the normal empty state
+      })
+      .finally(() => {
+        resolvedContactRef.current = contactUserId;
+      });
+  }, [contactUserId, conversations]);
 
   // Fetch messages when conversation changes
   useEffect(() => {

@@ -23,6 +23,7 @@ import DashboardOverview from './pages/dashboard/Overview';
 import DashboardBookings from './pages/dashboard/Bookings';
 import DashboardMessages from './pages/dashboard/Messages';
 import DashboardMixes from './pages/dashboard/Mixes';
+import DashboardEvents from './pages/dashboard/DjEvents';
 import DashboardAnalytics from './pages/dashboard/Analytics';
 import DashboardEarnings from './pages/dashboard/Earnings';
 import DashboardProfile from './pages/dashboard/Profile';
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="dashboard/bookings" element={<DashboardBookings />} />
             <Route path="dashboard/messages" element={<DashboardMessages />} />
             <Route path="dashboard/mixes" element={<DashboardMixes />} />
+            <Route path="dashboard/events" element={<DashboardEvents />} />
             <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
             <Route path="dashboard/earnings" element={<DashboardEarnings />} />
             <Route path="dashboard/profile" element={<DashboardProfile />} />

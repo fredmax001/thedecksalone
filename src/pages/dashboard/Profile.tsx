@@ -87,7 +87,7 @@ export default function Profile() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isDj = user?.role === 'DJ';
-  const djId = user?.djProfile?.id;
+  const [djId, setDjId] = useState<string | null>(user?.djProfile?.id || null);
 
   // Form state
   const [form, setForm] = useState({
@@ -124,16 +124,17 @@ export default function Profile() {
   });
 
   useEffect(() => {
-    if (!isDj || !djId) {
+    if (!isDj) {
       setLoading(false);
       return;
     }
 
     const fetchProfile = async () => {
       try {
-        const res = await api.get(`/djs/${djId}`);
+        const res = await api.get('/djs/me');
         if (res.data.success) {
           const dj = res.data.data;
+          setDjId(dj.id);
           setDjData(dj);
           setForm({
             stageName: dj.stageName || '',
@@ -167,72 +168,78 @@ export default function Profile() {
               spotify: '',
             },
           });
+          if (dj.avatar) setAvatarPreview(dj.avatar);
+          if (dj.coverBanner) setCoverPreview(dj.coverBanner);
         }
-      } catch (err) {
-        console.error('Failed to load profile', err);
+      } catch (err: any) {
+        // 404 means no DJ profile yet; show empty create form
+        if (err?.response?.status !== 404) {
+          console.error('Failed to load profile', err);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [isDj, djId]);
+  }, [isDj]);
+
+  const buildFormData = () => {
+    const formData = new FormData();
+    if (form.stageName) formData.append('stageName', form.stageName);
+    if (form.fullName) formData.append('fullName', form.fullName);
+    if (form.bio) formData.append('bio', form.bio);
+    if (form.yearsActive) formData.append('yearsActive', form.yearsActive);
+    if (form.city) formData.append('city', form.city);
+    if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
+    if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
+    if (form.equipment.length) form.equipment.forEach((e) => formData.append('equipment', e));
+    if (form.languages.length) form.languages.forEach((l) => formData.append('languages', l));
+    if (form.bookingFeeMin) formData.append('bookingFeeMin', form.bookingFeeMin);
+    if (form.bookingFeeMax) formData.append('bookingFeeMax', form.bookingFeeMax);
+    if (form.currency) formData.append('currency', form.currency);
+    if (form.website) formData.append('website', form.website);
+    if (form.whatsappNumber) formData.append('whatsappNumber', form.whatsappNumber);
+    formData.append('socialLinks', JSON.stringify(form.socialLinks));
+    formData.append('streamingLinks', JSON.stringify(form.streamingLinks));
+    const avatarFromInput = avatarInputRef.current?.files?.[0];
+    const coverFromInput = coverInputRef.current?.files?.[0];
+    if (avatarFromInput) formData.append('avatar', avatarFromInput);
+    if (coverFromInput) formData.append('coverBanner', coverFromInput);
+    return formData;
+  };
 
   const handleSave = async () => {
-    if (!djId) return;
+    if (!form.stageName || !form.fullName) {
+      setError('Stage name and full name are required');
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
-
-      // Use FormData when images are present, otherwise JSON
-      const hasImages = avatarFile || coverFile;
       let res;
 
-      if (hasImages) {
-        const formData = new FormData();
-        if (form.stageName) formData.append('stageName', form.stageName);
-        if (form.fullName) formData.append('fullName', form.fullName);
-        if (form.bio) formData.append('bio', form.bio);
-        if (form.yearsActive) formData.append('yearsActive', form.yearsActive);
-        if (form.city) formData.append('city', form.city);
-        if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
-        if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
-        if (form.equipment.length) form.equipment.forEach((e) => formData.append('equipment', e));
-        if (form.languages.length) form.languages.forEach((l) => formData.append('languages', l));
-        if (form.bookingFeeMin) formData.append('bookingFeeMin', form.bookingFeeMin);
-        if (form.bookingFeeMax) formData.append('bookingFeeMax', form.bookingFeeMax);
-        if (form.currency) formData.append('currency', form.currency);
-        if (form.website) formData.append('website', form.website);
-        if (form.whatsappNumber) formData.append('whatsappNumber', form.whatsappNumber);
-        formData.append('socialLinks', JSON.stringify(form.socialLinks));
-        formData.append('streamingLinks', JSON.stringify(form.streamingLinks));
-        if (avatarFile) formData.append('avatar', avatarFile);
-        if (coverFile) formData.append('coverBanner', coverFile);
-
-        res = await api.put(`/djs/${djId}`, formData);
+      if (djId) {
+        res = await api.put(`/djs/${djId}`, buildFormData());
       } else {
-        const payload = {
-          ...form,
-          yearsActive: form.yearsActive ? parseInt(form.yearsActive) : undefined,
-          bookingFeeMin: form.bookingFeeMin ? parseFloat(form.bookingFeeMin) : undefined,
-          bookingFeeMax: form.bookingFeeMax ? parseFloat(form.bookingFeeMax) : undefined,
-        };
-        res = await api.put(`/djs/${djId}`, payload);
+        res = await api.post('/djs', buildFormData());
       }
 
       if (res.data.success) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
+        const createdOrUpdated = res.data.data;
+        setDjId(createdOrUpdated.id);
+        setDjData(createdOrUpdated);
         // Clear file selections after successful save
         setAvatarFile(null);
-        setAvatarPreview(null);
         setCoverFile(null);
-        setCoverPreview(null);
-        // Refresh profile data
-        const refreshed = await api.get(`/djs/${djId}`);
-        if (refreshed.data.success) {
-          setDjData(refreshed.data.data);
-        }
+        // Keep previews from saved URLs if returned
+        if (createdOrUpdated.avatar) setAvatarPreview(createdOrUpdated.avatar);
+        if (createdOrUpdated.coverBanner) setCoverPreview(createdOrUpdated.coverBanner);
+        // Refresh auth user so role/djProfile are up to date
+        await useAuthStore.getState().fetchMe();
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to save profile');
@@ -719,25 +726,25 @@ export default function Profile() {
             <CardContent className="p-6 space-y-6">
               {/* Verification Status */}
               <div className="flex items-center gap-4 p-4 rounded-xl bg-black-elevated border border-dark-gray">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${djProfile?.verified ? 'bg-green/20 text-green' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                  {djProfile?.verified ? <ShieldCheck className="w-6 h-6" /> : <Shield className="w-6 h-6" />}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${djData?.verified ? 'bg-green/20 text-green' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                  {djData?.verified ? <ShieldCheck className="w-6 h-6" /> : <Shield className="w-6 h-6" />}
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-text-primary">
-                    {djProfile?.verified ? 'Verified DJ' : 'Not Verified'}
+                    {djData?.verified ? 'Verified DJ' : 'Not Verified'}
                   </h3>
                   <p className="text-xs text-text-secondary">
-                    {djProfile?.verified
+                    {djData?.verified
                       ? 'Your profile has been verified by The Deck Salone team.'
                       : 'Get verified to build trust with clients and unlock premium features.'}
                   </p>
                 </div>
-                {djProfile?.verified && (
+                {djData?.verified && (
                   <Badge className="bg-green/10 text-green border-0 ml-auto">Verified</Badge>
                 )}
               </div>
 
-              {!djProfile?.verified && (
+              {!djData?.verified && (
                 <>
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
@@ -788,7 +795,7 @@ export default function Profile() {
                 </>
               )}
 
-              {djProfile?.verified && (
+              {djData?.verified && (
                 <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
                   <h4 className="text-sm font-semibold text-text-primary mb-2">Verification Benefits</h4>
                   <ul className="space-y-2 text-xs text-text-secondary">

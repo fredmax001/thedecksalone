@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Headphones, Instagram, Twitter, Youtube, Music } from 'lucide-react';
+import { Instagram, Twitter, Youtube, Music } from 'lucide-react';
 
 const platformLinks = [
   { label: 'Discover DJs', path: '/discover' },
@@ -32,14 +32,12 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand Column */}
           <div className="lg:col-span-1">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <Headphones className="w-5 h-5 text-gold" />
-              <span className="font-display text-lg font-bold text-text-primary">
-                DECK
-              </span>
-              <span className="font-display text-lg font-bold text-gold">
-                SALONE
-              </span>
+            <Link to="/" className="flex items-center mb-4">
+              <img
+                src="/logo.png"
+                alt="Deck Salone"
+                className="h-8 w-auto object-contain"
+              />
             </Link>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs">
               The first official digital ecosystem for DJs in Sierra Leone and

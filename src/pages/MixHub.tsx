@@ -4,7 +4,7 @@ import {
   Play,
   Heart,
   Clock,
-  ChevronRight,
+
   Search,
   Flame,
   Loader2,
@@ -332,7 +332,7 @@ export default function MixHub() {
           </div>
         </div>
         <div className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
-          {trending.map((mix, i) => (
+          {trending.map((mix: any, i: any) => (
             <TrendingCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} />
           ))}
         </div>
@@ -347,7 +347,7 @@ export default function MixHub() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {latest.map((mix, i) => (
+          {latest.map((mix: any, i: any) => (
             <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
           ))}
         </div>

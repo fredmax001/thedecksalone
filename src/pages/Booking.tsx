@@ -481,7 +481,7 @@ export default function Booking() {
   }, [djData]);
 
   // Filter DJs
-  const filteredDJs = bookingDJs.filter((dj) => {
+  const filteredDJs = bookingDJs.filter((dj: any) => {
     if (filters.search && !dj.name.toLowerCase().includes(filters.search.toLowerCase()))
       return false;
     if (filters.location && !dj.location.includes(filters.location)) return false;
@@ -491,7 +491,7 @@ export default function Booking() {
       if (!hasEventType) return false;
     }
     if (filters.genres.length > 0) {
-      const hasGenre = dj.genres.some((g) => filters.genres.includes(g));
+      const hasGenre = dj.genres.some((g: any) => filters.genres.includes(g));
       if (!hasGenre) return false;
     }
     if (dj.priceMax < filters.budgetMin || dj.priceMin > filters.budgetMax) return false;
@@ -870,7 +870,7 @@ export default function Booking() {
           {/* DJ Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <AnimatePresence mode="popLayout">
-              {filteredDJs.map((dj, i) => (
+              {filteredDJs.map((dj: any, i: any) => (
                 <motion.div
                   key={dj.id}
                   className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
@@ -927,7 +927,7 @@ export default function Booking() {
                       </div>
 
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {dj.genres.map((genre) => (
+                        {dj.genres.map((genre: any) => (
                           <span
                             key={genre}
                             className="px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.1)] text-[10px] text-text-muted"

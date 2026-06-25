@@ -6,6 +6,7 @@ import {
   MapPin,
   Star,
   TrendingDown,
+  TrendingUp,
   CheckCircle2,
   Flame,
   Award,
@@ -27,7 +28,7 @@ import {
 } from 'recharts';
 import FadeIn from '@/components/FadeIn';
 import { useRankings } from '@/hooks/useRankings';
-import { useDJs } from '@/hooks/useDJs';
+
 
 /* ─────────────────── Easing ─────────────────── */
 
@@ -37,6 +38,7 @@ const easeSmooth = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 interface RankedDJ {
   id: string;
+  username?: string;
   rankingPosition: number;
   stageName: string;
   genres: string[];

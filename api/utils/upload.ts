@@ -71,6 +71,24 @@ const uploadDjProfileImages = multer({
   { name: 'coverBanner', maxCount: 1 },
 ]);
 
+// Combined upload for mixes (audio + cover image)
+const uploadMix = multer({
+  storage: memoryStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'audio') {
+      return fileFilter(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac'])(req, file, cb);
+    }
+    if (file.fieldname === 'coverImage') {
+      return fileFilter(['image/jpeg', 'image/png', 'image/webp'])(req, file, cb);
+    }
+    cb(new Error('Unexpected field'), false);
+  },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max for audio
+}).fields([
+  { name: 'audio', maxCount: 1 },
+  { name: 'coverImage', maxCount: 1 },
+]);
+
 // Serve uploads statically (local fallback)
 function serveUploads(app) {
   app.use('/uploads', require('express').static(path.join(process.cwd(), 'uploads')));
@@ -81,6 +99,7 @@ module.exports = {
   uploadCover,
   uploadMixAudio,
   uploadMixCover,
+  uploadMix,
   uploadEventImage,
   uploadDjProfileImages,
   serveUploads,

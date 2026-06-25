@@ -5,14 +5,10 @@ import {
   Zap,
   Crown,
   Music,
-  BarChart3,
-  Calendar,
-  Globe,
-  Headphones,
   Loader2,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useAuthStore } from '@/stores/authStore';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -90,9 +86,8 @@ const PLANS: Plan[] = [
 ];
 
 export default function Subscription() {
-  const { user } = useAuthStore();
   const [loading, setLoading] = useState<string | null>(null);
-  const currentPlan = user?.subscription?.plan || 'free';
+  const currentPlan = 'free';
 
   const handleSubscribe = async (planId: string) => {
     if (planId === currentPlan) {

@@ -23,6 +23,7 @@ import { useDJs, useDJCities, useDJGenres } from '@/hooks/useDJs';
 
 interface DJ {
   id: string;
+  username?: string;
   stageName: string;
   avatar: string;
   city: string;

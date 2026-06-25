@@ -9,7 +9,7 @@ import {
   Shield, TrendingUp,
   CheckCircle2, Play, Zap, Server,
   ChevronLeft, ChevronRight,
-  Radio, Mic, Headphones,
+  Radio, Mic,
   Menu, Crown,
   RefreshCw, LogOut, Volume2,
   BarChart2, Flag,
@@ -571,11 +571,21 @@ export default function AdminDashboard() {
         <div className="px-4 py-5 border-b border-white/5 flex items-center justify-between flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gold flex items-center justify-center"><Headphones className="w-4 h-4 text-black" /></div>
+              <img
+                src="/logo.png"
+                alt="Deck Salone"
+                className="h-8 w-auto object-contain"
+              />
               <div><p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide">Sound It</p><p className="text-[9px] text-text-muted uppercase tracking-widest">Admin Console</p></div>
             </div>
           )}
-          {sidebarCollapsed && <div className="w-8 h-8 rounded-lg bg-gold flex items-center justify-center mx-auto"><Headphones className="w-4 h-4 text-black" /></div>}
+          {sidebarCollapsed && (
+            <img
+              src="/logo.png"
+              alt="Deck Salone"
+              className="h-8 w-auto object-contain mx-auto"
+            />
+          )}
           {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="text-text-muted hover:text-text-primary"><ChevronLeft className="w-4 h-4" /></button>}
         </div>
 

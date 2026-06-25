@@ -831,11 +831,22 @@ function EventsSection({ events }: { events: any[] }) {
                         to={`/events/${event.id}`}
                         className="px-4 py-2 border border-white/20 rounded-full text-xs font-medium uppercase text-text-secondary hover:border-gold/50 hover:text-gold transition-all"
                       >
-                        Apply to DJ
+                        Details
                       </Link>
-                      <button className="px-4 py-2 bg-gold-gradient text-black text-xs font-medium uppercase rounded-full hover:scale-[1.02] transition-transform">
-                        Get Tickets
-                      </button>
+                      {event.ticketUrl ? (
+                        <a
+                          href={event.ticketUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-gold-gradient text-black text-xs font-medium uppercase rounded-full hover:scale-[1.02] transition-transform"
+                        >
+                          Get Tickets
+                        </a>
+                      ) : (
+                        <span className="px-4 py-2 bg-white/10 text-text-muted text-xs font-medium uppercase rounded-full cursor-not-allowed">
+                          No Tickets
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
