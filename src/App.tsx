@@ -27,6 +27,7 @@ import DashboardAnalytics from './pages/dashboard/Analytics';
 import DashboardEarnings from './pages/dashboard/Earnings';
 import DashboardProfile from './pages/dashboard/Profile';
 import DashboardSettings from './pages/dashboard/Settings';
+import DashboardSubscription from './pages/dashboard/Subscription';
 
 function AuthInitializer() {
   const init = useAuthStore((state) => state.init);
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
             <Route path="dashboard/earnings" element={<DashboardEarnings />} />
             <Route path="dashboard/profile" element={<DashboardProfile />} />
+            <Route path="dashboard/subscription" element={<DashboardSubscription />} />
             <Route path="dashboard/settings" element={<DashboardSettings />} />
           </Route>
         </Route>

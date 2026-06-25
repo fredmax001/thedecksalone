@@ -16,6 +16,7 @@ import {
   Search,
   ChevronRight,
   Headphones,
+  CreditCard,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -39,6 +40,7 @@ const navItems = [
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
+  { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 

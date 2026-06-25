@@ -34,7 +34,7 @@ function fileFilter(allowedMimes) {
 const uploadAvatar = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 const uploadCover = multer({
@@ -46,13 +46,13 @@ const uploadCover = multer({
 const uploadMixAudio = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac']),
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
 });
 
 const uploadMixCover = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 const uploadEventImage = multer({

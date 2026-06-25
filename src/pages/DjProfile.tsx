@@ -1688,7 +1688,16 @@ export default function DjProfile() {
                   <span className="hidden sm:inline">WhatsApp</span>
                 </a>
               ) : (
-                <button className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      navigate('/login');
+                      return;
+                    }
+                    navigate('/dashboard/messages');
+                  }}
+                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2"
+                >
                   <MessageCircle size={16} />
                   <span className="hidden sm:inline">Message</span>
                 </button>

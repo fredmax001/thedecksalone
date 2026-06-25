@@ -5,6 +5,10 @@ import {
   Music,
   Save,
   Check,
+  Shield,
+  ShieldCheck,
+  CheckCircle,
+  Upload,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -316,6 +320,7 @@ export default function Profile() {
           <TabsTrigger value="genres" className="data-[state=active]:bg-gold data-[state=active]:text-black">Genres & Skills</TabsTrigger>
           <TabsTrigger value="pricing" className="data-[state=active]:bg-gold data-[state=active]:text-black">Pricing</TabsTrigger>
           <TabsTrigger value="social" className="data-[state=active]:bg-gold data-[state=active]:text-black">Social & Links</TabsTrigger>
+          <TabsTrigger value="verification" className="data-[state=active]:bg-gold data-[state=active]:text-black">Verification</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="mt-4 space-y-4">
@@ -705,6 +710,107 @@ export default function Profile() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="verification" className="mt-4">
+          <Card className="bg-black-surface border-dark-gray">
+            <CardContent className="p-6 space-y-6">
+              {/* Verification Status */}
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${djProfile?.verified ? 'bg-green/20 text-green' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                  {djProfile?.verified ? <ShieldCheck className="w-6 h-6" /> : <Shield className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    {djProfile?.verified ? 'Verified DJ' : 'Not Verified'}
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    {djProfile?.verified
+                      ? 'Your profile has been verified by The Deck Salone team.'
+                      : 'Get verified to build trust with clients and unlock premium features.'}
+                  </p>
+                </div>
+                {djProfile?.verified && (
+                  <Badge className="bg-green/10 text-green border-0 ml-auto">Verified</Badge>
+                )}
+              </div>
+
+              {!djProfile?.verified && (
+                <>
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
+                      Request Verification
+                    </h3>
+                    <p className="text-xs text-text-secondary">
+                      Submit your details for review. Our team will verify your identity and DJ credentials within 2-3 business days.
+                    </p>
+
+                    <div>
+                      <Label className="text-text-secondary mb-2 block">Full Legal Name</Label>
+                      <Input
+                        placeholder="As shown on your ID"
+                        className="bg-black-elevated border-dark-gray text-text-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-text-secondary mb-2 block">ID Document</Label>
+                      <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-dark-gray bg-black-elevated">
+                        <Upload className="w-5 h-5 text-gold" />
+                        <span className="text-sm text-text-secondary">National ID, Passport, or Driver&apos;s License</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-text-secondary mb-2 block">Social Proof Links</Label>
+                      <Textarea
+                        placeholder="Links to your mixes, event photos, or press coverage..."
+                        rows={3}
+                        className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-text-secondary mb-2 block">Why should you be verified?</Label>
+                      <Textarea
+                        placeholder="Tell us about your experience, venues played, and audience..."
+                        rows={3}
+                        className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <Button className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90">
+                    Submit Verification Request
+                  </Button>
+                </>
+              )}
+
+              {djProfile?.verified && (
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                  <h4 className="text-sm font-semibold text-text-primary mb-2">Verification Benefits</h4>
+                  <ul className="space-y-2 text-xs text-text-secondary">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green" />
+                      Verified badge on your public profile
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green" />
+                      Higher ranking in search results
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green" />
+                      Priority booking requests from clients
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green" />
+                      Access to premium analytics
+                    </li>
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

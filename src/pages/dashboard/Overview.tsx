@@ -149,7 +149,7 @@ export default function Overview() {
               Manage Bookings
             </Button>
           </Link>
-          <Link to="/mixes">
+          <Link to="/dashboard/mixes">
             <Button className="bg-gold-gradient text-black hover:opacity-90">
               <Music className="w-4 h-4 mr-2" />
               Upload Mix
@@ -365,7 +365,7 @@ export default function Overview() {
               <div className="text-center py-8">
                 <Music className="w-10 h-10 text-text-muted mx-auto mb-3" />
                 <p className="text-sm text-text-secondary mb-2">No mixes uploaded yet</p>
-                <Link to="/mixes">
+                <Link to="/dashboard/mixes">
                   <Button variant="outline" size="sm" className="border-dark-gray text-text-primary">
                     Upload Your First Mix
                   </Button>

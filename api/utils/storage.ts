@@ -8,7 +8,7 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const S3_REGION = process.env.S3_REGION || 'auto';
 const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID;
 const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY;
-const CDN_URL = (process.env.CDN_URL || process.env.API_URL || 'http://localhost:5001').replace(/\/$/, '');
+const CDN_URL = (process.env.CDN_URL || process.env.API_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const isS3Enabled = S3_ENDPOINT && S3_BUCKET && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY;
 
