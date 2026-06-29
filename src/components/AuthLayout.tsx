@@ -17,12 +17,15 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="relative hidden lg:flex lg:w-[45%] flex-col justify-between p-8 overflow-hidden"
-        style={{ background: '#0A0A0A' }}
+        style={{ backgroundImage: "url('/login-bg.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}
       >
-        {/* Waveform background */}
-        <WaveformAnimation className="absolute inset-0 pointer-events-none overflow-hidden" />
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/85 z-0" />
 
-        {/* Logo */}
+        {/* Waveform background */}
+        <WaveformAnimation className="absolute inset-0 pointer-events-none overflow-hidden z-[1]" />
+
+        {/* Logo at top */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -32,16 +35,16 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
           <img
             src="/logo.png"
             alt="Deck Salone"
-            className="h-8 w-auto object-contain"
+            className="h-20 w-auto object-contain"
           />
         </motion.div>
 
-        {/* Center content */}
+        {/* Center content — below the logo */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="relative z-10 max-w-md"
+          className="relative z-10 max-w-md mt-4"
         >
           <p className="text-[18px] leading-relaxed text-text-secondary font-body">
             {quote}
@@ -63,7 +66,7 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.5 }}
-          className="relative z-10 flex items-center gap-2 text-xs text-text-muted"
+          className="relative z-10 flex items-center gap-2 text-xs text-text-muted mt-4"
         >
           <span>&copy; 2025 Deck Salone by Sound It Entertainment</span>
           <span className="text-medium-gray">|</span>
@@ -86,7 +89,7 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
             <img
               src="/logo.png"
               alt="Deck Salone"
-              className="h-8 w-auto object-contain mx-auto"
+              className="h-32 w-auto object-contain mx-auto"
             />
           </div>
           {children}

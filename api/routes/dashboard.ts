@@ -176,6 +176,44 @@ router.get('/stats', authMiddleware, async (req, res) => {
       Promise.resolve({ count: 0 }),
     ]);
 
+    // Monthly activity (last 6 months)
+    const monthlyActivity = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const monthLabel = monthStart.toLocaleString('default', { month: 'short' });
+
+      const [monthPlays, monthBookings] = await Promise.all([
+        prisma.mix.aggregate({
+          where: { djId: dj.id, createdAt: { gte: monthStart, lt: monthEnd } },
+          _sum: { plays: true },
+        }),
+        prisma.booking.count({
+          where: { djId: dj.id, createdAt: { gte: monthStart, lt: monthEnd } },
+        }),
+      ]);
+
+      monthlyActivity.push({
+        month: monthLabel,
+        plays: monthPlays._sum.plays || 0,
+        bookings: monthBookings,
+      });
+    }
+
+    // Genre breakdown from actual mixes
+    const genreBreakdown = await prisma.mix.groupBy({
+      by: ['genre'],
+      where: { djId: dj.id },
+      _count: { genre: true },
+      orderBy: { _count: { genre: 'desc' } },
+      take: 6,
+    });
+
+    const genreData = genreBreakdown.map((g) => ({
+      name: g.genre || 'Unknown',
+      value: g._count.genre,
+    }));
+
     // Calculate engagement rate
     const engagementRate = dj.totalStreams > 0
       ? Math.round(((dj.totalMixes * 1000) / dj.totalStreams) * 1000) / 10
@@ -194,6 +232,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
         engagementRate,
         rankingPosition: dj.rankingPosition,
         rankingScore: dj.rankingScore,
+        monthlyActivity,
+        genreBreakdown: genreData,
       },
     });
   } catch (error) {

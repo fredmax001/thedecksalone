@@ -63,7 +63,12 @@ export default function Login() {
     const result = await login(data.email, data.password);
     setIsSubmitting(false);
     if (result.success) {
-      navigate('/dashboard');
+      const user = useAuthStore.getState().user;
+      if (user?.role === 'ADMIN' || user?.role === 'MODERATOR') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } else {
       setError(result.error || 'Login failed');
     }

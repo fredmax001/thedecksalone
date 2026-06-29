@@ -50,15 +50,15 @@ export default function Navbar() {
             ? 'glass-nav border-b border-white/5 shadow-nav'
             : 'bg-transparent'
         }`}
-        style={{ height: '72px' }}
+        style={{ height: '140px' }}
       >
         <div className="container-main h-full flex items-center justify-between">
-          {/* Logo */}
+          {/* Logo — larger for visibility */}
           <Link to="/" className="flex items-center shrink-0">
             <img
               src="/logo.png"
               alt="Deck Salone"
-              className="h-8 w-auto object-contain"
+              className="h-32 w-auto object-contain"
             />
           </Link>
 

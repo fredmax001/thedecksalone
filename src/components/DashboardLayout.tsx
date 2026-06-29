@@ -128,7 +128,7 @@ export default function DashboardLayout() {
         <img
           src="/logo.png"
           alt="Deck Salone"
-          className="h-10 w-auto object-contain flex-shrink-0"
+          className="h-32 w-auto object-contain flex-shrink-0"
         />
         {!collapsed && (
           <div className="overflow-hidden">

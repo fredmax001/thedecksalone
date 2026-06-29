@@ -1,0 +1,30 @@
+\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K◇ injected env (7) from ../.env [2m// tip: ⌘ enable debugging { debug: true }[0m
+◇ injected env (0) from .env [2m// tip: ⌘ multiple files { path: ['.env.local', '.env'] }[0m
+[Auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set. Google OAuth will not work.
+node:internal/modules/cjs/loader:1476
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module '../prisma'
+Require stack:
+- /Users/djfredmax/Desktop/Deck Salone/app/api/routes/debug.ts
+- /Users/djfredmax/Desktop/Deck Salone/app/api/server.ts
+    at node:internal/modules/cjs/loader:1476:15
+    at nextResolveSimple (/Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-BOkp8V6j.cjs:10:1017)
+    at /Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-BOkp8V6j.cjs:9:4388
+    at /Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-BOkp8V6j.cjs:9:3818
+    at resolveTsPaths (/Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-BOkp8V6j.cjs:10:770)
+    at /Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-BOkp8V6j.cjs:10:1155
+    at T._resolveFilename (file:///Users/djfredmax/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-CqMfTiWi.mjs:2:14889)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)
+    at defaultResolve (node:internal/modules/cjs/loader:1124:20) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/djfredmax/Desktop/Deck Salone/app/api/routes/debug.ts',
+    '/Users/djfredmax/Desktop/Deck Salone/app/api/server.ts'
+  ]
+}
+
+Node.js v24.15.0
+\[1G[0K

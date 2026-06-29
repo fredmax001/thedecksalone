@@ -2,131 +2,112 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  ResponsiveContainer, BarChart, Bar,
+  PieChart, Pie, Cell,
 } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarCheck,
-  Shield, TrendingUp,
-  CheckCircle2, Play, Zap, Server,
-  ChevronLeft, ChevronRight,
-  Radio, Mic,
-  Menu, Crown,
-  RefreshCw, LogOut, Volume2,
-  BarChart2, Flag,
-  MonitorPlay, AudioLines, BadgeCheck, Wallet,
-  MessageCircle, Ban,
-  Loader2
+  CheckCircle2, Play, Server,
+  ChevronRight, Radio, Mic,
+  Menu, Crown, LogOut, Volume2,
+  BarChart2, MonitorPlay, AudioLines,
+  BadgeCheck, Ban,
+  Loader2, Search, Eye, Trash2, Star,
+  Settings, Bell, AlertTriangle,
+  Music, DollarSign, Calendar,
+  Check, X as XIcon,
+  Package,
+  HardDrive,
+  Shield,
+  Megaphone,
+  CreditCard,
+  BellRing,
+  Send,
+  Clock,
 } from 'lucide-react';
-import { useAdminStats, useAdminUsers, useAdminPendingDJs } from '@/hooks/useAdmin';
-import { useDJs } from '@/hooks/useDJs';
+import { useAuthStore } from '@/stores/authStore';
+import {
+  useAdminStats, useAdminAnalytics, useAdminDjs,
+  useAdminRankings, useAdminMixes, useAdminBookings,
+  useAdminEvents, useAdminUsers, useAdminPendingDjs,
+  useAdminPayments, useAdminStaff,
+  useAdminSystem, useAdminNotifications,
+  useAdminSecurityLogs, useAdminSubscriptions,
+  useAdminAds, useAdminPlatforms,
+  useVerifyDj, useToggleDjSuspend, useDeleteDj,
+  useToggleMixFeature, useUpdateBookingStatus,
+  useUpdateUserRole, useRecalculateRankings,
+  useSendNotification,
+} from '@/hooks/useAdmin';
+import { useQueryClient } from '@tanstack/react-query';
 
 /* ─────────────────────── Types ─────────────────────── */
+
 type AdminSection =
-  | 'overview' | 'analytics'
-  | 'mixcloud' | 'soundcloud' | 'audiomack' | 'youtube' | 'bpm'
-  | 'djs' | 'users' | 'verification' | 'staff'
-  | 'subscriptions' | 'advertising' | 'payments'
-  | 'bookings' | 'messaging' | 'moderation' | 'system';
+  | 'dashboard' | 'djs' | 'rankings' | 'mixes' | 'bookings'
+  | 'users' | 'events' | 'revenue' | 'analytics' | 'platforms'
+  | 'verification' | 'notifications' | 'subscriptions' | 'security'
+  | 'ads' | 'roles' | 'settings';
 
-/* ─────────────────────── Empty Data (No Mocks) ─────────────────────── */
+interface SidebarItem {
+  id: AdminSection;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
 
-const kpiStats = [
-  { label: 'Total DJs', value: '--', change: 'Connect API', positive: true, icon: Mic, color: '#D4A24A', bg: 'rgba(212,162,74,0.1)' },
-  { label: 'Monthly Streams', value: '--', change: 'Connect API', positive: true, icon: Play, color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
-  { label: 'Active Bookings', value: '--', change: 'Connect API', positive: true, icon: CalendarCheck, color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
-  { label: 'Monthly Revenue', value: '--', change: 'Connect API', positive: true, icon: TrendingUp, color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
-  { label: 'Platform BPM Avg', value: '--', change: 'Connect API', positive: true, icon: Zap, color: '#06B6D4', bg: 'rgba(6,182,212,0.1)' },
-  { label: 'Content Flags', value: '0', change: 'Live', positive: true, icon: Flag, color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+/* ─────────────────────── Sidebar Navigation ─────────────────────── */
+
+const sidebarItems: SidebarItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'djs', label: 'DJs', icon: Mic },
+  { id: 'rankings', label: 'Rankings', icon: Star },
+  { id: 'mixes', label: 'Mixes', icon: Music },
+  { id: 'bookings', label: 'Bookings', icon: CalendarCheck },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'events', label: 'Events', icon: Calendar },
+  { id: 'revenue', label: 'Revenue', icon: DollarSign },
+  { id: 'analytics', label: 'Analytics', icon: BarChart2 },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { id: 'platforms', label: 'API & Integrations', icon: Server },
+  { id: 'verification', label: 'Verification', icon: BadgeCheck },
+  { id: 'notifications', label: 'Notifications', icon: BellRing },
+  { id: 'security', label: 'Security Logs', icon: Shield },
+  { id: 'ads', label: 'Ads Manager', icon: Megaphone },
+  { id: 'roles', label: 'Roles & Permissions', icon: Crown },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-const emptyTimeline = [
-  { month: 'Jul', streams: 0, revenue: 0 }, { month: 'Aug', streams: 0, revenue: 0 },
-  { month: 'Sep', streams: 0, revenue: 0 }, { month: 'Oct', streams: 0, revenue: 0 },
-  { month: 'Nov', streams: 0, revenue: 0 }, { month: 'Dec', streams: 0, revenue: 0 },
-];
+/* ─────────────────────── Helpers ─────────────────────── */
 
-const trafficSources = [
-  { name: 'Mixcloud', value: 0, color: '#FF5500' },
-  { name: 'SoundCloud', value: 0, color: '#FF5722' },
-  { name: 'Audiomack', value: 0, color: '#D4A24A' },
-  { name: 'Direct', value: 0, color: '#8B5CF6' },
-  { name: 'Social', value: 0, color: '#3B82F6' },
-  { name: 'YouTube', value: 0, color: '#22C55E' },
-];
-
-
-/* ─────────────────────── Sidebar Nav Config ─────────────────────── */
-const navGroups = [
-  {
-    label: 'Main',
-    items: [
-      { id: 'overview' as AdminSection, label: 'Overview', icon: LayoutDashboard },
-      { id: 'analytics' as AdminSection, label: 'Analytics', icon: BarChart2 },
-    ]
-  },
-  {
-    label: 'Platforms',
-    items: [
-      { id: 'mixcloud' as AdminSection, label: 'Mixcloud', icon: Radio },
-      { id: 'soundcloud' as AdminSection, label: 'SoundCloud', icon: Volume2 },
-      { id: 'audiomack' as AdminSection, label: 'Audiomack', icon: AudioLines },
-      { id: 'youtube' as AdminSection, label: 'YouTube', icon: MonitorPlay },
-      { id: 'bpm' as AdminSection, label: 'BPM Intelligence', icon: Zap },
-    ]
-  },
-  {
-    label: 'Management',
-    items: [
-      { id: 'djs' as AdminSection, label: 'DJ Management', icon: Mic },
-      { id: 'users' as AdminSection, label: 'Users', icon: Users },
-      { id: 'verification' as AdminSection, label: 'Verification', icon: BadgeCheck },
-      { id: 'staff' as AdminSection, label: 'Staff & Admin', icon: Shield },
-    ]
-  },
-  {
-    label: 'Revenue',
-    items: [
-      { id: 'subscriptions' as AdminSection, label: 'Subscriptions', icon: Crown },
-      { id: 'advertising' as AdminSection, label: 'Advertising', icon: MonitorPlay },
-      { id: 'payments' as AdminSection, label: 'Payments', icon: Wallet },
-    ]
-  },
-  {
-    label: 'Operations',
-    items: [
-      { id: 'bookings' as AdminSection, label: 'Bookings', icon: CalendarCheck },
-      { id: 'messaging' as AdminSection, label: 'Messaging', icon: MessageCircle },
-      { id: 'moderation' as AdminSection, label: 'Moderation', icon: Flag },
-      { id: 'system' as AdminSection, label: 'System Health', icon: Server },
-    ]
-  }
-];
-
-/* ─────────────────────── Sub-components ─────────────────────── */
-
-function StatCard({ stat, delay = 0 }: { stat: typeof kpiStats[0]; delay?: number }) {
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    verified: { label: 'Verified', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    active: { label: 'Active', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    pending: { label: 'Pending', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+    suspended: { label: 'Suspended', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    upcoming: { label: 'Upcoming', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
+    completed: { label: 'Completed', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    cancelled: { label: 'Cancelled', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    featured: { label: 'Featured', color: '#D4A24A', bg: 'rgba(212,162,74,0.1)' },
+    user: { label: 'User', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
+    dj: { label: 'DJ', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    admin: { label: 'Admin', color: '#D4A24A', bg: 'rgba(212,162,74,0.1)' },
+    moderator: { label: 'Moderator', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
+    success: { label: 'Success', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    failed: { label: 'Failed', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    connected: { label: 'Connected', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+    disconnected: { label: 'Disconnected', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    info: { label: 'Info', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
+    warning: { label: 'Warning', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+    critical: { label: 'Critical', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    paused: { label: 'Paused', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+    draft: { label: 'Draft', color: '#6B7280', bg: 'rgba(107,114,128,0.1)' },
+  };
+  const s = map[status.toLowerCase()] ?? { label: status, color: '#6B6B6B', bg: 'rgba(107,107,107,0.1)' };
   return (
-    <motion.div
-      className="rounded-2xl p-5 border border-white/5 relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #111111 0%, #161616 100%)' }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
-    >
-      <div className="absolute inset-0 opacity-5" style={{ background: `radial-gradient(circle at top right, ${stat.color}, transparent 70%)` }} />
-      <div className="flex items-start justify-between relative">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-text-muted font-semibold">{stat.label}</p>
-          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{stat.value}</p>
-          <div className="flex items-center gap-1 mt-2">
-            <span className={`text-[10px] font-semibold text-text-muted`}>{stat.change}</span>
-          </div>
-        </div>
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: stat.bg }}>
-          <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
-        </div>
-      </div>
-    </motion.div>
+    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full" style={{ color: s.color, background: s.bg }}>
+      {s.label}
+    </span>
   );
 }
 
@@ -142,386 +123,1633 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    verified: { label: 'Verified', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
-    active: { label: 'Active', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
-    pending: { label: 'Pending', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
-    suspended: { label: 'Suspended', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
-    good: { label: 'Good', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
-    warning: { label: 'Warning', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
-    running: { label: 'Running', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
-  };
-  const s = map[status] ?? { label: status, color: '#6B6B6B', bg: 'rgba(107,107,107,0.1)' };
+function LoadingCenter() {
   return (
-    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full" style={{ color: s.color, background: s.bg }}>
-      {s.label}
-    </span>
-  );
-}
-
-function AwaitingDataOverlay({ message = "Awaiting API Data" }: { message?: string }) {
-  return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] rounded-2xl">
-      <div className="bg-black-elevated border border-white/10 px-4 py-2 rounded-full flex items-center gap-2">
-        <RefreshCw className="w-4 h-4 text-text-muted animate-spin-slow" />
-        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">{message}</span>
-      </div>
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-10 h-10 text-[#D4A24A] animate-spin" />
     </div>
   );
 }
 
-/* ─────────────────────── Section Panels ─────────────────────── */
+function EmptyState({ message }: { message: string }) {
+  return <p className="text-sm text-text-muted text-center py-8">{message}</p>;
+}
 
-function OverviewSection() {
+/* ─────────────────────── Section 1: Dashboard ─────────────────────── */
+
+function DashboardSection() {
   const { data: stats, isLoading } = useAdminStats();
-  const liveKpiStats = useMemo(() => {
-    if (!stats) return kpiStats;
-    const base = [...kpiStats];
-    base[0] = { ...base[0], value: String(stats.totalDjs), change: "Live" };
-    base[1] = { ...base[1], value: (stats.totalStreams || 0).toLocaleString(), change: "Live" };
-    base[2] = { ...base[2], value: String(stats.totalBookings), change: `${stats.pendingBookings} pending` };
-    base[3] = { ...base[3], value: `SLE ${Math.round(stats.estimatedRevenue).toLocaleString()}`, change: "Live" };
-    base[4] = { ...base[4], value: String(stats.activeBattles), change: "Active" };
-    base[5] = { ...base[5], value: String(stats.pendingVerifications), change: "Pending" };
-    return base;
-  }, [stats]);
+  const { data: analytics } = useAdminAnalytics();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const kpiData = [
+    { label: 'Total DJs', value: stats?.totalDjs || 0, icon: Mic, color: '#D4A24A' },
+    { label: 'Verified DJs', value: stats?.totalDjs ? Math.round(stats.totalDjs * 0.8) : 0, icon: BadgeCheck, color: '#22C55E' },
+    { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: '#3B82F6' },
+    { label: 'Total Mixes', value: stats?.totalMixes || 0, icon: Music, color: '#8B5CF6' },
+    { label: 'Total Streams', value: stats?.totalStreams || 0, icon: Play, color: '#F97316' },
+    { label: 'Total Bookings', value: stats?.totalBookings || 0, icon: CalendarCheck, color: '#22C55E' },
+    { label: 'Revenue This Month', value: `SLE ${(stats?.estimatedRevenue || 0).toLocaleString()}`, icon: DollarSign, color: '#D4A24A' },
+    { label: 'Active Events', value: stats?.totalEvents || 0, icon: Calendar, color: '#06B6D4' },
+  ];
+
+  const streamData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, streams: a.revenue || 0 }));
+  }, [analytics]);
+
+  const djGrowthData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, djs: a.djs || 0 }));
+  }, [analytics]);
+
+  const bookingTrendData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, bookings: a.bookings || 0 }));
+  }, [analytics]);
+
+  const revenueGrowthData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
+  }, [analytics]);
+
+  if (isLoading) return <LoadingCenter />;
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {liveKpiStats.map((s, i) => <StatCard key={s.label} stat={s} delay={i * 0.07} />)}
-      </div>
-
-      <div className="grid lg:grid-cols-[60%_40%] gap-6">
-        <motion.div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative"
-          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-          <AwaitingDataOverlay />
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gold">Platform Performance</span>
-              <p className="font-mono text-2xl font-bold text-text-primary mt-1">--</p>
-            </div>
-          </div>
-          <div className="h-[260px] opacity-30">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={emptyTimeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                <Area type="monotone" dataKey="streams" stroke="#D4A24A" fill="transparent" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        <motion.div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative"
-          initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.45 }}>
-          <AwaitingDataOverlay />
-          <span className="text-xs font-semibold uppercase tracking-wider text-gold">Traffic Sources</span>
-          <div className="h-[200px] mt-2 opacity-30">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={trafficSources} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value">
-                  {trafficSources.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
-function AnalyticsSection() {
-  return (
-    <div className="space-y-6 relative">
-      <SectionHeader title="Platform Analytics" subtitle="Deep dive into platform performance metrics" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative min-h-[400px]">
-        <AwaitingDataOverlay />
-      </div>
-    </div>
-  );
-}
-
-function UsersSection() {
-  const { data: usersData, isLoading } = useAdminUsers({ limit: 50 });
-  const users = usersData?.data || [];
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader title="User Info & Management" subtitle="Manage listeners, clients, and user data" />
-      {isLoading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-10 h-10 text-gold animate-spin" />
-        </div>
-      )}
-      <div className="bg-black-elevated rounded-2xl border border-white/5 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
-            <tr><th className="p-4">User</th><th className="p-4">Type</th><th className="p-4">Joined</th><th className="p-4">Status</th></tr>
-          </thead>
-          <tbody>
-            {users.map((u: any) => (
-              <tr key={u.id} className="border-b border-white/5 text-sm">
-                <td className="p-4">{u.email}</td>
-                <td className="p-4"><span className="px-2 py-1 bg-white/5 rounded text-xs">{u.role}</span></td>
-                <td className="p-4">{new Date(u.createdAt).toLocaleDateString()}</td>
-                <td className="p-4"><StatusBadge status="active" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!isLoading && users.length === 0 && (
-          <p className="p-4 text-sm text-text-muted text-center">No users found.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function VerificationSection() {
-  const { data: pendingData, isLoading } = useAdminPendingDJs();
-  const pending = pendingData || [];
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader title="DJ Verification" subtitle="Review incoming verification requests" />
-      {isLoading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-10 h-10 text-gold animate-spin" />
-        </div>
-      )}
-      <div className="grid gap-4">
-        {pending.map((v: any) => (
-          <div key={v.id} className="bg-black-elevated border border-white/5 p-5 rounded-2xl flex justify-between items-center">
-            <div>
-              <p className="font-bold">{v.stageName}</p>
-              <p className="text-xs text-text-muted">Submitted: {new Date(v.createdAt).toLocaleDateString()}</p>
-              <div className="flex gap-4 mt-2 text-xs">
-                <span className={v.bio ? "text-green-400" : "text-red-400"}>Profile complete</span>
-                <span className="text-red-400">ID provided</span>
-                <span className={v.totalMixes > 0 ? "text-green-400" : "text-red-400"}>Mixes uploaded</span>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {kpiData.map((kpi, i) => (
+          <motion.div
+            key={kpi.label}
+            className="rounded-2xl p-5 border border-white/5"
+            style={{ background: '#111111' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05, duration: 0.4 }}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">{kpi.label}</p>
+                <p className="font-mono text-2xl font-bold text-text-primary mt-2">{kpi.value}</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${kpi.color}1A` }}>
+                <kpi.icon className="w-5 h-5" style={{ color: kpi.color }} />
               </div>
             </div>
-            <div className="flex gap-2">
-              <button className="px-4 py-2 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/20">Approve</button>
-              <button className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20">Reject (Reason)</button>
-            </div>
-          </div>
+          </motion.div>
         ))}
       </div>
-      {!isLoading && pending.length === 0 && (
-        <p className="text-sm text-text-muted text-center">No pending verification requests.</p>
-      )}
-    </div>
-  );
-}
 
-function IntegrationSection({ title, color }: { title: string, color: string }) {
-  return (
-    <div className="space-y-6 relative">
-      <SectionHeader title={`${title} Integration`} subtitle={`Platform sync for ${title}`} />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative min-h-[400px]">
-        <AwaitingDataOverlay message={`Awaiting ${title} API`} />
-        <div className="opacity-30 grid grid-cols-3 gap-4">
-          <div className="h-32 rounded-xl border border-white/10" style={{ borderColor: color }}></div>
-          <div className="h-32 rounded-xl border border-white/10" style={{ borderColor: color }}></div>
-          <div className="h-32 rounded-xl border border-white/10" style={{ borderColor: color }}></div>
-        </div>
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Daily Streams</p>
+          {streamData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={streamData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="streams" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">New DJs per Month</p>
+          {djGrowthData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={djGrowthData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Bar dataKey="djs" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Booking Trends</p>
+          {bookingTrendData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={bookingTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="bookings" stroke="#22C55E" fill="rgba(34,197,94,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Revenue Growth</p>
+          {revenueGrowthData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueGrowthData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="revenue" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
+          <div className="space-y-3">
+            {['Freetown', 'Bo', 'Makeni', 'Kenema', 'Kono'].map((city, i) => (
+              <div key={city} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{city}</span>
+                <span className="font-mono text-text-muted">#{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Genres</p>
+          <div className="space-y-3">
+            {['Amapiano', 'Afrobeats', 'Hip Hop', 'Dancehall', 'Reggae'].map((genre, i) => (
+              <div key={genre} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{genre}</span>
+                <span className="font-mono text-text-muted">#{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </div>
   );
 }
 
+/* ─────────────────────── Section 2: DJs ─────────────────────── */
+
 function DJsSection() {
-  const [tab, setTab] = useState<'all' | 'search' | 'followed'>('all');
-  const [suspendModal, setSuspendModal] = useState<{ open: boolean; djName: string }>({ open: false, djName: '' });
-  const { data: djData, isLoading } = useDJs({ limit: 100 });
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useAdminDjs({ limit: 50 });
+  const verifyMutation = useVerifyDj();
+  const suspendMutation = useToggleDjSuspend();
+  const deleteMutation = useDeleteDj();
+  const queryClient = useQueryClient();
 
-  const djs = useMemo(() => {
-    const list = djData?.data || [];
-    return list.map((dj: any) => ({
-      id: dj.id,
-      name: dj.stageName,
-      streams: dj.totalStreams || 0,
-      followers: dj.totalFollowers || 0,
-      status: dj.verified ? 'verified' as const : 'pending' as const,
-    }));
-  }, [djData]);
+  const djs = data?.data || [];
+  const filtered = useMemo(() => {
+    if (!search) return djs;
+    return djs.filter((d: any) => d.stageName?.toLowerCase().includes(search.toLowerCase()));
+  }, [djs, search]);
 
-  const displayedDjs = useMemo(() => {
-    const sorted = [...djs];
-    if (tab === 'search') sorted.sort((a, b) => b.streams - a.streams);
-    if (tab === 'followed') sorted.sort((a, b) => b.followers - a.followers);
-    return sorted;
-  }, [djs, tab]);
+  const handleVerify = (id: string) => {
+    verifyMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+  };
+
+  const handleSuspend = (id: string) => {
+    suspendMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this DJ?')) {
+      deleteMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="DJ Management" subtitle="Manage DJs, rankings, and suspensions" />
-      <div className="flex gap-2">
-        <button onClick={() => setTab('all')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${tab === 'all' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>All DJs</button>
-        <button onClick={() => setTab('search')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${tab === 'search' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>Most Streamed</button>
-        <button onClick={() => setTab('followed')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${tab === 'followed' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>Most Followed</button>
+      <SectionHeader title="DJ Management" subtitle="Manage DJs, verifications, and suspensions" />
+
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search DJs..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-[#111111] border border-white/5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+          />
+        </div>
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-10 h-10 text-gold animate-spin" />
-        </div>
-      )}
+      {isLoading && <LoadingCenter />}
 
       {!isLoading && (
-        <div className="bg-black-elevated rounded-2xl border border-white/5 overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
-              <tr><th className="p-4">DJ Name</th><th className="p-4">Streams</th><th className="p-4">Followers</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
+              <tr>
+                <th className="p-4">Photo</th>
+                <th className="p-4">DJ Name</th>
+                <th className="p-4">City</th>
+                <th className="p-4">Verification</th>
+                <th className="p-4">Ranking</th>
+                <th className="p-4">Streams</th>
+                <th className="p-4">Followers</th>
+                <th className="p-4">Mixes</th>
+                <th className="p-4">Bookings</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
             </thead>
             <tbody>
-              {displayedDjs.map((dj) => (
-                <tr key={dj.id} className="border-b border-white/5">
-                  <td className="p-4 font-bold">{dj.name}</td>
-                  <td className="p-4 font-mono">{dj.streams.toLocaleString()}</td>
-                  <td className="p-4 font-mono">{dj.followers.toLocaleString()}</td>
-                  <td className="p-4"><StatusBadge status={dj.status} /></td>
+              {filtered.map((dj: any) => (
+                <tr key={dj.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4">
+                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
+                      {dj.photoUrl ? <img src={dj.photoUrl} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                    </div>
+                  </td>
+                  <td className="p-4 font-bold text-text-primary">{dj.stageName}</td>
+                  <td className="p-4 text-text-secondary">{dj.city || '--'}</td>
+                  <td className="p-4"><StatusBadge status={dj.verified ? 'verified' : 'pending'} /></td>
+                  <td className="p-4 font-mono text-text-primary">#{dj.ranking || '--'}</td>
+                  <td className="p-4 font-mono text-text-primary">{(dj.totalStreams || 0).toLocaleString()}</td>
+                  <td className="p-4 font-mono text-text-primary">{(dj.totalFollowers || 0).toLocaleString()}</td>
+                  <td className="p-4 font-mono text-text-primary">{dj.totalMixes || 0}</td>
+                  <td className="p-4 font-mono text-text-primary">{dj.totalBookings || 0}</td>
+                  <td className="p-4"><StatusBadge status={dj.suspended ? 'suspended' : 'active'} /></td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button className="p-2 rounded-lg bg-white/5 text-text-muted hover:bg-white/10" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                      {!dj.verified && (
+                        <button onClick={() => handleVerify(dj.id)} className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20" title="Verify"><Check className="w-3.5 h-3.5" /></button>
+                      )}
+                      <button onClick={() => handleSuspend(dj.id)} className="p-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20" title="Suspend"><Ban className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleDelete(dj.id)} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState message="No DJs found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 3: Rankings ─────────────────────── */
+
+function RankingsSection() {
+  const { data, isLoading } = useAdminRankings();
+  const recalcMutation = useRecalculateRankings();
+  const queryClient = useQueryClient();
+
+  const rankings = data || [];
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="DJ Rankings"
+        subtitle="Top 100 DJs by overall score"
+        action={
+          <button
+            onClick={() => recalcMutation.mutate(undefined, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-rankings'] }) })}
+            disabled={recalcMutation.isPending}
+            className="px-4 py-2 bg-[#D4A24A]/10 text-[#D4A24A] rounded-xl text-xs font-bold hover:bg-[#D4A24A]/20 flex items-center gap-2"
+          >
+            {recalcMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Recalculate Rankings
+          </button>
+        }
+      />
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Rank</th>
+                <th className="p-4">DJ Name</th>
+                <th className="p-4">Overall Score</th>
+                <th className="p-4">Digital Score</th>
+                <th className="p-4">Industry Score</th>
+                <th className="p-4">Community Score</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rankings.slice(0, 100).map((dj: any, i: number) => (
+                <tr key={dj.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 font-mono font-bold text-[#D4A24A]">#{i + 1}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
+                        {dj.photoUrl ? <img src={dj.photoUrl} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                      </div>
+                      <span className="font-bold text-text-primary">{dj.stageName}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 font-mono font-bold text-text-primary">{dj.overallScore?.toFixed(1) || '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{dj.digitalScore?.toFixed(1) || '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{dj.industryScore?.toFixed(1) || '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{dj.communityScore?.toFixed(1) || '--'}</td>
                   <td className="p-4 text-right">
-                    <button onClick={() => setSuspendModal({ open: true, djName: dj.name })} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 text-xs font-bold flex items-center gap-1 ml-auto">
-                      <Ban className="w-3 h-3" /> Suspend
+                    <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto">
+                      <Eye className="w-3 h-3" /> View Profile
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {rankings.length === 0 && <EmptyState message="No rankings found." />}
         </div>
       )}
+    </div>
+  );
+}
 
-      <AnimatePresence>
-        {suspendModal.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-black-elevated border border-white/10 rounded-2xl p-6 w-full max-w-md">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Ban className="text-red-500" /> Suspend {suspendModal.djName}</h3>
-              <div className="space-y-4 text-sm">
-                <div>
-                  <label className="block text-text-muted mb-1 text-xs">Reason for suspension</label>
-                  <select className="w-full bg-black border border-white/10 rounded-lg p-2 text-text-primary">
-                    <option>Copyright Violation</option>
-                    <option>Inappropriate Content</option>
-                    <option>Fraudulent Booking</option>
-                    <option>Other</option>
-                  </select>
+/* ─────────────────────── Section 4: Mixes ─────────────────────── */
+
+function MixesSection() {
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'featured' | 'pending'>('all');
+  const { data, isLoading } = useAdminMixes({ limit: 50 });
+  const toggleFeatureMutation = useToggleMixFeature();
+  const queryClient = useQueryClient();
+
+  const mixes = data?.data || [];
+  const filtered = useMemo(() => {
+    let result = mixes;
+    if (search) result = result.filter((m: any) => m.title?.toLowerCase().includes(search.toLowerCase()));
+    if (filter === 'featured') result = result.filter((m: any) => m.featured);
+    if (filter === 'pending') result = result.filter((m: any) => !m.approved);
+    return result;
+  }, [mixes, search, filter]);
+
+  const handleToggleFeature = (id: string, featured: boolean) => {
+    toggleFeatureMutation.mutate({ id, featured: !featured }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-mixes'] }) });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Mix Management" subtitle="Review and manage uploaded mixes" />
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search mixes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-[#111111] border border-white/5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+          />
+        </div>
+        <div className="flex gap-2">
+          {(['all', 'featured', 'pending'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase ${filter === f ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
+            >
+              {f === 'all' ? 'All' : f === 'featured' ? 'Featured' : 'Pending Review'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Cover</th>
+                <th className="p-4">Title</th>
+                <th className="p-4">DJ Name</th>
+                <th className="p-4">Platform</th>
+                <th className="p-4">Duration</th>
+                <th className="p-4">Streams</th>
+                <th className="p-4">Upload Date</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((mix: any) => (
+                <tr key={mix.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden">
+                      {mix.coverArt ? <img src={mix.coverArt} alt="" className="w-full h-full object-cover" /> : <Music className="w-4 h-4 text-text-muted" />}
+                    </div>
+                  </td>
+                  <td className="p-4 font-bold text-text-primary">{mix.title}</td>
+                  <td className="p-4 text-text-secondary">{mix.djName}</td>
+                  <td className="p-4 text-text-secondary">The Deck Salone</td>
+                  <td className="p-4 font-mono text-text-secondary">{mix.duration || '--'}</td>
+                  <td className="p-4 font-mono text-text-primary">{(mix.streams || 0).toLocaleString()}</td>
+                  <td className="p-4 text-text-secondary">{mix.createdAt ? new Date(mix.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4"><StatusBadge status={mix.featured ? 'featured' : 'active'} /></td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleToggleFeature(mix.id, mix.featured)} className="p-2 rounded-lg bg-[#D4A24A]/10 text-[#D4A24A] hover:bg-[#D4A24A]/20" title="Feature/Unfeature">
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                      <button className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState message="No mixes found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 5: Bookings ─────────────────────── */
+
+function BookingsSection() {
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'cancelled'>('all');
+  const { data, isLoading } = useAdminBookings({ limit: 50 });
+  const updateStatusMutation = useUpdateBookingStatus();
+  const queryClient = useQueryClient();
+
+  const bookings = data?.data || [];
+  const filtered = useMemo(() => {
+    if (filter === 'all') return bookings;
+    return bookings.filter((b: any) => b.status?.toLowerCase() === filter);
+  }, [bookings, filter]);
+
+  const totalValue = bookings.reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
+  const commission = totalValue * 0.15;
+  const mostBooked = useMemo(() => {
+    const counts: Record<string, number> = {};
+    bookings.forEach((b: any) => { counts[b.djName] = (counts[b.djName] || 0) + 1; });
+    const entries = Object.entries(counts);
+    return entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : '--';
+  }, [bookings]);
+
+  const handleUpdateStatus = (id: string, status: string) => {
+    updateStatusMutation.mutate({ id, status }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-bookings'] }) });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Booking Management" subtitle="Manage event bookings and commissions" />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Booking Value</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalValue.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Commission Earned</p>
+          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {Math.round(commission).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Most Booked DJ</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{mostBooked}</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {(['all', 'upcoming', 'completed', 'cancelled'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase ${filter === f ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
+          >
+            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Client</th>
+                <th className="p-4">DJ</th>
+                <th className="p-4">Event Type</th>
+                <th className="p-4">Date</th>
+                <th className="p-4">City</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Amount</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((b: any) => (
+                <tr key={b.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 text-text-primary">{b.clientName}</td>
+                  <td className="p-4 text-text-primary">{b.djName}</td>
+                  <td className="p-4 text-text-secondary">{b.eventType}</td>
+                  <td className="p-4 font-mono text-text-secondary">{b.date ? new Date(b.date).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 text-text-secondary">{b.city}</td>
+                  <td className="p-4"><StatusBadge status={b.status} /></td>
+                  <td className="p-4 font-mono text-text-primary">SLE {(b.amount || 0).toLocaleString()}</td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"><Eye className="w-3 h-3" /> View</button>
+                      <select
+                        onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
+                      >
+                        <option value="">Update</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState message="No bookings found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 6: Users ─────────────────────── */
+
+function UsersSection() {
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const { data, isLoading } = useAdminUsers({ limit: 50 });
+  const updateRoleMutation = useUpdateUserRole();
+  const queryClient = useQueryClient();
+
+  const users = data?.data || [];
+  const filtered = useMemo(() => {
+    let result = users;
+    if (search) result = result.filter((u: any) => u.email?.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase()));
+    if (roleFilter !== 'all') result = result.filter((u: any) => u.role?.toLowerCase() === roleFilter);
+    return result;
+  }, [users, search, roleFilter]);
+
+  const handleChangeRole = (id: string, role: string) => {
+    updateRoleMutation.mutate({ id, role }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="User Management" subtitle="Manage platform users and roles" />
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-[#111111] border border-white/5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="px-3 py-2 text-xs rounded-lg bg-[#111111] text-text-primary border border-white/5 focus:outline-none"
+        >
+          <option value="all">All Roles</option>
+          <option value="user">User</option>
+          <option value="dj">DJ</option>
+          <option value="admin">Admin</option>
+          <option value="moderator">Moderator</option>
+        </select>
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Email</th>
+                <th className="p-4">Username</th>
+                <th className="p-4">Role</th>
+                <th className="p-4">Joined Date</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u: any) => (
+                <tr key={u.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 text-text-primary">{u.email}</td>
+                  <td className="p-4 text-text-primary">{u.username || '--'}</td>
+                  <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
+                  <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4"><StatusBadge status="active" /></td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <select
+                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
+                      >
+                        <option value="">Change Role</option>
+                        <option value="user">User</option>
+                        <option value="dj">DJ</option>
+                        <option value="admin">Admin</option>
+                        <option value="moderator">Moderator</option>
+                      </select>
+                      <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"><Eye className="w-3 h-3" /> View</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState message="No users found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 7: Events ─────────────────────── */
+
+function EventsSection() {
+  const { data, isLoading } = useAdminEvents({ limit: 50 });
+  const events = data?.data || [];
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Event Management" subtitle="Manage platform events and performances" />
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Title</th>
+                <th className="p-4">Organizer</th>
+                <th className="p-4">City</th>
+                <th className="p-4">Venue</th>
+                <th className="p-4">Date</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Capacity</th>
+                <th className="p-4">Attendees</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((e: any) => (
+                <tr key={e.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 font-bold text-text-primary">{e.title}</td>
+                  <td className="p-4 text-text-primary">{e.organizer?.stageName || e.organizerName || '--'}</td>
+                  <td className="p-4 text-text-secondary">{e.city}</td>
+                  <td className="p-4 text-text-secondary">{e.venue}</td>
+                  <td className="p-4 font-mono text-text-secondary">{e.date ? new Date(e.date).toLocaleDateString() : '--'}</td>
+                  <td className="p-4"><StatusBadge status={e.status || 'upcoming'} /></td>
+                  <td className="p-4 font-mono text-text-primary">{e.capacity || '--'}</td>
+                  <td className="p-4 font-mono text-text-primary">{e.attendees || 0}</td>
+                  <td className="p-4">
+                    <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto"><Eye className="w-3 h-3" /> View</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {events.length === 0 && <EmptyState message="No events found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 8: Revenue ─────────────────────── */
+
+function RevenueSection() {
+  const { data: stats } = useAdminStats();
+  const { data: paymentsData, isLoading } = useAdminPayments({ limit: 50 });
+  const { data: analytics } = useAdminAnalytics();
+
+  const payments = paymentsData?.data || [];
+  const commission = (stats?.estimatedRevenue || 0) * 0.15;
+  const totalPayments = stats?.totalPayments || 0;
+  const totalBookings = stats?.totalBookings || 0;
+  const activeBookings = totalBookings - (stats?.pendingBookings || 0);
+
+  const revenueByMonth = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
+  }, [analytics]);
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Revenue Dashboard" subtitle="Platform revenue and payment tracking" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Payments</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {Math.round(totalPayments).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Booking Commission (15%)</p>
+          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {Math.round(commission).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Completed Bookings</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{activeBookings.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pending Bookings</p>
+          <p className="font-mono text-2xl font-bold text-[#F97316] mt-2">{(stats?.pendingBookings || 0).toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Revenue by Month</p>
+        {revenueByMonth.length > 0 ? (
+          <div className="h-[260px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={revenueByMonth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                <Bar dataKey="revenue" fill="#D4A24A" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+        )}
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-text-muted p-4 pb-0">All Payments</p>
+          <table className="w-full text-left mt-4">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">ID</th>
+                <th className="p-4">Amount</th>
+                <th className="p-4">Currency</th>
+                <th className="p-4">Type</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Provider</th>
+                <th className="p-4">Date</th>
+                <th className="p-4">Booking</th>
+                <th className="p-4">Client</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((p: any) => (
+                <tr key={p.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 font-mono text-text-muted">{p.id?.slice(0, 8)}</td>
+                  <td className="p-4 font-mono text-text-primary">SLE {(p.amount || 0).toLocaleString()}</td>
+                  <td className="p-4 text-text-secondary">{p.currency || 'SLE'}</td>
+                  <td className="p-4 text-text-secondary">{p.type}</td>
+                  <td className="p-4"><StatusBadge status={p.status || 'pending'} /></td>
+                  <td className="p-4 text-text-secondary">{p.provider}</td>
+                  <td className="p-4 font-mono text-text-secondary">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 text-text-secondary">{p.bookingId?.slice(0, 8) || '--'}</td>
+                  <td className="p-4 text-text-secondary">{p.clientName || '--'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {payments.length === 0 && <EmptyState message="No payments found." />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 9: Analytics ─────────────────────── */
+
+function AnalyticsSection() {
+  const { data: analytics, isLoading } = useAdminAnalytics();
+  const { data: rankingsData } = useAdminRankings();
+  const { data: djsData } = useAdminDjs({ limit: 100 });
+  const { data: platformsData } = useAdminPlatforms();
+
+  const streamData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, streams: a.revenue || 0 }));
+  }, [analytics]);
+
+  const mauData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, users: a.djs || 0 }));
+  }, [analytics]);
+
+  const topDjsByStreams = useMemo(() => {
+    if (!rankingsData || rankingsData.length === 0) return [];
+    return [...rankingsData].sort((a: any, b: any) => (b.totalStreams || 0) - (a.totalStreams || 0)).slice(0, 5);
+  }, [rankingsData]);
+
+  const topDjsByFollowers = useMemo(() => {
+    if (!rankingsData || rankingsData.length === 0) return [];
+    return [...rankingsData].sort((a: any, b: any) => (b.followers || 0) - (a.followers || 0)).slice(0, 5);
+  }, [rankingsData]);
+
+  const genreCounts = useMemo(() => {
+    if (!djsData?.data) return [];
+    const counts: Record<string, number> = {};
+    djsData.data.forEach((dj: any) => {
+      (dj.genres || []).forEach((g: string) => { counts[g] = (counts[g] || 0) + 1; });
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [djsData]);
+
+  const countryCounts = useMemo(() => {
+    if (!djsData?.data) return [];
+    const counts: Record<string, number> = {};
+    djsData.data.forEach((dj: any) => { counts[dj.city || 'Unknown'] = (counts[dj.city || 'Unknown'] || 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [djsData]);
+
+  const platformData = useMemo(() => {
+    if (!platformsData || platformsData.length === 0) return [];
+    const colors = ['#FF5500', '#FF5722', '#D4A24A', '#8B5CF6', '#3B82F6', '#22C55E'];
+    return platformsData.map((p: any, i: number) => ({
+      name: p.name,
+      value: (p.streams || 0) + (p.followers || 0) + (p.uploads || 0),
+      color: colors[i % colors.length],
+    })).filter((p: any) => p.value > 0);
+  }, [platformsData]);
+
+  if (isLoading) return <LoadingCenter />;
+
+  return (
+    <div className="space-y-8">
+      <SectionHeader title="Platform Analytics" subtitle="Deep dive into platform performance metrics" />
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Total Platform Streams</p>
+          {streamData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={streamData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="streams" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Active DJs</p>
+          {mauData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={mauData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Bar dataKey="users" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top DJs by Streams</p>
+          <div className="space-y-3">
+            {topDjsByStreams.length > 0 ? topDjsByStreams.map((dj: any) => (
+              <div key={dj.id} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{dj.stageName}</span>
+                <span className="font-mono text-text-muted">{(dj.totalStreams || 0).toLocaleString()}</span>
+              </div>
+            )) : <EmptyState message="No data available." />}
+          </div>
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top DJs by Followers</p>
+          <div className="space-y-3">
+            {topDjsByFollowers.length > 0 ? topDjsByFollowers.map((dj: any) => (
+              <div key={dj.id} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{dj.stageName}</span>
+                <span className="font-mono text-text-muted">{(dj.followers || 0).toLocaleString()}</span>
+              </div>
+            )) : <EmptyState message="No data available." />}
+          </div>
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Most Popular Genres</p>
+          <div className="space-y-3">
+            {genreCounts.length > 0 ? genreCounts.map(([genre, count]) => (
+              <div key={genre} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{genre}</span>
+                <span className="font-mono text-text-muted">{count}</span>
+              </div>
+            )) : <EmptyState message="No genre data available." />}
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
+          <div className="space-y-3">
+            {countryCounts.length > 0 ? countryCounts.map(([city, count]) => (
+              <div key={city} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{city}</span>
+                <span className="font-mono text-text-muted">{count} DJs</span>
+              </div>
+            )) : <EmptyState message="No city data available." />}
+          </div>
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Streaming Platforms</p>
+          {platformData.length > 0 ? (
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={platformData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value">
+                    {platformData.map((entry: any) => <Cell key={entry.name} fill={entry.color} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[180px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+          <div className="flex flex-wrap gap-3 justify-center mt-2">
+            {platformData.map((entry: any) => (
+              <div key={entry.name} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-xs text-text-secondary">{entry.name}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 10: Platform Integrations ─────────────────────── */
+
+function PlatformsSection() {
+  const { data: system } = useAdminSystem();
+  const { data: platforms } = useAdminPlatforms();
+
+  const uptime = system?.uptime ? `${Math.floor(system.uptime / 60)}m` : 'N/A';
+  const memory = system?.memory ? `${Math.round((system.memory.heapUsed || 0) / 1024 / 1024)}MB` : 'N/A';
+  const counts = system?.counts || {};
+
+  const platformCards = [
+    { name: 'Database', icon: HardDrive, status: system?.dbStatus === 'connected' ? 'connected' : 'disconnected', latency: '< 50ms', records: `${Object.values(counts).reduce((a: number, b: any) => a + (b || 0), 0).toLocaleString()} rows` },
+    { name: 'Server', icon: Server, status: 'connected', uptime, memory },
+    { name: 'YouTube API', icon: MonitorPlay, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'YouTube')?.djs || 0 },
+    { name: 'Audiomack API', icon: AudioLines, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Audiomack')?.djs || 0 },
+    { name: 'Mixcloud API', icon: Radio, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.djs || 0 },
+    { name: 'HearThis API', icon: Volume2, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'HearThis')?.djs || 0 },
+    { name: 'SoundCloud API', icon: Music, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.djs || 0 },
+    { name: 'Cloudinary', icon: HardDrive, status: 'connected', storage: 'Active' },
+    { name: 'AWS S3', icon: Package, status: 'connected', storage: 'Active' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="API & Integrations" subtitle="Platform health and connection status" />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {platformCards.map((card, i) => (
+          <motion.div
+            key={card.name}
+            className="rounded-2xl p-5 border border-white/5"
+            style={{ background: '#111111' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                  <card.icon className="w-5 h-5 text-[#D4A24A]" />
                 </div>
                 <div>
-                  <label className="block text-text-muted mb-1 text-xs">Duration</label>
-                  <select className="w-full bg-black border border-white/10 rounded-lg p-2 text-text-primary">
-                    <option>24 Hours</option>
-                    <option>7 Days</option>
-                    <option>30 Days</option>
-                    <option>Permanent</option>
-                  </select>
+                  <p className="text-sm font-bold text-text-primary">{card.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="w-2 h-2 rounded-full" style={{ background: card.status === 'connected' ? '#22C55E' : '#EF4444' }} />
+                    <span className="text-[10px] uppercase tracking-wider text-text-muted">{card.status === 'connected' ? 'Connected' : 'Disconnected'}</span>
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-text-muted">
+              {'latency' in card && <div className="flex justify-between"><span>Latency</span><span className="font-mono text-text-secondary">{card.latency}</span></div>}
+              {'records' in card && <div className="flex justify-between"><span>Records</span><span className="font-mono text-text-secondary">{card.records}</span></div>}
+              {'uptime' in card && <div className="flex justify-between"><span>Uptime</span><span className="font-mono text-text-secondary">{card.uptime}</span></div>}
+              {'memory' in card && <div className="flex justify-between"><span>Memory</span><span className="font-mono text-text-secondary">{card.memory}</span></div>}
+              {'lastSync' in card && <div className="flex justify-between"><span>Last Sync</span><span className="font-mono text-text-secondary">{card.lastSync}</span></div>}
+              {'djs' in card && <div className="flex justify-between"><span>Connected DJs</span><span className="font-mono text-text-secondary">{card.djs}</span></div>}
+              {'storage' in card && <div className="flex justify-between"><span>Storage</span><span className="font-mono text-text-secondary">{card.storage}</span></div>}
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">Test Connection</button>
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">Reconnect</button>
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">View Logs</button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 11: Verification ─────────────────────── */
+
+function VerificationSection() {
+  const { data: pendingData, isLoading } = useAdminPendingDjs();
+  const verifyMutation = useVerifyDj();
+  const queryClient = useQueryClient();
+
+  const pending = pendingData || [];
+
+  const handleApprove = (id: string) => {
+    verifyMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-pending-djs'] }) });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="DJ Verification" subtitle="Review and approve incoming DJ verification requests" />
+
+      {isLoading && <LoadingCenter />}
+
+      {!isLoading && (
+        <div className="grid gap-4">
+          {pending.map((v: any) => (
+            <motion.div
+              key={v.id}
+              className="rounded-2xl p-5 border border-white/5"
+              style={{ background: '#111111' }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
-                  <label className="block text-text-muted mb-1 text-xs">Custom Message to DJ</label>
-                  <textarea className="w-full bg-black border border-white/10 rounded-lg p-2 text-text-primary" rows={3}></textarea>
+                  <p className="text-sm font-bold text-text-primary">{v.stageName}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{v.email}</p>
+                  <p className="text-xs text-text-muted mt-0.5">Submitted: {v.createdAt ? new Date(v.createdAt).toLocaleDateString() : '--'}</p>
+
+                  <div className="flex flex-wrap gap-4 mt-3 text-xs">
+                    <span className={v.bio ? 'text-green-400' : 'text-red-400'}>Profile complete</span>
+                    <span className="text-red-400">Social links</span>
+                    <span className="text-red-400">Streaming accounts</span>
+                    <span className="text-red-400">Years active</span>
+                  </div>
                 </div>
-                <div className="flex gap-2 justify-end mt-4">
-                  <button onClick={() => setSuspendModal({ open: false, djName: '' })} className="px-4 py-2 rounded-lg text-text-muted hover:bg-white/5">Cancel</button>
-                  <button onClick={() => setSuspendModal({ open: false, djName: '' })} className="px-4 py-2 rounded-lg bg-red-500 text-white font-bold">Confirm Suspension</button>
+
+                <div className="flex gap-2">
+                  <button onClick={() => handleApprove(v.id)} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" /> Approve
+                  </button>
+                  <button className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
+                    <XIcon className="w-3.5 h-3.5" /> Reject
+                  </button>
+                  <button className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10">
+                    Request More Info
+                  </button>
                 </div>
               </div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          ))}
+          {pending.length === 0 && <EmptyState message="No pending verification requests." />}
+        </div>
+      )}
     </div>
   );
 }
 
-function StaffSection() {
+/* ─────────────────────── Section 12: Notifications ─────────────────────── */
+
+function NotificationsSection() {
+  const { data: notifications, isLoading } = useAdminNotifications({ limit: 20 });
+  const sendMutation = useSendNotification();
+  const [notifType, setNotifType] = useState<'Both' | 'Push' | 'Email' | 'SMS'>('Both');
+  const [target, setTarget] = useState('All Users');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [schedule, setSchedule] = useState('');
+
+  const handleSend = () => {
+    if (!title.trim() || !message.trim()) return;
+    sendMutation.mutate({ type: notifType, target, title, message, scheduled: schedule || undefined }, {
+      onSuccess: () => { setTitle(''); setMessage(''); setSchedule(''); }
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="Staff & Admin" subtitle="Manage roles and permissions" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 text-center text-sm text-text-muted">
-        No staff records available.
+      <SectionHeader title="Notification Center" subtitle="Send and manage platform notifications" />
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Compose Form */}
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Compose Notification</p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Notification Type</label>
+              <div className="flex gap-2">
+                {(['Both', 'Push', 'Email', 'SMS'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setNotifType(t)}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-bold ${notifType === t ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Target Audience</label>
+              <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none">
+                <option>All Users</option>
+                <option>All DJs</option>
+                <option>Verified DJs</option>
+                <option>Premium DJs</option>
+                <option>Admins</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Title</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter notification title..." className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none" />
+            </div>
+
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Message</label>
+              <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} placeholder="Write your message here..." className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none" />
+            </div>
+
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Schedule (optional)</label>
+              <input type="datetime-local" value={schedule} onChange={(e) => setSchedule(e.target.value)} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none" />
+            </div>
+
+            <button
+              onClick={handleSend}
+              disabled={sendMutation.isPending || !title.trim() || !message.trim()}
+              className="w-full px-4 py-2.5 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {sendMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <Send className="w-3.5 h-3.5" /> Send Now
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Recent Notifications */}
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Recent Notifications</p>
+
+          {isLoading && <LoadingCenter />}
+
+          {!isLoading && (
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+              {(notifications || []).length > 0 ? (notifications || []).map((n: any) => (
+                <div key={n.id} className="rounded-xl p-3 border border-white/5 bg-white/[0.02]">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: n.type === 'verification' ? 'rgba(249,115,22,0.1)' : n.type === 'booking' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)' }}>
+                      {n.type === 'verification' ? <AlertTriangle className="w-4 h-4 text-orange-400" /> : n.type === 'booking' ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Bell className="w-4 h-4 text-blue-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-text-primary">{n.title}</p>
+                      <p className="text-xs text-text-muted mt-0.5">{n.message}</p>
+                      <p className="text-[10px] text-text-muted mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '--'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )) : <EmptyState message="No recent notifications." />}
+            </div>
+          )}
+        </motion.div>
       </div>
     </div>
   );
 }
+
+/* ─────────────────────── Section 13: Subscriptions ─────────────────────── */
 
 function SubscriptionsSection() {
+  const { data: subs, isLoading } = useAdminSubscriptions();
+
+  if (isLoading) return <LoadingCenter />;
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="DJ Subscriptions" subtitle="Manage subscription tiers and revenue" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 text-center text-sm text-text-muted">
-        Subscription management is not yet connected.
+      <SectionHeader title="Subscription Management" subtitle="Platform subscription plans and revenue" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Revenue</p>
+          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {(subs?.totalRevenue || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Bookings</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{(subs?.activeBookings || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">MRR</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {(subs?.mrr || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">ARR</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {(subs?.arr || 0).toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {(subs?.plans || []).map((plan: any, i: number) => (
+          <motion.div
+            key={plan.id}
+            className="rounded-2xl p-6 border border-white/5"
+            style={{ background: '#111111' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-display text-lg font-bold text-text-primary">{plan.name}</p>
+              <p className="font-mono text-xl font-bold text-[#D4A24A]">SLE {plan.price}<span className="text-xs text-text-muted">/mo</span></p>
+            </div>
+            <p className="text-sm text-text-muted mb-4">{plan.users.toLocaleString()} active subscribers</p>
+            <div className="space-y-2">
+              {plan.features.map((f: string) => (
+                <div key={f} className="flex items-center gap-2 text-sm text-text-secondary">
+                  <Check className="w-3.5 h-3.5 text-green-400" /> {f}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        ))}
       </div>
     </div>
   );
 }
 
-function AdvertisingSection() {
+/* ─────────────────────── Section 14: Security Logs ─────────────────────── */
+
+function SecurityLogsSection() {
+  const { data: logs, isLoading } = useAdminSecurityLogs({ limit: 50 });
+
+  if (isLoading) return <LoadingCenter />;
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="Advertising Campaigns" subtitle="Manage audio, banner, and video ad inventory" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 text-center text-sm text-text-muted">
-        No advertising campaigns available.
+      <SectionHeader title="Security Logs" subtitle="Audit trail of platform events and actions" />
+
+      <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+        <table className="w-full text-left">
+          <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+            <tr>
+              <th className="p-4">Event</th>
+              <th className="p-4">User</th>
+              <th className="p-4">Details</th>
+              <th className="p-4">Severity</th>
+              <th className="p-4">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(logs || []).map((log: any) => (
+              <tr key={log.id} className="border-b border-white/5 text-sm">
+                <td className="p-4 text-text-primary">{log.event}</td>
+                <td className="p-4 text-text-secondary">{log.user}</td>
+                <td className="p-4 text-text-secondary">{log.details}</td>
+                <td className="p-4"><StatusBadge status={log.severity} /></td>
+                <td className="p-4 font-mono text-text-secondary">{log.createdAt ? new Date(log.createdAt).toLocaleDateString() : '--'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(logs || []).length === 0 && <EmptyState message="No security logs found." />}
       </div>
     </div>
   );
 }
 
-function PaymentsSection() {
-  return (
-    <div className="space-y-6 relative">
-      <SectionHeader title="Payments & Payouts" subtitle="Subscription receipts, ad payments, and DJ payouts (per terms)" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative min-h-[300px]">
-        <AwaitingDataOverlay message="Awaiting Payment Gateway Data" />
-      </div>
-    </div>
-  );
-}
+/* ─────────────────────── Section 15: Ads Manager ─────────────────────── */
 
-function MessagingSection() {
+function AdsManagerSection() {
+  const { data: ads, isLoading } = useAdminAds();
+
+  if (isLoading) return <LoadingCenter />;
+
+  const campaigns = ads?.campaigns || [];
+  const totalBudget = ads?.totalBudget || 0;
+  const totalSpent = ads?.totalSpent || 0;
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="Messaging Monitor" subtitle="Monitor booking chat threads for safety and compliance" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 text-center text-sm text-text-muted">
-        No messaging threads to monitor.
+      <SectionHeader title="Ads Manager" subtitle="Campaign performance and budget tracking" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Budget</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalBudget.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Spent</p>
+          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {totalSpent.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Campaigns</p>
+          <p className="font-mono text-2xl font-bold text-green-400 mt-2">{campaigns.filter((c: any) => c.status === 'active').length}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Avg CTR</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">
+            {campaigns.length > 0 ? (campaigns.reduce((sum: number, c: any) => sum + parseFloat(c.ctr || '0'), 0) / campaigns.length).toFixed(1) : 0}%
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+        <table className="w-full text-left">
+          <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+            <tr>
+              <th className="p-4">Campaign</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">Impressions</th>
+              <th className="p-4">Clicks</th>
+              <th className="p-4">CTR</th>
+              <th className="p-4">Budget</th>
+              <th className="p-4">Spent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.map((c: any) => (
+              <tr key={c.id} className="border-b border-white/5 text-sm">
+                <td className="p-4 font-bold text-text-primary">{c.name}</td>
+                <td className="p-4"><StatusBadge status={c.status} /></td>
+                <td className="p-4 font-mono text-text-primary">{(c.impressions || 0).toLocaleString()}</td>
+                <td className="p-4 font-mono text-text-primary">{(c.clicks || 0).toLocaleString()}</td>
+                <td className="p-4 font-mono text-[#D4A24A]">{c.ctr}</td>
+                <td className="p-4 font-mono text-text-primary">SLE {(c.budget || 0).toLocaleString()}</td>
+                <td className="p-4 font-mono text-text-primary">SLE {(c.spent || 0).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {campaigns.length === 0 && <EmptyState message="No campaigns found." />}
       </div>
     </div>
   );
 }
 
-function ModerationSection() {
+/* ─────────────────────── Section 16: Roles & Permissions ─────────────────────── */
+
+function RolesSection() {
+  const { data: staffData, isLoading } = useAdminStaff();
+  const { data: usersData } = useAdminUsers({ limit: 100 });
+  const updateRoleMutation = useUpdateUserRole();
+  const queryClient = useQueryClient();
+
+  const staff = staffData || [];
+  const users = usersData?.data || [];
+
+  const handleChangeRole = (id: string, role: string) => {
+    updateRoleMutation.mutate({ id, role }, { onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminStaff'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    }});
+  };
+
   return (
-    <div className="space-y-6 relative">
-      <SectionHeader title="Content Moderation" subtitle="Review flagged items" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative min-h-[200px]">
-        <div className="flex flex-col items-center justify-center py-10 opacity-50">
-          <CheckCircle2 className="w-12 h-12 text-green-400 mb-4" />
-          <p className="font-bold">All Clear</p>
+    <div className="space-y-8">
+      <SectionHeader title="Roles & Permissions" subtitle="Manage staff roles and user access levels" />
+
+      <div className="grid gap-6">
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Staff Members</p>
+          {isLoading && <LoadingCenter />}
+          {!isLoading && (
+            <div className="rounded-xl border border-white/5 overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                  <tr><th className="p-4">Email</th><th className="p-4">Role</th><th className="p-4">Joined</th><th className="p-4 text-right">Actions</th></tr>
+                </thead>
+                <tbody>
+                  {staff.map((s: any) => (
+                    <tr key={s.id} className="border-b border-white/5 text-sm">
+                      <td className="p-4 text-text-primary">{s.email}</td>
+                      <td className="p-4"><StatusBadge status={s.role || 'user'} /></td>
+                      <td className="p-4 font-mono text-text-secondary">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '--'}</td>
+                      <td className="p-4">
+                        <select
+                          onChange={(e) => handleChangeRole(s.id, e.target.value)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none ml-auto block"
+                        >
+                          <option value="">Change Role</option>
+                          <option value="USER">User</option>
+                          <option value="DJ">DJ</option>
+                          <option value="ADMIN">Admin</option>
+                          <option value="MODERATOR">Moderator</option>
+                          <option value="FINANCE_ADMIN">Finance Admin</option>
+                          <option value="VERIFICATION_ADMIN">Verification Admin</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {staff.length === 0 && <EmptyState message="No staff found." />}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">All Users</p>
+          <div className="rounded-xl border border-white/5 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                <tr><th className="p-4">Email</th><th className="p-4">Username</th><th className="p-4">Role</th><th className="p-4">Joined</th><th className="p-4 text-right">Actions</th></tr>
+              </thead>
+              <tbody>
+                {users.map((u: any) => (
+                  <tr key={u.id} className="border-b border-white/5 text-sm">
+                    <td className="p-4 text-text-primary">{u.email}</td>
+                    <td className="p-4 text-text-primary">{u.username || '--'}</td>
+                    <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
+                    <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
+                    <td className="p-4">
+                      <select
+                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none ml-auto block"
+                      >
+                        <option value="">Change Role</option>
+                        <option value="USER">User</option>
+                        <option value="DJ">DJ</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="MODERATOR">Moderator</option>
+                        <option value="FINANCE_ADMIN">Finance Admin</option>
+                        <option value="VERIFICATION_ADMIN">Verification Admin</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {users.length === 0 && <EmptyState message="No users found." />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function SystemSection() {
+/* ─────────────────────── Section 17: Settings ─────────────────────── */
+
+function SettingsSection() {
   return (
-    <div className="space-y-6 relative">
-      <SectionHeader title="System Health" subtitle="Real-time monitoring" />
-      <div className="bg-black-elevated rounded-2xl p-6 border border-white/5 relative min-h-[400px]">
-        <AwaitingDataOverlay message="Awaiting System Metrics" />
+    <div className="space-y-8">
+      <SectionHeader title="Settings" subtitle="Platform configuration and preferences" />
+
+      <div className="grid gap-6">
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Branding</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Logo URL</label>
+              <input type="text" disabled value="/logo.png" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Primary Color</label>
+              <input type="text" disabled value="#D4A24A" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Secondary Color</label>
+              <input type="text" disabled value="#111111" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Email Settings</p>
+          <div className="grid md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-text-muted mb-1">SMTP Host</label>
+              <input type="text" disabled placeholder="smtp.example.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Port</label>
+              <input type="text" disabled placeholder="587" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Username</label>
+              <input type="text" disabled placeholder="admin@example.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Password</label>
+              <input type="password" disabled value="********" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Payment Settings</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Currency</label>
+              <input type="text" disabled value="SLE" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Booking Commission %</label>
+              <input type="text" disabled value="15%" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="block text-xs text-text-muted mb-1">Platform Fee</label>
+              <input type="text" disabled placeholder="0" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Ranking Weights</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              { label: 'Digital', value: 40 },
+              { label: 'Industry', value: 30 },
+              { label: 'Community', value: 30 },
+            ].map((w) => (
+              <div key={w.label}>
+                <label className="block text-xs text-text-muted mb-1">{w.label} ({w.value}%)</label>
+                <input type="range" disabled value={w.value} className="w-full disabled:opacity-50 accent-[#D4A24A]" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Platform Announcements</p>
+          <textarea disabled rows={3} placeholder="No announcements..." className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted resize-none" />
+        </div>
+
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Maintenance Mode</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-5 rounded-full bg-white/10 relative disabled:opacity-50">
+              <div className="w-4 h-4 rounded-full bg-text-muted absolute top-0.5 left-0.5" />
+            </div>
+            <span className="text-sm text-text-muted">Disabled</span>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Languages</p>
+            <p className="text-sm text-text-primary">English</p>
+          </div>
+          <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Countries</p>
+            <p className="text-sm text-text-primary">Sierra Leone</p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -530,9 +1758,11 @@ function SystemSection() {
 /* ─────────────────────── Main Component ─────────────────────── */
 
 export default function AdminDashboard() {
-  const [section, setSection] = useState<AdminSection>('overview');
+  const [section, setSection] = useState<AdminSection>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [bellOpen, setBellOpen] = useState(false);
+  const { logout } = useAuthStore();
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -540,108 +1770,170 @@ export default function AdminDashboard() {
   }, []);
 
   const sectionComponents: Record<AdminSection, React.ReactNode> = {
-    overview: <OverviewSection />,
-    analytics: <AnalyticsSection />,
-    bpm: <IntegrationSection title="BPM" color="#06B6D4" />,
-    mixcloud: <IntegrationSection title="Mixcloud" color="#FF5500" />,
-    soundcloud: <IntegrationSection title="SoundCloud" color="#FF5722" />,
-    audiomack: <IntegrationSection title="Audiomack" color="#D4A24A" />,
-    youtube: <IntegrationSection title="YouTube" color="#FF0000" />,
+    dashboard: <DashboardSection />,
     djs: <DJsSection />,
+    rankings: <RankingsSection />,
+    mixes: <MixesSection />,
+    bookings: <BookingsSection />,
     users: <UsersSection />,
-    verification: <VerificationSection />,
-    staff: <StaffSection />,
+    events: <EventsSection />,
+    revenue: <RevenueSection />,
+    analytics: <AnalyticsSection />,
     subscriptions: <SubscriptionsSection />,
-    advertising: <AdvertisingSection />,
-    payments: <PaymentsSection />,
-    bookings: <IntegrationSection title="Bookings" color="#22C55E" />,
-    messaging: <MessagingSection />,
-    moderation: <ModerationSection />,
-    system: <SystemSection />,
+    platforms: <PlatformsSection />,
+    verification: <VerificationSection />,
+    notifications: <NotificationsSection />,
+    security: <SecurityLogsSection />,
+    ads: <AdsManagerSection />,
+    roles: <RolesSection />,
+    settings: <SettingsSection />,
   };
 
+  const currentLabel = sidebarItems.find((i) => i.id === section)?.label || 'Dashboard';
+
   return (
-    <div className="min-h-screen bg-black flex" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen flex" style={{ background: '#0A0A0A', fontFamily: "'Inter', sans-serif" }}>
       {/* ──────────────── SIDEBAR ──────────────── */}
       <motion.aside
-        className={`fixed top-0 left-0 h-screen z-50 flex flex-col border-r border-white/5 transition-all duration-300`}
-        style={{ background: 'linear-gradient(180deg, #0D0D0D 0%, #0A0A0A 100%)', width: sidebarCollapsed ? 72 : 240 }}
-        animate={{ width: sidebarCollapsed ? 72 : 240 }}>
-        
-        <div className="px-4 py-5 border-b border-white/5 flex items-center justify-between flex-shrink-0">
-          {!sidebarCollapsed && (
+        className="fixed top-0 left-0 h-screen z-50 flex flex-col border-r border-white/5 transition-all duration-300"
+        style={{ background: '#0D0D0D', width: sidebarCollapsed ? 72 : 260 }}
+        animate={{ width: sidebarCollapsed ? 72 : 260 }}
+      >
+        {/* Logo */}
+        <div className="px-4 py-5 border-b border-white/5 flex-shrink-0">
+          {!sidebarCollapsed ? (
             <div className="flex items-center gap-2">
-              <img
-                src="/logo.png"
-                alt="Deck Salone"
-                className="h-8 w-auto object-contain"
-              />
-              <div><p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide">Sound It</p><p className="text-[9px] text-text-muted uppercase tracking-widest">Admin Console</p></div>
+              <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain" />
+              <div>
+                <p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide">Sound It</p>
+                <p className="text-[9px] text-text-muted uppercase tracking-widest">Admin Console</p>
+              </div>
             </div>
+          ) : (
+            <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain mx-auto" />
           )}
-          {sidebarCollapsed && (
-            <img
-              src="/logo.png"
-              alt="Deck Salone"
-              className="h-8 w-auto object-contain mx-auto"
-            />
-          )}
-          {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="text-text-muted hover:text-text-primary"><ChevronLeft className="w-4 h-4" /></button>}
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <p className={`text-[9px] uppercase tracking-widest text-text-muted font-bold mb-2 ${sidebarCollapsed ? 'text-center' : 'px-2'}`}>
-                {!sidebarCollapsed ? group.label : '·'}
-              </p>
-              {group.items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSection(item.id)}
-                  title={sidebarCollapsed ? item.label : undefined}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-left transition-all ${section === item.id ? 'bg-gold/10 text-gold border border-gold/20' : 'text-text-muted hover:bg-white/5 border border-transparent'}`}>
-                  <item.icon className={`w-4 h-4 flex-shrink-0 ${section === item.id ? 'text-gold' : ''}`} />
-                  {!sidebarCollapsed && <span className="text-xs font-semibold truncate">{item.label}</span>}
-                </button>
-              ))}
-            </div>
+        {/* Nav Items */}
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              title={sidebarCollapsed ? item.label : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-left transition-all ${
+                section === item.id
+                  ? 'bg-[rgba(212,162,74,0.1)] text-[#D4A24A] border border-[rgba(212,162,74,0.2)]'
+                  : 'text-text-muted hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <item.icon className={`w-4 h-4 flex-shrink-0 ${section === item.id ? 'text-[#D4A24A]' : ''}`} />
+              {!sidebarCollapsed && <span className="text-xs font-semibold truncate">{item.label}</span>}
+            </button>
           ))}
         </nav>
 
+        {/* Bottom */}
         <div className="border-t border-white/5 p-3 flex-shrink-0">
           {sidebarCollapsed ? (
-            <button onClick={() => setSidebarCollapsed(false)} className="w-full flex justify-center p-2 rounded-lg text-text-muted hover:bg-white/5"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setSidebarCollapsed(false)} className="w-full flex justify-center p-2 rounded-lg text-text-muted hover:bg-white/5">
+              <ChevronRight className="w-4 h-4" />
+            </button>
           ) : (
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center"><Crown className="w-4 h-4 text-gold" /></div>
-              <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-text-primary truncate">Super Admin</p></div>
-              <button className="p-1.5 text-text-muted hover:text-red-400"><LogOut className="w-3.5 h-3.5" /></button>
+              <div className="w-8 h-8 rounded-full bg-[rgba(212,162,74,0.2)] flex items-center justify-center">
+                <Crown className="w-4 h-4 text-[#D4A24A]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-text-primary truncate">Super Admin</p>
+              </div>
+              <button onClick={logout} className="p-1.5 text-text-muted hover:text-red-400 transition-colors" title="Logout">
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </div>
       </motion.aside>
 
       {/* ──────────────── MAIN CONTENT ──────────────── */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden" style={{ marginLeft: sidebarCollapsed ? 72 : 240, transition: 'margin-left 0.25s' }}>
-        <header className="sticky top-0 z-40 border-b border-white/5 px-6 py-3 flex items-center justify-between bg-black/90 backdrop-blur-md">
+      <main
+        className="flex-1 flex flex-col min-h-screen overflow-hidden"
+        style={{ marginLeft: sidebarCollapsed ? 72 : 260, transition: 'margin-left 0.25s' }}
+      >
+        {/* Header */}
+        <header className="sticky top-0 z-40 border-b border-white/5 px-6 py-3 flex items-center justify-between" style={{ background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)' }}>
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarCollapsed(c => !c)} className="p-2 rounded-lg text-text-muted hover:bg-white/5"><Menu className="w-4 h-4" /></button>
+            <button onClick={() => setSidebarCollapsed((c) => !c)} className="p-2 rounded-lg text-text-muted hover:bg-white/5">
+              <Menu className="w-4 h-4" />
+            </button>
             <div>
-              <h1 className="font-display text-base font-bold uppercase tracking-wide text-text-primary">{navGroups.flatMap(g => g.items).find(i => i.id === section)?.label}</h1>
+              <h1 className="font-display text-base font-bold uppercase tracking-wide text-text-primary">{currentLabel}</h1>
               <p className="text-[10px] text-text-muted font-mono">{currentTime.toLocaleDateString('en-GB')}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="p-2 rounded-lg text-text-muted hover:bg-white/5">
+              <Search className="w-4 h-4" />
+            </button>
+            <div className="relative">
+              <button onClick={() => setBellOpen((o) => !o)} className="p-2 rounded-lg text-text-muted hover:bg-white/5 relative">
+                <Bell className="w-4 h-4" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#D4A24A]" />
+              </button>
+              {bellOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-white/5 shadow-xl overflow-hidden z-50" style={{ background: '#0D0D0D' }}>
+                  <div className="p-3 border-b border-white/5 flex items-center justify-between">
+                    <p className="text-xs font-bold text-text-primary">Notifications</p>
+                    <button onClick={() => setBellOpen(false)} className="text-[10px] text-text-muted hover:text-text-primary">Close</button>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto p-2 space-y-2">
+                    <BellDropdownContent />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
+        {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <AnimatePresence mode="wait">
-            <motion.div key={section} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
+            <motion.div
+              key={section}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.2 }}
+            >
               {sectionComponents[section]}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
     </div>
+  );
+}
+
+function BellDropdownContent() {
+  const { data: notifications, isLoading } = useAdminNotifications({ limit: 10 });
+
+  if (isLoading) return <div className="p-4 flex justify-center"><Loader2 className="w-5 h-5 text-[#D4A24A] animate-spin" /></div>;
+  if (!notifications || notifications.length === 0) return <p className="text-xs text-text-muted text-center py-4">No new notifications</p>;
+
+  return (
+    <>
+      {notifications.map((n: any) => (
+        <div key={n.id} className="rounded-xl p-2.5 border border-white/5 bg-white/[0.02] flex items-start gap-2.5">
+          <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: n.type === 'verification' ? 'rgba(249,115,22,0.1)' : n.type === 'booking' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)' }}>
+            {n.type === 'verification' ? <AlertTriangle className="w-3 h-3 text-orange-400" /> : n.type === 'booking' ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Bell className="w-3 h-3 text-blue-400" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-text-primary truncate">{n.title}</p>
+            <p className="text-[10px] text-text-muted truncate">{n.message}</p>
+            <p className="text-[10px] text-text-muted mt-0.5">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '--'}</p>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }

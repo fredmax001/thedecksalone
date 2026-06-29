@@ -16,9 +16,12 @@ model User {
   googleId      String?  @unique
   phone         String?  @unique
   phoneVerified Boolean  @default(false)
+  emailVerified Boolean  @default(false)
   phoneOtp      String?  // Temporary OTP for phone verification
   phoneOtpExpiry DateTime? // OTP expiration timestamp
   role          Role     @default(USER)
+  status        UserStatus @default(ACTIVE)
+  lastLoginAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   djProfile     DjProfile?
@@ -28,12 +31,36 @@ model User {
   payments      Payment[] @relation("ClientPayments")
   sentMessages  Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  auditLogs     AuditLog[] @relation("ActorAuditLogs")
+  targetLogs    AuditLog[] @relation("TargetAuditLogs")
   @@map("users")
   @@index([email])
   @@index([username])
   @@index([phone])
   @@index([googleId])
   @@index([role])
+  @@index([status, role, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  targetId    String?
+  action      String   // e.g. USER_SUSPEND, USER_REINSTATE, ROLE_CHANGE
+  entity      String   // e.g. USER
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor       User     @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: Cascade)
+  target      User?    @relation("TargetAuditLogs", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([action, entity, createdAt])
 }
 
 model DjProfile {
@@ -317,6 +344,12 @@ model RankingHistory {
   @@map("ranking_history")
   @@index([djId])
   @@index([week])
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
 }
 
 enum Role {

@@ -64,21 +64,8 @@ export default function Analytics() {
     );
   }
 
-  const mockGenreData = [
-    { name: 'Amapiano', value: 45 },
-    { name: 'Afrobeats', value: 30 },
-    { name: 'Hip Hop', value: 15 },
-    { name: 'Dancehall', value: 10 },
-  ];
-
-  const mockMonthlyData = [
-    { month: 'Jan', plays: 1200, bookings: 2 },
-    { month: 'Feb', plays: 1800, bookings: 3 },
-    { month: 'Mar', plays: 2400, bookings: 4 },
-    { month: 'Apr', plays: 2100, bookings: 3 },
-    { month: 'May', plays: 3200, bookings: 5 },
-    { month: 'Jun', plays: 3800, bookings: 6 },
-  ];
+  const genreData = stats?.genreBreakdown || [];
+  const monthlyData = stats?.monthlyActivity || [];
 
   const tooltipStyle = {
     backgroundColor: '#111111',
@@ -159,7 +146,7 @@ export default function Analytics() {
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockMonthlyData}>
+                <BarChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
                   <XAxis dataKey="month" stroke="#666" fontSize={12} />
                   <YAxis stroke="#666" fontSize={12} />
@@ -181,7 +168,7 @@ export default function Analytics() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={mockGenreData}
+                    data={genreData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -189,7 +176,7 @@ export default function Analytics() {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {mockGenreData.map((_entry: any, index: number) => (
+                    {genreData.map((_entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -198,7 +185,7 @@ export default function Analytics() {
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap gap-3 justify-center mt-2">
-              {mockGenreData.map((entry, index) => (
+              {genreData.map((entry: { name: string; value: number }, index: number) => (
                 <div key={entry.name} className="flex items-center gap-1.5">
                   <div
                     className="w-2.5 h-2.5 rounded-full"

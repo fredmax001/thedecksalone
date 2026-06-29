@@ -36,7 +36,7 @@ export default function Footer() {
               <img
                 src="/logo.png"
                 alt="Deck Salone"
-                className="h-8 w-auto object-contain"
+                className="h-24 w-auto object-contain"
               />
             </Link>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs">
