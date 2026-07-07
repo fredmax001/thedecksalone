@@ -11,8 +11,14 @@ import {
   X,
   FileAudio,
   ImageIcon,
+  Pencil,
+  ExternalLink,
+  Share2,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,13 +39,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 interface Mix {
   id: string;
   title: string;
   genre: string;
+  category?: string;
+  description?: string;
   coverImage?: string;
+  audioUrl?: string;
+  originalUrl?: string;
+  audioSource?: string;
   plays: number;
   likes: number;
   isPublic: boolean;
@@ -73,6 +91,7 @@ const CATEGORIES = [
 
 export default function Mixes() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [mixes, setMixes] = useState<Mix[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -83,13 +102,31 @@ export default function Mixes() {
     category: '',
     description: '',
     isPublic: true,
+    audioUrl: '',
   });
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [audioSource, setAudioSource] = useState<'file' | 'url'>('file');
   const audioInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isDj = user?.role === 'DJ';
   const djId = user?.djProfile?.id;
+
+  // Edit state
+  const [editingMix, setEditingMix] = useState<Mix | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    genre: '',
+    category: '',
+    description: '',
+    isPublic: true,
+  });
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Delete state
+  const [deletingMixId, setDeletingMixId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (!isDj || !djId) {
@@ -115,8 +152,12 @@ export default function Mixes() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!audioFile) {
+    if (audioSource === 'file' && !audioFile) {
       toast.error('Audio file required');
+      return;
+    }
+    if (audioSource === 'url' && !uploadForm.audioUrl) {
+      toast.error('Audio URL required');
       return;
     }
     if (!uploadForm.title || !uploadForm.genre || !uploadForm.category) {
@@ -131,7 +172,11 @@ export default function Mixes() {
     formData.append('category', uploadForm.category);
     formData.append('description', uploadForm.description);
     formData.append('isPublic', String(uploadForm.isPublic));
-    formData.append('audio', audioFile);
+    if (audioSource === 'file' && audioFile) {
+      formData.append('audio', audioFile);
+    } else if (audioSource === 'url' && uploadForm.audioUrl) {
+      formData.append('audioUrl', uploadForm.audioUrl);
+    }
     if (coverFile) formData.append('coverImage', coverFile);
 
     try {
@@ -140,9 +185,10 @@ export default function Mixes() {
         toast.success('Mix uploaded successfully!');
         setMixes((prev) => [res.data.data, ...prev]);
         setIsUploadOpen(false);
-        setUploadForm({ title: '', genre: '', category: '', description: '', isPublic: true });
+        setUploadForm({ title: '', genre: '', category: '', description: '', isPublic: true, audioUrl: '' });
         setAudioFile(null);
         setCoverFile(null);
+        setAudioSource('file');
       } else {
         toast.error(res.data.error || 'Upload failed');
       }
@@ -153,10 +199,119 @@ export default function Mixes() {
     }
   };
 
+  const openEditModal = (mix: Mix) => {
+    setEditingMix(mix);
+    setEditForm({
+      title: mix.title,
+      genre: mix.genre,
+      category: mix.category || '',
+      description: mix.description || '',
+      isPublic: mix.isPublic,
+    });
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMix) return;
+    if (!editForm.title || !editForm.genre || !editForm.category) {
+      toast.error('Title, genre, and category are required');
+      return;
+    }
+
+    setEditLoading(true);
+    try {
+      const res = await api.put(`/mixes/${editingMix.id}`, {
+        title: editForm.title,
+        genre: editForm.genre,
+        category: editForm.category,
+        description: editForm.description,
+        isPublic: editForm.isPublic,
+      });
+      if (res.data.success) {
+        toast.success('Mix updated successfully!');
+        setMixes((prev) =>
+          prev.map((m) => (m.id === editingMix.id ? { ...m, ...res.data.data } : m))
+        );
+        setEditingMix(null);
+      } else {
+        toast.error(res.data.error || 'Update failed');
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Update failed');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const confirmDelete = (mixId: string) => {
+    setDeletingMixId(mixId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingMixId) return;
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/mixes/${deletingMixId}`);
+      toast.success('Mix deleted successfully');
+      setMixes((prev) => prev.filter((m) => m.id !== deletingMixId));
+      setDeleteDialogOpen(false);
+      setDeletingMixId(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Delete failed');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleShare = async (mix: Mix) => {
+    const shareUrl = `${window.location.origin}/mixes`;
+    const shareData = {
+      title: mix.title,
+      text: `Check out "${mix.title}" by ${user?.djProfile?.stageName || 'DJ'} on Deck Salone!`,
+      url: shareUrl,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareData.text} ${shareUrl}`);
+        toast.success('Link copied to clipboard!');
+      }
+    } catch {
+      // User cancelled share
+    }
+  };
+
+  const handlePlay = (mix: Mix) => {
+    const url = mix.originalUrl || mix.audioUrl;
+    if (url) {
+      // Open audio in new tab for playback
+      window.open(url, '_blank');
+    } else {
+      toast.info('Audio playback coming soon');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-10 h-10 text-gold animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isDj) {
+    return (
+      <div className="text-center py-12">
+        <Music className="w-12 h-12 text-text-muted mx-auto mb-4" />
+        <p className="text-text-secondary mb-2">Mix management is only available for DJs.</p>
+        <p className="text-sm text-text-muted mb-6">
+          Upgrade your account to a DJ profile to upload and manage mixes.
+        </p>
+        <Button className="bg-gold-gradient text-black" onClick={() => navigate('/dashboard/profile')}>
+          Go to Profile
+        </Button>
       </div>
     );
   }
@@ -232,7 +387,11 @@ export default function Mixes() {
                         </div>
                       )}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Button size="icon" className="bg-gold/90 text-black hover:bg-gold rounded-full">
+                        <Button
+                          size="icon"
+                          className="bg-gold/90 text-black hover:bg-gold rounded-full"
+                          onClick={() => handlePlay(mix)}
+                        >
                           <Play className="w-5 h-5 ml-0.5" />
                         </Button>
                       </div>
@@ -248,10 +407,34 @@ export default function Mixes() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="bg-black-surface border-dark-gray">
-                            <DropdownMenuItem className="cursor-pointer">Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">View on Site</DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">Share</DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer text-red">Delete</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => openEditModal(mix)}
+                            >
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => navigate('/mixes')}
+                            >
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View on Site
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => handleShare(mix)}
+                            >
+                              <Share2 className="w-4 h-4 mr-2" />
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red"
+                              onClick={() => confirmDelete(mix.id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -383,25 +566,62 @@ export default function Mixes() {
                 </div>
 
                 <div>
-                  <Label className="text-text-secondary mb-2 block">Audio File *</Label>
-                  <input
-                    ref={audioInputRef}
-                    type="file"
-                    accept="audio/*"
-                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => audioInputRef.current?.click()}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-dark-gray hover:border-gold/50 transition-colors bg-black-elevated"
-                  >
-                    <FileAudio className="w-5 h-5 text-gold" />
-                    <span className="text-sm text-text-secondary">
-                      {audioFile ? audioFile.name : 'Click to select audio file'}
-                    </span>
-                  </button>
+                  <Label className="text-text-secondary mb-2 block">Audio Source</Label>
+                  <div className="flex bg-black-elevated border border-dark-gray rounded-lg p-1">
+                    <button
+                      type="button"
+                      onClick={() => setAudioSource('file')}
+                      className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+                        audioSource === 'file' ? 'bg-gold text-black' : 'text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAudioSource('url')}
+                      className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+                        audioSource === 'url' ? 'bg-gold text-black' : 'text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      External URL
+                    </button>
+                  </div>
                 </div>
+
+                {audioSource === 'file' ? (
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Audio File *</Label>
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => audioInputRef.current?.click()}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-dark-gray hover:border-gold/50 transition-colors bg-black-elevated"
+                    >
+                      <FileAudio className="w-5 h-5 text-gold" />
+                      <span className="text-sm text-text-secondary">
+                        {audioFile ? audioFile.name : 'Click to select audio file'}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Audio URL *</Label>
+                    <Input
+                      value={uploadForm.audioUrl}
+                      onChange={(e) => setUploadForm({ ...uploadForm, audioUrl: e.target.value })}
+                      placeholder="Audiomack, Hearthis.at, or direct .mp3 link"
+                      className="bg-black-elevated border-dark-gray text-text-primary"
+                      required={audioSource === 'url'}
+                    />
+                  </div>
+                )}
 
                 <div>
                   <Label className="text-text-secondary mb-2 block">Cover Image</Label>
@@ -454,6 +674,154 @@ export default function Mixes() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {editingMix && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setEditingMix(null)}
+          >
+            <motion.div
+              className="relative w-full max-w-lg bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setEditingMix(null)}
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors"
+              >
+                <X size={20} className="text-text-muted" />
+              </button>
+
+              <h2 className="font-display text-xl font-semibold text-text-primary uppercase tracking-tight">
+                Edit Mix
+              </h2>
+              <p className="mt-2 text-sm text-text-secondary">
+                Update your mix details
+              </p>
+
+              <form className="mt-6 space-y-4" onSubmit={handleEdit}>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Title</Label>
+                  <Input
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    placeholder="Enter mix title"
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Genre</Label>
+                  <select
+                    value={editForm.genre}
+                    onChange={(e) => setEditForm({ ...editForm, genre: e.target.value })}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    required
+                  >
+                    <option value="">Select genre</option>
+                    {GENRES.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Category</Label>
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    required
+                  >
+                    <option value="">Select category</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Description</Label>
+                  <Textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    placeholder="Tell listeners about this mix..."
+                    rows={3}
+                    className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editIsPublic"
+                    checked={editForm.isPublic}
+                    onChange={(e) => setEditForm({ ...editForm, isPublic: e.target.checked })}
+                    className="w-4 h-4 accent-gold rounded"
+                  />
+                  <Label htmlFor="editIsPublic" className="text-sm text-text-secondary cursor-pointer">
+                    Make this mix public
+                  </Label>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={editLoading}
+                  className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90"
+                >
+                  {editLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Pencil className="w-4 h-4 mr-2" />
+                  )}
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="bg-black-surface border-dark-gray text-text-primary">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-text-primary">
+              <AlertTriangle className="w-5 h-5 text-red" />
+              Delete Mix
+            </DialogTitle>
+            <DialogDescription className="text-text-secondary">
+              Are you sure you want to delete this mix? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button
+              variant="outline"
+              className="border-dark-gray text-text-primary"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red text-white hover:bg-red/90"
+              onClick={handleDelete}
+              disabled={deleteLoading}
+            >
+              {deleteLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

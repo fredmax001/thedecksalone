@@ -12,14 +12,14 @@ import {
   User,
   Settings,
   LogOut,
-  Menu,
   Bell,
   Search,
   ChevronRight,
   CreditCard,
+  Megaphone,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,6 +42,7 @@ const navItems = [
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
   { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
+  { icon: Megaphone, label: 'Promotions', path: '/dashboard/campaigns' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
@@ -50,7 +51,6 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const isDj = user?.role === 'DJ';
@@ -69,9 +69,7 @@ export default function DashboardLayout() {
     navigate('/');
   };
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
+
 
   useEffect(() => {
     const handleResize = () => {
@@ -85,6 +83,13 @@ export default function DashboardLayout() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Role guard: only DJs may access the DJ dashboard
+  useEffect(() => {
+    if (user && !isDj) {
+      navigate('/user/dashboard', { replace: true });
+    }
+  }, [user, isDj, navigate]);
 
   const sidebarWidth = collapsed ? '72px' : '260px';
 
@@ -121,21 +126,21 @@ export default function DashboardLayout() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo / Brand */}
-      <div className={cn(
-        'flex items-center gap-3 px-4 pt-6 pb-4',
+      <Link to="/" className={cn(
+        'flex items-center gap-3 px-4 pt-6 pb-4 hover:opacity-80 transition-opacity',
         collapsed && 'justify-center px-2'
       )}>
         <img
           src="/logo.png"
           alt="Deck Salone"
-          className="h-32 w-auto object-contain flex-shrink-0"
+          className="h-10 w-auto object-contain flex-shrink-0"
         />
         {!collapsed && (
           <div className="overflow-hidden">
             <p className="text-[10px] text-text-muted uppercase tracking-wider">DJ Studio</p>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* DJ Profile Mini */}
       <div className={cn(
@@ -196,32 +201,15 @@ export default function DashboardLayout() {
         <SidebarContent />
       </aside>
 
-      {/* Mobile Sidebar (Sheet) */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden fixed top-4 left-4 z-50 text-text-secondary hover:text-text-primary bg-black/50 backdrop-blur-sm border border-dark-gray"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-[280px] bg-black border-r border-dark-gray p-0">
-          <SidebarContent />
-        </SheetContent>
-      </Sheet>
-
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300"
-        style={{ marginLeft: '0' }}
+        className="flex-1 flex flex-col min-h-screen transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
       >
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-dark-gray lg:ml-0" style={{ marginLeft: sidebarWidth }}>
+        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-dark-gray">
           <div className="flex items-center justify-between h-16 px-4 lg:px-6">
             {/* Left: Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm ml-12 lg:ml-0">
+            <div className="flex items-center gap-2 text-sm">
               <Link to="/" className="text-text-muted hover:text-text-primary transition-colors">
                 Home
               </Link>
@@ -304,8 +292,7 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main
-          className="flex-1 p-4 lg:p-6 overflow-y-auto"
-          style={{ marginLeft: sidebarWidth }}
+          className="flex-1 p-4 lg:p-6 overflow-y-auto pb-20 lg:pb-6"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -320,6 +307,8 @@ export default function DashboardLayout() {
           </AnimatePresence>
         </main>
       </div>
+
+      <MobileTabBar items={navItems} />
     </div>
   );
 }

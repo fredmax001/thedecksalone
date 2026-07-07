@@ -41,7 +41,6 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
 
       setAuth: (user, token) => {
-        localStorage.setItem('soundit_token', token);
         set({ user, token, isAuthenticated: true });
       },
 
@@ -50,7 +49,6 @@ export const useAuthStore = create<AuthState>()(
           const res = await api.post('/auth/login', { email, password });
           if (res.data.success) {
             const { user, token } = res.data.data;
-            localStorage.setItem('soundit_token', token);
             set({ user, token, isAuthenticated: true });
             return { success: true };
           }
@@ -65,7 +63,6 @@ export const useAuthStore = create<AuthState>()(
           const res = await api.post('/auth/register', { email, password, role, phone });
           if (res.data.success) {
             const { user, token } = res.data.data;
-            localStorage.setItem('soundit_token', token);
             set({ user, token, isAuthenticated: true });
             return { success: true };
           }
@@ -76,12 +73,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        localStorage.removeItem('soundit_token');
         set({ user: null, token: null, isAuthenticated: false });
       },
 
       fetchMe: async () => {
-        const token = localStorage.getItem('soundit_token');
+        const token = get().token;
         if (!token) {
           set({ isLoading: false });
           return;
@@ -93,15 +89,14 @@ export const useAuthStore = create<AuthState>()(
             set({ user: res.data.data, token, isAuthenticated: true, isLoading: false });
           }
         } catch {
-          localStorage.removeItem('soundit_token');
           set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
 
       init: () => {
-        const token = localStorage.getItem('soundit_token');
+        const token = get().token;
         if (token) {
-          set({ token, isAuthenticated: true });
+          set({ isAuthenticated: true });
           get().fetchMe();
         } else {
           set({ isLoading: false });

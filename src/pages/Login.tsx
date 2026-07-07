@@ -66,8 +66,12 @@ export default function Login() {
       const user = useAuthStore.getState().user;
       if (user?.role === 'ADMIN' || user?.role === 'MODERATOR') {
         navigate('/admin');
+      } else if (user?.role === 'DJ') {
+        // On mobile/tablet, DJs land on the public platform and open the dashboard from the profile menu.
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+        navigate(isMobile ? '/discover' : '/dashboard');
       } else {
-        navigate('/dashboard');
+        navigate('/discover');
       }
     } else {
       setError(result.error || 'Login failed');

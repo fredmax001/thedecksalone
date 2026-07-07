@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '../.env' });
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
@@ -22,21 +23,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1571266028243-3716f02d2d2e?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Top Ranked', 'Veteran'],
-    totalFollowers: 45000,
-    totalStreams: 1200000,
-    totalMixes: 48,
-    totalEvents: 120,
-    totalBookings: 85,
-    averageRating: 4.8,
-    rankingScore: 92.5,
-    digitalScore: 88.0,
-    industryScore: 95.0,
-    communityScore: 94.5,
-    rankingPosition: 1,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/fredmax', followers: 25000, streams: 800000, uploads: 48 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/fredmax', followers: 15000, streams: 300000, uploads: 45 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/fredmax', followers: 5000, streams: 100000, uploads: 40 },
+      { platform: 'YouTube', url: 'https://youtube.com/fredmax' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/fredmax' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/fredmax' },
     ],
   },
   {
@@ -57,21 +47,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Trending'],
-    totalFollowers: 32000,
-    totalStreams: 800000,
-    totalMixes: 36,
-    totalEvents: 80,
-    totalBookings: 60,
-    averageRating: 4.6,
-    rankingScore: 85.3,
-    digitalScore: 82.0,
-    industryScore: 88.0,
-    communityScore: 86.0,
-    rankingPosition: 2,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/rampage', followers: 18000, streams: 500000, uploads: 36 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/rampage', followers: 12000, streams: 250000, uploads: 32 },
-      { platform: 'SoundCloud', url: 'https://soundcloud.com/rampage', followers: 2000, streams: 50000, uploads: 30 },
+      { platform: 'YouTube', url: 'https://youtube.com/rampage' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/rampage' },
+      { platform: 'SoundCloud', url: 'https://soundcloud.com/rampage' },
     ],
   },
   {
@@ -92,21 +71,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Fastest Rising'],
-    totalFollowers: 22000,
-    totalStreams: 550000,
-    totalMixes: 28,
-    totalEvents: 55,
-    totalBookings: 42,
-    averageRating: 4.5,
-    rankingScore: 78.9,
-    digitalScore: 76.0,
-    industryScore: 80.0,
-    communityScore: 80.7,
-    rankingPosition: 3,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/cess', followers: 12000, streams: 350000, uploads: 28 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/cess', followers: 8000, streams: 150000, uploads: 25 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/cess', followers: 2000, streams: 50000, uploads: 20 },
+      { platform: 'YouTube', url: 'https://youtube.com/cess' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/cess' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/cess' },
     ],
   },
   {
@@ -127,21 +95,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Veteran'],
-    totalFollowers: 28000,
-    totalStreams: 650000,
-    totalMixes: 40,
-    totalEvents: 95,
-    totalBookings: 72,
-    averageRating: 4.7,
-    rankingScore: 82.1,
-    digitalScore: 78.0,
-    industryScore: 86.0,
-    communityScore: 82.3,
-    rankingPosition: 4,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/ditofreaky', followers: 15000, streams: 400000, uploads: 40 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/ditofreaky', followers: 10000, streams: 200000, uploads: 35 },
-      { platform: 'SoundCloud', url: 'https://soundcloud.com/ditofreaky', followers: 3000, streams: 50000, uploads: 30 },
+      { platform: 'YouTube', url: 'https://youtube.com/ditofreaky' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/ditofreaky' },
+      { platform: 'SoundCloud', url: 'https://soundcloud.com/ditofreaky' },
     ],
   },
   {
@@ -162,21 +119,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1598387993441-a364f854c3e1?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ'],
-    totalFollowers: 18000,
-    totalStreams: 420000,
-    totalMixes: 24,
-    totalEvents: 45,
-    totalBookings: 35,
-    averageRating: 4.3,
-    rankingScore: 71.5,
-    digitalScore: 70.0,
-    industryScore: 72.0,
-    communityScore: 72.5,
-    rankingPosition: 5,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/busy', followers: 10000, streams: 280000, uploads: 24 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/busy', followers: 6000, streams: 120000, uploads: 22 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/busy', followers: 2000, streams: 20000, uploads: 18 },
+      { platform: 'YouTube', url: 'https://youtube.com/busy' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/busy' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/busy' },
     ],
   },
   {
@@ -197,21 +143,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Veteran'],
-    totalFollowers: 38000,
-    totalStreams: 900000,
-    totalMixes: 52,
-    totalEvents: 150,
-    totalBookings: 95,
-    averageRating: 4.9,
-    rankingScore: 88.7,
-    digitalScore: 84.0,
-    industryScore: 92.0,
-    communityScore: 90.1,
-    rankingPosition: 6,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/kaywizesalone', followers: 22000, streams: 600000, uploads: 52 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/kaywizesalone', followers: 13000, streams: 250000, uploads: 48 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/kaywizesalone', followers: 3000, streams: 50000, uploads: 45 },
+      { platform: 'YouTube', url: 'https://youtube.com/kaywizesalone' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/kaywizesalone' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/kaywizesalone' },
     ],
   },
   {
@@ -232,21 +167,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Trending'],
-    totalFollowers: 25000,
-    totalStreams: 580000,
-    totalMixes: 30,
-    totalEvents: 65,
-    totalBookings: 48,
-    averageRating: 4.6,
-    rankingScore: 76.4,
-    digitalScore: 74.0,
-    industryScore: 78.0,
-    communityScore: 77.2,
-    rankingPosition: 7,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/djmaggie', followers: 14000, streams: 350000, uploads: 30 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/djmaggie', followers: 9000, streams: 180000, uploads: 28 },
-      { platform: 'SoundCloud', url: 'https://soundcloud.com/djmaggie', followers: 2000, streams: 50000, uploads: 25 },
+      { platform: 'YouTube', url: 'https://youtube.com/djmaggie' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/djmaggie' },
+      { platform: 'SoundCloud', url: 'https://soundcloud.com/djmaggie' },
     ],
   },
   {
@@ -267,21 +191,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1571266028243-3716f02d2d2e?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ'],
-    totalFollowers: 15000,
-    totalStreams: 350000,
-    totalMixes: 20,
-    totalEvents: 35,
-    totalBookings: 28,
-    averageRating: 4.4,
-    rankingScore: 65.2,
-    digitalScore: 64.0,
-    industryScore: 66.0,
-    communityScore: 65.6,
-    rankingPosition: 8,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/switch', followers: 8000, streams: 220000, uploads: 20 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/switch', followers: 5000, streams: 100000, uploads: 18 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/switch', followers: 2000, streams: 30000, uploads: 15 },
+      { platform: 'YouTube', url: 'https://youtube.com/switch' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/switch' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/switch' },
     ],
   },
   {
@@ -302,21 +215,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Veteran'],
-    totalFollowers: 20000,
-    totalStreams: 480000,
-    totalMixes: 32,
-    totalEvents: 70,
-    totalBookings: 50,
-    averageRating: 4.5,
-    rankingScore: 73.8,
-    digitalScore: 72.0,
-    industryScore: 76.0,
-    communityScore: 73.4,
-    rankingPosition: 9,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/bow', followers: 11000, streams: 300000, uploads: 32 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/bow', followers: 7000, streams: 130000, uploads: 30 },
-      { platform: 'SoundCloud', url: 'https://soundcloud.com/bow', followers: 2000, streams: 50000, uploads: 28 },
+      { platform: 'YouTube', url: 'https://youtube.com/bow' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/bow' },
+      { platform: 'SoundCloud', url: 'https://soundcloud.com/bow' },
     ],
   },
   {
@@ -337,21 +239,10 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ', 'Fastest Rising'],
-    totalFollowers: 12000,
-    totalStreams: 280000,
-    totalMixes: 18,
-    totalEvents: 30,
-    totalBookings: 22,
-    averageRating: 4.3,
-    rankingScore: 58.7,
-    digitalScore: 58.0,
-    industryScore: 60.0,
-    communityScore: 58.1,
-    rankingPosition: 10,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/min1', followers: 6000, streams: 180000, uploads: 18 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/min1', followers: 5000, streams: 80000, uploads: 16 },
-      { platform: 'Mixcloud', url: 'https://mixcloud.com/min1', followers: 1000, streams: 20000, uploads: 12 },
+      { platform: 'YouTube', url: 'https://youtube.com/min1' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/min1' },
+      { platform: 'Mixcloud', url: 'https://mixcloud.com/min1' },
     ],
   },
   {
@@ -372,68 +263,47 @@ const djData = [
     coverBanner: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1200&h=400&fit=crop',
     verified: true,
     badges: ['Verified DJ'],
-    totalFollowers: 22000,
-    totalStreams: 520000,
-    totalMixes: 26,
-    totalEvents: 60,
-    totalBookings: 45,
-    averageRating: 4.4,
-    rankingScore: 74.1,
-    digitalScore: 72.0,
-    industryScore: 76.0,
-    communityScore: 74.3,
-    rankingPosition: 11,
     streaming: [
-      { platform: 'YouTube', url: 'https://youtube.com/flex', followers: 12000, streams: 320000, uploads: 26 },
-      { platform: 'Audiomack', url: 'https://audiomack.com/flex', followers: 8000, streams: 160000, uploads: 24 },
-      { platform: 'SoundCloud', url: 'https://soundcloud.com/flex', followers: 2000, streams: 40000, uploads: 20 },
+      { platform: 'YouTube', url: 'https://youtube.com/flex' },
+      { platform: 'Audiomack', url: 'https://audiomack.com/flex' },
+      { platform: 'SoundCloud', url: 'https://soundcloud.com/flex' },
     ],
-  },];
+  },
+];
 
 const mixData = [
-  // Fred Max - 4 mixes
-  { title: 'Salone Vibes Vol. 1', category: 'Salone Mix', genre: 'Salone Mix', plays: 45000, likes: 3200, downloads: 1800, tags: ['sierra leone', 'bubu', 'gumbe'] },
-  { title: 'Afrobeats Heatwave 2024', category: 'Afrobeats', genre: 'Afrobeats', plays: 38000, likes: 2800, downloads: 1500, tags: ['naija', 'burna boy', 'wizkid'] },
-  { title: 'Dancehall Kings Mix', category: 'Dancehall', genre: 'Dancehall', plays: 32000, likes: 2400, downloads: 1200, tags: ['jamaica', 'vybz kartel', 'alkaline'] },
-  { title: 'Club Night Anthems', category: 'Club Mixes', genre: 'Club Mixes', plays: 28000, likes: 2100, downloads: 1000, tags: ['party', 'club', 'anthems'] },
-  // Rampage - 4 mixes
-  { title: 'Amapiano to the World', category: 'Amapiano', genre: 'Amapiano', plays: 35000, likes: 2600, downloads: 1400, tags: ['south africa', 'kabza de small', 'dj maphorisa'] },
-  { title: 'Salone Fiesta Mix', category: 'Salone Mix', genre: 'Salone Mix', plays: 30000, likes: 2200, downloads: 1100, tags: ['freetown', 'sierra leone', 'party'] },
-  { title: 'Afrobeats Non-Stop', category: 'Afrobeats', genre: 'Afrobeats', plays: 27000, likes: 2000, downloads: 900, tags: ['davido', 'tiwa savage', 'afro'] },
-  { title: 'Weekend Turn Up', category: 'Club Mixes', genre: 'Club Mixes', plays: 25000, likes: 1800, downloads: 850, tags: ['weekend', 'party', 'turn up'] },
-  // Cess - 3 mixes
-  { title: 'Azonto Revival', category: 'Afrobeats', genre: 'Afrobeats', plays: 24000, likes: 1800, downloads: 800, tags: ['ghana', 'azonto', 'fuse odg'] },
-  { title: 'Alkayida Dance Special', category: 'Afrobeats', genre: 'Afrobeats', plays: 22000, likes: 1600, downloads: 750, tags: ['alkayida', 'dance', 'ghana'] },
-  { title: 'West African Connection', category: 'Afrobeats', genre: 'Afrobeats', plays: 20000, likes: 1400, downloads: 600, tags: ['west africa', 'fusion', 'vibes'] },
-  // Dito Freaky - 3 mixes
-  { title: 'Slow Jams & R&B Classics', category: 'Throwbacks', genre: 'R&B', plays: 26000, likes: 2000, downloads: 1000, tags: ['r&b', 'slow jams', 'love'] },
-  { title: 'Wedding Bliss Mix', category: 'Wedding Mixes', genre: 'Wedding Mixes', plays: 23000, likes: 1700, downloads: 900, tags: ['wedding', 'love', 'first dance'] },
-  { title: 'Salone Love Songs', category: 'Salone Mix', genre: 'Salone Mix', plays: 21000, likes: 1500, downloads: 700, tags: ['sierra leone', 'love', 'emerson'] },
-  // Busy - 2 mixes
-  { title: 'Party Hard Mix Vol. 1', category: 'Club Mixes', genre: 'Club Mixes', plays: 18000, likes: 1300, downloads: 550, tags: ['party', 'club', 'bangers'] },
-  { title: 'Hip Hop Takeover', category: 'Club Mixes', genre: 'Hip Hop', plays: 16000, likes: 1100, downloads: 450, tags: ['hip hop', 'rap', 'drake'] },
-  // Kaywize Salone - 4 mixes
-  { title: 'Dancehall Don', category: 'Dancehall', genre: 'Dancehall', plays: 42000, likes: 3100, downloads: 1600, tags: ['dancehall', 'reggae', 'bashment'] },
-  { title: 'Reggae Roots Revival', category: 'Dancehall', genre: 'Reggae', plays: 35000, likes: 2500, downloads: 1300, tags: ['reggae', 'bob marley', 'roots'] },
-  { title: 'Sound System Culture', category: 'Dancehall', genre: 'Dancehall', plays: 31000, likes: 2300, downloads: 1100, tags: ['sound system', 'dub', 'culture'] },
-  { title: 'Caribbean Connection', category: 'Dancehall', genre: 'Dancehall', plays: 28000, likes: 2000, downloads: 950, tags: ['caribbean', 'island vibes', 'socca'] },
-  // DJ Maggie - 3 mixes
-  { title: 'Queen of the Decks', category: 'Club Mixes', genre: 'Club Mixes', plays: 22000, likes: 1600, downloads: 700, tags: ['female dj', 'power', 'queen'] },
-  { title: 'Amapiano Queens', category: 'Amapiano', genre: 'Amapiano', plays: 20000, likes: 1500, downloads: 650, tags: ['amapiano', 'female', 'vibes'] },
-  { title: 'Ladies Night Special', category: 'Club Mixes', genre: 'R&B', plays: 18000, likes: 1300, downloads: 550, tags: ['ladies', 'r&b', 'beyonce'] },
-  // Switch - 2 mixes
-  { title: 'Eastern Province Vibes', category: 'Salone Mix', genre: 'Salone Mix', plays: 15000, likes: 1000, downloads: 450, tags: ['kenema', 'eastern province', 'local'] },
-  { title: 'Mende Traditional Fusion', category: 'Salone Mix', genre: 'Salone Mix', plays: 13000, likes: 850, downloads: 350, tags: ['mende', 'traditional', 'fusion'] },
-  // Bow - 3 mixes
-  { title: 'Northern Lights Mix', category: 'Salone Mix', genre: 'Salone Mix', plays: 20000, likes: 1400, downloads: 650, tags: ['makeni', 'northern', 'temne'] },
-  { title: 'Gospel Praise Mix', category: 'Gospel', genre: 'Gospel', plays: 18000, likes: 1200, downloads: 800, tags: ['gospel', 'praise', 'worship'] },
-  { title: 'Sunday Morning Bliss', category: 'Gospel', genre: 'Gospel', plays: 16000, likes: 1100, downloads: 600, tags: ['sunday', 'gospel', 'peace'] },
-  // Min-1 - 2 mixes
-  { title: 'Amapiano Deep Cuts', category: 'Amapiano', genre: 'Amapiano', plays: 14000, likes: 900, downloads: 400, tags: ['amapiano', 'deep', 'soulful'] },
-  { title: 'Yanos to the World', category: 'Amapiano', genre: 'Amapiano', plays: 12000, likes: 800, downloads: 350, tags: ['yano', 'south africa', 'global'] },
-  // Flex - 2 mixes
-  { title: 'Throwback Thursday', category: 'Throwbacks', genre: 'Throwbacks', plays: 21000, likes: 1500, downloads: 700, tags: ['throwback', 'old school', 'classics'] },
-  { title: 'Corporate Event Set', category: 'Wedding Mixes', genre: 'Wedding Mixes', plays: 17000, likes: 1100, downloads: 500, tags: ['corporate', 'professional', 'smooth'] },
+  { title: 'Salone Vibes Vol. 1', category: 'Salone Mix', genre: 'Salone Mix', tags: ['sierra leone', 'bubu', 'gumbe'] },
+  { title: 'Afrobeats Heatwave 2024', category: 'Afrobeats', genre: 'Afrobeats', tags: ['naija', 'burna boy', 'wizkid'] },
+  { title: 'Dancehall Kings Mix', category: 'Dancehall', genre: 'Dancehall', tags: ['jamaica', 'vybz kartel', 'alkaline'] },
+  { title: 'Club Night Anthems', category: 'Club Mixes', genre: 'Club Mixes', tags: ['party', 'club', 'anthems'] },
+  { title: 'Amapiano to the World', category: 'Amapiano', genre: 'Amapiano', tags: ['south africa', 'kabza de small', 'dj maphorsa'] },
+  { title: 'Salone Fiesta Mix', category: 'Salone Mix', genre: 'Salone Mix', tags: ['freetown', 'sierra leone', 'party'] },
+  { title: 'Afrobeats Non-Stop', category: 'Afrobeats', genre: 'Afrobeats', tags: ['davido', 'tiwa savage', 'afro'] },
+  { title: 'Weekend Turn Up', category: 'Club Mixes', genre: 'Club Mixes', tags: ['weekend', 'party', 'turn up'] },
+  { title: 'Azonto Revival', category: 'Afrobeats', genre: 'Afrobeats', tags: ['ghana', 'azonto', 'fuse odg'] },
+  { title: 'Alkayida Dance Special', category: 'Afrobeats', genre: 'Afrobeats', tags: ['alkayida', 'dance', 'ghana'] },
+  { title: 'West African Connection', category: 'Afrobeats', genre: 'Afrobeats', tags: ['west africa', 'fusion', 'vibes'] },
+  { title: 'Slow Jams & R&B Classics', category: 'Throwbacks', genre: 'R&B', tags: ['r&b', 'slow jams', 'love'] },
+  { title: 'Wedding Bliss Mix', category: 'Wedding Mixes', genre: 'Wedding Mixes', tags: ['wedding', 'love', 'first dance'] },
+  { title: 'Salone Love Songs', category: 'Salone Mix', genre: 'Salone Mix', tags: ['sierra leone', 'love', 'emerson'] },
+  { title: 'Party Hard Mix Vol. 1', category: 'Club Mixes', genre: 'Club Mixes', tags: ['party', 'club', 'bangers'] },
+  { title: 'Hip Hop Takeover', category: 'Club Mixes', genre: 'Hip Hop', tags: ['hip hop', 'rap', 'drake'] },
+  { title: 'Dancehall Don', category: 'Dancehall', genre: 'Dancehall', tags: ['dancehall', 'reggae', 'bashment'] },
+  { title: 'Reggae Roots Revival', category: 'Dancehall', genre: 'Reggae', tags: ['reggae', 'bob marley', 'roots'] },
+  { title: 'Sound System Culture', category: 'Dancehall', genre: 'Dancehall', tags: ['sound system', 'dub', 'culture'] },
+  { title: 'Caribbean Connection', category: 'Dancehall', genre: 'Dancehall', tags: ['caribbean', 'island vibes', 'socca'] },
+  { title: 'Queen of the Decks', category: 'Club Mixes', genre: 'Club Mixes', tags: ['female dj', 'power', 'queen'] },
+  { title: 'Amapiano Queens', category: 'Amapiano', genre: 'Amapiano', tags: ['amapiano', 'female', 'vibes'] },
+  { title: 'Ladies Night Special', category: 'Club Mixes', genre: 'R&B', tags: ['ladies', 'r&b', 'beyonce'] },
+  { title: 'Eastern Province Vibes', category: 'Salone Mix', genre: 'Salone Mix', tags: ['kenema', 'eastern province', 'local'] },
+  { title: 'Mende Traditional Fusion', category: 'Salone Mix', genre: 'Salone Mix', tags: ['mende', 'traditional', 'fusion'] },
+  { title: 'Northern Lights Mix', category: 'Salone Mix', genre: 'Salone Mix', tags: ['makeni', 'northern', 'temne'] },
+  { title: 'Gospel Praise Mix', category: 'Gospel', genre: 'Gospel', tags: ['gospel', 'praise', 'worship'] },
+  { title: 'Sunday Morning Bliss', category: 'Gospel', genre: 'Gospel', tags: ['sunday', 'gospel', 'peace'] },
+  { title: 'Amapiano Deep Cuts', category: 'Amapiano', genre: 'Amapiano', tags: ['amapiano', 'deep', 'soulful'] },
+  { title: 'Yanos to the World', category: 'Amapiano', genre: 'Amapiano', tags: ['yano', 'south africa', 'global'] },
+  { title: 'Throwback Thursday', category: 'Throwbacks', genre: 'Throwbacks', tags: ['throwback', 'old school', 'classics'] },
+  { title: 'Corporate Event Set', category: 'Wedding Mixes', genre: 'Wedding Mixes', tags: ['corporate', 'professional', 'smooth'] },
 ];
 
 const eventData = [
@@ -523,6 +393,7 @@ async function seed() {
   await prisma.event.deleteMany();
   await prisma.mix.deleteMany();
   await prisma.streamingPlatform.deleteMany();
+  await prisma.follow.deleteMany();
   await prisma.djProfile.deleteMany();
   await prisma.user.deleteMany();
 
@@ -534,6 +405,7 @@ async function seed() {
     const user = await prisma.user.create({
       data: {
         email: `user${i + 1}@example.com`,
+        username: `user${i + 1}`,
         password: await bcrypt.hash('password123', 10),
         role: 'USER',
       },
@@ -542,7 +414,7 @@ async function seed() {
   }
   console.log('Created 12 regular users');
 
-  // Create DJ users and profiles
+  // Create DJ users and profiles (base data only — no fake aggregates)
   const djProfiles = [];
   for (let i = 0; i < djData.length; i++) {
     const dj = djData[i];
@@ -550,6 +422,7 @@ async function seed() {
     const user = await prisma.user.create({
       data: {
         email: dj.email,
+        username: dj.email.split('@')[0],
         password: await bcrypt.hash(dj.password, 10),
         role: 'DJ',
       },
@@ -573,30 +446,16 @@ async function seed() {
         bookingFeeMax: dj.bookingFeeMax,
         verified: dj.verified,
         badges: dj.badges,
-        totalFollowers: dj.totalFollowers,
-        totalStreams: dj.totalStreams,
-        totalMixes: dj.totalMixes,
-        totalEvents: dj.totalEvents,
-        totalBookings: dj.totalBookings,
-        averageRating: dj.averageRating,
-        rankingScore: dj.rankingScore,
-        digitalScore: dj.digitalScore,
-        industryScore: dj.industryScore,
-        communityScore: dj.communityScore,
-        rankingPosition: dj.rankingPosition,
       },
     });
 
-    // Create streaming platforms
+    // Create streaming platforms (URLs only — counts default to 0)
     for (const platform of dj.streaming) {
       await prisma.streamingPlatform.create({
         data: {
           djId: profile.id,
           platform: platform.platform,
           url: platform.url,
-          followers: platform.followers,
-          streams: platform.streams,
-          uploads: platform.uploads,
         },
       });
     }
@@ -606,7 +465,7 @@ async function seed() {
 
   console.log(`Created ${djProfiles.length} DJ profiles`);
 
-  // Create mixes (distribute among DJs)
+  // Create mixes (distribute among DJs) — no fake play/like/download counts
   let mixIndex = 0;
   for (const mix of mixData) {
     const djIdx = mixIndex % djProfiles.length;
@@ -620,9 +479,6 @@ async function seed() {
         genre: mix.genre,
         category: mix.category,
         tags: mix.tags,
-        plays: mix.plays,
-        likes: mix.likes,
-        downloads: mix.downloads,
         isPublic: true,
       },
     });
@@ -675,28 +531,67 @@ async function seed() {
 
   console.log(`Created ${reviewData.length} reviews`);
 
-  // Create ranking history for top DJs
-  const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const dj = djData[i];
-    for (let week = 0; week < 12; week++) {
-      await prisma.rankingHistory.create({
-        data: {
-          djId: djProfiles[i].id,
-          position: Math.max(1, dj.rankingPosition + Math.floor(Math.random() * 5) - 2),
-          score: Math.max(0, Math.min(100, dj.rankingScore + (Math.random() * 10 - 5))),
-          digitalScore: Math.max(0, Math.min(100, dj.digitalScore + (Math.random() * 10 - 5))),
-          industryScore: Math.max(0, Math.min(100, dj.industryScore + (Math.random() * 10 - 5))),
-          communityScore: Math.max(0, Math.min(100, dj.communityScore + (Math.random() * 10 - 5))),
-          week: new Date(now.getTime() - (11 - week) * 7 * 86400000),
-        },
-      });
+  // Create follow relationships so totalFollowers reflects real data
+  for (let i = 0; i < regularUsers.length; i++) {
+    for (let j = 0; j < djProfiles.length; j++) {
+      if ((i + j) % 3 === 0) {
+        try {
+          await prisma.follow.create({
+            data: {
+              userId: regularUsers[i].id,
+              djId: djProfiles[j].id,
+            },
+          });
+        } catch (e) {
+          // Ignore duplicate follow errors
+        }
+      }
     }
   }
+  console.log('Created follow relationships');
 
-  console.log('Created ranking history entries');
+  // Compute real aggregates from actual database records and update each DJ profile
+  const { recalculateAllRankings } = require('../utils/ranking');
 
-  // Create a metric-based battle
+  for (const profile of djProfiles) {
+    const totalFollowers = await prisma.follow.count({ where: { djId: profile.id } });
+    const totalMixes = await prisma.mix.count({ where: { djId: profile.id } });
+    const totalEvents = await prisma.event.count({ where: { djId: profile.id } });
+    const totalBookings = await prisma.booking.count({ where: { djId: profile.id } });
+
+    const streamAgg = await prisma.streamingPlatform.aggregate({
+      where: { djId: profile.id },
+      _sum: { streams: true },
+    });
+    const totalStreams = streamAgg._sum.streams || 0;
+
+    const reviewAgg = await prisma.review.aggregate({
+      where: { djId: profile.id },
+      _avg: { rating: true },
+    });
+    const averageRating = reviewAgg._avg.rating || 0;
+
+    await prisma.djProfile.update({
+      where: { id: profile.id },
+      data: {
+        totalFollowers,
+        totalMixes,
+        totalEvents,
+        totalBookings,
+        totalStreams,
+        averageRating,
+      },
+    });
+  }
+
+  console.log('Updated DJ profiles with real aggregates');
+
+  // Recalculate real ranking scores and positions from actual data
+  await recalculateAllRankings();
+  console.log('Recalculated real ranking scores and positions');
+
+  // Create a metric-based battle (after aggregates are real)
+  const now = new Date();
   const battle = await prisma.battle.create({
     data: {
       title: 'Weekly DJ Battle - Amapiano Week',
@@ -708,7 +603,6 @@ async function seed() {
     },
   });
 
-  // Add battle entries with calculated base scores from DJ metrics
   const { calculateBattleBaseScore } = require('../utils/ranking');
   for (let i = 0; i < 4; i++) {
     const baseScore = await calculateBattleBaseScore(djProfiles[i].id, 'COMPOSITE');
@@ -734,7 +628,6 @@ async function seed() {
           },
         });
 
-        // Update entry votes
         await prisma.battleEntry.update({
           where: { id: entry.id },
           data: { votes: { increment: 1 } },
@@ -815,6 +708,7 @@ async function seed() {
   await prisma.user.create({
     data: {
       email: 'admin@soundit.sl',
+      username: 'admin',
       password: await bcrypt.hash('admin123', 10),
       role: 'ADMIN',
     },

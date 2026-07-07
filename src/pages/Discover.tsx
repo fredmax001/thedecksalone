@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -285,6 +285,22 @@ export default function Discover() {
 
   const citiesQuery = useDJCities();
   const genresQuery = useDJGenres();
+
+  /* ── Debug logging ── */
+  useEffect(() => {
+    if (djsQuery.error) {
+      console.error('[Discover] DJs query failed:', djsQuery.error);
+    }
+  }, [djsQuery.error]);
+
+  useEffect(() => {
+    if (djsQuery.data) {
+      console.log('[Discover] DJs query success:', {
+        count: (djsQuery.data as DJsResponse)?.data?.length ?? 0,
+        meta: (djsQuery.data as DJsResponse)?.meta,
+      });
+    }
+  }, [djsQuery.data]);
 
   const djsData = djsQuery.data as DJsResponse | undefined;
   const cityOptions = (citiesQuery.data as string[] | undefined) ?? [];

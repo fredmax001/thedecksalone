@@ -1,34 +1,53 @@
-import { useEffect } from 'react';
+import { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import AdminDashboard from './pages/AdminDashboard';
-import AuthCallback from './pages/AuthCallback';
 import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
-import Home from './pages/Home';
-import Discover from './pages/Discover';
-import Rankings from './pages/Rankings';
-import DjProfile from './pages/DjProfile';
-import Booking from './pages/Booking';
-import MixHub from './pages/MixHub';
-import Events from './pages/Events';
-import HallOfFame from './pages/HallOfFame';
-import Battles from './pages/Battles';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import UserDashboardLayout from './components/UserDashboardLayout';
 
-/* ─── Dashboard pages ─── */
-import DashboardOverview from './pages/dashboard/Overview';
-import DashboardBookings from './pages/dashboard/Bookings';
-import DashboardMessages from './pages/dashboard/Messages';
-import DashboardMixes from './pages/dashboard/Mixes';
-import DashboardEvents from './pages/dashboard/DjEvents';
-import DashboardAnalytics from './pages/dashboard/Analytics';
-import DashboardEarnings from './pages/dashboard/Earnings';
-import DashboardProfile from './pages/dashboard/Profile';
-import DashboardSettings from './pages/dashboard/Settings';
-import DashboardSubscription from './pages/dashboard/Subscription';
+// Lazy loaded pages for better code splitting
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const Home = lazy(() => import('./pages/Home'));
+const Discover = lazy(() => import('./pages/Discover'));
+const Rankings = lazy(() => import('./pages/Rankings'));
+const DjProfile = lazy(() => import('./pages/DjProfile'));
+const Booking = lazy(() => import('./pages/Booking'));
+const MixHub = lazy(() => import('./pages/MixHub'));
+const Events = lazy(() => import('./pages/Events'));
+const EventDetail = lazy(() => import('./pages/EventDetail'));
+const HallOfFame = lazy(() => import('./pages/HallOfFame'));
+const Battles = lazy(() => import('./pages/Battles'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Help = lazy(() => import('./pages/Help'));
+const Blog = lazy(() => import('./pages/Blog'));
+
+/* ─── DJ Dashboard pages ─── */
+const DashboardOverview = lazy(() => import('./pages/dashboard/Overview'));
+const DashboardBookings = lazy(() => import('./pages/dashboard/Bookings'));
+const DashboardMessages = lazy(() => import('./pages/dashboard/Messages'));
+const DashboardMixes = lazy(() => import('./pages/dashboard/Mixes'));
+const DashboardEvents = lazy(() => import('./pages/dashboard/DjEvents'));
+const DashboardAnalytics = lazy(() => import('./pages/dashboard/Analytics'));
+const DashboardEarnings = lazy(() => import('./pages/dashboard/Earnings'));
+const DashboardProfile = lazy(() => import('./pages/dashboard/Profile'));
+const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
+const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
+const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
+
+/* ─── User Dashboard pages ─── */
+const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
+const UserBookings = lazy(() => import('./pages/user/MyBookings'));
+const UserMessages = lazy(() => import('./pages/user/Messages'));
+const UserFollowing = lazy(() => import('./pages/user/Following'));
+const UserActivity = lazy(() => import('./pages/user/Activity'));
+const UserNotifications = lazy(() => import('./pages/user/Notifications'));
+const UserProfile = lazy(() => import('./pages/user/UserProfile'));
+const UserSettings = lazy(() => import('./pages/user/UserSettings'));
 
 function AuthInitializer() {
   const init = useAuthStore((state) => state.init);
@@ -45,46 +64,71 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthInitializer />
-      <Routes>
-        {/* Auth callback (Google OAuth) */}
-        <Route path="auth/callback" element={<AuthCallback />} />
+      <Suspense fallback={<div className="flex h-screen w-full items-center justify-center text-deck-accent"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent"></div></div>}>
+        <Routes>
+          {/* Auth callback (Google OAuth) */}
+          <Route path="auth/callback" element={<AuthCallback />} />
 
-        {/* Admin — protected, standalone layout */}
-        <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR']} fallback="/login" />}>
-          <Route path="admin" element={<AdminDashboard />} />
-        </Route>
-
-        {/* DJ Dashboard — protected, custom layout (no public navbar/footer) */}
-        <Route element={<ProtectedRoute fallback="/login" />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="dashboard" element={<DashboardOverview />} />
-            <Route path="dashboard/bookings" element={<DashboardBookings />} />
-            <Route path="dashboard/messages" element={<DashboardMessages />} />
-            <Route path="dashboard/mixes" element={<DashboardMixes />} />
-            <Route path="dashboard/events" element={<DashboardEvents />} />
-            <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
-            <Route path="dashboard/earnings" element={<DashboardEarnings />} />
-            <Route path="dashboard/profile" element={<DashboardProfile />} />
-            <Route path="dashboard/subscription" element={<DashboardSubscription />} />
-            <Route path="dashboard/settings" element={<DashboardSettings />} />
+          {/* Admin — protected, standalone layout */}
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR']} fallback="/login" />}>
+            <Route path="admin" element={<AdminDashboard />} />
           </Route>
-        </Route>
 
-        {/* Public site */}
-        <Route element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="discover" element={<Discover />} />
-          <Route path="rankings" element={<Rankings />} />
-          <Route path="dj/:identifier" element={<DjProfile />} />
-          <Route path="booking" element={<Booking />} />
-          <Route path="mixes" element={<MixHub />} />
-          <Route path="events" element={<Events />} />
-          <Route path="hall-of-fame" element={<HallOfFame />} />
-          <Route path="battles" element={<Battles />} />
+          {/* DJ Dashboard — protected, custom layout (no public navbar/footer) */}
+          {/* USER role is excluded and redirected to /user/dashboard */}
+          <Route element={<ProtectedRoute excludeRoles={['USER']} fallback="/user/dashboard" />}>
+            <Route element={<DashboardLayout />}>
+              <Route path="dashboard" element={<DashboardOverview />} />
+              <Route path="dashboard/bookings" element={<DashboardBookings />} />
+              <Route path="dashboard/messages" element={<DashboardMessages />} />
+              <Route path="dashboard/mixes" element={<DashboardMixes />} />
+              <Route path="dashboard/events" element={<DashboardEvents />} />
+              <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
+              <Route path="dashboard/earnings" element={<DashboardEarnings />} />
+              <Route path="dashboard/profile" element={<DashboardProfile />} />
+              <Route path="dashboard/subscription" element={<DashboardSubscription />} />
+              <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
+              <Route path="dashboard/settings" element={<DashboardSettings />} />
+            </Route>
+          </Route>
+
+          {/* User Dashboard — protected, custom layout (no public navbar/footer) */}
+          <Route element={<ProtectedRoute fallback="/login" />}>
+            <Route element={<UserDashboardLayout />}>
+              <Route path="user/dashboard" element={<UserDashboard />} />
+              <Route path="user/bookings" element={<UserBookings />} />
+              <Route path="user/messages" element={<UserMessages />} />
+              <Route path="user/following" element={<UserFollowing />} />
+              <Route path="user/activity" element={<UserActivity />} />
+              <Route path="user/notifications" element={<UserNotifications />} />
+              <Route path="user/profile" element={<UserProfile />} />
+              <Route path="user/settings" element={<UserSettings />} />
+            </Route>
+          </Route>
+
+          {/* Auth screens (Standalone layout) */}
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
-        </Route>
-      </Routes>
+
+          {/* Public site */}
+          <Route element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="discover" element={<Discover />} />
+            <Route path="rankings" element={<Rankings />} />
+            <Route path="dj/:identifier" element={<DjProfile />} />
+            <Route path="booking" element={<Booking />} />
+            <Route path="mixes" element={<MixHub />} />
+            <Route path="events" element={<Events />} />
+            <Route path="events/:id" element={<EventDetail />} />
+            <Route path="hall-of-fame" element={<HallOfFame />} />
+            <Route path="battles" element={<Battles />} />
+            <Route path="terms" element={<Terms />} />
+            <Route path="privacy" element={<Privacy />} />
+            <Route path="help" element={<Help />} />
+            <Route path="blog" element={<Blog />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

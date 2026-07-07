@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin,
@@ -11,7 +12,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useEvents, useEventTypes } from '@/hooks/useEvents';
-
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -86,6 +86,7 @@ interface EventItem {
 }
 
 export default function Events() {
+  const navigate = useNavigate();
   const [activeType, setActiveType] = useState('All Types');
   const [activeCity, setActiveCity] = useState('All Cities');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -101,8 +102,8 @@ export default function Events() {
 
   const events = useMemo(() => {
     let result = (eventsData?.data || [])
-      .filter((event: any) => event.djId && event.dj)
-      .map(toEventItem);
+      .filter((event: any) => event.djId && event.dj);
+
     if (activeType !== 'All Types') {
       result = result.filter((e: any) => e.type.toLowerCase() === activeType.toLowerCase());
     }
@@ -111,10 +112,10 @@ export default function Events() {
     }
     if (sortBy === 'Alphabetical') {
       result.sort((a: any, b: any) => a.title.localeCompare(b.title));
-    } else {
-      result.sort((a: any, b: any) => new Date(a.month + ' ' + a.date + ' 2025').getTime() - new Date(b.month + ' ' + b.date + ' 2025').getTime());
     }
-    return result;
+    // 'Soonest' uses the API's default date-ascending order
+
+    return result.map(toEventItem);
   }, [eventsData, activeType, activeCity, sortBy]);
 
   const featured = events.slice(0, 2);
@@ -156,7 +157,19 @@ export default function Events() {
             </motion.div>
             <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.3 }} className="relative w-full lg:w-[45%] max-w-md">
               <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }} className="relative">
-                <img src="/placeholder.jpg" alt="Events" className="w-full rounded-2xl object-cover border-[3px] border-gold" style={{ aspectRatio: '16/10' }} />
+                {events.length > 0 ? (
+                  <img
+                    src={events[0].image}
+                    alt={events[0].title}
+                    className="w-full rounded-2xl object-cover border-[3px] border-gold cursor-pointer"
+                    style={{ aspectRatio: '16/10' }}
+                    onClick={() => navigate(`/events/${events[0].id}`)}
+                  />
+                ) : (
+                  <div className="w-full rounded-2xl border-[3px] border-gold bg-gradient-to-br from-gold/20 to-black flex items-center justify-center" style={{ aspectRatio: '16/10' }}>
+                    <Music size={48} className="text-gold/40" />
+                  </div>
+                )}
                 <div className="absolute top-4 left-4 px-3 py-1.5 bg-gold text-black text-xs font-bold uppercase rounded-lg">
                   UPCOMING
                 </div>
@@ -203,7 +216,7 @@ export default function Events() {
       {!showCalendar && featured.length > 0 && (
         <section className="max-w-container mx-auto px-6 pt-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {featured.map((ev: any, i: any) => (
+            {featured.map((ev: EventItem, i: number) => (
               <motion.div
                 key={ev.id}
                 variants={fadeUp}
@@ -211,6 +224,7 @@ export default function Events() {
                 whileInView="visible"
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15 }}
+                onClick={() => navigate(`/events/${ev.id}`)}
                 className="group relative rounded-2xl overflow-hidden cursor-pointer border border-white/5 hover:border-gold/30 transition-all duration-300"
                 style={{ aspectRatio: '2/1' }}
               >
@@ -241,11 +255,15 @@ export default function Events() {
           <AnimatePresence mode="wait">
             {viewMode === 'list' ? (
               <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-                {events.map((ev: any, i: any) => <EventListRow key={ev.id} event={ev} index={i} />)}
+                {events.map((ev: EventItem, i: number) => (
+                  <EventListRow key={ev.id} event={ev} index={i} onClick={() => navigate(`/events/${ev.id}`)} />
+                ))}
               </motion.div>
             ) : (
               <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {events.map((ev: any, i: any) => <EventGridCard key={ev.id} event={ev} index={i} />)}
+                {events.map((ev: EventItem, i: number) => (
+                  <EventGridCard key={ev.id} event={ev} index={i} onClick={() => navigate(`/events/${ev.id}`)} />
+                ))}
               </motion.div>
             )}
           </AnimatePresence>
@@ -262,7 +280,9 @@ export default function Events() {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {openSlots.map((slot: any, i: any) => <DJSlotCard key={slot.id} slot={slot} index={i} />)}
+            {openSlots.map((slot: EventItem, i: number) => (
+              <DJSlotCard key={slot.id} slot={slot} index={i} />
+            ))}
           </div>
         </div>
       </section>
@@ -270,16 +290,16 @@ export default function Events() {
       {/* Calendar */}
       {showCalendar && (
         <section className="max-w-container mx-auto px-6 pt-8 pb-16">
-          <CalendarView month={calendarMonth} onChangeMonth={setCalendarMonth} events={events} />
+          <CalendarView month={calendarMonth} onChangeMonth={setCalendarMonth} events={events} onEventClick={(id) => navigate(`/events/${id}`)} />
         </section>
       )}
     </div>
   );
 }
 
-function EventListRow({ event, index }: { event: EventItem; index: number }) {
+function EventListRow({ event, index, onClick }: { event: EventItem; index: number; onClick?: () => void }) {
   return (
-    <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.08 }} className="group flex items-center gap-4 bg-black-elevated rounded-xl p-4 border border-white/5 hover:bg-medium-gray hover:translate-x-1 transition-all duration-200 cursor-pointer">
+    <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.08 }} onClick={onClick} className="group flex items-center gap-4 bg-black-elevated rounded-xl p-4 border border-white/5 hover:bg-medium-gray hover:translate-x-1 transition-all duration-200 cursor-pointer">
       <div className="flex flex-col items-center justify-center w-16 flex-shrink-0">
         <span className="text-[10px] font-semibold text-gold uppercase tracking-wider">{event.month}</span>
         <span className="font-mono text-2xl font-bold text-text-primary leading-none mt-0.5">{event.date}</span>
@@ -303,6 +323,7 @@ function EventListRow({ event, index }: { event: EventItem; index: number }) {
             href={event.ticketUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="hidden sm:block px-3 py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full hover:scale-[1.02] transition-transform"
           >
             Get Tickets
@@ -317,9 +338,9 @@ function EventListRow({ event, index }: { event: EventItem; index: number }) {
   );
 }
 
-function EventGridCard({ event, index }: { event: EventItem; index: number }) {
+function EventGridCard({ event, index, onClick }: { event: EventItem; index: number; onClick?: () => void }) {
   return (
-    <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.06 }} className="group relative rounded-xl overflow-hidden bg-black-elevated border border-white/5 hover:border-gold/30 transition-all duration-300">
+    <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.06 }} onClick={onClick} className="group relative rounded-xl overflow-hidden bg-black-elevated border border-white/5 hover:border-gold/30 transition-all duration-300">
       <div className="relative aspect-[16/9] overflow-hidden">
         <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
@@ -334,6 +355,7 @@ function EventGridCard({ event, index }: { event: EventItem; index: number }) {
             href={event.ticketUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="mt-3 block text-center w-full py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full hover:scale-[1.02] transition-transform"
           >
             Get Tickets
@@ -349,6 +371,8 @@ function EventGridCard({ event, index }: { event: EventItem; index: number }) {
 }
 
 function DJSlotCard({ slot, index }: { slot: EventItem; index: number }) {
+  const [showMessage, setShowMessage] = useState(false);
+
   return (
     <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.1 }} className="relative bg-black rounded-xl p-5 border-l-[3px] border-l-gold border border-white/5">
       <h4 className="font-display text-sm font-semibold text-gold uppercase">{slot.title}</h4>
@@ -357,15 +381,25 @@ function DJSlotCard({ slot, index }: { slot: EventItem; index: number }) {
       <p className="text-xs text-text-primary mt-2"><span className="text-text-muted">Open slots:</span> {slot.djCount}</p>
       <div className="flex items-center justify-between mt-3">
         <span className="text-[10px] text-text-muted">Apply to DJ</span>
-        <motion.button className="px-4 py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full" animate={{ scale: [1, 1.03, 1] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
+        <motion.button
+          className="px-4 py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full"
+          animate={{ scale: [1, 1.03, 1] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          onClick={() => setShowMessage(true)}
+        >
           Apply Now
         </motion.button>
       </div>
+      {showMessage && (
+        <p className="mt-2 text-[10px] text-gold">
+          Applications coming soon. Contact the event organizer for now.
+        </p>
+      )}
     </motion.div>
   );
 }
 
-function CalendarView({ month, onChangeMonth, events }: { month: number; onChangeMonth: (m: number) => void; events: EventItem[] }) {
+function CalendarView({ month, onChangeMonth, events, onEventClick }: { month: number; onChangeMonth: (m: number) => void; events: EventItem[]; onEventClick?: (id: string) => void }) {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const year = new Date().getFullYear();
@@ -408,7 +442,16 @@ function CalendarView({ month, onChangeMonth, events }: { month: number; onChang
                 {isToday(day) ? <span className="w-6 h-6 rounded-full bg-gold text-black text-[11px] font-bold flex items-center justify-center">{day}</span> : <span className="text-[11px] font-mono text-text-primary">{day}</span>}
               </div>
               <div className="mt-1 space-y-0.5">
-                {dayEvents.slice(0, 2).map((ev) => <div key={ev.id} className="flex items-center gap-1 px-1 py-0.5 rounded bg-black-surface/50"><span className="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" /><span className="text-[9px] text-gold truncate hidden lg:block">{ev.title}</span></div>)}
+                {dayEvents.slice(0, 2).map((ev) => (
+                  <div
+                    key={ev.id}
+                    onClick={() => onEventClick?.(ev.id)}
+                    className="flex items-center gap-1 px-1 py-0.5 rounded bg-black-surface/50 cursor-pointer hover:bg-gold/10 transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" />
+                    <span className="text-[9px] text-gold truncate hidden lg:block">{ev.title}</span>
+                  </div>
+                ))}
                 {dayEvents.length > 2 && <p className="text-[9px] text-text-muted pl-1">+{dayEvents.length - 2} more</p>}
               </div>
             </motion.div>

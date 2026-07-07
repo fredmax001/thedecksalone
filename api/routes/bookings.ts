@@ -35,6 +35,123 @@ const reviewSchema = z.object({
   review: z.string().max(2000).optional(),
 });
 
+const counterResponseSchema = z.object({
+  action: z.enum(['accept', 'reject', 'counter']),
+  proposedPrice: z.number().min(0).optional(),
+  note: z.string().max(500).optional(),
+});
+
+// GET /api/bookings/my-requests - User's sent booking requests (explicit alias for client bookings)
+router.get('/my-requests', authMiddleware, async (req, res) => {
+  try {
+    const parsed = bookingFilterSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
+    }
+
+    const { status, page, limit } = parsed.data;
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = { clientId: req.user.id };
+    if (status) where.status = status;
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, bookingFeeMin: true, bookingFeeMax: true } },
+          payments: { select: { id: true, amount: true, status: true, type: true } },
+        },
+      }),
+      prisma.booking.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: bookings,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/bookings/:id/counter - User responds to a DJ's counter offer
+router.put('/:id/counter', authMiddleware, async (req, res) => {
+  try {
+    const parsed = counterResponseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { action, proposedPrice, note } = parsed.data;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { dj: true },
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    if (booking.clientId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Only the client can respond to counter offers' });
+    }
+
+    // Must be in NEGOTIATING state to respond to a counter
+    if (booking.status !== 'NEGOTIATING' && booking.status !== 'PENDING') {
+      return res.status(400).json({ success: false, error: `Cannot respond to counter when booking is ${booking.status}` });
+    }
+
+    let updateData: any = {};
+    let newStatus = booking.status;
+
+    if (action === 'accept') {
+      newStatus = 'CONFIRMED';
+    } else if (action === 'reject') {
+      newStatus = 'CANCELLED';
+    } else if (action === 'counter') {
+      if (proposedPrice === undefined) {
+        return res.status(400).json({ success: false, error: 'proposedPrice is required for counter action' });
+      }
+      // Update budget to reflect client's new proposal; keep NEGOTIATING
+      updateData.budget = proposedPrice;
+      newStatus = 'NEGOTIATING';
+    }
+
+    updateData.status = newStatus;
+
+    // Append note if provided
+    if (note) {
+      const existingNotes = booking.notes || '';
+      updateData.notes = existingNotes
+        ? `${existingNotes}\n[${new Date().toISOString()}] Client ${action}: ${note}`
+        : `[${new Date().toISOString()}] Client ${action}: ${note}`;
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        client: { select: { id: true, email: true } },
+        dj: { select: { id: true, stageName: true, avatar: true } },
+        payments: true,
+      },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/bookings - List bookings (for logged in user)
 router.get('/', authMiddleware, async (req, res) => {
   try {

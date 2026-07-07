@@ -14,6 +14,7 @@ import {
   ListMusic,
   X,
 } from 'lucide-react';
+import api from '@/lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -26,6 +27,13 @@ export interface MixTrack {
   cover: string;
   genre: string;
   plays?: number;
+  audioUrl?: string;
+  audioSource?: string;
+  originalUrl?: string;
+}
+
+function isEmbedSource(source?: string): boolean {
+  return ['audiomack', 'youtube', 'soundcloud', 'mixcloud'].includes(source || '');
 }
 
 interface MixPlayerProps {
@@ -209,20 +217,86 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
   const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
   const [liked, setLiked] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playTrackedRef = useRef(false);
+
+  const embed = isEmbedSource(track?.audioSource);
 
   // Reset when track changes
   useEffect(() => {
     setProgress(0);
     setCurrentTime(0);
-    setIsPlaying(true);
+    setIsPlaying(!embed);
     setLiked(false);
+    playTrackedRef.current = false;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+  }, [track?.id, embed]);
+
+  // Initialize audio element when audioUrl is available
+  useEffect(() => {
+    if (!track?.audioUrl || embed) return;
+    const audio = new Audio(track.audioUrl);
+    audioRef.current = audio;
+
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      if (track.duration && track.duration > 0) {
+        setProgress(audio.currentTime / track.duration);
+      }
+    };
+
+    const onEnded = () => {
+      setIsPlaying(false);
+    };
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('ended', onEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('ended', onEnded);
+      audioRef.current = null;
+    };
+  }, [track?.id, track?.audioUrl]);
+
+  // Play / pause control
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || embed) return;
+    if (isPlaying) {
+      audio.play().catch((err) => {
+        console.error('Audio playback failed:', err);
+        setIsPlaying(false);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, embed]);
+
+  // Track play count once per track via API (selection counts as a play)
+  useEffect(() => {
+    if (track && !playTrackedRef.current) {
+      playTrackedRef.current = true;
+      api.post(`/mixes/${track.id}/play`).catch(() => {});
+    }
   }, [track?.id]);
 
-  // Playback timer
+  // Volume control
   useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || embed) return;
+    audio.volume = isMuted ? 0 : volume;
+  }, [volume, isMuted, embed]);
+
+  // Fallback timer when no real audio URL
+  useEffect(() => {
+    if (track?.audioUrl) return;
     if (isPlaying && track) {
-      timerRef.current = setInterval(() => {
+      const interval = setInterval(() => {
         setCurrentTime((prev) => {
           const next = prev + 1;
           if (next >= track.duration) {
@@ -233,23 +307,30 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
           return next;
         });
       }, 1000);
+      return () => clearInterval(interval);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
   }, [isPlaying, track]);
 
   const handleSeek = useCallback(
     (pct: number) => {
-      if (!track) return;
+      if (!track || embed) return;
       const newTime = pct * track.duration;
+      if (audioRef.current) {
+        audioRef.current.currentTime = newTime;
+      }
       setCurrentTime(newTime);
       setProgress(pct);
     },
-    [track]
+    [track, embed]
   );
 
-  const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
+  const togglePlay = useCallback(() => {
+    if (embed) {
+      setIsExpanded(true);
+      return;
+    }
+    setIsPlaying((p) => !p);
+  }, [embed]);
   const toggleMute = useCallback(() => setIsMuted((m) => !m), []);
   const toggleLike = useCallback(() => setLiked((l) => !l), []);
 
@@ -316,48 +397,63 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
                 </button>
               </div>
 
-              {/* Center: Controls + Waveform */}
-              <div className="flex flex-col items-center flex-1 px-4">
-                <div className="flex items-center gap-4 mb-1">
-                  <button
-                    onClick={onPrev}
-                    className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                  >
-                    <SkipBack size={18} />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="w-9 h-9 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform"
-                  >
-                    {isPlaying ? (
-                      <Pause size={16} className="text-black" />
-                    ) : (
-                      <Play size={16} className="text-black ml-0.5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={onNext}
-                    className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                  >
-                    <SkipForward size={18} />
-                  </button>
-                </div>
+              {/* Center: Controls + Waveform (or embed iframe) */}
+              <div className="flex flex-col items-center flex-1 px-4 min-w-0">
+                {embed ? (
+                  <iframe
+                    src={track.audioUrl}
+                    title={`${track.title} player`}
+                    width="100%"
+                    height="80"
+                    scrolling="no"
+                    frameBorder="0"
+                    allow="autoplay"
+                    className="rounded-md"
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-center gap-4 mb-1">
+                      <button
+                        onClick={onPrev}
+                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <SkipBack size={18} />
+                      </button>
+                      <button
+                        onClick={togglePlay}
+                        className="w-9 h-9 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform"
+                      >
+                        {isPlaying ? (
+                          <Pause size={16} className="text-black" />
+                        ) : (
+                          <Play size={16} className="text-black ml-0.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={onNext}
+                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <SkipForward size={18} />
+                      </button>
+                    </div>
 
-                <div className="flex items-center gap-3 w-full max-w-md">
-                  <span className="text-[10px] font-mono text-text-muted w-10 text-right">
-                    {formatTime(currentTime)}
-                  </span>
-                  <div className="flex-1">
-                    <WaveformBars
-                      isPlaying={isPlaying}
-                      progress={progress}
-                      onSeek={handleSeek}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-text-muted w-10">
-                    {formatTime(track.duration)}
-                  </span>
-                </div>
+                    <div className="flex items-center gap-3 w-full max-w-md">
+                      <span className="text-[10px] font-mono text-text-muted w-10 text-right">
+                        {formatTime(currentTime)}
+                      </span>
+                      <div className="flex-1">
+                        <WaveformBars
+                          isPlaying={isPlaying}
+                          progress={progress}
+                          onSeek={handleSeek}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-text-muted w-10">
+                        {formatTime(track.duration)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Right: Volume + Expand */}
@@ -440,50 +536,65 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
                 <p className="text-gold text-sm mt-1">{track.dj}</p>
                 <p className="text-text-muted text-xs mt-1">{track.genre}</p>
 
-                {/* Full Waveform */}
-                <div className="w-full max-w-lg mt-6">
-                  <FullWaveform
-                    isPlaying={isPlaying}
-                    progress={progress}
-                    onSeek={handleSeek}
+                {embed ? (
+                  <iframe
+                    src={track.audioUrl}
+                    title={`${track.title} player`}
+                    width="100%"
+                    height="250"
+                    scrolling="no"
+                    frameBorder="0"
+                    allow="autoplay"
+                    className="w-full max-w-lg mt-6 rounded-xl"
                   />
-                </div>
+                ) : (
+                  <>
+                    {/* Full Waveform */}
+                    <div className="w-full max-w-lg mt-6">
+                      <FullWaveform
+                        isPlaying={isPlaying}
+                        progress={progress}
+                        onSeek={handleSeek}
+                      />
+                    </div>
 
-                {/* Time display */}
-                <div className="flex justify-between w-full max-w-lg mt-2">
-                  <span className="text-xs font-mono text-text-muted">
-                    {formatTime(currentTime)}
-                  </span>
-                  <span className="text-xs font-mono text-text-muted">
-                    {formatTime(track.duration)}
-                  </span>
-                </div>
+                    {/* Time display */}
+                    <div className="flex justify-between w-full max-w-lg mt-2">
+                      <span className="text-xs font-mono text-text-muted">
+                        {formatTime(currentTime)}
+                      </span>
+                      <span className="text-xs font-mono text-text-muted">
+                        {formatTime(track.duration)}
+                      </span>
+                    </div>
 
-                {/* Controls */}
-                <div className="flex items-center gap-6 mt-4">
-                  <button
-                    onClick={onPrev}
-                    className="p-2 text-text-muted hover:text-text-primary transition-colors"
-                  >
-                    <SkipBack size={24} />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="w-14 h-14 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform"
-                  >
-                    {isPlaying ? (
-                      <Pause size={24} className="text-black" />
-                    ) : (
-                      <Play size={24} className="text-black ml-1" />
-                    )}
-                  </button>
-                  <button
-                    onClick={onNext}
-                    className="p-2 text-text-muted hover:text-text-primary transition-colors"
-                  >
-                    <SkipForward size={24} />
-                  </button>
-                </div>
+                    {/* Controls */}
+                    <div className="flex items-center gap-6 mt-4">
+                      <button
+                        onClick={onPrev}
+                        className="p-2 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <SkipBack size={24} />
+                      </button>
+                      <button
+                        onClick={togglePlay}
+                        className="w-14 h-14 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform"
+                      >
+                        {isPlaying ? (
+                          <Pause size={24} className="text-black" />
+                        ) : (
+                          <Play size={24} className="text-black ml-1" />
+                        )}
+                      </button>
+                      <button
+                        onClick={onNext}
+                        className="p-2 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <SkipForward size={24} />
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-4 mt-4">
@@ -494,7 +605,26 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
                     <Heart size={16} className={liked ? 'fill-red text-red' : ''} />
                     <span className="text-xs">{liked ? 'Liked' : 'Like'}</span>
                   </button>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-text-secondary hover:border-gold hover:text-gold transition-colors">
+                  <button
+                    onClick={async () => {
+                      if (!track) return;
+                      const url = `${window.location.origin}/mixes`;
+                      try {
+                        if (navigator.share) {
+                          await navigator.share({
+                            title: `${track.title} by ${track.dj}`,
+                            url,
+                          });
+                        } else {
+                          await navigator.clipboard.writeText(url);
+                          alert('Link copied to clipboard!');
+                        }
+                      } catch {
+                        // User cancelled share
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-text-secondary hover:border-gold hover:text-gold transition-colors"
+                  >
                     <Share2 size={16} />
                     <span className="text-xs">Share</span>
                   </button>

@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { z } = require('zod');
 const passport = require('passport');
 const { prisma } = require('../utils/prisma');
@@ -34,16 +35,21 @@ async function generateUsername(email) {
     .replace(/^[-_]+|[-_]+$/g, '');
   const base = prefix.length >= 3 ? prefix : 'user';
 
-  let attempt = 0;
-  while (attempt < 100) {
-    const candidate = attempt === 0 ? base : `${base}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+  // First try the bare base name
+  const baseExists = await prisma.user.findUnique({ where: { username: base } });
+  if (!baseExists && !RESERVED_USERNAMES.has(base)) return base;
+
+  // Append a random 4-char suffix — collision probability is astronomically low
+  // (36^4 = 1.6M combinations). Retry up to 5 times for safety.
+  for (let i = 0; i < 5; i++) {
+    const suffix = crypto.randomBytes(2).toString('hex'); // e.g. "a3f2"
+    const candidate = `${base}_${suffix}`;
     if (!RESERVED_USERNAMES.has(candidate)) {
       const existing = await prisma.user.findUnique({ where: { username: candidate } });
       if (!existing) return candidate;
     }
-    attempt += 1;
   }
-  throw new Error('Unable to generate unique username');
+  throw new Error('Unable to generate unique username after retries');
 }
 
 const registerSchema = z.object({
@@ -244,21 +250,33 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
     const { email } = parsed.data;
     const user = await prisma.user.findUnique({ where: { email } });
 
+    // Always return the same response to prevent user enumeration
+    const successResponse = { success: true, data: { message: 'If an account exists, a reset email has been sent.' } };
+
     if (!user) {
-      // Don't reveal if user exists
-      return res.json({ success: true, data: { message: 'If an account exists, a reset email has been sent.' } });
+      return res.json(successResponse);
     }
 
-    // Generate reset token (JWT with short expiry)
-    const resetToken = signToken({ id: user.id, type: 'password_reset' });
+    // Generate a secure, random single-use token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // TODO: Send actual email with reset link
-    // In production, use SendGrid, AWS SES, or similar
-    // For now, log to console for development
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    console.log(`[Password Reset] ${email}: ${resetUrl}`);
+    // Persist only the hash — raw token is sent to user and never stored
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
+    });
 
-    return res.json({ success: true, data: { message: 'If an account exists, a reset email has been sent.' } });
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+
+    // TODO: Replace with actual email provider (SendGrid, AWS SES, etc.)
+    // The reset URL must be sent via email — do NOT log in production.
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Dev] Password reset URL for ${email}: ${resetUrl}`);
+    }
+
+    return res.json(successResponse);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -273,17 +291,31 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     }
 
     const { token, newPassword } = parsed.data;
-    const { verifyToken } = require('../utils/jwt');
-    const decoded = verifyToken(token);
 
-    if (!decoded || decoded.type !== 'password_reset') {
+    // Hash the incoming raw token to compare against stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: { gt: new Date() }, // Must not be expired
+      },
+    });
+
+    if (!user) {
       return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and immediately invalidate the reset token (single-use)
     await prisma.user.update({
-      where: { id: decoded.id },
-      data: { password: hashedPassword },
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
+      },
     });
 
     return res.json({ success: true, data: { message: 'Password updated successfully' } });
@@ -339,9 +371,15 @@ router.get('/me', authMiddleware, async (req, res) => {
 
 const updateProfileSchema = z.object({
   username: z.string().min(3).max(30).optional(),
+  email: z.string().email().optional(),
 });
 
-// PUT /api/auth/me - Update current user's profile (username, etc.)
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
+// PUT /api/auth/me - Update current user's profile (username, email, etc.)
 router.put('/me', authMiddleware, async (req, res) => {
   try {
     const parsed = updateProfileSchema.safeParse(req.body);
@@ -349,7 +387,7 @@ router.put('/me', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { username } = parsed.data;
+    const { username, email } = parsed.data;
     const updateData: any = {};
 
     if (username !== undefined) {
@@ -364,6 +402,15 @@ router.put('/me', authMiddleware, async (req, res) => {
       updateData.username = normalized;
     }
 
+    if (email !== undefined) {
+      const normalizedEmail = email.toLowerCase().trim();
+      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing && existing.id !== req.user.id) {
+        return res.status(409).json({ success: false, error: 'Email already in use' });
+      }
+      updateData.email = normalizedEmail;
+    }
+
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: updateData,
@@ -371,6 +418,42 @@ router.put('/me', authMiddleware, async (req, res) => {
     });
 
     return res.json({ success: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/auth/change-password - Change current user's password
+router.post('/change-password', authMiddleware, async (req, res) => {
+  try {
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { currentPassword, newPassword } = parsed.data;
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, password: true },
+    });
+
+    if (!user || !user.password) {
+      return res.status(400).json({ success: false, error: 'User not found or no password set' });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password: hashedPassword },
+    });
+
+    return res.json({ success: true, data: { message: 'Password updated successfully' } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -11,7 +11,14 @@ export const api = axios.create({
 
 // Attach JWT token to every request if available
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('soundit_token');
+  let token = null;
+  const authData = localStorage.getItem('soundit-auth');
+  if (authData) {
+    try {
+      token = JSON.parse(authData).state?.token;
+    } catch (e) {}
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -28,7 +35,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const isAuthCheck = error.config?.url?.includes('/auth/me');
-      localStorage.removeItem('soundit_token');
+      localStorage.removeItem('soundit-auth');
       if (!isAuthCheck) {
         window.location.href = '/login';
       }

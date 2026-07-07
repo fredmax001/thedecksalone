@@ -3,10 +3,11 @@ import { useAuthStore, type UserRole } from '@/stores/authStore';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
+  excludeRoles?: UserRole[];
   fallback?: string;
 }
 
-export default function ProtectedRoute({ allowedRoles, fallback = '/login' }: ProtectedRouteProps) {
+export default function ProtectedRoute({ allowedRoles, excludeRoles, fallback = '/login' }: ProtectedRouteProps) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
 
@@ -24,6 +25,10 @@ export default function ProtectedRoute({ allowedRoles, fallback = '/login' }: Pr
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/" replace />;
+  }
+
+  if (excludeRoles && excludeRoles.includes(user.role)) {
+    return <Navigate to={fallback} replace />;
   }
 
   return <Outlet />;

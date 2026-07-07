@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
   Play,
@@ -8,85 +8,53 @@ import {
   Send,
   Headphones,
   Disc3,
+  Settings,
+  Star,
+  Search,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import { useHallOfFameDJs } from '../hooks/useDJs';
+import { useHallOfFameMixes } from '../hooks/useMixes';
+import {
+  useAdminDjs,
+  useAdminMixes,
+  useToggleDjHallOfFame,
+  useToggleMixHallOfFame,
+} from '../hooks/useAdmin';
+import { useAuthStore } from '../stores/authStore';
 
-/* ──────────────────────────── data ──────────────────────────── */
+/* ──────────────────────────── types ──────────────────────────── */
 
-const pioneers = [
-  {
-    name: 'DJ MASTER K',
-    years: '1985 – 2010',
-    location: 'Freetown',
-    image: '/placeholder.jpg',
-    bio: 'One of the first professional DJs in Freetown, Master K built his own sound system from salvaged parts and played at every major event in the city for 25 years.',
-    knownFor: 'Creating the first mobile DJ setup in Sierra Leone',
-    quote: '"The music chose me. I just had to find a way to let it speak."',
-  },
-  {
-    name: 'QUEEN LUCY',
-    years: '1990 – 2015',
-    location: 'Bo',
-    image: '/placeholder.jpg',
-    bio: 'Breaking barriers as one of the first female DJs in Sierra Leone, Queen Lucy inspired a generation of women to take up the craft. Her Sunday gospel mixes are still talked about today.',
-    knownFor: 'Pioneering female DJ culture in Sierra Leone',
-    quote: '"The turntables don\'t care who\'s spinning. Only the crowd does."',
-  },
-  {
-    name: 'DJ SOUNDMAN',
-    years: '1988 – 2005',
-    location: 'Kenema',
-    image: '/placeholder.jpg',
-    bio: "The Eastern Region's ambassador of sound. DJ Soundman connected Kenema to Freetown's music scene, bringing the latest tracks to the provinces before anyone else.",
-    knownFor: 'Bridging urban and provincial music scenes',
-    quote: '"Every town deserves to hear the best music."',
-  },
-];
+interface HallOfFameDj {
+  id: string;
+  stageName: string;
+  yearsActive: number | null;
+  city: string | null;
+  avatar: string | null;
+  bio: string | null;
+  awards: string[];
+  totalFollowers: number;
+  totalStreams: number;
+  verified: boolean;
+  username: string;
+  _count: { mixes: number; reviews: number };
+}
 
-const legendaryMixes = [
-  {
-    year: 1995,
-    title: 'Freetown All-Nighter Vol. 1',
-    dj: 'DJ Master K',
-    significance: 'The first widely-circulated mixtape in Sierra Leone. Cassette copies traded across the country.',
-    hasAudio: true,
-  },
-  {
-    year: 2002,
-    title: 'Post-War Revival Mix',
-    dj: 'DJ Soundman',
-    significance: 'Recorded just after the civil war ended, this mix symbolized hope and the return of celebration.',
-    hasAudio: true,
-  },
-  {
-    year: 2005,
-    title: 'Sunday Gospel Special',
-    dj: 'Queen Lucy',
-    significance: 'Her most celebrated mix — a 3-hour journey through gospel that united churches across Bo.',
-    hasAudio: true,
-  },
-  {
-    year: 2010,
-    title: 'Independence Golden Jubilee',
-    dj: 'Various DJs',
-    significance: "50 DJs contributed to this 24-hour mix celebrating 50 years of Sierra Leone's independence.",
-    hasAudio: true,
-  },
-  {
-    year: 2015,
-    title: 'Ebola Survivors Celebration',
-    dj: 'Bow',
-    significance: "Mixed during the Ebola recovery, this became the soundtrack to Sierra Leone's resilience.",
-    hasAudio: true,
-  },
-  {
-    year: 2020,
-    title: 'Lockdown Livestream',
-    dj: 'Fred Max',
-    significance: 'The first major livestreamed DJ set from Sierra Leone, reaching viewers across the diaspora.',
-    hasAudio: true,
-  },
-];
+interface HallOfFameMix {
+  id: string;
+  title: string;
+  dj: { id: string; stageName: string; avatar: string | null };
+  createdAt: string;
+  description: string | null;
+  plays: number;
+  likes: number;
+  audioUrl: string | null;
+  coverImage: string | null;
+}
+
+/* ──────────────────────────── hardcoded data ──────────────────────────── */
 
 const timelineEvents = [
   {
@@ -171,9 +139,39 @@ export default function HallOfFame() {
     reason: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminTab, setAdminTab] = useState<'djs' | 'mixes'>('djs');
+  const [djSearch, setDjSearch] = useState('');
+  const [mixSearch, setMixSearch] = useState('');
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineInView = useInView(timelineRef, { once: true, margin: '-100px' });
+
+  const { user } = useAuthStore();
+  const isAdmin = ['ADMIN', 'MODERATOR', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'].includes(
+    user?.role || ''
+  );
+
+  /* Real data hooks */
+  const { data: pioneers = [], isLoading: pioneersLoading } = useHallOfFameDJs(6);
+  const { data: legendaryMixes = [], isLoading: mixesLoading } = useHallOfFameMixes(6);
+
+  /* Admin data hooks */
+  const { data: adminDjsData, isLoading: adminDjsLoading } = useAdminDjs({
+    search: djSearch,
+    page: 1,
+    limit: 100,
+  });
+  const { data: adminMixesData, isLoading: adminMixesLoading } = useAdminMixes({
+    search: mixSearch,
+    page: 1,
+    limit: 100,
+  });
+  const toggleDjHof = useToggleDjHallOfFame();
+  const toggleMixHof = useToggleMixHallOfFame();
+
+  const adminDjs = adminDjsData?.data || [];
+  const adminMixes = adminMixesData?.data || [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,6 +181,200 @@ export default function HallOfFame() {
 
   return (
     <div className="bg-black min-h-[100dvh]">
+      {/* ═══════════════ ADMIN BAR ═══════════════ */}
+      {isAdmin && (
+        <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/10">
+          <div className="container-main py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-gold" />
+              <span className="text-sm font-semibold text-text-primary">
+                Admin: Hall of Fame
+              </span>
+            </div>
+            <button
+              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase transition-colors ${
+                showAdminPanel
+                  ? 'bg-gold text-black'
+                  : 'bg-white/10 text-text-primary hover:bg-white/20'
+              }`}
+            >
+              {showAdminPanel ? 'Close Panel' : 'Manage Hall of Fame'}
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showAdminPanel && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden border-t border-white/10"
+              >
+                <div className="container-main py-4">
+                  {/* Tabs */}
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      onClick={() => setAdminTab('djs')}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase transition-colors ${
+                        adminTab === 'djs'
+                          ? 'bg-gold text-black'
+                          : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                      }`}
+                    >
+                      Pioneers ({adminDjs.filter((d) => d.hallOfFame).length})
+                    </button>
+                    <button
+                      onClick={() => setAdminTab('mixes')}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase transition-colors ${
+                        adminTab === 'mixes'
+                          ? 'bg-gold text-black'
+                          : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                      }`}
+                    >
+                      Mixes ({adminMixes.filter((m) => m.hallOfFame).length})
+                    </button>
+                  </div>
+
+                  {adminTab === 'djs' ? (
+                    <div>
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                        <input
+                          type="text"
+                          placeholder="Search DJs..."
+                          value={djSearch}
+                          onChange={(e) => setDjSearch(e.target.value)}
+                          className="w-full bg-black-surface border border-dark-gray rounded-lg pl-10 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+                        />
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto space-y-1">
+                        {adminDjsLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-5 h-5 text-gold animate-spin" />
+                          </div>
+                        ) : adminDjs.length === 0 ? (
+                          <p className="text-sm text-text-muted text-center py-4">
+                            No DJs found
+                          </p>
+                        ) : (
+                          adminDjs.map((dj) => (
+                            <div
+                              key={dj.id}
+                              className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={dj.avatar || '/placeholder.jpg'}
+                                  alt={dj.stageName}
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-text-primary">
+                                    {dj.stageName}
+                                  </p>
+                                  <p className="text-xs text-text-muted">
+                                    {dj.city || 'Sierra Leone'} • {dj.verified ? 'Verified' : 'Unverified'}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => toggleDjHof.mutate(dj.id)}
+                                disabled={toggleDjHof.isPending}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                                  dj.hallOfFame
+                                    ? 'bg-gold text-black'
+                                    : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                                }`}
+                              >
+                                {dj.hallOfFame ? (
+                                  <>
+                                    <Check className="w-3 h-3" /> In Hall of Fame
+                                  </>
+                                ) : (
+                                  <>
+                                    <Star className="w-3 h-3" /> Add
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                        <input
+                          type="text"
+                          placeholder="Search mixes..."
+                          value={mixSearch}
+                          onChange={(e) => setMixSearch(e.target.value)}
+                          className="w-full bg-black-surface border border-dark-gray rounded-lg pl-10 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+                        />
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto space-y-1">
+                        {adminMixesLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-5 h-5 text-gold animate-spin" />
+                          </div>
+                        ) : adminMixes.length === 0 ? (
+                          <p className="text-sm text-text-muted text-center py-4">
+                            No mixes found
+                          </p>
+                        ) : (
+                          adminMixes.map((mix) => (
+                            <div
+                              key={mix.id}
+                              className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded bg-black-elevated flex items-center justify-center">
+                                  <Disc3 className="w-4 h-4 text-gold" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-text-primary">
+                                    {mix.title}
+                                  </p>
+                                  <p className="text-xs text-text-muted">
+                                    {mix.dj?.stageName || 'Unknown DJ'} • {mix.plays} plays
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => toggleMixHof.mutate(mix.id)}
+                                disabled={toggleMixHof.isPending}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                                  mix.hallOfFame
+                                    ? 'bg-gold text-black'
+                                    : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                                }`}
+                              >
+                                {mix.hallOfFame ? (
+                                  <>
+                                    <Check className="w-3 h-3" /> In Hall of Fame
+                                  </>
+                                ) : (
+                                  <>
+                                    <Star className="w-3 h-3" /> Add
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
       {/* ═══════════════ SECTION 1: HERO ═══════════════ */}
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden">
         {/* Background with Ken Burns */}
@@ -339,7 +531,7 @@ export default function HallOfFame() {
         </div>
       </section>
 
-      {/* ═══════════════ SECTION 3: PIONEER DJS ═══════════════ */}
+      {/* ═══════════════ SECTION 3: PIONEER DJS (REAL DATA) ═══════════════ */}
       <section className="py-16 sm:py-24 lg:py-32 bg-black-elevated">
         <div className="container-main">
           <div className="text-center mb-12 lg:mb-16">
@@ -358,46 +550,69 @@ export default function HallOfFame() {
             </FadeIn>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {pioneers.map((pioneer, index) => (
-              <FadeIn key={pioneer.name} delay={0.15 * index}>
-                <motion.div
-                  className="bg-black rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all duration-400"
-                  whileHover={{ y: -4 }}
-                >
-                  <div className="aspect-square overflow-hidden">
-                    <img
-                      src={pioneer.image}
-                      alt={pioneer.name}
-                      className="w-full h-full object-cover sepia group-hover:sepia-0 transition-all duration-400"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <span className="inline-block px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gold text-black rounded-full">
-                      Pioneer
-                    </span>
-                    <h3 className="font-display text-xl font-semibold text-text-primary mt-3 uppercase">
-                      {pioneer.name}
-                    </h3>
-                    <p className="font-mono text-sm text-gold mt-1">{pioneer.years}</p>
-                    <p className="text-sm text-text-secondary mt-3 leading-relaxed">
-                      {pioneer.bio}
-                    </p>
-                    <p className="text-xs text-text-muted mt-2">
-                      Known for: {pioneer.knownFor}
-                    </p>
-                    <blockquote className="mt-4 text-sm text-gold/70 italic border-l-2 border-gold pl-3">
-                      {pioneer.quote}
-                    </blockquote>
-                  </div>
-                </motion.div>
-              </FadeIn>
-            ))}
-          </div>
+          {pioneersLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-gold animate-spin" />
+            </div>
+          ) : pioneers.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-text-secondary text-lg">
+                No pioneers in the Hall of Fame yet. Check back soon!
+              </p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {(pioneers as HallOfFameDj[]).map((pioneer, index) => (
+                <FadeIn key={pioneer.id} delay={0.15 * index}>
+                  <motion.div
+                    className="bg-black rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all duration-400"
+                    whileHover={{ y: -4 }}
+                  >
+                    <div className="aspect-square overflow-hidden">
+                      <img
+                        src={pioneer.avatar || '/placeholder.jpg'}
+                        alt={pioneer.stageName}
+                        className="w-full h-full object-cover sepia group-hover:sepia-0 transition-all duration-400"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <span className="inline-block px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gold text-black rounded-full">
+                        Pioneer
+                      </span>
+                      <h3 className="font-display text-xl font-semibold text-text-primary mt-3 uppercase">
+                        {pioneer.stageName}
+                      </h3>
+                      <p className="font-mono text-sm text-gold mt-1">
+                        {pioneer.yearsActive
+                          ? `Active for ${pioneer.yearsActive} years`
+                          : 'Verified Pioneer'}
+                      </p>
+                      <p className="text-sm text-text-secondary mt-3 leading-relaxed">
+                        {pioneer.bio || 'A pioneer of Sierra Leone\'s DJ culture.'}
+                      </p>
+                      <p className="text-xs text-text-muted mt-2">
+                        Known for: {pioneer.awards?.[0] || 'Contributing to Sierra Leone\'s music scene'}
+                      </p>
+                      <div className="mt-4 flex items-center gap-3 text-xs text-gold/70">
+                        <span className="flex items-center gap-1">
+                          <Headphones className="w-3 h-3" />
+                          {pioneer.totalStreams.toLocaleString()} streams
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Star className="w-3 h-3" />
+                          {pioneer.totalFollowers.toLocaleString()} followers
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                </FadeIn>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ═══════════════ SECTION 4: LEGENDARY MIXES TABLE ═══════════════ */}
+      {/* ═══════════════ SECTION 4: LEGENDARY MIXES TABLE (REAL DATA) ═══════════════ */}
       <section className="py-16 sm:py-24 lg:py-32">
         <div className="container-main">
           <div className="mb-12">
@@ -416,73 +631,85 @@ export default function HallOfFame() {
             </FadeIn>
           </div>
 
-          <FadeIn delay={0.3}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-dark-gray">
-                    <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Year
-                    </th>
-                    <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Mix Name
-                    </th>
-                    <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      DJ
-                    </th>
-                    <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Significance
-                    </th>
-                    <th className="text-center py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Listen
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {legendaryMixes.map((mix, i) => (
-                    <motion.tr
-                      key={mix.title}
-                      className={`border-b border-white/5 hover:bg-medium-gray/50 transition-colors ${
-                        i % 2 === 0 ? 'bg-black' : 'bg-black-elevated'
-                      }`}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.06 }}
-                    >
-                      <td className="py-5 px-4">
-                        <span className="font-mono text-lg font-semibold text-gold">
-                          {mix.year}
-                        </span>
-                      </td>
-                      <td className="py-5 px-4">
-                        <span className="font-display text-base font-semibold text-text-primary">
-                          {mix.title}
-                        </span>
-                      </td>
-                      <td className="py-5 px-4">
-                        <span className="text-sm text-gold">{mix.dj}</span>
-                      </td>
-                      <td className="py-5 px-4">
-                        <p className="text-sm text-text-secondary max-w-[300px]">
-                          {mix.significance}
-                        </p>
-                      </td>
-                      <td className="py-5 px-4 text-center">
-                        {mix.hasAudio ? (
-                          <button className="w-8 h-8 rounded-full bg-gold/10 hover:bg-gold/20 flex items-center justify-center transition-colors">
-                            <Play className="w-4 h-4 text-gold fill-gold" />
-                          </button>
-                        ) : (
-                          <span className="text-xs text-text-muted">Lost</span>
-                        )}
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
+          {mixesLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-gold animate-spin" />
             </div>
-          </FadeIn>
+          ) : legendaryMixes.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-text-secondary text-lg">
+                No legendary mixes in the Hall of Fame yet. Check back soon!
+              </p>
+            </div>
+          ) : (
+            <FadeIn delay={0.3}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-dark-gray">
+                      <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Year
+                      </th>
+                      <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Mix Name
+                      </th>
+                      <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        DJ
+                      </th>
+                      <th className="text-left py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Significance
+                      </th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Listen
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(legendaryMixes as HallOfFameMix[]).map((mix, i) => (
+                      <motion.tr
+                        key={mix.id}
+                        className={`border-b border-white/5 hover:bg-medium-gray/50 transition-colors ${
+                          i % 2 === 0 ? 'bg-black' : 'bg-black-elevated'
+                        }`}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: i * 0.06 }}
+                      >
+                        <td className="py-5 px-4">
+                          <span className="font-mono text-lg font-semibold text-gold">
+                            {new Date(mix.createdAt).getFullYear()}
+                          </span>
+                        </td>
+                        <td className="py-5 px-4">
+                          <span className="font-display text-base font-semibold text-text-primary">
+                            {mix.title}
+                          </span>
+                        </td>
+                        <td className="py-5 px-4">
+                          <span className="text-sm text-gold">{mix.dj?.stageName || 'Unknown'}</span>
+                        </td>
+                        <td className="py-5 px-4">
+                          <p className="text-sm text-text-secondary max-w-[300px]">
+                            {mix.description || 'A legendary mix from Sierra Leone\'s DJ culture.'}
+                          </p>
+                        </td>
+                        <td className="py-5 px-4 text-center">
+                          {mix.audioUrl ? (
+                            <button className="w-8 h-8 rounded-full bg-gold/10 hover:bg-gold/20 flex items-center justify-center transition-colors">
+                              <Play className="w-4 h-4 text-gold fill-gold" />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-text-muted">Lost</span>
+                          )}
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </FadeIn>
+          )}
         </div>
       </section>
 

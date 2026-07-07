@@ -9,7 +9,10 @@ import {
   ShieldCheck,
   CheckCircle,
   Upload,
+  Globe,
+  FileText,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -86,6 +89,18 @@ export default function Profile() {
   const [djData, setDjData] = useState<any>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const [idDocFile, setIdDocFile] = useState<File | null>(null);
+  const idDocInputRef = useRef<HTMLInputElement>(null);
+
+  // Verification form state
+  const [verificationForm, setVerificationForm] = useState({
+    fullLegalName: '',
+    nationality: 'Sierra Leonean',
+    idDocumentType: 'passport',
+    socialProofLinks: '',
+    whyVerified: '',
+  });
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
   const isDj = user?.role === 'DJ';
   const [djId, setDjId] = useState<string | null>(user?.djProfile?.id || null);
 
@@ -268,6 +283,40 @@ export default function Profile() {
   const removeAward = (index: number) => {
     setForm((prev) => ({ ...prev, awards: prev.awards.filter((_, i) => i !== index) }));
   };
+
+  const handleVerificationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationForm.fullLegalName || !verificationForm.nationality || !verificationForm.idDocumentType || !idDocFile) {
+      toast.error('Full legal name, nationality, ID type, and document are required');
+      return;
+    }
+
+    setVerificationSubmitting(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('fullLegalName', verificationForm.fullLegalName);
+      formData.append('nationality', verificationForm.nationality);
+      formData.append('idDocumentType', verificationForm.idDocumentType);
+      if (verificationForm.socialProofLinks) formData.append('socialProofLinks', verificationForm.socialProofLinks);
+      if (verificationForm.whyVerified) formData.append('whyVerified', verificationForm.whyVerified);
+      formData.append('document', idDocFile);
+
+      await api.post('/djs/verification-request', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      toast.success('Verification request submitted for review. Our team will get back to you within 2-3 business days.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to submit verification request');
+    } finally {
+      setVerificationSubmitting(false);
+    }
+  };
+
+  const verificationStatus = djData?.verificationStatus || 'unverified';
+  const verificationPending = verificationStatus === 'pending' || verificationStatus === 'info_requested';
+  const verificationRejected = verificationStatus === 'rejected';
 
   if (loading) {
     return (
@@ -726,73 +775,150 @@ export default function Profile() {
             <CardContent className="p-6 space-y-6">
               {/* Verification Status */}
               <div className="flex items-center gap-4 p-4 rounded-xl bg-black-elevated border border-dark-gray">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${djData?.verified ? 'bg-green/20 text-green' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  djData?.verified ? 'bg-green/20 text-green' : verificationPending ? 'bg-yellow-500/20 text-yellow-500' : verificationRejected ? 'bg-red/20 text-red' : 'bg-yellow-500/20 text-yellow-500'
+                }`}>
                   {djData?.verified ? <ShieldCheck className="w-6 h-6" /> : <Shield className="w-6 h-6" />}
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-text-primary">
-                    {djData?.verified ? 'Verified DJ' : 'Not Verified'}
+                    {djData?.verified ? 'Verified DJ' : verificationPending ? 'Verification Pending' : verificationRejected ? 'Verification Rejected' : 'Not Verified'}
                   </h3>
                   <p className="text-xs text-text-secondary">
                     {djData?.verified
                       ? 'Your profile has been verified by The Deck Salone team.'
-                      : 'Get verified to build trust with clients and unlock premium features.'}
+                      : verificationPending
+                        ? 'Your verification request is under review. We will notify you once it is processed.'
+                        : verificationRejected
+                          ? (djData?.verificationNotes || 'Your verification was rejected. You may resubmit.')
+                          : 'Get verified to build trust with clients and unlock premium features.'}
                   </p>
                 </div>
                 {djData?.verified && (
                   <Badge className="bg-green/10 text-green border-0 ml-auto">Verified</Badge>
                 )}
+                {verificationPending && (
+                  <Badge className="bg-yellow-500/10 text-yellow-500 border-0 ml-auto">Pending</Badge>
+                )}
+                {verificationRejected && (
+                  <Badge className="bg-red/10 text-red border-0 ml-auto">Rejected</Badge>
+                )}
               </div>
 
-              {!djData?.verified && (
-                <>
-                  <div className="space-y-4">
+              {!djData?.verified && !verificationPending && (
+                <form className="space-y-4" onSubmit={handleVerificationSubmit}>
+                  <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
                       Request Verification
                     </h3>
-                    <p className="text-xs text-text-secondary">
-                      Submit your details for review. Our team will verify your identity and DJ credentials within 2-3 business days.
+                    <p className="text-xs text-text-secondary mt-1">
+                      Submit your passport or national ID for review. Our team will verify your identity and DJ credentials within 2-3 business days.
                     </p>
+                  </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-text-secondary mb-2 block">Full Legal Name</Label>
                       <Input
+                        value={verificationForm.fullLegalName}
+                        onChange={(e) => setVerificationForm({ ...verificationForm, fullLegalName: e.target.value })}
                         placeholder="As shown on your ID"
                         className="bg-black-elevated border-dark-gray text-text-primary"
+                        required
                       />
                     </div>
-
                     <div>
-                      <Label className="text-text-secondary mb-2 block">ID Document</Label>
-                      <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-dark-gray bg-black-elevated">
-                        <Upload className="w-5 h-5 text-gold" />
-                        <span className="text-sm text-text-secondary">National ID, Passport, or Driver&apos;s License</span>
+                      <Label className="text-text-secondary mb-2 block">Nationality</Label>
+                      <div className="relative">
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                        <Input
+                          value={verificationForm.nationality}
+                          onChange={(e) => setVerificationForm({ ...verificationForm, nationality: e.target.value })}
+                          placeholder="e.g. Sierra Leonean"
+                          className="bg-black-elevated border-dark-gray text-text-primary pl-9"
+                          required
+                        />
                       </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-text-secondary mb-2 block">Social Proof Links</Label>
-                      <Textarea
-                        placeholder="Links to your mixes, event photos, or press coverage..."
-                        rows={3}
-                        className="bg-black-elevated border-dark-gray text-text-primary resize-none"
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="text-text-secondary mb-2 block">Why should you be verified?</Label>
-                      <Textarea
-                        placeholder="Tell us about your experience, venues played, and audience..."
-                        rows={3}
-                        className="bg-black-elevated border-dark-gray text-text-primary resize-none"
-                      />
                     </div>
                   </div>
 
-                  <Button className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90">
-                    Submit Verification Request
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">ID Document Type</Label>
+                    <Select
+                      value={verificationForm.idDocumentType}
+                      onValueChange={(v) => setVerificationForm({ ...verificationForm, idDocumentType: v })}
+                    >
+                      <SelectTrigger className="bg-black-elevated border-dark-gray text-text-primary">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-black-surface border-dark-gray">
+                        <SelectItem value="passport">Passport</SelectItem>
+                        <SelectItem value="national_id">National ID</SelectItem>
+                        <SelectItem value="drivers_license">Driver's License</SelectItem>
+                        <SelectItem value="residence_permit">Residence Permit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">ID Document</Label>
+                    <input
+                      ref={idDocInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={(e) => setIdDocFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => idDocInputRef.current?.click()}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-dark-gray hover:border-gold/50 transition-colors bg-black-elevated"
+                    >
+                      <FileText className="w-5 h-5 text-gold" />
+                      <span className="text-sm text-text-secondary">
+                        {idDocFile ? idDocFile.name : 'Upload passport, ID, or permit (PDF/image)'}
+                      </span>
+                    </button>
+                    {idDocFile && (
+                      <p className="text-xs text-green mt-1">{idDocFile.name} selected</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Social Proof Links</Label>
+                    <Textarea
+                      value={verificationForm.socialProofLinks}
+                      onChange={(e) => setVerificationForm({ ...verificationForm, socialProofLinks: e.target.value })}
+                      placeholder="Links to your mixes, event photos, or press coverage..."
+                      rows={3}
+                      className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Why should you be verified?</Label>
+                    <Textarea
+                      value={verificationForm.whyVerified}
+                      onChange={(e) => setVerificationForm({ ...verificationForm, whyVerified: e.target.value })}
+                      placeholder="Tell us about your experience, venues played, and audience..."
+                      rows={3}
+                      className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={verificationSubmitting}
+                    className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90"
+                  >
+                    {verificationSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    {verificationSubmitting ? 'Submitting...' : 'Submit Verification Request'}
                   </Button>
-                </>
+                </form>
               )}
 
               {djData?.verified && (

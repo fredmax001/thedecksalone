@@ -1,5 +1,4 @@
 const { verifyToken } = require('../utils/jwt');
-const { prisma } = require('../utils/prisma');
 
 async function authMiddleware(req, res, next) {
   try {
@@ -14,19 +13,37 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ success: false, error: 'Unauthorized: Invalid token' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id || decoded.userId },
-      select: { id: true, email: true, role: true },
-    });
-
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
-    }
-
-    req.user = user;
+    // Trust the JWT payload for id, email, and role.
+    // This removes a DB round-trip on every request. JWT is signed — tampering
+    // is detected by verifyToken(). Role changes take effect at next token refresh.
+    req.user = {
+      id: decoded.id || decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+    };
     next();
   } catch (error) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+}
+
+async function softAuthMiddleware(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyToken(token);
+      if (decoded) {
+        req.user = {
+          id: decoded.id || decoded.userId,
+          email: decoded.email,
+          role: decoded.role,
+        };
+      }
+    }
+    next();
+  } catch (error) {
+    next();
   }
 }
 
@@ -42,4 +59,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authMiddleware, requireRole };
+module.exports = { authMiddleware, softAuthMiddleware, requireRole };

@@ -104,6 +104,7 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const register = useAuthStore((state) => state.register);
+  const user = useAuthStore((state) => state.user);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -194,7 +195,8 @@ export default function Register() {
 
       setIsSubmitting(false);
       setCompleted(true);
-      setTimeout(() => navigate('/dashboard'), 1500);
+      const redirectPath = role === 'DJ' ? '/dashboard' : '/discover';
+      setTimeout(() => navigate(redirectPath), 1500);
     },
     [register, navigate, watchStep1, avatarFile]
   );
@@ -245,7 +247,9 @@ export default function Register() {
             transition={{ delay: 0.5, duration: 0.4, ease }}
             className="mt-3 text-text-secondary"
           >
-            Your profile is now live. Start uploading mixes and get discovered.
+            {user?.role === 'DJ'
+              ? 'Your profile is now live. Start uploading mixes and get discovered.'
+              : 'Your account is ready. Start exploring DJs, mixes, and events.'}
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -254,17 +258,19 @@ export default function Register() {
             className="mt-8 flex flex-col sm:flex-row gap-3 justify-center"
           >
             <a
-              href="/dashboard"
+              href={user?.role === 'DJ' ? '/dashboard' : '/user/dashboard'}
               className="inline-flex items-center justify-center h-[48px] px-8 bg-gold-gradient text-black font-semibold text-sm uppercase tracking-wide rounded-full hover:scale-[1.02] transition-transform"
             >
-              Go to Dashboard
+              {user?.role === 'DJ' ? 'Go to Dashboard' : 'Go to Fan Hub'}
             </a>
-            <a
-              href="/mixes"
-              className="inline-flex items-center justify-center h-[48px] px-8 bg-black-elevated text-text-primary font-semibold text-sm uppercase tracking-wide rounded-full border border-dark-gray hover:bg-medium-gray transition-colors"
-            >
-              Upload a Mix
-            </a>
+            {user?.role === 'DJ' && (
+              <a
+                href="/mixes"
+                className="inline-flex items-center justify-center h-[48px] px-8 bg-black-elevated text-text-primary font-semibold text-sm uppercase tracking-wide rounded-full border border-dark-gray hover:bg-medium-gray transition-colors"
+              >
+                Upload a Mix
+              </a>
+            )}
           </motion.div>
         </motion.div>
       </AuthLayout>

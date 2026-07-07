@@ -79,7 +79,7 @@ async function uploadBuffer(
   ensureLocalDir(key);
   const dest = localPath(key);
   await fs.promises.writeFile(dest, buffer);
-  return `${CDN_URL}/uploads/${key}`;
+  return `/uploads/${key}`;
 }
 
 async function deleteFile(url) {

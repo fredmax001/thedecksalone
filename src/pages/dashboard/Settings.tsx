@@ -9,8 +9,12 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Sun,
+  Moon,
+  Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -30,12 +34,28 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import api from '@/lib/api';
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Profile form state
+  const [username, setUsername] = useState(user?.username || '');
+  const [email, setEmail] = useState(user?.email || '');
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Notification settings
   const [notifications, setNotifications] = useState({
@@ -53,9 +73,57 @@ export default function SettingsPage() {
     showEarnings: false,
   });
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSaveProfile = async () => {
+    setSaveError('');
+    setSaved(false);
+    setIsSavingProfile(true);
+
+    try {
+      const res = await api.put('/auth/me', { username, email });
+      if (res.data.success) {
+        setSaved(true);
+        useAuthStore.getState().fetchMe();
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaveError(res.data.error || 'Failed to update profile');
+      }
+    } catch (error: any) {
+      setSaveError(error.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await api.post('/auth/change-password', { currentPassword, newPassword });
+      if (res.data.success) {
+        setPasswordSuccess(true);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setPasswordSuccess(false), 3000);
+      } else {
+        setPasswordError(res.data.error || 'Failed to change password');
+      }
+    } catch (error: any) {
+      setPasswordError(error.response?.data?.error || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -82,6 +150,7 @@ export default function SettingsPage() {
           <TabsTrigger value="account" className="data-[state=active]:bg-gold data-[state=active]:text-black">Account</TabsTrigger>
           <TabsTrigger value="notifications" className="data-[state=active]:bg-gold data-[state=active]:text-black">Notifications</TabsTrigger>
           <TabsTrigger value="privacy" className="data-[state=active]:bg-gold data-[state=active]:text-black">Privacy</TabsTrigger>
+          <TabsTrigger value="appearance" className="data-[state=active]:bg-gold data-[state=active]:text-black">Appearance</TabsTrigger>
           <TabsTrigger value="danger" className="data-[state=active]:bg-red data-[state=active]:text-white">Danger Zone</TabsTrigger>
         </TabsList>
 
@@ -97,9 +166,9 @@ export default function SettingsPage() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                     <Input
-                      value={user?.email || ''}
-                      readOnly
-                      className="pl-10 bg-black-elevated border-dark-gray text-text-primary opacity-60"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 bg-black-elevated border-dark-gray text-text-primary"
                     />
                   </div>
                 </div>
@@ -108,16 +177,28 @@ export default function SettingsPage() {
                   <div className="relative">
                     <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                     <Input
-                      value={user?.username || ''}
-                      readOnly
-                      className="pl-10 bg-black-elevated border-dark-gray text-text-primary opacity-60"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="pl-10 bg-black-elevated border-dark-gray text-text-primary"
                     />
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-text-muted">
-                Email and username cannot be changed here. Contact support for account changes.
-              </p>
+              {saveError && (
+                <p className="text-xs text-red">{saveError}</p>
+              )}
+              <Button
+                className="bg-gold-gradient text-black hover:opacity-90"
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
             </CardContent>
           </Card>
 
@@ -134,6 +215,8 @@ export default function SettingsPage() {
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
                       className="pl-10 bg-black-elevated border-dark-gray text-text-primary"
                     />
                     <button
@@ -150,12 +233,40 @@ export default function SettingsPage() {
                   <Input
                     type="password"
                     placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Confirm New Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     className="bg-black-elevated border-dark-gray text-text-primary"
                   />
                 </div>
               </div>
-              <Button className="bg-gold-gradient text-black hover:opacity-90" onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
+              {passwordError && (
+                <p className="text-xs text-red">{passwordError}</p>
+              )}
+              {passwordSuccess && (
+                <p className="text-xs text-green flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Password updated successfully
+                </p>
+              )}
+              <Button
+                className="bg-gold-gradient text-black hover:opacity-90"
+                onClick={handleChangePassword}
+                disabled={isChangingPassword}
+              >
+                {isChangingPassword ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
                 Update Password
               </Button>
             </CardContent>
@@ -270,6 +381,37 @@ export default function SettingsPage() {
                   checked={privacy.showEarnings}
                   onCheckedChange={(v) => setPrivacy({ ...privacy, showEarnings: v })}
                 />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="appearance" className="mt-4">
+          <Card className="bg-black-surface border-dark-gray">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-text-primary">Appearance</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Theme</p>
+                  <p className="text-xs text-text-secondary">Switch between light and dark mode</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-dark-gray text-text-primary hover:bg-black-elevated flex items-center gap-2"
+                  onClick={toggleTheme}
+                >
+                  {theme === 'dark' ? (
+                    <>
+                      <Sun className="w-4 h-4" /> Dark
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="w-4 h-4" /> Light
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>

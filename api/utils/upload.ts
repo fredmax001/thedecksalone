@@ -8,6 +8,7 @@ const uploadDirs = {
   covers: path.join(process.cwd(), 'uploads', 'covers'),
   mixes: path.join(process.cwd(), 'uploads', 'mixes'),
   events: path.join(process.cwd(), 'uploads', 'events'),
+  documents: path.join(process.cwd(), 'uploads', 'documents'),
 };
 
 Object.values(uploadDirs).forEach((dir) => {
@@ -61,6 +62,17 @@ const uploadEventImage = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
+const uploadDocument = multer({
+  storage: memoryStorage,
+  fileFilter: fileFilter([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+  ]),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
 // Combined upload for DJ profile update (avatar + cover)
 const uploadDjProfileImages = multer({
   storage: memoryStorage,
@@ -102,5 +114,6 @@ module.exports = {
   uploadMix,
   uploadEventImage,
   uploadDjProfileImages,
+  uploadDocument,
   serveUploads,
 };

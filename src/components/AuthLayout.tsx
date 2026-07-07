@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import WaveformAnimation from './WaveformAnimation';
 
@@ -26,18 +27,13 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         <WaveformAnimation className="absolute inset-0 pointer-events-none overflow-hidden z-[1]" />
 
         {/* Logo at top */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="relative z-10"
-        >
+        <Link to="/" className="relative z-10 hover:opacity-80 transition-opacity">
           <img
             src="/logo.png"
             alt="Deck Salone"
             className="h-20 w-auto object-contain"
           />
-        </motion.div>
+        </Link>
 
         {/* Center content — below the logo */}
         <motion.div
@@ -84,14 +80,13 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         className="flex flex-1 items-center justify-center bg-black-elevated p-4 sm:p-6 lg:p-8"
       >
         <div className="w-full max-w-[440px]">
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-8 text-center">
+          <Link to="/" className="lg:hidden mb-8 text-center hover:opacity-80 transition-opacity block">
             <img
               src="/logo.png"
               alt="Deck Salone"
               className="h-32 w-auto object-contain mx-auto"
             />
-          </div>
+          </Link>
           {children}
         </div>
       </motion.div>

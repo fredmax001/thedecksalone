@@ -29,61 +29,80 @@ export interface AdminAnalytics {
 
 export interface AdminDj {
   id: string;
-  stageName: string;
+  userId: string;
   email: string;
-  verified: boolean;
-  suspended: boolean;
-  genres: string[];
+  stageName: string;
   city: string;
-  followers: number;
+  verified: boolean;
+  isPublic: boolean;
+  hallOfFame?: boolean;
+  rankingPosition: number;
+  rankingScore: number;
   totalStreams: number;
-  rating: number;
-  createdAt: string;
+  totalFollowers: number;
+  totalMixes: number;
+  totalBookings: number;
+  completedBookings: number;
   avatar?: string;
+  genres: string[];
+  createdAt: string;
 }
 
 export interface DjProfile {
   id: string;
   stageName: string;
-  email: string;
-  realName: string;
+  user: { email: string; createdAt: string };
+  fullName: string;
   bio: string;
   genres: string[];
   city: string;
-  phone: string;
   equipment: string[];
-  socialLinks: Record<string, string>;
-  documents: string[];
-  submittedAt: string;
-  userId: string;
+  socialLinks: Record<string, string> | null;
+  streamingLinks: Record<string, string> | null;
+  streamingPlatforms?: { platform: string; url: string; followers: number; streams: number; uploads: number }[];
+  yearsActive: number | null;
+  verified: boolean;
+  isPublic: boolean;
+  totalFollowers: number;
+  totalStreams: number;
+  totalMixes: number;
+  totalBookings: number;
+  averageRating: number;
   avatar?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RankingDj {
   id: string;
   stageName: string;
-  rank: number;
-  score: number;
+  rankingPosition: number;
+  rankingScore: number;
   totalStreams: number;
   totalBookings: number;
   totalEvents: number;
-  rating: number;
-  followers: number;
+  averageRating: number;
+  totalFollowers: number;
   city: string;
   avatar?: string;
+  digitalScore: number;
+  industryScore: number;
+  communityScore: number;
+  verified: boolean;
 }
 
 export interface Mix {
   id: string;
   title: string;
   djId: string;
-  djName: string;
+  dj: { id: string; stageName: string };
   genre: string;
-  duration: number;
-  streams: number;
+  duration: number | null;
+  plays: number;
   likes: number;
   featured: boolean;
-  coverArt?: string;
+  hallOfFame?: boolean;
+  coverImage?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,15 +110,16 @@ export interface Mix {
 export interface Booking {
   id: string;
   clientId: string;
-  clientEmail: string;
-  clientName: string;
+  client: { id: string; email: string };
   djId: string;
-  djName: string;
+  dj: { id: string; stageName: string; avatar?: string };
   eventType: string;
   eventDate: string;
-  eventCity: string;
+  eventLocation: string;
   status: string;
-  amount: number;
+  finalPrice: number | null;
+  budget: number;
+  deposit: number | null;
   currency: string;
   createdAt: string;
   updatedAt: string;
@@ -110,30 +130,34 @@ export interface Event {
   id: string;
   title: string;
   description: string;
-  organizerId: string;
-  organizerName: string;
+  djId: string | null;
   city: string;
-  venue: string;
-  startDate: string;
-  endDate: string;
+  venue: string | null;
+  date: string;
   status: string;
-  capacity: number;
-  attendees: number;
-  coverImage?: string;
+  slots: number;
+  filledSlots: number;
+  image?: string;
+  type: string;
+  location: string;
   createdAt: string;
   updatedAt: string;
+  dj?: { id: string; stageName: string } | null;
 }
 
 export interface User {
   id: string;
   email: string;
-  username: string;
+  username?: string;
   role: string;
   verified: boolean;
   createdAt: string;
   updatedAt: string;
-  lastLogin?: string;
+  lastLoginAt?: string;
   avatar?: string;
+  phone?: string;
+  phoneVerified?: boolean;
+  djProfile?: { id: string; stageName: string; verified: boolean } | null;
 }
 
 export interface Payment {
@@ -225,18 +249,42 @@ export interface SubscriptionOverview {
 export interface AdCampaign {
   id: string;
   name: string;
-  status: 'active' | 'paused' | 'draft';
+  status: 'pending_payment' | 'active' | 'paused' | 'rejected' | 'completed' | 'draft';
+  targetType: 'profile' | 'mix' | 'battle';
+  targetId?: string | null;
   impressions: number;
   clicks: number;
-  ctr: string;
+  ctr: number | string;
+  reachScore: number;
   budget: number;
   spent: number;
+  currency: string;
+  creativeImageUrl?: string | null;
+  ctaUrl?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  createdAt: string;
+  advertiser?: { id: string; stageName: string; avatar?: string } | null;
 }
 
 export interface AdsOverview {
   campaigns: AdCampaign[];
   totalBudget: number;
   totalSpent: number;
+}
+
+export interface CreateAdInput {
+  name: string;
+  status?: 'active' | 'paused' | 'draft';
+  budget?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface UpdateCampaignStatusInput {
+  id: string;
+  status: 'pending_payment' | 'active' | 'paused' | 'rejected' | 'completed';
+  notes?: string;
 }
 
 export interface PaginatedMeta {
@@ -257,7 +305,7 @@ export function useAdminStats() {
   return useQuery<AdminStats>({
     queryKey: ['adminStats'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/stats');
+      const res = await api.get('/admin/stats');
       return res.data.data;
     },
   });
@@ -267,7 +315,7 @@ export function useAdminAnalytics() {
   return useQuery<AdminAnalytics[]>({
     queryKey: ['adminAnalytics'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/analytics');
+      const res = await api.get('/admin/analytics');
       return res.data.data;
     },
   });
@@ -287,7 +335,7 @@ export function useAdminDjs(
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/djs${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/djs${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -297,7 +345,7 @@ export function useAdminRankings() {
   return useQuery<RankingDj[]>({
     queryKey: ['adminRankings'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/rankings');
+      const res = await api.get('/admin/rankings');
       return res.data.data;
     },
   });
@@ -317,7 +365,7 @@ export function useAdminMixes(
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/mixes${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/mixes${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -334,7 +382,7 @@ export function useAdminBookings(
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/bookings${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/bookings${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -352,7 +400,7 @@ export function useAdminEvents(
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/events${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/events${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -370,7 +418,7 @@ export function useAdminUsers(
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/users${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/users${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -380,7 +428,7 @@ export function useAdminPendingDjs() {
   return useQuery<DjProfile[]>({
     queryKey: ['adminPendingDJs'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/djs/pending');
+      const res = await api.get('/admin/djs/pending');
       return res.data.data;
     },
   });
@@ -394,7 +442,7 @@ export function useAdminPayments(filters?: { page?: number; limit?: number }) {
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/payments${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/payments${query ? `?${query}` : ''}`);
       return res.data;
     },
   });
@@ -404,7 +452,7 @@ export function useAdminMessages() {
   return useQuery<MessageThread[]>({
     queryKey: ['adminMessages'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/messages');
+      const res = await api.get('/admin/messages');
       return res.data.data;
     },
   });
@@ -414,7 +462,7 @@ export function useAdminStaff() {
   return useQuery<Staff[]>({
     queryKey: ['adminStaff'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/staff');
+      const res = await api.get('/admin/staff');
       return res.data.data;
     },
   });
@@ -424,7 +472,7 @@ export function useAdminPlatforms() {
   return useQuery<Platform[]>({
     queryKey: ['adminPlatforms'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/platforms');
+      const res = await api.get('/admin/platforms');
       return res.data.data;
     },
   });
@@ -434,7 +482,7 @@ export function useAdminSystem() {
   return useQuery<SystemHealth>({
     queryKey: ['adminSystem'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/system');
+      const res = await api.get('/admin/system');
       return res.data.data;
     },
   });
@@ -447,7 +495,7 @@ export function useAdminNotifications(filters?: { limit?: number }) {
       const params = new URLSearchParams();
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/notifications${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/notifications${query ? `?${query}` : ''}`);
       return res.data.data;
     },
   });
@@ -460,7 +508,7 @@ export function useAdminSecurityLogs(filters?: { limit?: number }) {
       const params = new URLSearchParams();
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/api/admin/security-logs${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/security-logs${query ? `?${query}` : ''}`);
       return res.data.data;
     },
   });
@@ -470,7 +518,7 @@ export function useAdminSubscriptions() {
   return useQuery<SubscriptionOverview>({
     queryKey: ['adminSubscriptions'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/subscriptions');
+      const res = await api.get('/admin/subscriptions');
       return res.data.data;
     },
   });
@@ -480,8 +528,47 @@ export function useAdminAds() {
   return useQuery<AdsOverview>({
     queryKey: ['adminAds'],
     queryFn: async () => {
-      const res = await api.get('/api/admin/ads');
+      const res = await api.get('/admin/ads');
       return res.data.data;
+    },
+  });
+}
+
+export function useCreateAd() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CreateAdInput) => {
+      const res = await api.post('/admin/ads', payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAds'] });
+    },
+  });
+}
+
+export function useAdminVerificationRequests() {
+  return useQuery<DjProfile[]>({
+    queryKey: ['adminVerificationRequests'],
+    queryFn: async () => {
+      const res = await api.get('/admin/djs/verification-requests');
+      return res.data.data;
+    },
+  });
+}
+
+export function useUpdateCampaignStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: UpdateCampaignStatusInput) => {
+      const res = await api.put(`/admin/campaigns/${payload.id}/status`, {
+        status: payload.status,
+        notes: payload.notes,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAds'] });
     },
   });
 }
@@ -491,14 +578,42 @@ export function useAdminAds() {
 export function useVerifyDj() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.put(`/api/admin/djs/${id}/verify`);
+    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
+      const res = await api.put(`/admin/djs/${id}/verify`, { notes });
       return res.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
       queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useRejectDjVerification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const res = await api.put(`/admin/djs/${id}/reject`, { reason });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useRequestDjInfo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const res = await api.put(`/admin/djs/${id}/request-info`, { notes });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
     },
   });
 }
@@ -507,7 +622,7 @@ export function useToggleDjSuspend() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.put(`/api/admin/djs/${id}/suspend`);
+      const res = await api.put(`/admin/djs/${id}/suspend`);
       return res.data.data;
     },
     onSuccess: () => {
@@ -521,7 +636,7 @@ export function useDeleteDj() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.delete(`/api/admin/djs/${id}`);
+      const res = await api.delete(`/admin/djs/${id}`);
       return res.data.data;
     },
     onSuccess: () => {
@@ -535,7 +650,7 @@ export function useToggleMixFeature() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, featured }: { id: string; featured: boolean }) => {
-      const res = await api.put(`/api/admin/mixes/${id}/feature`, { featured });
+      const res = await api.put(`/admin/mixes/${id}/feature`, { featured });
       return res.data.data;
     },
     onSuccess: () => {
@@ -549,7 +664,7 @@ export function useUpdateBookingStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await api.put(`/api/admin/bookings/${id}/status`, { status });
+      const res = await api.put(`/admin/bookings/${id}/status`, { status });
       return res.data.data;
     },
     onSuccess: () => {
@@ -563,7 +678,7 @@ export function useUpdateUserRole() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
-      const res = await api.put(`/api/admin/users/${id}/role`, { role });
+      const res = await api.put(`/admin/users/${id}/role`, { role });
       return res.data.data;
     },
     onSuccess: () => {
@@ -578,7 +693,7 @@ export function useSendNotification() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { type: string; target: string; title: string; message: string; scheduled?: string }) => {
-      const res = await api.post('/api/admin/notifications', payload);
+      const res = await api.post('/admin/notifications', payload);
       return res.data.data;
     },
     onSuccess: () => {
@@ -587,11 +702,114 @@ export function useSendNotification() {
   });
 }
 
+// Battle hooks
+export function useAdminBattles(filters?: { status?: string; page?: number; limit?: number }) {
+  return useQuery({
+    queryKey: ['adminBattles', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.set('status', filters.status);
+      if (filters?.page) params.set('page', String(filters.page));
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      const query = params.toString();
+      const res = await api.get(`/battles${query ? `?${query}` : ''}`);
+      return res.data || { data: [], meta: {} };
+    },
+  });
+}
+
+export function useCreateBattle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { title: string; weekStart: string; weekEnd: string; theme?: string; metricType?: string }) => {
+      const res = await api.post('/battles', payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useCloseBattle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/battles/${id}/close`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useDeleteMix() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/admin/mixes/${id}`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useUpdateRanking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; rankingScore?: number; rankingPosition?: number; digitalScore?: number; industryScore?: number; communityScore?: number }) => {
+      const res = await api.put(`/admin/djs/${id}/ranking`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminRankings'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useToggleDjHallOfFame() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.put(`/admin/djs/${id}/hall-of-fame`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameDJs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useToggleMixHallOfFame() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.put(`/admin/mixes/${id}/hall-of-fame`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
 export function useRecalculateRankings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/admin/rankings/recalculate');
+      const res = await api.post('/admin/rankings/recalculate');
       return res.data.data;
     },
     onSuccess: () => {

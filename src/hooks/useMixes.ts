@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 export interface MixFilters {
@@ -63,3 +63,30 @@ export function useMix(id: string | undefined) {
     enabled: !!id,
   });
 }
+
+export function useLikeMix() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (mixId: string) => {
+      const res = await api.post(`/mixes/${mixId}/like`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mixes'] });
+      queryClient.invalidateQueries({ queryKey: ['trendingMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['mix'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameMixes'] });
+    },
+  });
+}
+
+export function useHallOfFameMixes(limit = 6) {
+  return useQuery({
+    queryKey: ['hallOfFameMixes', limit],
+    queryFn: async () => {
+      const res = await api.get(`/mixes/hall-of-fame?limit=${limit}`);
+      return res.data.data || [];
+    },
+  });
+}
+

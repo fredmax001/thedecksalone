@@ -31,14 +31,7 @@ interface Payment {
   booking?: { eventType: string; eventDate: string };
 }
 
-const mockMonthlyEarnings = [
-  { month: 'Jan', earnings: 500 },
-  { month: 'Feb', earnings: 800 },
-  { month: 'Mar', earnings: 1200 },
-  { month: 'Apr', earnings: 950 },
-  { month: 'May', earnings: 1500 },
-  { month: 'Jun', earnings: 2100 },
-];
+
 
 export default function Earnings() {
   const { user } = useAuthStore();
@@ -70,6 +63,29 @@ export default function Earnings() {
 
   const totalEarnings = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const pendingPayout = payments.filter((p) => p.status === 'PENDING').reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  // Generate real monthly earnings chart data (last 6 months)
+  const realMonthlyEarnings = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    return {
+      month: d.toLocaleString('en-US', { month: 'short' }),
+      earnings: 0,
+      year: d.getFullYear(),
+      monthNum: d.getMonth(),
+    };
+  });
+
+  payments.forEach((p) => {
+    if (p.status !== 'COMPLETED') return; // Only count completed earnings in chart if needed, or all. We'll count all for now to match old behavior but typically only completed.
+    const pDate = new Date(p.createdAt);
+    const match = realMonthlyEarnings.find(m => m.monthNum === pDate.getMonth() && m.year === pDate.getFullYear());
+    if (match) {
+      match.earnings += (p.amount || 0);
+    }
+  });
+
+  const thisMonthEarnings = realMonthlyEarnings[5].earnings;
 
   if (loading) {
     return (
@@ -109,7 +125,7 @@ export default function Earnings() {
               <TrendingUp className="w-4 h-4 text-green" />
               <span className="text-xs text-text-secondary">This Month</span>
             </div>
-            <p className="text-2xl font-bold text-text-primary font-display">SLE 2,100</p>
+            <p className="text-2xl font-bold text-text-primary font-display">SLE {thisMonthEarnings.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="bg-black-surface border-dark-gray">
@@ -140,7 +156,7 @@ export default function Earnings() {
         <CardContent>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockMonthlyEarnings}>
+              <BarChart data={realMonthlyEarnings}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
                 <XAxis dataKey="month" stroke="#666" fontSize={12} />
                 <YAxis stroke="#666" fontSize={12} />

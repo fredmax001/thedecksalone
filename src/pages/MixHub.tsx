@@ -1,16 +1,18 @@
-import { useState, useRef, useCallback, useMemo, memo } from 'react';
+import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
   Heart,
   Clock,
-
   Search,
   Flame,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import MixPlayer, { type MixTrack } from '@/components/MixPlayer';
-import { useMixes, useTrendingMixes, useMixCategories } from '@/hooks/useMixes';
+import { useMixes, useTrendingMixes, useMixCategories, useLikeMix } from '@/hooks/useMixes';
+import { useAuthStore } from '@/stores/authStore';
 
 /* ──────────────────────── Animation helpers ──────────────────────── */
 const fadeUp = {
@@ -67,6 +69,10 @@ function toMixTrack(mix: any): MixTrack {
     duration: mix.duration || 0,
     cover: mix.coverImage || '/placeholder.jpg',
     genre: mix.genre || mix.category || 'Mix',
+    audioUrl: mix.audioUrl,
+    audioSource: mix.audioSource,
+    originalUrl: mix.originalUrl,
+    plays: mix.plays || 0,
   };
 }
 
@@ -83,6 +89,15 @@ function MixCard({
   isNew?: boolean;
 }) {
   const [liked, setLiked] = useState(false);
+  const { mutate: likeMix } = useLikeMix();
+  const { isAuthenticated } = useAuthStore();
+
+  const handleLike = useCallback(() => {
+    setLiked((prev) => !prev);
+    if (isAuthenticated) {
+      likeMix(mix.id);
+    }
+  }, [mix.id, isAuthenticated, likeMix]);
 
   return (
     <motion.div
@@ -133,7 +148,7 @@ function MixCard({
                 {formatDuration(mix.duration)}
               </span>
             </div>
-            <button onClick={() => setLiked(!liked)} className="p-1 hover:bg-white/5 rounded-full transition-colors">
+            <button onClick={handleLike} className="p-1 hover:bg-white/5 rounded-full transition-colors">
               <Heart size={14} className={liked ? 'text-red fill-red' : 'text-text-muted'} />
             </button>
           </div>
@@ -184,6 +199,7 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
 
 /* ═══════════════════════════ MAIN PAGE ═══════════════════════════ */
 export default function MixHub() {
+  const { user } = useAuthStore();
   const [activeCategory, setActiveCategory] = useState('all');
   const [currentTrack, setCurrentTrack] = useState<MixTrack | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -192,10 +208,37 @@ export default function MixHub() {
 
   const heroRef = useRef<HTMLDivElement>(null);
 
+  // Read category from URL query params on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const catParam = params.get('category');
+    if (catParam) {
+      setActiveCategory(catParam);
+    }
+  }, []);
+
+  // Sync activeCategory to URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeCategory === 'all') {
+      url.searchParams.delete('category');
+    } else {
+      url.searchParams.set('category', activeCategory);
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [activeCategory]);
+
   const { data: categories = [], isLoading: categoriesLoading } = useMixCategories();
   const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8);
+
+  const activeCategoryName = useMemo(() => {
+    if (activeCategory === 'all') return undefined;
+    const cat = (categories || []).find((c: any) => c.id === activeCategory);
+    return cat?.name;
+  }, [activeCategory, categories]);
+
   const { data: latestData, isLoading: latestLoading } = useMixes({
-    category: activeCategory === 'all' ? undefined : activeCategory,
+    category: activeCategoryName,
     search: searchQuery || undefined,
     sortBy: 'newest',
     page,
@@ -204,7 +247,17 @@ export default function MixHub() {
 
   const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
   const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
-  const allMixes = useMemo(() => [...trending, ...latest], [trending, latest]);
+  const allMixes = useMemo(() => {
+    const seen = new Set<string>();
+    const result: MixTrack[] = [];
+    for (const mix of [...trending, ...latest]) {
+      if (!seen.has(mix.id)) {
+        seen.add(mix.id);
+        result.push(mix);
+      }
+    }
+    return result;
+  }, [trending, latest]);
 
   const handlePlay = useCallback((mix: MixTrack) => {
     setCurrentTrack(mix);
@@ -242,6 +295,7 @@ export default function MixHub() {
 
   const isLoading = categoriesLoading || trendingLoading || latestLoading;
   const featuredMix = trending[0];
+  const isDj = user?.role === 'DJ';
 
   return (
     <div className="min-h-[100dvh] bg-black">
@@ -274,6 +328,14 @@ export default function MixHub() {
                 />
               </div>
             </motion.div>
+            {isDj && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="mt-4">
+                <Link to="/dashboard/mixes" className="inline-flex items-center gap-2 px-5 py-2.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
+                  <Upload size={14} />
+                  Upload Your Mix
+                </Link>
+              </motion.div>
+            )}
           </div>
 
           {featuredMix && (
@@ -335,6 +397,11 @@ export default function MixHub() {
           {trending.map((mix: any, i: any) => (
             <TrendingCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} />
           ))}
+          {trending.length === 0 && !trendingLoading && (
+            <div className="text-center py-8 w-full">
+              <p className="text-text-muted text-sm">No trending mixes yet. Be the first to upload!</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -350,6 +417,19 @@ export default function MixHub() {
           {latest.map((mix: any, i: any) => (
             <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
           ))}
+          {latest.length === 0 && !latestLoading && (
+            <div className="col-span-full text-center py-12">
+              <p className="text-text-muted text-sm">
+                {activeCategory === 'all' ? 'No mixes uploaded yet.' : `No mixes found in this category.`}
+              </p>
+              {isDj && (
+                <Link to="/dashboard/mixes" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
+                  <Upload size={14} />
+                  Upload Your Mix
+                </Link>
+              )}
+            </div>
+          )}
         </div>
         {(latestData?.meta?.totalPages || 0) > page && (
           <div className="flex justify-center mt-8">

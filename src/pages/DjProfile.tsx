@@ -24,10 +24,12 @@ import {
   X,
   TrendingUp,
   Loader2,
+  UserPlus,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
-import { useDJ, useDJs } from "@/hooks/useDJs";
+import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
 import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
@@ -1494,6 +1496,77 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
   );
 }
 
+function DjFollowButton({ djId, djUserId }: { djId: string; djUserId?: string }) {
+  const { user } = useAuthStore();
+  const { data: followStatus } = useIsFollowingDj(djId);
+  const { follow, unfollow } = useFollowDj(djId);
+
+  const [localError, setLocalError] = useState<string | null>(null);
+  // Local override to persist follow state across buggy backend invalidations
+  const [localFollowing, setLocalFollowing] = useState<boolean | null>(null);
+
+  const isFollowing = localFollowing ?? followStatus?.following ?? false;
+
+  // Don't show follow button if user is not logged in or is the DJ themselves
+  if (!user || (djUserId && user.id === djUserId)) return null;
+
+  const handleClick = () => {
+    setLocalError(null);
+    const nextState = !isFollowing;
+    setLocalFollowing(nextState);
+
+    if (nextState) {
+      follow.mutate(undefined, {
+        onError: (err) => {
+          setLocalFollowing(false);
+          setLocalError(err instanceof Error ? err.message : 'Failed to follow');
+        },
+      });
+    } else {
+      unfollow.mutate(undefined, {
+        onError: (err) => {
+          setLocalFollowing(true);
+          setLocalError(err instanceof Error ? err.message : 'Failed to unfollow');
+        },
+      });
+    }
+  };
+
+  const isLoading = follow.isPending || unfollow.isPending;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        onClick={handleClick}
+        disabled={isLoading}
+        className={cn(
+          "flex-1 sm:flex-auto px-4 py-2.5 rounded-full text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 disabled:opacity-70",
+          isFollowing
+            ? "bg-[rgba(212,162,74,0.15)] text-gold border border-gold/30"
+            : "border border-[rgba(255,255,255,0.2)] text-text-primary hover:bg-[rgba(255,255,255,0.05)]"
+        )}
+      >
+        {isLoading ? (
+          <Loader2 size={16} className="animate-spin" />
+        ) : isFollowing ? (
+          <>
+            <UserCheck size={16} />
+            Following
+          </>
+        ) : (
+          <>
+            <UserPlus size={16} />
+            Follow
+          </>
+        )}
+      </button>
+      {localError && (
+        <span className="text-[10px] text-red-400 text-center">{localError}</span>
+      )}
+    </div>
+  );
+}
+
 /* ───── Main DJ Profile Page ───── */
 export default function DjProfile() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -1682,6 +1755,7 @@ export default function DjProfile() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.6 }}
           >
+            <DjFollowButton djId={dj.id} djUserId={dj.userId} />
             <button
               onClick={() => setIsBookingOpen(true)}
               className="flex-1 sm:flex-auto px-6 py-2.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"

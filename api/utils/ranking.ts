@@ -26,12 +26,12 @@ function calculateDigitalScore(dj, platforms, totalMixes) {
   let score = 0;
 
   // Total followers across platforms (max 30 pts)
-  const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0) || dj.totalFollowers;
+  const totalFollowers = platforms.reduce((sum, p) => sum + (p.followers || 0), 0);
   const followerScore = Math.min(30, (totalFollowers / 50000) * 30); // 50k followers = max
   score += followerScore;
 
   // Total streams (max 25 pts)
-  const totalStreams = platforms.reduce((sum, p) => sum + p.streams, 0) || dj.totalStreams;
+  const totalStreams = platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
   const streamScore = Math.min(25, (totalStreams / 1000000) * 25); // 1M streams = max
   score += streamScore;
 
@@ -45,8 +45,8 @@ function calculateDigitalScore(dj, platforms, totalMixes) {
   score += diversityScore;
 
   // Engagement rate (max 10 pts) - likes + plays ratio
-  const engagementScore = dj.totalStreams > 0
-    ? Math.min(10, ((dj.totalMixes * 100) / dj.totalStreams) * 10)
+  const engagementScore = totalStreams > 0
+    ? Math.min(10, ((totalMixes * 100) / totalStreams) * 10)
     : 0;
   score += engagementScore;
 
@@ -56,15 +56,15 @@ function calculateDigitalScore(dj, platforms, totalMixes) {
 /**
  * Calculate industry score (0-100) based on professional metrics.
  */
-function calculateIndustryScore(dj) {
+function calculateIndustryScore(dj, bookingCount, eventCount) {
   let score = 0;
 
-  // Total bookings (max 35 pts)
-  const bookingScore = Math.min(35, (dj.totalBookings / 100) * 35); // 100 bookings = max
+  // Total bookings (max 35 pts) — 100 bookings = max
+  const bookingScore = Math.min(35, (bookingCount / 100) * 35);
   score += bookingScore;
 
-  // Total events (max 20 pts)
-  const eventScore = Math.min(20, (dj.totalEvents / 150) * 20); // 150 events = max
+  // Total events (max 20 pts) — 150 events = max
+  const eventScore = Math.min(20, (eventCount / 150) * 20);
   score += eventScore;
 
   // Years active (max 15 pts) - veteran DJs get recognition
@@ -91,7 +91,7 @@ function calculateIndustryScore(dj) {
 /**
  * Calculate community score (0-100) based on audience interaction.
  */
-function calculateCommunityScore(dj, reviews) {
+function calculateCommunityScore(dj, reviews, followerCount, mixCount, totalLikes) {
   let score = 0;
 
   // Average rating (max 40 pts) - 5 stars = max
@@ -104,13 +104,12 @@ function calculateCommunityScore(dj, reviews) {
   score += reviewCountScore;
 
   // Profile engagement (max 20 pts) - followers as a proxy
-  const followerScore = Math.min(20, (dj.totalFollowers / 30000) * 20); // 30k = max
+  const followerScore = Math.min(20, (followerCount / 30000) * 20); // 30k = max
   score += followerScore;
 
   // Mix engagement (max 15 pts) - likes per mix
-  const totalMixes = Math.max(1, dj.totalMixes);
-  const likesPerMix = (dj.totalLikes || 0) / totalMixes; // Note: totalLikes not on schema yet, use proxy
-  // Since we don't track totalLikes on DjProfile, we'll compute from mixes
+  const totalMixes = Math.max(1, mixCount);
+  const likesPerMix = totalLikes / totalMixes;
   const engagementScore = Math.min(15, likesPerMix / 100); // 1500 likes per mix = max
   score += engagementScore;
 
@@ -133,10 +132,15 @@ async function computeDjScore(djId) {
 
   if (!dj) return null;
 
+  // Compute real counts from actual database records
+  const totalMixes = dj.mixes.length;
+  const totalLikes = dj.mixes.reduce((sum, m) => sum + (m.likes || 0), 0);
+  const followerCount = await prisma.follow.count({ where: { djId } });
+
   // Calculate sub-scores
-  const digitalScore = calculateDigitalScore(dj, dj.streamingPlatforms, dj.mixes.length);
-  const industryScore = calculateIndustryScore(dj);
-  const communityScore = calculateCommunityScore(dj, dj.reviews);
+  const digitalScore = calculateDigitalScore(dj, dj.streamingPlatforms, totalMixes);
+  const industryScore = calculateIndustryScore(dj, dj._count.bookingsAsDj, dj._count.events);
+  const communityScore = calculateCommunityScore(dj, dj.reviews, followerCount, totalMixes, totalLikes);
 
   // Composite score (weighted)
   const rankingScore =
@@ -155,69 +159,103 @@ async function computeDjScore(djId) {
 /**
  * Recalculate and update rankings for all DJs.
  * Call this via a cron job (e.g., weekly) or after significant events.
+ *
+ * Performance: processes DJs in cursor-based batches of 100 to avoid
+ * loading the entire table into memory. Uses a single $transaction per batch
+ * and createMany for history records to minimize DB round-trips.
  */
 async function recalculateAllRankings() {
-  const djs = await prisma.djProfile.findMany({
-    where: { isPublic: true },
-    include: {
-      streamingPlatforms: true,
-      mixes: { select: { likes: true, plays: true } },
-      reviews: { select: { rating: true } },
-    },
-  });
+  const BATCH_SIZE = 100;
+  const allScored: Array<{
+    id: string;
+    digitalScore: number;
+    industryScore: number;
+    communityScore: number;
+    rankingScore: number;
+  }> = [];
 
-  // Compute scores for all DJs
-  const scoredDjs = djs.map((dj) => {
-    const digitalScore = calculateDigitalScore(dj, dj.streamingPlatforms, dj.mixes.length);
-    const industryScore = calculateIndustryScore(dj);
-    const communityScore = calculateCommunityScore(dj, dj.reviews);
-    const rankingScore =
-      digitalScore * WEIGHTS.digital +
-      industryScore * WEIGHTS.industry +
-      communityScore * WEIGHTS.community;
-
-    return {
-      id: dj.id,
-      digitalScore: Math.round(digitalScore * 10) / 10,
-      industryScore: Math.round(industryScore * 10) / 10,
-      communityScore: Math.round(communityScore * 10) / 10,
-      rankingScore: Math.round(rankingScore * 10) / 10,
-    };
-  });
-
-  // Sort by ranking score descending
-  scoredDjs.sort((a, b) => b.rankingScore - a.rankingScore);
-
-  // Update database with new scores and positions
-  const now = new Date();
-  for (let i = 0; i < scoredDjs.length; i++) {
-    const dj = scoredDjs[i];
-    await prisma.djProfile.update({
-      where: { id: dj.id },
-      data: {
-        rankingScore: dj.rankingScore,
-        digitalScore: dj.digitalScore,
-        industryScore: dj.industryScore,
-        communityScore: dj.communityScore,
-        rankingPosition: i + 1,
+  // Step 1: Score all DJs using cursor-based pagination (memory-safe)
+  let cursor: string | undefined;
+  do {
+    const batch = await prisma.djProfile.findMany({
+      where: { isPublic: true },
+      take: BATCH_SIZE,
+      skip: cursor ? 1 : 0,
+      ...(cursor ? { cursor: { id: cursor } } : {}),
+      orderBy: { id: 'asc' },
+      include: {
+        streamingPlatforms: true,
+        mixes: { select: { likes: true, plays: true } },
+        reviews: { select: { rating: true } },
+        _count: { select: { bookingsAsDj: true, events: true } },
       },
     });
 
-    // Save to history
-    await prisma.rankingHistory.create({
-      data: {
+    for (const dj of batch) {
+      const totalMixes = dj.mixes.length;
+      const totalLikes = dj.mixes.reduce((sum, m) => sum + (m.likes || 0), 0);
+      const followerCount = await prisma.follow.count({ where: { djId: dj.id } });
+
+      const digitalScore = calculateDigitalScore(dj, dj.streamingPlatforms, totalMixes);
+      const industryScore = calculateIndustryScore(dj, dj._count.bookingsAsDj, dj._count.events);
+      const communityScore = calculateCommunityScore(dj, dj.reviews, followerCount, totalMixes, totalLikes);
+      const rankingScore =
+        digitalScore * WEIGHTS.digital +
+        industryScore * WEIGHTS.industry +
+        communityScore * WEIGHTS.community;
+
+      allScored.push({
+        id: dj.id,
+        digitalScore: Math.round(digitalScore * 10) / 10,
+        industryScore: Math.round(industryScore * 10) / 10,
+        communityScore: Math.round(communityScore * 10) / 10,
+        rankingScore: Math.round(rankingScore * 10) / 10,
+      });
+    }
+
+    cursor = batch.length === BATCH_SIZE ? batch[batch.length - 1].id : undefined;
+  } while (cursor);
+
+  // Step 2: Sort by ranking score descending and assign positions
+  allScored.sort((a, b) => b.rankingScore - a.rankingScore);
+
+  // Step 3: Write new scores in batches (transaction per batch to limit lock time)
+  const now = new Date();
+  for (let i = 0; i < allScored.length; i += BATCH_SIZE) {
+    const batch = allScored.slice(i, i + BATCH_SIZE);
+
+    await prisma.$transaction([
+      // Bulk update scores and positions
+      ...batch.map((dj, batchIdx) =>
+        prisma.djProfile.update({
+          where: { id: dj.id },
+          data: {
+            rankingScore: dj.rankingScore,
+            digitalScore: dj.digitalScore,
+            industryScore: dj.industryScore,
+            communityScore: dj.communityScore,
+            rankingPosition: i + batchIdx + 1,
+          },
+        })
+      ),
+    ]);
+
+    // Bulk insert history records (createMany skips duplicates if needed)
+    await prisma.rankingHistory.createMany({
+      data: batch.map((dj, batchIdx) => ({
         djId: dj.id,
-        position: i + 1,
+        position: i + batchIdx + 1,
         score: dj.rankingScore,
         digitalScore: dj.digitalScore,
         industryScore: dj.industryScore,
         communityScore: dj.communityScore,
         week: now,
-      },
+      })),
+      skipDuplicates: true,
     });
   }
 
-  return scoredDjs;
+  return allScored;
 }
 
 /**

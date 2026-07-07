@@ -64,6 +64,10 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
+  html[data-theme="light"] body {
+    @apply bg-[#F5F5F5] text-[#1A1A1A];
+  }
+
   html {
     scroll-behavior: smooth;
   }
@@ -71,6 +75,11 @@
   ::selection {
     background: rgba(212, 162, 74, 0.3);
     color: #F5F5F5;
+  }
+
+  html[data-theme="light"] ::selection {
+    background: rgba(212, 162, 74, 0.3);
+    color: #1A1A1A;
   }
 
   ::-webkit-scrollbar {
@@ -81,13 +90,26 @@
     background: #0A0A0A;
   }
 
+  html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: #F0F0F0;
+  }
+
   ::-webkit-scrollbar-thumb {
     background: #2A2A2A;
     border-radius: 4px;
   }
 
+  html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: #CCCCCC;
+    border-radius: 4px;
+  }
+
   ::-webkit-scrollbar-thumb:hover {
     background: #3A3A3A;
+  }
+
+  html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: #AAAAAA;
   }
 }
 
@@ -127,12 +149,90 @@
     -webkit-backdrop-filter: blur(20px);
   }
 
+  html[data-theme="light"] .glass-nav {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
   .section-label {
     @apply text-xs font-semibold uppercase tracking-[0.15em] text-gold;
   }
 
   .container-main {
     @apply max-w-container mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .theme-bg {
+    background: #0A0A0A;
+  }
+
+  html[data-theme="light"] .theme-bg {
+    background: #F5F5F5;
+  }
+
+  .theme-bg-elevated {
+    background: #111111;
+  }
+
+  html[data-theme="light"] .theme-bg-elevated {
+    background: #FFFFFF;
+  }
+
+  .theme-bg-surface {
+    background: #181818;
+  }
+
+  html[data-theme="light"] .theme-bg-surface {
+    background: #F0F0F0;
+  }
+
+  .theme-bg-card {
+    background: #111111;
+  }
+
+  html[data-theme="light"] .theme-bg-card {
+    background: #FFFFFF;
+  }
+
+  .theme-border-card {
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  html[data-theme="light"] .theme-border-card {
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .theme-input-bg {
+    background: #111111;
+  }
+
+  html[data-theme="light"] .theme-input-bg {
+    background: #FFFFFF;
+  }
+
+  .theme-text-primary {
+    color: #F5F5F5;
+  }
+
+  html[data-theme="light"] .theme-text-primary {
+    color: #1A1A1A;
+  }
+
+  .theme-text-secondary {
+    color: #A3A3A3;
+  }
+
+  html[data-theme="light"] .theme-text-secondary {
+    color: #555555;
+  }
+
+  .theme-text-muted {
+    color: #6B6B6B;
+  }
+
+  html[data-theme="light"] .theme-text-muted {
+    color: #888888;
   }
 }
 
@@ -149,4 +249,151 @@
   .animation-delay-1200 { animation-delay: 1200ms; }
   .animation-delay-1500 { animation-delay: 1500ms; }
   .animation-delay-2000 { animation-delay: 2000ms; }
+}
+
+/* Additional light mode Tailwind class overrides */
+html[data-theme="light"] .bg-black-elevated {
+  background-color: #FFFFFF;
+}
+
+html[data-theme="light"] .bg-black-surface {
+  background-color: #F0F0F0;
+}
+
+html[data-theme="light"] .border-dark-gray {
+  border-color: #E0E0E0;
+}
+
+html[data-theme="light"] .border-white\/5 {
+  border-color: rgba(0,0,0,0.08);
+}
+
+html[data-theme="light"] .border-white\/10 {
+  border-color: rgba(0,0,0,0.1);
+}
+
+html[data-theme="light"] .bg-white\/5 {
+  background-color: rgba(0,0,0,0.04);
+}
+
+html[data-theme="light"] .bg-white\/10 {
+  background-color: rgba(0,0,0,0.08);
+}
+
+html[data-theme="light"] .hover\:bg-white\/5:hover {
+  background-color: rgba(0,0,0,0.04);
+}
+
+html[data-theme="light"] .hover\:bg-white\/10:hover {
+  background-color: rgba(0,0,0,0.08);
+}
+
+html[data-theme="light"] .hover\:bg-medium-gray:hover {
+  background-color: #F0F0F0;
+}
+
+html[data-theme="light"] .bg-black\/40 {
+  background-color: rgba(0,0,0,0.04);
+}
+
+html[data-theme="light"] .bg-black\/95 {
+  background-color: rgba(255,255,255,0.95);
+}
+
+html[data-theme="light"] .bg-black\/60 {
+  background-color: rgba(0,0,0,0.3);
+}
+
+html[data-theme="light"] .bg-black\/\[0\.02\] {
+  background-color: rgba(0,0,0,0.02);
+}
+
+html[data-theme="light"] .bg-white\/\[0\.02\] {
+  background-color: rgba(0,0,0,0.02);
+}
+
+html[data-theme="light"] .bg-\[\#111111\] {
+  background-color: #FFFFFF !important;
+}
+
+html[data-theme="light"] .bg-\[\#0A0A0A\] {
+  background-color: #F5F5F5 !important;
+}
+
+html[data-theme="light"] .bg-\[\#0D0D0D\] {
+  background-color: #FFFFFF !important;
+}
+
+html[data-theme="light"] .bg-\[\#1a1a1a\] {
+  background-color: #FFFFFF !important;
+}
+
+html[data-theme="light"] .bg-\[\#1a0505\] {
+  background-color: #FFF0F0 !important;
+}
+
+html[data-theme="light"] .bg-\[\#D4A24A\]\/10 {
+  background-color: rgba(212, 162, 74, 0.1);
+}
+
+html[data-theme="light"] .bg-black\/50 {
+  background-color: rgba(0,0,0,0.25);
+}
+
+html[data-theme="light"] .bg-black\/70 {
+  background-color: rgba(0,0,0,0.35);
+}
+
+html[data-theme="light"] .bg-black\/80 {
+  background-color: rgba(0,0,0,0.4);
+}
+
+html[data-theme="light"] .bg-black\/85 {
+  background-color: rgba(0,0,0,0.45);
+}
+
+html[data-theme="light"] .bg-white\/20 {
+  background-color: rgba(0,0,0,0.12);
+}
+
+html[data-theme="light"] .border-white\/20 {
+  border-color: rgba(0,0,0,0.15);
+}
+
+html[data-theme="light"] .bg-white\/\[0\.03\] {
+  background-color: rgba(0,0,0,0.03);
+}
+
+html[data-theme="light"] .border-white\/\[0\.03\] {
+  border-color: rgba(0,0,0,0.03);
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #888888;
+}
+
+/* shadcn/ui light mode overrides */
+:root[data-theme="light"] {
+  --background: 0 0% 96%;
+  --foreground: 0 0% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 10%;
+  --secondary: 0 0% 94%;
+  --secondary-foreground: 0 0% 10%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 10%;
+  --border: 0 0% 90%;
+  --input: 0 0% 96%;
+  --ring: 40 60% 55%;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 0 0% 10%;
+  --sidebar-accent: 0 0% 94%;
+  --sidebar-accent-foreground: 0 0% 10%;
+  --sidebar-border: 0 0% 90%;
+  --sidebar-ring: 40 60% 55%;
 }

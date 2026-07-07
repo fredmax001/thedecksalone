@@ -21,6 +21,8 @@ router.get('/', authMiddleware, async (req, res) => {
       totalStreams,
       totalBookings,
       totalReviews,
+      totalFollowers,
+      totalEvents,
       recentBookings,
       topMixes,
       recentReviews,
@@ -36,6 +38,8 @@ router.get('/', authMiddleware, async (req, res) => {
       }),
       prisma.booking.count({ where: { djId: dj.id } }),
       prisma.review.count({ where: { djId: dj.id } }),
+      prisma.follow.count({ where: { djId: dj.id } }),
+      prisma.event.count({ where: { djId: dj.id } }),
       prisma.booking.findMany({
         where: { djId: dj.id },
         orderBy: { createdAt: 'desc' },
@@ -99,9 +103,11 @@ router.get('/', authMiddleware, async (req, res) => {
           totalStreams: totalStreams._sum.plays || 0,
           totalBookings,
           totalReviews,
+          totalEvents,
           averageRating: dj.averageRating,
           rankingPosition: dj.rankingPosition,
           rankingScore: dj.rankingScore,
+          totalFollowers,
           liveScores,
         },
         recentBookings,
@@ -137,12 +143,11 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const [
       mixesThisMonth,
       bookingsThisMonth,
-      newStreams,
+      totalStreamsAllTime,
       newStreamsThisWeek,
-      profileViewsEstimate,
       mixLikesThisMonth,
       topGenre,
-      followersGrowth,
+      totalMixesAllTime,
     ] = await Promise.all([
       prisma.mix.count({
         where: { djId: dj.id, createdAt: { gte: thirtyDaysAgo } },
@@ -158,8 +163,6 @@ router.get('/stats', authMiddleware, async (req, res) => {
         where: { djId: dj.id, createdAt: { gte: sevenDaysAgo } },
         _sum: { plays: true },
       }),
-      // Estimate: total followers * engagement rate (simplified)
-      Promise.resolve(Math.floor(dj.totalFollowers * 0.02)),
       prisma.mix.aggregate({
         where: { djId: dj.id, createdAt: { gte: thirtyDaysAgo } },
         _sum: { likes: true },
@@ -172,33 +175,50 @@ router.get('/stats', authMiddleware, async (req, res) => {
         orderBy: { _count: { genre: 'desc' } },
         take: 1,
       }),
-      // Follower growth is not directly tracked; use ranking history as proxy
-      Promise.resolve({ count: 0 }),
+      prisma.mix.count({ where: { djId: dj.id } }),
     ]);
 
-    // Monthly activity (last 6 months)
-    const monthlyActivity = [];
-    for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const monthLabel = monthStart.toLocaleString('default', { month: 'short' });
+    // Monthly activity (last 6 months) — single query instead of 12 sequential ones
+    const monthlyRaw: Array<{ month: Date; plays: bigint; bookings: bigint }> =
+      await prisma.$queryRaw`
+        SELECT
+          DATE_TRUNC('month', m."createdAt") AS month,
+          COALESCE(SUM(m.plays), 0)         AS plays,
+          0::bigint                          AS bookings
+        FROM mixes m
+        WHERE m."djId" = ${dj.id}
+          AND m."createdAt" > NOW() - INTERVAL '6 months'
+        GROUP BY 1
 
-      const [monthPlays, monthBookings] = await Promise.all([
-        prisma.mix.aggregate({
-          where: { djId: dj.id, createdAt: { gte: monthStart, lt: monthEnd } },
-          _sum: { plays: true },
-        }),
-        prisma.booking.count({
-          where: { djId: dj.id, createdAt: { gte: monthStart, lt: monthEnd } },
-        }),
-      ]);
+        UNION ALL
 
-      monthlyActivity.push({
-        month: monthLabel,
-        plays: monthPlays._sum.plays || 0,
-        bookings: monthBookings,
-      });
+        SELECT
+          DATE_TRUNC('month', b."createdAt") AS month,
+          0::bigint                          AS plays,
+          COUNT(*)::bigint                   AS bookings
+        FROM bookings b
+        WHERE b."djId" = ${dj.id}
+          AND b."createdAt" > NOW() - INTERVAL '6 months'
+        GROUP BY 1
+      `;
+
+    // Merge plays and bookings by month label
+    const monthMap = new Map<string, { plays: number; bookings: number }>();
+    for (const row of monthlyRaw) {
+      const label = new Date(row.month).toLocaleString('default', { month: 'short' });
+      const entry = monthMap.get(label) || { plays: 0, bookings: 0 };
+      entry.plays += Number(row.plays);
+      entry.bookings += Number(row.bookings);
+      monthMap.set(label, entry);
     }
+
+    // Fill in all 6 months in order, defaulting to 0 for months with no data
+    const monthlyActivity = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const label = d.toLocaleString('default', { month: 'short' });
+      const data = monthMap.get(label) || { plays: 0, bookings: 0 };
+      return { month: label, ...data };
+    });
 
     // Genre breakdown from actual mixes
     const genreBreakdown = await prisma.mix.groupBy({
@@ -214,9 +234,9 @@ router.get('/stats', authMiddleware, async (req, res) => {
       value: g._count.genre,
     }));
 
-    // Calculate engagement rate
-    const engagementRate = dj.totalStreams > 0
-      ? Math.round(((dj.totalMixes * 1000) / dj.totalStreams) * 1000) / 10
+    // Calculate engagement rate using real database counts
+    const engagementRate = totalStreamsAllTime._sum.plays > 0
+      ? Math.round(((totalMixesAllTime * 1000) / totalStreamsAllTime._sum.plays) * 1000) / 10
       : 0;
 
     return res.json({
@@ -224,9 +244,9 @@ router.get('/stats', authMiddleware, async (req, res) => {
       data: {
         mixesThisMonth,
         bookingsThisMonth,
-        newStreams: newStreams._sum.plays || 0,
+        newStreams: totalStreamsAllTime._sum.plays || 0,
         newStreamsThisWeek: newStreamsThisWeek._sum.plays || 0,
-        profileViews: profileViewsEstimate,
+        profileViews: null,
         mixLikesThisMonth: mixLikesThisMonth._sum.likes || 0,
         topGenre: topGenre[0]?.genre || 'Unknown',
         engagementRate,

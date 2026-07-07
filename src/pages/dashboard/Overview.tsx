@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Calendar,
   User,
+  Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -37,6 +38,7 @@ interface DashboardData {
     totalStreams: number;
     totalBookings: number;
     totalReviews: number;
+    totalFollowers: number;
     averageRating: number;
     rankingPosition: number;
     rankingScore: number;
@@ -165,7 +167,7 @@ export default function Overview() {
       )}
 
       {/* KPI Cards */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <KpiCard
           icon={CalendarCheck}
           label="Total Bookings"
@@ -184,6 +186,13 @@ export default function Overview() {
           icon={Headphones}
           label="Total Streams"
           value={overview?.totalStreams?.toLocaleString() || '0'}
+          change=""
+          trend="neutral"
+        />
+        <KpiCard
+          icon={Users}
+          label="Total Followers"
+          value={overview?.totalFollowers?.toLocaleString() || '0'}
           change=""
           trend="neutral"
         />

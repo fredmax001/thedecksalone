@@ -138,28 +138,28 @@ const howItWorksSteps = [
     icon: UserPlus,
     title: 'CREATE PROFILE',
     desc: 'Sign up, verify your identity, and build your professional DJ profile with bio, genres, equipment, and social links.',
-    img: '/placeholder.jpg',
+    img: '/howitworks-1.png',
   },
   {
     num: '02',
     icon: Upload,
     title: 'UPLOAD MIXES',
     desc: 'Upload your mixes, connect streaming platforms, and let fans discover your sound across all genres.',
-    img: '/placeholder.jpg',
+    img: '/howitworks-2.png',
   },
   {
     num: '03',
     icon: TrendingUp,
     title: 'GET DISCOVERED',
     desc: 'Our ranking algorithm tracks your streams, bookings, and engagement. Climb the leaderboard and get noticed.',
-    img: '/placeholder.jpg',
+    img: '/howitworks-3.png',
   },
   {
     num: '04',
     icon: CalendarCheck,
     title: 'GET BOOKED',
     desc: 'Receive booking requests from promoters and fans. Negotiate fees, manage your calendar, and grow your career.',
-    img: '/placeholder.jpg',
+    img: '/howitworks-4.png',
   },
 ];
 

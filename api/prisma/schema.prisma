@@ -17,10 +17,18 @@ model User {
   phone         String?  @unique
   phoneVerified Boolean  @default(false)
   emailVerified Boolean  @default(false)
-  phoneOtp      String?  // Temporary OTP for phone verification
+  phoneOtp      String?   // Temporary OTP for phone verification
   phoneOtpExpiry DateTime? // OTP expiration timestamp
+  passwordResetToken  String?   // Hashed reset token (SHA-256)
+  passwordResetExpiry DateTime? // Token expiration (15 minutes)
   role          Role     @default(USER)
   status        UserStatus @default(ACTIVE)
+  name          String?
+  bio           String?
+  location      String?
+  avatar        String?
+  favoriteGenres String[] @default([])
+  socialLinks   Json?    // { instagram, twitter, facebook }
   lastLoginAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -33,6 +41,8 @@ model User {
   receivedMessages Message[] @relation("ReceivedMessages")
   auditLogs     AuditLog[] @relation("ActorAuditLogs")
   targetLogs    AuditLog[] @relation("TargetAuditLogs")
+  mixLikes      MixLike[]
+  follows       Follow[]
   @@map("users")
   @@index([email])
   @@index([username])
@@ -87,7 +97,16 @@ model DjProfile {
   socialLinks     Json?    // { instagram, twitter, tiktok, youtube, facebook }
   streamingLinks  Json?    // { audiomack, mixcloud, soundcloud, youtube, hearthis, appleMusic, spotify }
   verified        Boolean  @default(false)
-  isPublic        Boolean  @default(true)
+  verificationStatus String @default("unverified")
+  nationality     String?
+  idDocumentType  String?
+  idDocumentUrl   String?
+  legalName       String?
+  socialProof     String?
+  verificationReason String?
+  verificationNotes String?
+  verifiedAt      DateTime?
+  isPublic        Boolean  @default(false)
   totalFollowers  Int      @default(0)
   totalStreams    Int      @default(0)
   totalMixes      Int      @default(0)
@@ -110,12 +129,28 @@ model DjProfile {
   streamingPlatforms StreamingPlatform[]
   rankingHistory  RankingHistory[]
   battleEntries   BattleEntry[]
+  followers       Follow[]
+  campaigns       AdCampaign[]
   @@map("dj_profiles")
   @@index([userId])
   @@index([city])
   @@index([verified])
+  @@index([verificationStatus])
   @@index([rankingScore])
   @@index([isPublic])
+}
+
+model Follow {
+  id        String   @id @default(cuid())
+  userId    String
+  djId      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  @@unique([userId, djId])
+  @@map("follows")
+  @@index([userId])
+  @@index([djId])
 }
 
 model StreamingPlatform {
@@ -138,6 +173,8 @@ model Mix {
   description String?
   coverImage  String?
   audioUrl    String?
+  originalUrl String?
+  audioSource String?
   duration    Int?
   genre       String
   tags        String[]
@@ -150,12 +187,26 @@ model Mix {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   dj          DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  mixLikes    MixLike[]
   @@map("mixes")
   @@index([djId])
   @@index([category])
   @@index([genre])
   @@index([featured])
   @@index([createdAt])
+}
+
+model MixLike {
+  id        String   @id @default(cuid())
+  mixId     String
+  userId    String
+  createdAt DateTime @default(now())
+  mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([mixId, userId])
+  @@map("mix_likes")
+  @@index([mixId])
+  @@index([userId])
 }
 
 model Booking {
@@ -344,6 +395,35 @@ model RankingHistory {
   @@map("ranking_history")
   @@index([djId])
   @@index([week])
+}
+
+model AdCampaign {
+  id          String   @id @default(cuid())
+  name        String
+  advertiserId String?
+  targetType  String   @default("profile")
+  targetId    String?
+  status      String   @default("pending_payment")
+  budget      Float    @default(0)
+  currency    String   @default("SLE")
+  reachScore  Float    @default(0)
+  spent       Float    @default(0)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  ctr         Float    @default(0)
+  creativeImageUrl String?
+  ctaUrl      String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  advertiser  DjProfile? @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
+
+  @@map("ad_campaigns")
+  @@index([status])
+  @@index([advertiserId])
+  @@index([targetType, status])
 }
 
 enum UserStatus {

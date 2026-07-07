@@ -1,8 +1,8 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware, requireRole } = require('../middleware/auth');
-const { uploadAvatar, uploadDjProfileImages } = require('../utils/upload');
+const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
+const { uploadAvatar, uploadDjProfileImages, uploadDocument } = require('../utils/upload');
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
@@ -57,40 +57,8 @@ const createDjSchema = z.object({
   }).optional(),
 });
 
-const updateDjSchema = z.object({
-  stageName: z.string().min(1).max(100).optional(),
-  fullName: z.string().min(1).max(200).optional(),
-  bio: z.string().max(2000).optional(),
-  yearsActive: z.number().int().min(0).max(50).optional(),
-  city: z.string().max(100).optional(),
-  genres: z.array(z.string()).max(5).optional(),
-  awards: z.array(z.string()).optional(),
-  equipment: z.array(z.string()).optional(),
-  languages: z.array(z.string()).optional(),
-  bookingFeeMin: z.number().min(0).optional(),
-  bookingFeeMax: z.number().min(0).optional(),
-  currency: z.string().max(10).optional(),
-  availability: z.string().optional(),
-  website: z.string().url().optional().or(z.literal('')),
-  whatsappNumber: z.string().max(20).optional(),
-  isPublic: z.boolean().optional(),
-  socialLinks: z.object({
-    instagram: z.string().url().optional().or(z.literal('')),
-    twitter: z.string().url().optional().or(z.literal('')),
-    tiktok: z.string().url().optional().or(z.literal('')),
-    youtube: z.string().url().optional().or(z.literal('')),
-    facebook: z.string().url().optional().or(z.literal('')),
-  }).optional(),
-  streamingLinks: z.object({
-    audiomack: z.string().url().optional().or(z.literal('')),
-    mixcloud: z.string().url().optional().or(z.literal('')),
-    soundcloud: z.string().url().optional().or(z.literal('')),
-    youtube: z.string().url().optional().or(z.literal('')),
-    hearthis: z.string().url().optional().or(z.literal('')),
-    appleMusic: z.string().url().optional().or(z.literal('')),
-    spotify: z.string().url().optional().or(z.literal('')),
-  }).optional(),
-});
+// updateDjSchema is the same shape as createDjSchema but every field is optional
+const updateDjSchema = createDjSchema.partial();
 
 // Helper to parse JSON fields from FormData (multer stores them as strings)
 function parseFormFields(body) {
@@ -178,16 +146,75 @@ router.get('/', async (req, res) => {
         include: {
           user: { select: { username: true } },
           streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
-          _count: { select: { mixes: true, reviews: true } },
+          _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
         },
       }),
       prisma.djProfile.count({ where }),
     ]);
 
+    const computeTotalStreams = (platforms: any[]) =>
+      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+
     return res.json({
       success: true,
-      data: djs.map((dj) => ({ ...dj, username: dj.user.username })),
+      data: djs.map((dj) => ({
+        ...dj,
+        username: dj.user.username,
+        totalFollowers: dj._count.followers,
+        totalMixes: dj._count.mixes,
+        totalEvents: dj._count.events,
+        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+      })),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/hall-of-fame - DJs in the Hall of Fame
+router.get('/hall-of-fame', async (req, res) => {
+  try {
+    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 6));
+
+    let djs = await prisma.djProfile.findMany({
+      where: { hallOfFame: true, isPublic: true },
+      orderBy: { rankingScore: 'desc' },
+      take: limitNum,
+      include: {
+        user: { select: { username: true } },
+        streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
+        _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
+      },
+    });
+
+    // Fallback: if no Hall of Fame DJs, return top verified DJs
+    if (djs.length === 0) {
+      djs = await prisma.djProfile.findMany({
+        where: { verified: true, isPublic: true },
+        orderBy: { rankingScore: 'desc' },
+        take: limitNum,
+        include: {
+          user: { select: { username: true } },
+          streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
+          _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
+        },
+      });
+    }
+
+    const computeTotalStreams = (platforms) =>
+      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+
+    return res.json({
+      success: true,
+      data: djs.map((dj) => ({
+        ...dj,
+        username: dj.user.username,
+        totalFollowers: dj._count.followers,
+        totalMixes: dj._count.mixes,
+        totalEvents: dj._count.events,
+        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+      })),
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -208,16 +235,18 @@ router.get('/cities', async (req, res) => {
   }
 });
 
-// GET /api/djs/genres - Get all genres
+// GET /api/djs/genres - Get all genres (uses UNNEST for efficiency)
 router.get('/genres', async (req, res) => {
   try {
-    const djs = await prisma.djProfile.findMany({
-      where: { isPublic: true },
-      select: { genres: true },
-    });
-    const genreSet = new Set();
-    djs.forEach((dj) => dj.genres.forEach((g) => genreSet.add(g)));
-    return res.json({ success: true, data: Array.from(genreSet) });
+    // Using raw SQL UNNEST to flatten the genres array column efficiently
+    // without loading all DJ profile rows into Node.js memory.
+    const rows: Array<{ genre: string }> = await prisma.$queryRaw`
+      SELECT DISTINCT UNNEST(genres) AS genre
+      FROM dj_profiles
+      WHERE "isPublic" = true
+      ORDER BY genre
+    `;
+    return res.json({ success: true, data: rows.map((r) => r.genre) });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -244,6 +273,53 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/djs/verification-request - Submit passport/ID verification
+router.post('/verification-request', authMiddleware, uploadDocument.single('document'), async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = req.body;
+
+    if (!nationality || !idDocumentType || !fullLegalName) {
+      return res.status(400).json({ success: false, error: 'Nationality, ID document type, and full legal name are required' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'ID document file is required' });
+    }
+
+    if (dj.verificationStatus === 'pending') {
+      return res.status(409).json({ success: false, error: 'A verification request is already pending' });
+    }
+
+    const idDocumentUrl = await uploadBuffer(req.file.buffer, 'documents', {
+      contentType: req.file.mimetype,
+      ext: req.file.originalname.split('.').pop() || 'pdf',
+    });
+
+    const updated = await prisma.djProfile.update({
+      where: { id: dj.id },
+      data: {
+        nationality,
+        idDocumentType,
+        idDocumentUrl,
+        legalName: fullLegalName,
+        socialProof: socialProofLinks || '',
+        verificationReason: whyVerified || '',
+        verificationStatus: 'pending',
+        verificationNotes: `Submitted on ${new Date().toISOString()}`,
+      },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/djs/:identifier - Get single DJ by id or username
 router.get('/:identifier', async (req, res) => {
   try {
@@ -259,7 +335,7 @@ router.get('/:identifier', async (req, res) => {
         take: 20,
       },
       events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
-      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true } },
+      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
     };
 
     let dj = await prisma.djProfile.findUnique({
@@ -278,7 +354,21 @@ router.get('/:identifier', async (req, res) => {
       return res.status(404).json({ success: false, error: 'DJ not found' });
     }
 
-    return res.json({ success: true, data: { ...dj, username: dj.user.username, userId: dj.user.id } });
+    const computeTotalStreams = (platforms) =>
+      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        ...dj,
+        username: dj.user.username,
+        userId: dj.user.id,
+        totalFollowers: dj._count.followers,
+        totalMixes: dj._count.mixes,
+        totalEvents: dj._count.events,
+        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -410,6 +500,68 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'DJ'), async (req, re
 
     await prisma.djProfile.delete({ where: { id: req.params.id } });
     return res.json({ success: true, data: { message: 'DJ profile deleted' } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/djs/:id/follow - Follow a DJ
+router.post('/:id/follow', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+
+    // Prevent DJs from following themselves
+    if (dj.userId === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You cannot follow yourself' });
+    }
+
+    await prisma.follow.upsert({
+      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+      create: { userId: req.user.id, djId: req.params.id },
+      update: {},
+    });
+
+    return res.json({ success: true, data: { following: true } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/djs/:id/follow - Unfollow a DJ
+router.delete('/:id/follow', authMiddleware, async (req, res) => {
+  try {
+    const existing = await prisma.follow.findUnique({
+      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Not following this DJ' });
+    }
+
+    await prisma.follow.delete({
+      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+    });
+
+    return res.json({ success: true, data: { following: false } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/:id/follow-status - Check if current user follows this DJ (public, returns false if not logged in)
+router.get('/:id/follow-status', softAuthMiddleware, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.json({ success: true, data: { following: false } });
+    }
+
+    const follow = await prisma.follow.findUnique({
+      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+    });
+
+    return res.json({ success: true, data: { following: !!follow } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

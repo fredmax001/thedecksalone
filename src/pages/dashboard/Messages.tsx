@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Check,
   CheckCheck,
+  Plus,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -15,6 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface MessageItem {
   id: string;
@@ -55,6 +63,10 @@ export default function Messages() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState('');
+  const [newChatResults, setNewChatResults] = useState<Array<{ id: string; name: string; avatar: string | null }>>([]);
+  const [newChatLoading, setNewChatLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resolvedContactRef = useRef<string | null>(null);
@@ -137,6 +149,49 @@ export default function Messages() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const searchUsers = async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) {
+      setNewChatResults([]);
+      return;
+    }
+    try {
+      setNewChatLoading(true);
+      const res = await api.get(`/users/search?q=${encodeURIComponent(query.trim())}`);
+      if (res.data.success) {
+        setNewChatResults(res.data.data || []);
+      }
+    } catch (err: any) {
+      // Silently fail — user can retry
+      setNewChatResults([]);
+    } finally {
+      setNewChatLoading(false);
+    }
+  };
+
+  const startNewConversation = (userId: string, name: string, avatar?: string | null) => {
+    setNewChatOpen(false);
+    setNewChatSearch('');
+    setNewChatResults([]);
+
+    const existing = conversations.find((c) => c.userId === userId);
+    if (existing) {
+      setActiveConversation(userId);
+      return;
+    }
+
+    const newConversation: Conversation = {
+      userId,
+      name,
+      avatar: avatar || undefined,
+      lastMessage: '',
+      lastMessageAt: new Date().toISOString(),
+      unreadCount: 0,
+    };
+
+    setConversations((prev) => [newConversation, ...prev]);
+    setActiveConversation(userId);
   };
 
   const fetchMessages = async (userId: string, silent = false) => {
@@ -239,6 +294,17 @@ export default function Messages() {
         {/* Conversation List */}
         <Card className="w-full md:w-80 flex-shrink-0 bg-black-surface border-dark-gray flex flex-col">
           <div className="p-3 border-b border-dark-gray">
+            <div className="flex items-center gap-2 mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 border-dark-gray text-text-primary hover:bg-black-elevated hover:text-gold"
+                onClick={() => setNewChatOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                New Chat
+              </Button>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
               <Input
@@ -375,6 +441,63 @@ export default function Messages() {
             </div>
           )}
         </Card>
+
+        {/* New Chat Dialog */}
+        <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+          <DialogContent className="bg-black-surface border-dark-gray text-text-primary max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-text-primary">Start New Chat</DialogTitle>
+              <DialogDescription className="text-text-secondary">
+                Search for a user to start a conversation.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                <Input
+                  placeholder="Search by name or username..."
+                  value={newChatSearch}
+                  onChange={(e) => {
+                    setNewChatSearch(e.target.value);
+                    searchUsers(e.target.value);
+                  }}
+                  className="pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {newChatLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-5 h-5 text-gold animate-spin" />
+                  </div>
+                ) : newChatResults.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-text-muted">
+                      {newChatSearch.trim().length >= 2 ? 'No users found' : 'Type at least 2 characters to search'}
+                    </p>
+                  </div>
+                ) : (
+                  newChatResults.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => startNewConversation(u.id, u.name, u.avatar)}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors hover:bg-black-elevated"
+                    >
+                      <Avatar className="w-10 h-10 flex-shrink-0">
+                        <AvatarImage src={u.avatar || undefined} />
+                        <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-primary truncate">{u.name}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

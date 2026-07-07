@@ -34,7 +34,7 @@ export default function Layout() {
   const handleClose = useCallback(() => setCurrentTrack(null), []);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-black">
+    <div className="min-h-[100dvh] flex flex-col theme-bg">
       <Navbar />
       <main className="flex-1 pb-16 lg:pb-0">
         <Outlet />

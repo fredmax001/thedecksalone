@@ -20,26 +20,38 @@ import {
   HardDrive,
   Shield,
   Megaphone,
+  ExternalLink,
   CreditCard,
   BellRing,
   Send,
   Clock,
+  Trophy,
+  Plus,
+  FileText,
+  Globe,
 } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 import { useAuthStore } from '@/stores/authStore';
+import { useNavigate } from 'react-router-dom';
 import {
   useAdminStats, useAdminAnalytics, useAdminDjs,
   useAdminRankings, useAdminMixes, useAdminBookings,
-  useAdminEvents, useAdminUsers, useAdminPendingDjs,
+  useAdminEvents, useAdminUsers,
   useAdminPayments, useAdminStaff,
   useAdminSystem, useAdminNotifications,
   useAdminSecurityLogs, useAdminSubscriptions,
   useAdminAds, useAdminPlatforms,
+  useAdminBattles, useCreateBattle, useCloseBattle,
   useVerifyDj, useToggleDjSuspend, useDeleteDj,
+  useCreateAd, useAdminVerificationRequests,
+  useRejectDjVerification, useRequestDjInfo,
+  useUpdateCampaignStatus,
   useToggleMixFeature, useUpdateBookingStatus,
   useUpdateUserRole, useRecalculateRankings,
-  useSendNotification,
+  useSendNotification, useDeleteMix, useUpdateRanking,
 } from '@/hooks/useAdmin';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 /* ─────────────────────── Types ─────────────────────── */
 
@@ -47,7 +59,7 @@ type AdminSection =
   | 'dashboard' | 'djs' | 'rankings' | 'mixes' | 'bookings'
   | 'users' | 'events' | 'revenue' | 'analytics' | 'platforms'
   | 'verification' | 'notifications' | 'subscriptions' | 'security'
-  | 'ads' | 'roles' | 'settings';
+  | 'ads' | 'roles' | 'settings' | 'battles';
 
 interface SidebarItem {
   id: AdminSection;
@@ -65,6 +77,7 @@ const sidebarItems: SidebarItem[] = [
   { id: 'bookings', label: 'Bookings', icon: CalendarCheck },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'events', label: 'Events', icon: Calendar },
+  { id: 'battles', label: 'DJ Battles', icon: Trophy },
   { id: 'revenue', label: 'Revenue', icon: DollarSign },
   { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
@@ -102,6 +115,10 @@ function StatusBadge({ status }: { status: string }) {
     critical: { label: 'Critical', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
     paused: { label: 'Paused', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
     draft: { label: 'Draft', color: '#6B7280', bg: 'rgba(107,114,128,0.1)' },
+    pending_payment: { label: 'Pending Payment', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+    rejected: { label: 'Rejected', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+    info_requested: { label: 'Info Requested', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
+    approved: { label: 'Approved', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
   };
   const s = map[status.toLowerCase()] ?? { label: status, color: '#6B6B6B', bg: 'rgba(107,107,107,0.1)' };
   return (
@@ -138,12 +155,13 @@ function EmptyState({ message }: { message: string }) {
 /* ─────────────────────── Section 1: Dashboard ─────────────────────── */
 
 function DashboardSection() {
-  const { data: stats, isLoading } = useAdminStats();
+  const { data: stats, isLoading, error } = useAdminStats();
   const { data: analytics } = useAdminAnalytics();
+  const { data: djsData } = useAdminDjs({ limit: 100 });
 
   const kpiData = [
     { label: 'Total DJs', value: stats?.totalDjs || 0, icon: Mic, color: '#D4A24A' },
-    { label: 'Verified DJs', value: stats?.totalDjs ? Math.round(stats.totalDjs * 0.8) : 0, icon: BadgeCheck, color: '#22C55E' },
+    { label: 'Pending Verifications', value: stats?.pendingVerifications || 0, icon: BadgeCheck, color: '#F97316' },
     { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: '#3B82F6' },
     { label: 'Total Mixes', value: stats?.totalMixes || 0, icon: Music, color: '#8B5CF6' },
     { label: 'Total Streams', value: stats?.totalStreams || 0, icon: Play, color: '#F97316' },
@@ -152,9 +170,9 @@ function DashboardSection() {
     { label: 'Active Events', value: stats?.totalEvents || 0, icon: Calendar, color: '#06B6D4' },
   ];
 
-  const streamData = useMemo(() => {
+  const mixesData = useMemo(() => {
     if (!analytics || analytics.length === 0) return [];
-    return analytics.map((a: any) => ({ month: a.month, streams: a.revenue || 0 }));
+    return analytics.map((a: any) => ({ month: a.month, mixes: a.mixes || 0 }));
   }, [analytics]);
 
   const djGrowthData = useMemo(() => {
@@ -172,7 +190,30 @@ function DashboardSection() {
     return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
   }, [analytics]);
 
+  const topCities = useMemo(() => {
+    if (!djsData?.data) return [];
+    const counts: Record<string, number> = {};
+    djsData.data.forEach((dj: any) => { counts[dj.city || 'Unknown'] = (counts[dj.city || 'Unknown'] || 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [djsData]);
+
+  const topGenres = useMemo(() => {
+    if (!djsData?.data) return [];
+    const counts: Record<string, number> = {};
+    djsData.data.forEach((dj: any) => {
+      (dj.genres || []).forEach((g: string) => { counts[g] = (counts[g] || 0) + 1; });
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [djsData]);
+
   if (isLoading) return <LoadingCenter />;
+
+  if (error) return (
+    <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+      <p className="text-red-400 font-medium">Failed to load data</p>
+      <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -181,7 +222,7 @@ function DashboardSection() {
           <motion.div
             key={kpi.label}
             className="rounded-2xl p-5 border border-white/5"
-            style={{ background: '#111111' }}
+            style={{ background: 'var(--bg-card)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, duration: 0.4 }}
@@ -200,16 +241,16 @@ function DashboardSection() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Daily Streams</p>
-          {streamData.length > 0 ? (
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Mix Uploads</p>
+          {mixesData.length > 0 ? (
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={streamData}>
+                <AreaChart data={mixesData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                  <Area type="monotone" dataKey="streams" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
+                  <Area type="monotone" dataKey="mixes" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -218,7 +259,7 @@ function DashboardSection() {
           )}
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">New DJs per Month</p>
           {djGrowthData.length > 0 ? (
             <div className="h-[260px]">
@@ -238,7 +279,7 @@ function DashboardSection() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Booking Trends</p>
           {bookingTrendData.length > 0 ? (
             <div className="h-[260px]">
@@ -256,7 +297,7 @@ function DashboardSection() {
           )}
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Revenue Growth</p>
           {revenueGrowthData.length > 0 ? (
             <div className="h-[260px]">
@@ -276,27 +317,27 @@ function DashboardSection() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
           <div className="space-y-3">
-            {['Freetown', 'Bo', 'Makeni', 'Kenema', 'Kono'].map((city, i) => (
+            {topCities.length > 0 ? topCities.map(([city, count]) => (
               <div key={city} className="flex items-center justify-between text-sm">
                 <span className="text-text-primary">{city}</span>
-                <span className="font-mono text-text-muted">#{i + 1}</span>
+                <span className="font-mono text-text-muted">{count} DJs</span>
               </div>
-            ))}
+            )) : <EmptyState message="No city data available." />}
           </div>
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Genres</p>
           <div className="space-y-3">
-            {['Amapiano', 'Afrobeats', 'Hip Hop', 'Dancehall', 'Reggae'].map((genre, i) => (
+            {topGenres.length > 0 ? topGenres.map(([genre, count]) => (
               <div key={genre} className="flex items-center justify-between text-sm">
                 <span className="text-text-primary">{genre}</span>
-                <span className="font-mono text-text-muted">#{i + 1}</span>
+                <span className="font-mono text-text-muted">{count} DJs</span>
               </div>
-            ))}
+            )) : <EmptyState message="No genre data available." />}
           </div>
         </motion.div>
       </div>
@@ -308,7 +349,8 @@ function DashboardSection() {
 
 function DJsSection() {
   const [search, setSearch] = useState('');
-  const { data, isLoading } = useAdminDjs({ limit: 50 });
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useAdminDjs({ limit: 50 });
   const verifyMutation = useVerifyDj();
   const suspendMutation = useToggleDjSuspend();
   const deleteMutation = useDeleteDj();
@@ -321,16 +363,16 @@ function DJsSection() {
   }, [djs, search]);
 
   const handleVerify = (id: string) => {
-    verifyMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+    verifyMutation.mutate({ id }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminDjs'] }) });
   };
 
   const handleSuspend = (id: string) => {
-    suspendMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+    suspendMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminDjs'] }) });
   };
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this DJ?')) {
-      deleteMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-djs'] }) });
+      deleteMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminDjs'] }) });
     }
   };
 
@@ -353,8 +395,15 @@ function DJsSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
@@ -376,21 +425,21 @@ function DJsSection() {
                 <tr key={dj.id} className="border-b border-white/5 text-sm">
                   <td className="p-4">
                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                      {dj.photoUrl ? <img src={dj.photoUrl} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                      {dj.avatar ? <img src={dj.avatar} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
                     </div>
                   </td>
                   <td className="p-4 font-bold text-text-primary">{dj.stageName}</td>
                   <td className="p-4 text-text-secondary">{dj.city || '--'}</td>
                   <td className="p-4"><StatusBadge status={dj.verified ? 'verified' : 'pending'} /></td>
-                  <td className="p-4 font-mono text-text-primary">#{dj.ranking || '--'}</td>
+                  <td className="p-4 font-mono text-text-primary">#{dj.rankingPosition || '--'}</td>
                   <td className="p-4 font-mono text-text-primary">{(dj.totalStreams || 0).toLocaleString()}</td>
                   <td className="p-4 font-mono text-text-primary">{(dj.totalFollowers || 0).toLocaleString()}</td>
                   <td className="p-4 font-mono text-text-primary">{dj.totalMixes || 0}</td>
                   <td className="p-4 font-mono text-text-primary">{dj.totalBookings || 0}</td>
-                  <td className="p-4"><StatusBadge status={dj.suspended ? 'suspended' : 'active'} /></td>
+                  <td className="p-4"><StatusBadge status={!dj.isPublic ? 'suspended' : 'active'} /></td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
-                      <button className="p-2 rounded-lg bg-white/5 text-text-muted hover:bg-white/10" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => navigate(`/dj/${dj.id}`)} className="p-2 rounded-lg bg-white/5 text-text-muted hover:bg-white/10" title="View"><Eye className="w-3.5 h-3.5" /></button>
                       {!dj.verified && (
                         <button onClick={() => handleVerify(dj.id)} className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20" title="Verify"><Check className="w-3.5 h-3.5" /></button>
                       )}
@@ -412,11 +461,56 @@ function DJsSection() {
 /* ─────────────────────── Section 3: Rankings ─────────────────────── */
 
 function RankingsSection() {
-  const { data, isLoading } = useAdminRankings();
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useAdminRankings();
   const recalcMutation = useRecalculateRankings();
+  const updateRankingMutation = useUpdateRanking();
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editScores, setEditScores] = useState<Record<string, number>>({});
 
   const rankings = data || [];
+
+  const startEdit = (dj: any) => {
+    setEditingId(dj.id);
+    setEditScores({
+      [dj.id + '_rankingScore']: dj.rankingScore || 0,
+      [dj.id + '_digitalScore']: dj.digitalScore || 0,
+      [dj.id + '_industryScore']: dj.industryScore || 0,
+      [dj.id + '_communityScore']: dj.communityScore || 0,
+    });
+  };
+
+  const saveEdit = (id: string) => {
+    updateRankingMutation.mutate({
+      id,
+      rankingScore: editScores[id + '_rankingScore'],
+      digitalScore: editScores[id + '_digitalScore'],
+      industryScore: editScores[id + '_industryScore'],
+      communityScore: editScores[id + '_communityScore'],
+    }, {
+      onSuccess: () => {
+        setEditingId(null);
+        queryClient.invalidateQueries({ queryKey: ['adminRankings'] });
+      }
+    });
+  };
+
+  const ScoreInput = ({ dj, field }: { dj: any; field: string }) => {
+    const key = dj.id + '_' + field;
+    const isEditing = editingId === dj.id;
+    const value = isEditing ? editScores[key] : dj[field];
+    if (!isEditing) return <span className="font-mono text-text-primary">{value?.toFixed(1) || '--'}</span>;
+    return (
+      <input
+        type="number"
+        step="0.1"
+        value={value}
+        onChange={(e) => setEditScores(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+        className="w-16 px-1 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-text-primary font-mono focus:outline-none focus:border-[#D4A24A]/30"
+      />
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -425,7 +519,7 @@ function RankingsSection() {
         subtitle="Top 100 DJs by overall score"
         action={
           <button
-            onClick={() => recalcMutation.mutate(undefined, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-rankings'] }) })}
+            onClick={() => recalcMutation.mutate(undefined, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminRankings'] }) })}
             disabled={recalcMutation.isPending}
             className="px-4 py-2 bg-[#D4A24A]/10 text-[#D4A24A] rounded-xl text-xs font-bold hover:bg-[#D4A24A]/20 flex items-center gap-2"
           >
@@ -437,8 +531,15 @@ function RankingsSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
@@ -458,19 +559,35 @@ function RankingsSection() {
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                        {dj.photoUrl ? <img src={dj.photoUrl} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                        {dj.avatar ? <img src={dj.avatar} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
                       </div>
                       <span className="font-bold text-text-primary">{dj.stageName}</span>
                     </div>
                   </td>
-                  <td className="p-4 font-mono font-bold text-text-primary">{dj.overallScore?.toFixed(1) || '--'}</td>
-                  <td className="p-4 font-mono text-text-secondary">{dj.digitalScore?.toFixed(1) || '--'}</td>
-                  <td className="p-4 font-mono text-text-secondary">{dj.industryScore?.toFixed(1) || '--'}</td>
-                  <td className="p-4 font-mono text-text-secondary">{dj.communityScore?.toFixed(1) || '--'}</td>
+                  <td className="p-4"><ScoreInput dj={dj} field="rankingScore" /></td>
+                  <td className="p-4"><ScoreInput dj={dj} field="digitalScore" /></td>
+                  <td className="p-4"><ScoreInput dj={dj} field="industryScore" /></td>
+                  <td className="p-4"><ScoreInput dj={dj} field="communityScore" /></td>
                   <td className="p-4 text-right">
-                    <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto">
-                      <Eye className="w-3 h-3" /> View Profile
-                    </button>
+                    {editingId === dj.id ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => saveEdit(dj.id)} className="px-2 py-1 text-xs rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Save
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="px-2 py-1 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1">
+                          <XIcon className="w-3 h-3" /> Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => startEdit(dj)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1">
+                          <Star className="w-3 h-3" /> Edit
+                        </button>
+                        <button onClick={() => navigate(`/dj/${dj.id}`)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto">
+                          <Eye className="w-3 h-3" /> View Profile
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -488,8 +605,9 @@ function RankingsSection() {
 function MixesSection() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'featured' | 'pending'>('all');
-  const { data, isLoading } = useAdminMixes({ limit: 50 });
+  const { data, isLoading, error } = useAdminMixes({ limit: 50 });
   const toggleFeatureMutation = useToggleMixFeature();
+  const deleteMixMutation = useDeleteMix();
   const queryClient = useQueryClient();
 
   const mixes = data?.data || [];
@@ -502,7 +620,7 @@ function MixesSection() {
   }, [mixes, search, filter]);
 
   const handleToggleFeature = (id: string, featured: boolean) => {
-    toggleFeatureMutation.mutate({ id, featured: !featured }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-mixes'] }) });
+    toggleFeatureMutation.mutate({ id, featured: !featured }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminMixes'] }) });
   };
 
   return (
@@ -535,17 +653,24 @@ function MixesSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
                 <th className="p-4">Cover</th>
                 <th className="p-4">Title</th>
                 <th className="p-4">DJ Name</th>
-                <th className="p-4">Platform</th>
+                <th className="p-4">Genre</th>
                 <th className="p-4">Duration</th>
-                <th className="p-4">Streams</th>
+                <th className="p-4">Plays</th>
                 <th className="p-4">Upload Date</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-right">Actions</th>
@@ -556,14 +681,14 @@ function MixesSection() {
                 <tr key={mix.id} className="border-b border-white/5 text-sm">
                   <td className="p-4">
                     <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden">
-                      {mix.coverArt ? <img src={mix.coverArt} alt="" className="w-full h-full object-cover" /> : <Music className="w-4 h-4 text-text-muted" />}
+                      {mix.coverImage ? <img src={mix.coverImage} alt="" className="w-full h-full object-cover" /> : <Music className="w-4 h-4 text-text-muted" />}
                     </div>
                   </td>
                   <td className="p-4 font-bold text-text-primary">{mix.title}</td>
-                  <td className="p-4 text-text-secondary">{mix.djName}</td>
-                  <td className="p-4 text-text-secondary">The Deck Salone</td>
+                  <td className="p-4 text-text-secondary">{mix.dj?.stageName || '--'}</td>
+                  <td className="p-4 text-text-secondary">{mix.genre || '--'}</td>
                   <td className="p-4 font-mono text-text-secondary">{mix.duration || '--'}</td>
-                  <td className="p-4 font-mono text-text-primary">{(mix.streams || 0).toLocaleString()}</td>
+                  <td className="p-4 font-mono text-text-primary">{(mix.plays || 0).toLocaleString()}</td>
                   <td className="p-4 text-text-secondary">{mix.createdAt ? new Date(mix.createdAt).toLocaleDateString() : '--'}</td>
                   <td className="p-4"><StatusBadge status={mix.featured ? 'featured' : 'active'} /></td>
                   <td className="p-4">
@@ -571,7 +696,7 @@ function MixesSection() {
                       <button onClick={() => handleToggleFeature(mix.id, mix.featured)} className="p-2 rounded-lg bg-[#D4A24A]/10 text-[#D4A24A] hover:bg-[#D4A24A]/20" title="Feature/Unfeature">
                         <Star className="w-3.5 h-3.5" />
                       </button>
-                      <button className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { if (confirm('Delete this mix?')) deleteMixMutation.mutate(mix.id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminMixes'] }) }); }} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </td>
                 </tr>
@@ -588,28 +713,29 @@ function MixesSection() {
 /* ─────────────────────── Section 5: Bookings ─────────────────────── */
 
 function BookingsSection() {
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'cancelled'>('all');
-  const { data, isLoading } = useAdminBookings({ limit: 50 });
+  const [filter, setFilter] = useState<'all' | 'PENDING' | 'COMPLETED' | 'CANCELLED'>('all');
+  const [viewBooking, setViewBooking] = useState<any>(null);
+  const { data, isLoading, error } = useAdminBookings({ limit: 50 });
   const updateStatusMutation = useUpdateBookingStatus();
   const queryClient = useQueryClient();
 
   const bookings = data?.data || [];
   const filtered = useMemo(() => {
     if (filter === 'all') return bookings;
-    return bookings.filter((b: any) => b.status?.toLowerCase() === filter);
+    return bookings.filter((b: any) => b.status === filter);
   }, [bookings, filter]);
 
-  const totalValue = bookings.reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
+  const totalValue = bookings.reduce((sum: number, b: any) => sum + ((b.finalPrice ?? b.budget) || 0), 0);
   const commission = totalValue * 0.15;
   const mostBooked = useMemo(() => {
     const counts: Record<string, number> = {};
-    bookings.forEach((b: any) => { counts[b.djName] = (counts[b.djName] || 0) + 1; });
+    bookings.forEach((b: any) => { counts[b.dj?.stageName || 'Unknown'] = (counts[b.dj?.stageName || 'Unknown'] || 0) + 1; });
     const entries = Object.entries(counts);
     return entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : '--';
   }, [bookings]);
 
   const handleUpdateStatus = (id: string, status: string) => {
-    updateStatusMutation.mutate({ id, status }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-bookings'] }) });
+    updateStatusMutation.mutate({ id, status }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminBookings'] }) });
   };
 
   return (
@@ -617,36 +743,43 @@ function BookingsSection() {
       <SectionHeader title="Booking Management" subtitle="Manage event bookings and commissions" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Booking Value</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalValue.toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Commission Earned</p>
           <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {Math.round(commission).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Most Booked DJ</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">{mostBooked}</p>
         </div>
       </div>
 
       <div className="flex gap-2">
-        {(['all', 'upcoming', 'completed', 'cancelled'] as const).map((f) => (
+        {(['all', 'PENDING', 'COMPLETED', 'CANCELLED'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase ${filter === f ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
           >
-            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1).toLowerCase()}
           </button>
         ))}
       </div>
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
@@ -654,7 +787,7 @@ function BookingsSection() {
                 <th className="p-4">DJ</th>
                 <th className="p-4">Event Type</th>
                 <th className="p-4">Date</th>
-                <th className="p-4">City</th>
+                <th className="p-4">Location</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Amount</th>
                 <th className="p-4 text-right">Actions</th>
@@ -663,24 +796,28 @@ function BookingsSection() {
             <tbody>
               {filtered.map((b: any) => (
                 <tr key={b.id} className="border-b border-white/5 text-sm">
-                  <td className="p-4 text-text-primary">{b.clientName}</td>
-                  <td className="p-4 text-text-primary">{b.djName}</td>
+                  <td className="p-4 text-text-primary">{b.client?.email || '--'}</td>
+                  <td className="p-4 text-text-primary">{b.dj?.stageName || '--'}</td>
                   <td className="p-4 text-text-secondary">{b.eventType}</td>
-                  <td className="p-4 font-mono text-text-secondary">{b.date ? new Date(b.date).toLocaleDateString() : '--'}</td>
-                  <td className="p-4 text-text-secondary">{b.city}</td>
+                  <td className="p-4 font-mono text-text-secondary">{b.eventDate ? new Date(b.eventDate).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 text-text-secondary">{b.eventLocation || '--'}</td>
                   <td className="p-4"><StatusBadge status={b.status} /></td>
-                  <td className="p-4 font-mono text-text-primary">SLE {(b.amount || 0).toLocaleString()}</td>
+                  <td className="p-4 font-mono text-text-primary">SLE {((b.finalPrice ?? b.budget) || 0).toLocaleString()}</td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
-                      <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"><Eye className="w-3 h-3" /> View</button>
+                      <button onClick={() => setViewBooking(b)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="View details"><Eye className="w-3 h-3" /> View</button>
                       <select
                         onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
                         className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
                       >
                         <option value="">Update</option>
-                        <option value="upcoming">Upcoming</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="NEGOTIATING">Negotiating</option>
+                        <option value="CONFIRMED">Confirmed</option>
+                        <option value="DEPOSIT_PAID">Deposit Paid</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="CANCELLED">Cancelled</option>
+                        <option value="REFUNDED">Refunded</option>
                       </select>
                     </div>
                   </td>
@@ -691,6 +828,27 @@ function BookingsSection() {
           {filtered.length === 0 && <EmptyState message="No bookings found." />}
         </div>
       )}
+
+      {viewBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setViewBooking(null)}>
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-text-primary">Booking Details</h3>
+              <button onClick={() => setViewBooking(null)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between"><span className="text-text-muted">Client</span><span className="text-text-primary">{viewBooking.client?.email || '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">DJ</span><span className="text-text-primary">{viewBooking.dj?.stageName || '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Event Type</span><span className="text-text-primary">{viewBooking.eventType}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Date</span><span className="text-text-primary">{viewBooking.eventDate ? new Date(viewBooking.eventDate).toLocaleDateString() : '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Location</span><span className="text-text-primary">{viewBooking.eventLocation || '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Amount</span><span className="text-text-primary">SLE {((viewBooking.finalPrice ?? viewBooking.budget) || 0).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Status</span><span className="text-text-primary"><StatusBadge status={viewBooking.status} /></span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Created</span><span className="text-text-primary">{viewBooking.createdAt ? new Date(viewBooking.createdAt).toLocaleDateString() : '--'}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -698,22 +856,23 @@ function BookingsSection() {
 /* ─────────────────────── Section 6: Users ─────────────────────── */
 
 function UsersSection() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const { data, isLoading } = useAdminUsers({ limit: 50 });
+  const { data, isLoading, error } = useAdminUsers({ limit: 50 });
   const updateRoleMutation = useUpdateUserRole();
   const queryClient = useQueryClient();
 
   const users = data?.data || [];
   const filtered = useMemo(() => {
     let result = users;
-    if (search) result = result.filter((u: any) => u.email?.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase()));
-    if (roleFilter !== 'all') result = result.filter((u: any) => u.role?.toLowerCase() === roleFilter);
+    if (search) result = result.filter((u: any) => u.email?.toLowerCase().includes(search.toLowerCase()) || u.djProfile?.stageName?.toLowerCase().includes(search.toLowerCase()));
+    if (roleFilter !== 'all') result = result.filter((u: any) => u.role?.toLowerCase() === roleFilter.toLowerCase());
     return result;
   }, [users, search, roleFilter]);
 
   const handleChangeRole = (id: string, role: string) => {
-    updateRoleMutation.mutate({ id, role }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) });
+    updateRoleMutation.mutate({ id, role }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }) });
   };
 
   return (
@@ -746,13 +905,20 @@ function UsersSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
                 <th className="p-4">Email</th>
-                <th className="p-4">Username</th>
+                <th className="p-4">Display Name</th>
                 <th className="p-4">Role</th>
                 <th className="p-4">Joined Date</th>
                 <th className="p-4">Status</th>
@@ -763,7 +929,7 @@ function UsersSection() {
               {filtered.map((u: any) => (
                 <tr key={u.id} className="border-b border-white/5 text-sm">
                   <td className="p-4 text-text-primary">{u.email}</td>
-                  <td className="p-4 text-text-primary">{u.username || '--'}</td>
+                  <td className="p-4 text-text-primary">{u.djProfile?.stageName || u.username || '--'}</td>
                   <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
                   <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
                   <td className="p-4"><StatusBadge status="active" /></td>
@@ -779,7 +945,13 @@ function UsersSection() {
                         <option value="admin">Admin</option>
                         <option value="moderator">Moderator</option>
                       </select>
-                      <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"><Eye className="w-3 h-3" /> View</button>
+                      <button
+                        onClick={() => u.djProfile?.id ? navigate(`/dj/${u.djProfile.id}`) : alert('No DJ profile for this user')}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"
+                        title="View profile"
+                      >
+                        <Eye className="w-3 h-3" /> View
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -796,7 +968,8 @@ function UsersSection() {
 /* ─────────────────────── Section 7: Events ─────────────────────── */
 
 function EventsSection() {
-  const { data, isLoading } = useAdminEvents({ limit: 50 });
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useAdminEvents({ limit: 50 });
   const events = data?.data || [];
 
   return (
@@ -805,19 +978,26 @@ function EventsSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <table className="w-full text-left">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
               <tr>
                 <th className="p-4">Title</th>
-                <th className="p-4">Organizer</th>
+                <th className="p-4">DJ / Organizer</th>
                 <th className="p-4">City</th>
                 <th className="p-4">Venue</th>
                 <th className="p-4">Date</th>
                 <th className="p-4">Status</th>
-                <th className="p-4">Capacity</th>
-                <th className="p-4">Attendees</th>
+                <th className="p-4">Slots</th>
+                <th className="p-4">Filled</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -825,15 +1005,15 @@ function EventsSection() {
               {events.map((e: any) => (
                 <tr key={e.id} className="border-b border-white/5 text-sm">
                   <td className="p-4 font-bold text-text-primary">{e.title}</td>
-                  <td className="p-4 text-text-primary">{e.organizer?.stageName || e.organizerName || '--'}</td>
+                  <td className="p-4 text-text-primary">{e.dj?.stageName || '--'}</td>
                   <td className="p-4 text-text-secondary">{e.city}</td>
-                  <td className="p-4 text-text-secondary">{e.venue}</td>
+                  <td className="p-4 text-text-secondary">{e.venue || '--'}</td>
                   <td className="p-4 font-mono text-text-secondary">{e.date ? new Date(e.date).toLocaleDateString() : '--'}</td>
                   <td className="p-4"><StatusBadge status={e.status || 'upcoming'} /></td>
-                  <td className="p-4 font-mono text-text-primary">{e.capacity || '--'}</td>
-                  <td className="p-4 font-mono text-text-primary">{e.attendees || 0}</td>
+                  <td className="p-4 font-mono text-text-primary">{e.slots || '--'}</td>
+                  <td className="p-4 font-mono text-text-primary">{e.filledSlots || 0}</td>
                   <td className="p-4">
-                    <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto"><Eye className="w-3 h-3" /> View</button>
+                    <button onClick={() => navigate(`/events/${e.id}`)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto" title="View event"><Eye className="w-3 h-3" /> View</button>
                   </td>
                 </tr>
               ))}
@@ -846,11 +1026,187 @@ function EventsSection() {
   );
 }
 
+/* ─────────────────────── Section 7b: Battles ─────────────────────── */
+
+function BattlesSection() {
+  const navigate = useNavigate();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'CLOSED'>('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'PLAYS' });
+  const { data, isLoading, error } = useAdminBattles({ limit: 50 });
+  const createBattleMutation = useCreateBattle();
+  const closeBattleMutation = useCloseBattle();
+  const queryClient = useQueryClient();
+
+  const battles = data?.data || [];
+  const filtered = useMemo(() => {
+    if (statusFilter === 'all') return battles;
+    return battles.filter((b: any) => b.status === statusFilter);
+  }, [battles, statusFilter]);
+
+  const activeCount = battles.filter((b: any) => b.status === 'ACTIVE').length;
+  const totalEntries = battles.reduce((sum: number, b: any) => sum + (b.entries?.length || 0), 0);
+  const totalVotes = battles.reduce((sum: number, b: any) => sum + (b.entries?.reduce((s: number, e: any) => s + (e.votes?.length || 0), 0) || 0), 0);
+
+  const handleCreate = () => {
+    if (!createForm.title || !createForm.weekStart || !createForm.weekEnd) return;
+    createBattleMutation.mutate(createForm, {
+      onSuccess: () => {
+        setShowCreateModal(false);
+        setCreateForm({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'PLAYS' });
+        queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="DJ Battles" subtitle="Manage battles and competitions" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Battles</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{battles.length.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active</p>
+          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">{activeCount.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Entries</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{totalEntries.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Votes</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{totalVotes.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {(['all', 'ACTIVE', 'CLOSED'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setStatusFilter(f)}
+            className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase ${statusFilter === f ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
+          >
+            {f === 'all' ? 'All' : f}
+          </button>
+        ))}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-3 py-1.5 text-xs rounded-lg font-bold uppercase bg-[#D4A24A] text-black hover:bg-[#D4A24A]/90 ml-auto"
+        >
+          + New Battle
+        </button>
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Title</th>
+                <th className="p-4">Theme</th>
+                <th className="p-4">Week</th>
+                <th className="p-4">Entries</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Created</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((b: any) => (
+                <tr key={b.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4 font-bold text-text-primary">{b.title}</td>
+                  <td className="p-4 text-text-secondary">{b.theme || '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">
+                    {b.weekStart ? new Date(b.weekStart).toLocaleDateString() : '--'} - {b.weekEnd ? new Date(b.weekEnd).toLocaleDateString() : '--'}
+                  </td>
+                  <td className="p-4 font-mono text-text-primary">{b.entries?.length || 0}</td>
+                  <td className="p-4"><StatusBadge status={b.status === 'ACTIVE' ? 'active' : 'inactive'} /></td>
+                  <td className="p-4 font-mono text-text-secondary">{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => navigate('/battles')} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="View battles page"><Eye className="w-3 h-3" /> View</button>
+                      {b.status === 'ACTIVE' && (
+                        <button
+                          onClick={() => { if (confirm('Close this battle?')) closeBattleMutation.mutate(b.id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminBattles'] }) }); }}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center gap-1"
+                          title="Close battle"
+                        >
+                          <Ban className="w-3 h-3" /> Close
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState message="No battles found." />}
+        </div>
+      )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-text-primary">Create New Battle</h3>
+              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Title</label>
+                <input value={createForm.title} onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })} className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30" placeholder="Battle title" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-text-muted block mb-1">Week Start</label>
+                  <input type="date" value={createForm.weekStart} onChange={(e) => setCreateForm({ ...createForm, weekStart: e.target.value })} className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30" />
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted block mb-1">Week End</label>
+                  <input type="date" value={createForm.weekEnd} onChange={(e) => setCreateForm({ ...createForm, weekEnd: e.target.value })} className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Theme</label>
+                <input value={createForm.theme} onChange={(e) => setCreateForm({ ...createForm, theme: e.target.value })} className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30" placeholder="e.g. Afrobeat Mix" />
+              </div>
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Metric Type</label>
+                <select value={createForm.metricType} onChange={(e) => setCreateForm({ ...createForm, metricType: e.target.value })} className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30">
+                  <option value="PLAYS">Plays</option>
+                  <option value="VOTES">Votes</option>
+                  <option value="LIKES">Likes</option>
+                  <option value="COMMENTS">Comments</option>
+                </select>
+              </div>
+              <button onClick={handleCreate} disabled={createBattleMutation.isPending} className="w-full py-2 bg-[#D4A24A] text-black font-bold rounded-lg hover:bg-[#D4A24A]/90 disabled:opacity-50">
+                {createBattleMutation.isPending ? 'Creating...' : 'Create Battle'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────── Section 8: Revenue ─────────────────────── */
 
 function RevenueSection() {
   const { data: stats } = useAdminStats();
-  const { data: paymentsData, isLoading } = useAdminPayments({ limit: 50 });
+  const { data: paymentsData, isLoading, error } = useAdminPayments({ limit: 50 });
   const { data: analytics } = useAdminAnalytics();
 
   const payments = paymentsData?.data || [];
@@ -869,25 +1225,25 @@ function RevenueSection() {
       <SectionHeader title="Revenue Dashboard" subtitle="Platform revenue and payment tracking" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Payments</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {Math.round(totalPayments).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Booking Commission (15%)</p>
           <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {Math.round(commission).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Completed Bookings</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">{activeBookings.toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pending Bookings</p>
           <p className="font-mono text-2xl font-bold text-[#F97316] mt-2">{(stats?.pendingBookings || 0).toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+      <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Revenue by Month</p>
         {revenueByMonth.length > 0 ? (
           <div className="h-[260px]">
@@ -907,8 +1263,15 @@ function RevenueSection() {
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
-        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-text-muted p-4 pb-0">All Payments</p>
           <table className="w-full text-left mt-4">
             <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
@@ -932,10 +1295,10 @@ function RevenueSection() {
                   <td className="p-4 text-text-secondary">{p.currency || 'SLE'}</td>
                   <td className="p-4 text-text-secondary">{p.type}</td>
                   <td className="p-4"><StatusBadge status={p.status || 'pending'} /></td>
-                  <td className="p-4 text-text-secondary">{p.provider}</td>
+                  <td className="p-4 text-text-secondary">{p.provider || '--'}</td>
                   <td className="p-4 font-mono text-text-secondary">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '--'}</td>
                   <td className="p-4 text-text-secondary">{p.bookingId?.slice(0, 8) || '--'}</td>
-                  <td className="p-4 text-text-secondary">{p.clientName || '--'}</td>
+                  <td className="p-4 text-text-secondary">{p.client?.email || '--'}</td>
                 </tr>
               ))}
             </tbody>
@@ -950,14 +1313,14 @@ function RevenueSection() {
 /* ─────────────────────── Section 9: Analytics ─────────────────────── */
 
 function AnalyticsSection() {
-  const { data: analytics, isLoading } = useAdminAnalytics();
+  const { data: analytics, isLoading, error } = useAdminAnalytics();
   const { data: rankingsData } = useAdminRankings();
   const { data: djsData } = useAdminDjs({ limit: 100 });
   const { data: platformsData } = useAdminPlatforms();
 
   const streamData = useMemo(() => {
     if (!analytics || analytics.length === 0) return [];
-    return analytics.map((a: any) => ({ month: a.month, streams: a.revenue || 0 }));
+    return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
   }, [analytics]);
 
   const mauData = useMemo(() => {
@@ -972,7 +1335,7 @@ function AnalyticsSection() {
 
   const topDjsByFollowers = useMemo(() => {
     if (!rankingsData || rankingsData.length === 0) return [];
-    return [...rankingsData].sort((a: any, b: any) => (b.followers || 0) - (a.followers || 0)).slice(0, 5);
+    return [...rankingsData].sort((a: any, b: any) => (b.totalFollowers || 0) - (a.totalFollowers || 0)).slice(0, 5);
   }, [rankingsData]);
 
   const genreCounts = useMemo(() => {
@@ -1003,13 +1366,20 @@ function AnalyticsSection() {
 
   if (isLoading) return <LoadingCenter />;
 
+  if (error) return (
+    <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+      <p className="text-red-400 font-medium">Failed to load data</p>
+      <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+    </div>
+  );
+
   return (
     <div className="space-y-8">
       <SectionHeader title="Platform Analytics" subtitle="Deep dive into platform performance metrics" />
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Total Platform Streams</p>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Revenue</p>
           {streamData.length > 0 ? (
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -1017,7 +1387,7 @@ function AnalyticsSection() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                  <Area type="monotone" dataKey="streams" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
+                  <Area type="monotone" dataKey="revenue" stroke="#D4A24A" fill="rgba(212,162,74,0.1)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1026,8 +1396,8 @@ function AnalyticsSection() {
           )}
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Active DJs</p>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">New DJs per Month</p>
           {mauData.length > 0 ? (
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -1046,7 +1416,7 @@ function AnalyticsSection() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top DJs by Streams</p>
           <div className="space-y-3">
             {topDjsByStreams.length > 0 ? topDjsByStreams.map((dj: any) => (
@@ -1058,19 +1428,19 @@ function AnalyticsSection() {
           </div>
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top DJs by Followers</p>
           <div className="space-y-3">
             {topDjsByFollowers.length > 0 ? topDjsByFollowers.map((dj: any) => (
               <div key={dj.id} className="flex items-center justify-between text-sm">
                 <span className="text-text-primary">{dj.stageName}</span>
-                <span className="font-mono text-text-muted">{(dj.followers || 0).toLocaleString()}</span>
+                <span className="font-mono text-text-muted">{(dj.totalFollowers || 0).toLocaleString()}</span>
               </div>
             )) : <EmptyState message="No data available." />}
           </div>
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Most Popular Genres</p>
           <div className="space-y-3">
             {genreCounts.length > 0 ? genreCounts.map(([genre, count]) => (
@@ -1084,7 +1454,7 @@ function AnalyticsSection() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
           <div className="space-y-3">
             {countryCounts.length > 0 ? countryCounts.map(([city, count]) => (
@@ -1096,7 +1466,7 @@ function AnalyticsSection() {
           </div>
         </motion.div>
 
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Streaming Platforms</p>
           {platformData.length > 0 ? (
             <div className="h-[180px]">
@@ -1128,12 +1498,21 @@ function AnalyticsSection() {
 /* ─────────────────────── Section 10: Platform Integrations ─────────────────────── */
 
 function PlatformsSection() {
-  const { data: system } = useAdminSystem();
-  const { data: platforms } = useAdminPlatforms();
+  const { data: system, isLoading: systemLoading, error: systemError } = useAdminSystem();
+  const { data: platforms, isLoading: platformsLoading, error: platformsError } = useAdminPlatforms();
 
   const uptime = system?.uptime ? `${Math.floor(system.uptime / 60)}m` : 'N/A';
   const memory = system?.memory ? `${Math.round((system.memory.heapUsed || 0) / 1024 / 1024)}MB` : 'N/A';
   const counts = system?.counts || {};
+
+  if (systemLoading || platformsLoading) return <LoadingCenter />;
+
+  if (systemError || platformsError) return (
+    <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+      <p className="text-red-400 font-medium">Failed to load data</p>
+      <p className="text-red-400/60 text-sm mt-1">{(systemError as any)?.response?.data?.error || (platformsError as any)?.response?.data?.error || (systemError as any)?.message || (platformsError as any)?.message || 'Unknown error'}</p>
+    </div>
+  );
 
   const platformCards = [
     { name: 'Database', icon: HardDrive, status: system?.dbStatus === 'connected' ? 'connected' : 'disconnected', latency: '< 50ms', records: `${Object.values(counts).reduce((a: number, b: any) => a + (b || 0), 0).toLocaleString()} rows` },
@@ -1156,7 +1535,7 @@ function PlatformsSection() {
           <motion.div
             key={card.name}
             className="rounded-2xl p-5 border border-white/5"
-            style={{ background: '#111111' }}
+            style={{ background: 'var(--bg-card)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
@@ -1187,9 +1566,9 @@ function PlatformsSection() {
             </div>
 
             <div className="flex gap-2 mt-4">
-              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">Test Connection</button>
-              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">Reconnect</button>
-              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">View Logs</button>
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 opacity-50 cursor-not-allowed" title="Not implemented">Test Connection</button>
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 opacity-50 cursor-not-allowed" title="Not implemented">Reconnect</button>
+              <button className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 opacity-50 cursor-not-allowed" title="Not implemented">View Logs</button>
             </div>
           </motion.div>
         ))}
@@ -1201,61 +1580,158 @@ function PlatformsSection() {
 /* ─────────────────────── Section 11: Verification ─────────────────────── */
 
 function VerificationSection() {
-  const { data: pendingData, isLoading } = useAdminPendingDjs();
+  const { data: requestsData, isLoading, error } = useAdminVerificationRequests();
   const verifyMutation = useVerifyDj();
+  const rejectMutation = useRejectDjVerification();
+  const requestInfoMutation = useRequestDjInfo();
   const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<any | null>(null);
+  const [action, setAction] = useState<'approve' | 'reject' | 'request' | null>(null);
+  const [note, setNote] = useState('');
 
-  const pending = pendingData || [];
+  const requests = requestsData || [];
 
-  const handleApprove = (id: string) => {
-    verifyMutation.mutate(id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-pending-djs'] }) });
+  const handleAction = () => {
+    if (!selected || !action) return;
+    const onSettled = () => {
+      setSelected(null);
+      setAction(null);
+      setNote('');
+      queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    };
+
+    if (action === 'approve') {
+      verifyMutation.mutate({ id: selected.id, notes: note }, { onSettled });
+    } else if (action === 'reject') {
+      if (!note) return toast.error('Rejection reason is required');
+      rejectMutation.mutate({ id: selected.id, reason: note }, { onSettled });
+    } else if (action === 'request') {
+      if (!note) return toast.error('Request notes are required');
+      requestInfoMutation.mutate({ id: selected.id, notes: note }, { onSettled });
+    }
   };
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="DJ Verification" subtitle="Review and approve incoming DJ verification requests" />
+      <SectionHeader title="DJ Verification" subtitle="Review passport/ID submissions and approve verified DJs" />
 
       {isLoading && <LoadingCenter />}
 
-      {!isLoading && (
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
         <div className="grid gap-4">
-          {pending.map((v: any) => (
+          {requests.map((v: any) => (
             <motion.div
               key={v.id}
               className="rounded-2xl p-5 border border-white/5"
-              style={{ background: '#111111' }}
+              style={{ background: 'var(--bg-card)' }}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold text-text-primary">{v.stageName}</p>
-                  <p className="text-xs text-text-muted mt-0.5">{v.email}</p>
-                  <p className="text-xs text-text-muted mt-0.5">Submitted: {v.createdAt ? new Date(v.createdAt).toLocaleDateString() : '--'}</p>
-
-                  <div className="flex flex-wrap gap-4 mt-3 text-xs">
-                    <span className={v.bio ? 'text-green-400' : 'text-red-400'}>Profile complete</span>
-                    <span className="text-red-400">Social links</span>
-                    <span className="text-red-400">Streaming accounts</span>
-                    <span className="text-red-400">Years active</span>
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold text-text-primary">{v.stageName}</p>
+                    <StatusBadge status={v.verificationStatus || 'pending'} />
                   </div>
+                  <p className="text-xs text-text-muted mt-0.5">{v.user?.email || '--'}</p>
+                  <p className="text-xs text-text-muted mt-0.5">Submitted: {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString() : '--'}</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-xs">
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <Globe className="w-3.5 h-3.5 text-gold" />
+                      Nationality: {v.nationality || '--'}
+                    </div>
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <FileText className="w-3.5 h-3.5 text-gold" />
+                      ID Type: {v.idDocumentType ? v.idDocumentType.replace(/_/g, ' ') : '--'}
+                    </div>
+                    <div className="flex items-center gap-2 text-text-secondary md:col-span-2">
+                      <span className="font-semibold">Legal name:</span> {v.legalName || '--'}
+                    </div>
+                  </div>
+
+                  {v.idDocumentUrl && (
+                    <div className="mt-4">
+                      <a
+                        href={v.idDocumentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-text-secondary hover:bg-white/10 text-xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View Uploaded Document
+                      </a>
+                    </div>
+                  )}
+
+                  {(v.socialProof || v.verificationReason) && (
+                    <div className="mt-4 space-y-2 text-xs text-text-secondary bg-white/[0.02] p-3 rounded-xl">
+                      {v.socialProof && <p><span className="font-semibold">Social proof:</span> {v.socialProof}</p>}
+                      {v.verificationReason && <p><span className="font-semibold">Reason:</span> {v.verificationReason}</p>}
+                      {v.verificationNotes && <p><span className="font-semibold">Notes:</span> {v.verificationNotes}</p>}
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-2">
-                  <button onClick={() => handleApprove(v.id)} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setSelected(v); setAction('approve'); setNote(''); }} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
                     <Check className="w-3.5 h-3.5" /> Approve
                   </button>
-                  <button className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
+                  <button onClick={() => { setSelected(v); setAction('reject'); setNote(''); }} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
                     <XIcon className="w-3.5 h-3.5" /> Reject
                   </button>
-                  <button className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10">
-                    Request More Info
+                  <button onClick={() => { setSelected(v); setAction('request'); setNote(''); }} className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1">
+                    Request Info
                   </button>
                 </div>
               </div>
             </motion.div>
           ))}
-          {pending.length === 0 && <EmptyState message="No pending verification requests." />}
+          {requests.length === 0 && <EmptyState message="No verification requests." />}
+        </div>
+      )}
+
+      {selected && action && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAction(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-text-primary">
+                {action === 'approve' ? 'Approve Verification' : action === 'reject' ? 'Reject Verification' : 'Request More Info'}
+              </h3>
+              <button onClick={() => setAction(null)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-text-muted">DJ: <span className="text-text-primary font-semibold">{selected.stageName}</span></p>
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">
+                {action === 'approve' ? 'Approval notes (optional)' : action === 'reject' ? 'Rejection reason (required)' : 'What information do you need? (required)'}
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none"
+                placeholder={action === 'approve' ? 'Optional internal notes...' : 'Write your message...'}
+              />
+            </div>
+            <button
+              onClick={handleAction}
+              disabled={verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending}
+              className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 ${
+                action === 'approve' ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : action === 'reject' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#D4A24A] text-black hover:bg-[#D4A24A]/90'
+              }`}
+            >
+              {(verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {action === 'approve' ? 'Confirm Approval' : action === 'reject' ? 'Confirm Rejection' : 'Send Request'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1265,7 +1741,7 @@ function VerificationSection() {
 /* ─────────────────────── Section 12: Notifications ─────────────────────── */
 
 function NotificationsSection() {
-  const { data: notifications, isLoading } = useAdminNotifications({ limit: 20 });
+  const { data: notifications, isLoading, error } = useAdminNotifications({ limit: 20 });
   const sendMutation = useSendNotification();
   const [notifType, setNotifType] = useState<'Both' | 'Push' | 'Email' | 'SMS'>('Both');
   const [target, setTarget] = useState('All Users');
@@ -1286,7 +1762,7 @@ function NotificationsSection() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Compose Form */}
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Compose Notification</p>
 
           <div className="space-y-4">
@@ -1343,12 +1819,19 @@ function NotificationsSection() {
         </motion.div>
 
         {/* Recent Notifications */}
-        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Recent Notifications</p>
 
           {isLoading && <LoadingCenter />}
 
-          {!isLoading && (
+          {error && (
+            <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+              <p className="text-red-400 font-medium">Failed to load data</p>
+              <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && (
             <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
               {(notifications || []).length > 0 ? (notifications || []).map((n: any) => (
                 <div key={n.id} className="rounded-xl p-3 border border-white/5 bg-white/[0.02]">
@@ -1377,28 +1860,35 @@ function NotificationsSection() {
 /* ─────────────────────── Section 13: Subscriptions ─────────────────────── */
 
 function SubscriptionsSection() {
-  const { data: subs, isLoading } = useAdminSubscriptions();
+  const { data: subs, isLoading, error } = useAdminSubscriptions();
 
   if (isLoading) return <LoadingCenter />;
+
+  if (error) return (
+    <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+      <p className="text-red-400 font-medium">Failed to load data</p>
+      <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
       <SectionHeader title="Subscription Management" subtitle="Platform subscription plans and revenue" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Revenue</p>
           <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {(subs?.totalRevenue || 0).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Bookings</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">{(subs?.activeBookings || 0).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">MRR</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {(subs?.mrr || 0).toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">ARR</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {(subs?.arr || 0).toLocaleString()}</p>
         </div>
@@ -1409,7 +1899,7 @@ function SubscriptionsSection() {
           <motion.div
             key={plan.id}
             className="rounded-2xl p-6 border border-white/5"
-            style={{ background: '#111111' }}
+            style={{ background: 'var(--bg-card)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
@@ -1436,15 +1926,22 @@ function SubscriptionsSection() {
 /* ─────────────────────── Section 14: Security Logs ─────────────────────── */
 
 function SecurityLogsSection() {
-  const { data: logs, isLoading } = useAdminSecurityLogs({ limit: 50 });
+  const { data: logs, isLoading, error } = useAdminSecurityLogs({ limit: 50 });
 
   if (isLoading) return <LoadingCenter />;
+
+  if (error) return (
+    <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+      <p className="text-red-400 font-medium">Failed to load data</p>
+      <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
       <SectionHeader title="Security Logs" subtitle="Audit trail of platform events and actions" />
 
-      <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
+      <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
         <table className="w-full text-left">
           <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
             <tr>
@@ -1476,68 +1973,259 @@ function SecurityLogsSection() {
 /* ─────────────────────── Section 15: Ads Manager ─────────────────────── */
 
 function AdsManagerSection() {
-  const { data: ads, isLoading } = useAdminAds();
-
-  if (isLoading) return <LoadingCenter />;
+  const { data: ads, isLoading, error } = useAdminAds();
+  const createMutation = useCreateAd();
+  const statusMutation = useUpdateCampaignStatus();
+  const queryClient = useQueryClient();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    status: 'draft' as 'active' | 'paused' | 'draft',
+    budget: '',
+    startDate: '',
+    endDate: '',
+  });
 
   const campaigns = ads?.campaigns || [];
   const totalBudget = ads?.totalBudget || 0;
   const totalSpent = ads?.totalSpent || 0;
 
+  const resetForm = () => {
+    setForm({ name: '', status: 'draft', budget: '', startDate: '', endDate: '' });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate(
+      {
+        name: form.name.trim(),
+        status: form.status,
+        budget: Number(form.budget) || 0,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['adminAds'] });
+          resetForm();
+          setIsCreateOpen(false);
+        },
+      }
+    );
+  };
+
+  const updateStatus = (id: string, status: any) => {
+    statusMutation.mutate({ id, status }, { onSuccess: () => setStatusMenuId(null) });
+  };
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="Ads Manager" subtitle="Campaign performance and budget tracking" />
+      <SectionHeader
+        title="Ads Manager"
+        subtitle="Review, approve, and manage DJ promotion campaigns"
+        action={
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="px-4 py-2 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center gap-2"
+          >
+            <Plus className="w-3.5 h-3.5" /> Create Campaign
+          </button>
+        }
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
-          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Budget</p>
-          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalBudget.toLocaleString()}</p>
-        </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
-          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Spent</p>
-          <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {totalSpent.toLocaleString()}</p>
-        </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
-          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Campaigns</p>
-          <p className="font-mono text-2xl font-bold text-green-400 mt-2">{campaigns.filter((c: any) => c.status === 'active').length}</p>
-        </div>
-        <div className="rounded-2xl p-5 border border-white/5" style={{ background: '#111111' }}>
-          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Avg CTR</p>
-          <p className="font-mono text-2xl font-bold text-text-primary mt-2">
-            {campaigns.length > 0 ? (campaigns.reduce((sum: number, c: any) => sum + parseFloat(c.ctr || '0'), 0) / campaigns.length).toFixed(1) : 0}%
-          </p>
-        </div>
-      </div>
+      {isLoading && <LoadingCenter />}
 
-      <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: '#111111' }}>
-        <table className="w-full text-left">
-          <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
-            <tr>
-              <th className="p-4">Campaign</th>
-              <th className="p-4">Status</th>
-              <th className="p-4">Impressions</th>
-              <th className="p-4">Clicks</th>
-              <th className="p-4">CTR</th>
-              <th className="p-4">Budget</th>
-              <th className="p-4">Spent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((c: any) => (
-              <tr key={c.id} className="border-b border-white/5 text-sm">
-                <td className="p-4 font-bold text-text-primary">{c.name}</td>
-                <td className="p-4"><StatusBadge status={c.status} /></td>
-                <td className="p-4 font-mono text-text-primary">{(c.impressions || 0).toLocaleString()}</td>
-                <td className="p-4 font-mono text-text-primary">{(c.clicks || 0).toLocaleString()}</td>
-                <td className="p-4 font-mono text-[#D4A24A]">{c.ctr}</td>
-                <td className="p-4 font-mono text-text-primary">SLE {(c.budget || 0).toLocaleString()}</td>
-                <td className="p-4 font-mono text-text-primary">SLE {(c.spent || 0).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {campaigns.length === 0 && <EmptyState message="No campaigns found." />}
-      </div>
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Budget</p>
+              <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalBudget.toLocaleString()}</p>
+            </div>
+            <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Spent</p>
+              <p className="font-mono text-2xl font-bold text-[#D4A24A] mt-2">SLE {totalSpent.toLocaleString()}</p>
+            </div>
+            <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Campaigns</p>
+              <p className="font-mono text-2xl font-bold text-green-400 mt-2">{campaigns.filter((c: any) => c.status === 'active').length}</p>
+            </div>
+            <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pending Approval</p>
+              <p className="font-mono text-2xl font-bold text-orange-400 mt-2">{campaigns.filter((c: any) => c.status === 'pending_payment').length}</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
+            <table className="w-full text-left">
+              <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                <tr>
+                  <th className="p-4">Campaign</th>
+                  <th className="p-4">Advertiser</th>
+                  <th className="p-4">Target</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Reach</th>
+                  <th className="p-4">Impr.</th>
+                  <th className="p-4">Clicks</th>
+                  <th className="p-4">Budget</th>
+                  <th className="p-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((c: any) => (
+                  <tr key={c.id} className="border-b border-white/5 text-sm">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-black-elevated overflow-hidden flex-shrink-0">
+                          {c.creativeImageUrl ? (
+                            <img src={c.creativeImageUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <Megaphone className="w-5 h-5 text-text-muted m-2.5" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-text-primary">{c.name}</p>
+                          {c.ctaUrl && (
+                            <a href={c.ctaUrl} target="_blank" rel="noreferrer" className="text-[10px] text-gold hover:underline flex items-center gap-0.5">
+                              CTA <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-text-secondary">{c.advertiser?.stageName || '--'}</td>
+                    <td className="p-4 text-text-secondary capitalize">{c.targetType}{c.targetId ? ` • ${c.targetId.slice(0, 6)}` : ''}</td>
+                    <td className="p-4"><StatusBadge status={c.status} /></td>
+                    <td className="p-4 font-mono text-text-primary">{c.reachScore?.toFixed(1) || 0}</td>
+                    <td className="p-4 font-mono text-text-primary">{(c.impressions || 0).toLocaleString()}</td>
+                    <td className="p-4 font-mono text-text-primary">{(c.clicks || 0).toLocaleString()}</td>
+                    <td className="p-4 font-mono text-text-primary">{c.currency || 'SLE'} {(c.budget || 0).toLocaleString()}</td>
+                    <td className="p-4">
+                      <div className="relative">
+                        <button
+                          onClick={() => setStatusMenuId(statusMenuId === c.id ? null : c.id)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary hover:bg-white/10"
+                        >
+                          Change Status
+                        </button>
+                        {statusMenuId === c.id && (
+                          <div className="absolute right-0 top-full mt-1 z-10 w-36 rounded-xl border border-white/10 bg-black-surface shadow-lg overflow-hidden">
+                            {['pending_payment', 'active', 'paused', 'rejected', 'completed'].map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => updateStatus(c.id, s)}
+                                className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-white/5 capitalize"
+                              >
+                                {s.replace('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {campaigns.length === 0 && <EmptyState message="No campaigns found." />}
+          </div>
+        </>
+      )}
+
+      {isCreateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setIsCreateOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-text-primary">Create Campaign</h3>
+              <button onClick={() => setIsCreateOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs text-text-muted mb-1.5">Campaign Name</label>
+                <input
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. Summer Promo"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-text-muted mb-1.5">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value as 'active' | 'paused' | 'draft' })}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-text-muted mb-1.5">Budget (SLE)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.budget}
+                  onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-text-muted mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1.5">End Date</label>
+                  <input
+                    type="date"
+                    value={form.endDate}
+                    onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={createMutation.isPending || !form.name.trim()}
+                className="w-full px-4 py-2.5 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {createMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <Plus className="w-3.5 h-3.5" /> Create Campaign
+              </button>
+
+              {createMutation.isError && (
+                <p className="text-xs text-red-400 text-center">
+                  {(createMutation.error as any)?.response?.data?.error || (createMutation.error as any)?.message || 'Failed to create campaign'}
+                </p>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1545,7 +2233,7 @@ function AdsManagerSection() {
 /* ─────────────────────── Section 16: Roles & Permissions ─────────────────────── */
 
 function RolesSection() {
-  const { data: staffData, isLoading } = useAdminStaff();
+  const { data: staffData, isLoading, error } = useAdminStaff();
   const { data: usersData } = useAdminUsers({ limit: 100 });
   const updateRoleMutation = useUpdateUserRole();
   const queryClient = useQueryClient();
@@ -1565,10 +2253,18 @@ function RolesSection() {
       <SectionHeader title="Roles & Permissions" subtitle="Manage staff roles and user access levels" />
 
       <div className="grid gap-6">
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Staff Members</p>
           {isLoading && <LoadingCenter />}
-          {!isLoading && (
+
+          {error && (
+            <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+              <p className="text-red-400 font-medium">Failed to load data</p>
+              <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && (
             <div className="rounded-xl border border-white/5 overflow-hidden">
               <table className="w-full text-left">
                 <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
@@ -1603,7 +2299,7 @@ function RolesSection() {
           )}
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">All Users</p>
           <div className="rounded-xl border border-white/5 overflow-hidden">
             <table className="w-full text-left">
@@ -1651,7 +2347,7 @@ function SettingsSection() {
       <SectionHeader title="Settings" subtitle="Platform configuration and preferences" />
 
       <div className="grid gap-6">
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Branding</p>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
@@ -1669,12 +2365,12 @@ function SettingsSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Email Settings</p>
           <div className="grid md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs text-text-muted mb-1">SMTP Host</label>
-              <input type="text" disabled placeholder="smtp.example.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+              <input type="text" disabled placeholder="smtp.yourhost.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
             </div>
             <div>
               <label className="block text-xs text-text-muted mb-1">Port</label>
@@ -1682,7 +2378,7 @@ function SettingsSection() {
             </div>
             <div>
               <label className="block text-xs text-text-muted mb-1">Username</label>
-              <input type="text" disabled placeholder="admin@example.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
+              <input type="text" disabled placeholder="notifications@soundit.com" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
             </div>
             <div>
               <label className="block text-xs text-text-muted mb-1">Password</label>
@@ -1691,7 +2387,7 @@ function SettingsSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Payment Settings</p>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
@@ -1709,7 +2405,7 @@ function SettingsSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Ranking Weights</p>
           <div className="grid md:grid-cols-3 gap-4">
             {[
@@ -1725,12 +2421,12 @@ function SettingsSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Platform Announcements</p>
           <textarea disabled rows={3} placeholder="No announcements..." className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted resize-none" />
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Maintenance Mode</p>
           <div className="flex items-center gap-3">
             <div className="w-10 h-5 rounded-full bg-white/10 relative disabled:opacity-50">
@@ -1741,11 +2437,11 @@ function SettingsSection() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Languages</p>
             <p className="text-sm text-text-primary">English</p>
           </div>
-          <div className="rounded-2xl p-6 border border-white/5" style={{ background: '#111111' }}>
+          <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Countries</p>
             <p className="text-sm text-text-primary">Sierra Leone</p>
           </div>
@@ -1777,6 +2473,7 @@ export default function AdminDashboard() {
     bookings: <BookingsSection />,
     users: <UsersSection />,
     events: <EventsSection />,
+    battles: <BattlesSection />,
     revenue: <RevenueSection />,
     analytics: <AnalyticsSection />,
     subscriptions: <SubscriptionsSection />,
@@ -1792,25 +2489,27 @@ export default function AdminDashboard() {
   const currentLabel = sidebarItems.find((i) => i.id === section)?.label || 'Dashboard';
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#0A0A0A', fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen flex theme-bg" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* ──────────────── SIDEBAR ──────────────── */}
       <motion.aside
-        className="fixed top-0 left-0 h-screen z-50 flex flex-col border-r border-white/5 transition-all duration-300"
-        style={{ background: '#0D0D0D', width: sidebarCollapsed ? 72 : 260 }}
+        className="fixed top-0 left-0 h-screen z-50 flex flex-col border-r theme-border-card transition-all duration-300 theme-bg-elevated"
+        style={{ width: sidebarCollapsed ? 72 : 260 }}
         animate={{ width: sidebarCollapsed ? 72 : 260 }}
       >
         {/* Logo */}
-        <div className="px-4 py-5 border-b border-white/5 flex-shrink-0">
+        <div className="px-4 py-5 border-b theme-border-card flex-shrink-0">
           {!sidebarCollapsed ? (
-            <div className="flex items-center gap-2">
+            <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain" />
               <div>
                 <p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide">Sound It</p>
                 <p className="text-[9px] text-text-muted uppercase tracking-widest">Admin Console</p>
               </div>
-            </div>
+            </a>
           ) : (
-            <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain mx-auto" />
+            <a href="/" className="hover:opacity-80 transition-opacity block">
+              <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain mx-auto" />
+            </a>
           )}
         </div>
 
@@ -1834,7 +2533,7 @@ export default function AdminDashboard() {
         </nav>
 
         {/* Bottom */}
-        <div className="border-t border-white/5 p-3 flex-shrink-0">
+        <div className="border-t theme-border-card p-3 flex-shrink-0">
           {sidebarCollapsed ? (
             <button onClick={() => setSidebarCollapsed(false)} className="w-full flex justify-center p-2 rounded-lg text-text-muted hover:bg-white/5">
               <ChevronRight className="w-4 h-4" />
@@ -1861,7 +2560,7 @@ export default function AdminDashboard() {
         style={{ marginLeft: sidebarCollapsed ? 72 : 260, transition: 'margin-left 0.25s' }}
       >
         {/* Header */}
-        <header className="sticky top-0 z-40 border-b border-white/5 px-6 py-3 flex items-center justify-between" style={{ background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)' }}>
+        <header className="sticky top-0 z-40 border-b theme-border-card px-6 py-3 flex items-center justify-between glass-nav">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarCollapsed((c) => !c)} className="p-2 rounded-lg text-text-muted hover:bg-white/5">
               <Menu className="w-4 h-4" />
@@ -1875,14 +2574,15 @@ export default function AdminDashboard() {
             <button className="p-2 rounded-lg text-text-muted hover:bg-white/5">
               <Search className="w-4 h-4" />
             </button>
+            <ThemeToggle />
             <div className="relative">
               <button onClick={() => setBellOpen((o) => !o)} className="p-2 rounded-lg text-text-muted hover:bg-white/5 relative">
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#D4A24A]" />
               </button>
               {bellOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-white/5 shadow-xl overflow-hidden z-50" style={{ background: '#0D0D0D' }}>
-                  <div className="p-3 border-b border-white/5 flex items-center justify-between">
+                <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border theme-border-card shadow-xl overflow-hidden z-50 theme-bg-elevated">
+                  <div className="p-3 border-b theme-border-card flex items-center justify-between">
                     <p className="text-xs font-bold text-text-primary">Notifications</p>
                     <button onClick={() => setBellOpen(false)} className="text-[10px] text-text-muted hover:text-text-primary">Close</button>
                   </div>

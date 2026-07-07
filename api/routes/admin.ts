@@ -36,6 +36,23 @@ const bookingStatusSchema = z.object({
   status: z.enum(['PENDING', 'NEGOTIATING', 'CONFIRMED', 'DEPOSIT_PAID', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
 });
 
+const createAdSchema = z.object({
+  name: z.string().min(1, 'Campaign name is required'),
+  status: z.enum(['active', 'paused', 'draft']).default('draft'),
+  budget: z.number().min(0).default(0),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+const campaignStatusSchema = z.object({
+  status: z.enum(['pending_payment', 'active', 'paused', 'rejected', 'completed']),
+  notes: z.string().optional(),
+});
+
+const verifyDjSchema = z.object({
+  notes: z.string().optional(),
+});
+
 // GET /api/admin/stats - Platform-wide stats
 router.get('/stats', async (req, res) => {
   try {
@@ -47,6 +64,7 @@ router.get('/stats', async (req, res) => {
       totalBookings,
       totalEvents,
       totalReviews,
+      totalFollowers,
       pendingBookings,
       pendingVerifications,
     ] = await Promise.all([
@@ -57,8 +75,9 @@ router.get('/stats', async (req, res) => {
       prisma.booking.count(),
       prisma.event.count(),
       prisma.review.count(),
+      prisma.follow.count(),
       prisma.booking.count({ where: { status: 'PENDING' } }),
-      prisma.djProfile.count({ where: { verified: false } }),
+      prisma.djProfile.count({ where: { verificationStatus: 'pending' } }),
     ]);
 
     const bookingRevenue = await prisma.booking.aggregate({
@@ -83,6 +102,7 @@ router.get('/stats', async (req, res) => {
         totalBookings,
         totalEvents,
         totalReviews,
+        totalFollowers,
         pendingBookings,
         pendingVerifications,
         estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
@@ -167,12 +187,12 @@ router.put('/users/:id/role', async (req, res) => {
   }
 });
 
-// GET /api/admin/djs/pending - Get DJs pending verification
+// GET /api/admin/djs/pending - Get DJs pending verification (legacy flag)
 router.get('/djs/pending', async (req, res) => {
   try {
     const djs = await prisma.djProfile.findMany({
-      where: { verified: false },
-      orderBy: { createdAt: 'desc' },
+      where: { verificationStatus: 'pending' },
+      orderBy: { updatedAt: 'desc' },
       include: {
         user: { select: { id: true, email: true, createdAt: true } },
         streamingPlatforms: true,
@@ -185,14 +205,83 @@ router.get('/djs/pending', async (req, res) => {
   }
 });
 
-// PUT /api/admin/djs/:id/verify - Verify a DJ
+// GET /api/admin/djs/verification-requests - Get passport verification requests
+router.get('/djs/verification-requests', async (req, res) => {
+  try {
+    const djs = await prisma.djProfile.findMany({
+      where: { verificationStatus: { in: ['pending', 'info_requested', 'rejected'] } },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        user: { select: { id: true, email: true, createdAt: true } },
+        streamingPlatforms: true,
+      },
+    });
+
+    return res.json({ success: true, data: djs });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/djs/:id/verify - Approve verification
 router.put('/djs/:id/verify', async (req, res) => {
   try {
+    const parsed = verifyDjSchema.safeParse(req.body);
+    const notes = parsed.success ? parsed.data.notes : undefined;
+
     const dj = await prisma.djProfile.update({
       where: { id: req.params.id },
       data: {
         verified: true,
+        verificationStatus: 'approved',
+        isPublic: true,
+        verifiedAt: new Date(),
         badges: { push: 'Verified DJ' },
+        ...(notes && { verificationNotes: notes }),
+      },
+    });
+
+    return res.json({ success: true, data: dj });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/djs/:id/reject - Reject verification
+router.put('/djs/:id/reject', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) {
+      return res.status(400).json({ success: false, error: 'Rejection reason is required' });
+    }
+
+    const dj = await prisma.djProfile.update({
+      where: { id: req.params.id },
+      data: {
+        verificationStatus: 'rejected',
+        verificationNotes: reason,
+      },
+    });
+
+    return res.json({ success: true, data: dj });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/djs/:id/request-info - Request more information
+router.put('/djs/:id/request-info', async (req, res) => {
+  try {
+    const { notes } = req.body;
+    if (!notes) {
+      return res.status(400).json({ success: false, error: 'Request notes are required' });
+    }
+
+    const dj = await prisma.djProfile.update({
+      where: { id: req.params.id },
+      data: {
+        verificationStatus: 'info_requested',
+        verificationNotes: notes,
       },
     });
 
@@ -278,6 +367,54 @@ router.put('/mixes/:id/feature', async (req, res) => {
     });
 
     return res.json({ success: true, data: mix });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/djs/:id/hall-of-fame - Toggle DJ Hall of Fame status
+router.put('/djs/:id/hall-of-fame', async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+
+    const updated = await prisma.djProfile.update({
+      where: { id: req.params.id },
+      data: { hallOfFame: !dj.hallOfFame },
+    });
+
+    return res.json({ success: true, data: { id: updated.id, hallOfFame: updated.hallOfFame, stageName: updated.stageName } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/mixes/:id/hall-of-fame - Toggle Mix Hall of Fame status
+router.put('/mixes/:id/hall-of-fame', async (req, res) => {
+  try {
+    const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    const updated = await prisma.mix.update({
+      where: { id: req.params.id },
+      data: { hallOfFame: !mix.hallOfFame },
+    });
+
+    return res.json({ success: true, data: { id: updated.id, hallOfFame: updated.hallOfFame, title: updated.title } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/admin/mixes/:id - Delete a mix
+router.delete('/mixes/:id', async (req, res) => {
+  try {
+    const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    await prisma.mix.delete({ where: { id: req.params.id } });
+
+    return res.json({ success: true, data: { id: req.params.id, message: 'Mix deleted' } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -527,6 +664,7 @@ router.get('/djs', async (req, res) => {
           mixes: { select: { id: true } },
           bookingsAsDj: { select: { id: true, status: true } },
           streamingPlatforms: true,
+          followers: { select: { id: true } },
         },
       }),
       prisma.djProfile.count({ where }),
@@ -540,10 +678,11 @@ router.get('/djs', async (req, res) => {
       city: dj.city,
       verified: dj.verified,
       isPublic: dj.isPublic,
+      hallOfFame: dj.hallOfFame,
       rankingPosition: dj.rankingPosition,
       rankingScore: dj.rankingScore,
-      totalStreams: dj.totalStreams,
-      totalFollowers: dj.totalFollowers,
+      totalStreams: dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.streams || 0), 0),
+      totalFollowers: dj.followers.length,
       totalMixes: dj.mixes.length,
       totalBookings: dj.bookingsAsDj.length,
       completedBookings: dj.bookingsAsDj.filter((b: any) => b.status === 'COMPLETED').length,
@@ -666,23 +805,28 @@ router.get('/rankings', async (req, res) => {
       where: { rankingPosition: { gt: 0 } },
       orderBy: { rankingPosition: 'asc' },
       take: 100,
-      select: {
-        id: true,
-        stageName: true,
-        avatar: true,
-        city: true,
-        rankingPosition: true,
-        rankingScore: true,
-        digitalScore: true,
-        industryScore: true,
-        communityScore: true,
-        totalStreams: true,
-        totalFollowers: true,
-        verified: true,
+      include: {
+        streamingPlatforms: { select: { streams: true } },
+        followers: { select: { id: true } },
       },
     });
 
-    return res.json({ success: true, data: djs });
+    const data = djs.map((dj: any) => ({
+      id: dj.id,
+      stageName: dj.stageName,
+      avatar: dj.avatar,
+      city: dj.city,
+      rankingPosition: dj.rankingPosition,
+      rankingScore: dj.rankingScore,
+      digitalScore: dj.digitalScore,
+      industryScore: dj.industryScore,
+      communityScore: dj.communityScore,
+      totalStreams: dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.streams || 0), 0),
+      totalFollowers: dj.followers.length,
+      verified: dj.verified,
+    }));
+
+    return res.json({ success: true, data });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -784,17 +928,14 @@ router.get('/subscriptions', async (req, res) => {
     const plans = [
       { id: 'free', name: 'Free Tier', price: 0, users: djCount - verifiedDjCount, features: ['Basic profile', 'Limited uploads'] },
       { id: 'verified', name: 'Verified DJ', price: 0, users: verifiedDjCount, features: ['Verified badge', 'Unlimited uploads', 'Booking enabled'] },
-      { id: 'premium', name: 'Premium DJ', price: 150, users: Math.floor(verifiedDjCount * 0.2), features: ['Featured placement', 'Analytics dashboard', 'Priority support'] },
     ];
 
     return res.json({
       success: true,
       data: {
         plans,
-        totalRevenue: Math.round((totalRevenue._sum.finalPrice || 0) * 0.15),
+        totalRevenue: Math.round(totalRevenue._sum.finalPrice || 0),
         activeBookings,
-        mrr: 0,
-        arr: 0,
       },
     });
   } catch (error) {
@@ -802,20 +943,77 @@ router.get('/subscriptions', async (req, res) => {
   }
 });
 
-// GET /api/admin/ads - Ad campaign overview (placeholder)
+// GET /api/admin/ads - Ad campaign overview (alias for campaigns)
 router.get('/ads', async (req, res) => {
   try {
-    const totalUsers = await prisma.user.count();
-    const totalDjs = await prisma.djProfile.count();
-    const totalEvents = await prisma.event.count();
+    const campaigns = await prisma.adCampaign.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        advertiser: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
 
-    const campaigns = [
-      { id: 'camp-1', name: 'Homepage Banner', status: 'active', impressions: totalUsers * 12, clicks: Math.floor(totalUsers * 0.8), ctr: '6.5%', budget: 500, spent: 320 },
-      { id: 'camp-2', name: 'DJ Spotlight', status: 'active', impressions: totalDjs * 30, clicks: Math.floor(totalDjs * 2.5), ctr: '8.2%', budget: 300, spent: 180 },
-      { id: 'camp-3', name: 'Event Promo', status: 'paused', impressions: totalEvents * 50, clicks: Math.floor(totalEvents * 1.5), ctr: '3.1%', budget: 200, spent: 95 },
-    ];
+    const totalBudget = campaigns.reduce((sum, c) => sum + (c.budget || 0), 0);
+    const totalSpent = campaigns.reduce((sum, c) => sum + (c.spent || 0), 0);
 
-    return res.json({ success: true, data: { campaigns, totalBudget: 1000, totalSpent: 595 } });
+    return res.json({
+      success: true,
+      data: {
+        campaigns: campaigns.map((c) => ({
+          ...c,
+          ctr: `${(c.ctr || 0).toFixed(2)}%`,
+        })),
+        totalBudget,
+        totalSpent,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/ads - Create a new ad campaign
+router.post('/ads', async (req, res) => {
+  try {
+    const data = createAdSchema.parse(req.body);
+
+    const campaign = await prisma.adCampaign.create({
+      data: {
+        name: data.name,
+        status: data.status,
+        budget: data.budget,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        endDate: data.endDate ? new Date(data.endDate) : null,
+      },
+    });
+
+    return res.status(201).json({ success: true, data: campaign });
+  } catch (error) {
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ success: false, error: error.errors });
+    }
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/campaigns/:id/status - Update campaign status (approve/reject/pause)
+router.put('/campaigns/:id/status', async (req, res) => {
+  try {
+    const parsed = campaignStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { status, notes } = parsed.data;
+    const campaign = await prisma.adCampaign.update({
+      where: { id: req.params.id },
+      data: { status },
+      include: {
+        advertiser: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    return res.json({ success: true, data: campaign });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

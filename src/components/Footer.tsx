@@ -12,10 +12,10 @@ const platformLinks = [
 
 const resourceLinks = [
   { label: 'Hall of Fame', path: '/hall-of-fame' },
-  { label: 'Blog', path: '#' },
-  { label: 'Help Center', path: '#' },
-  { label: 'Privacy Policy', path: '#' },
-  { label: 'Terms of Service', path: '#' },
+  { label: 'Blog', path: '/blog' },
+  { label: 'Help Center', path: '/help' },
+  { label: 'Privacy Policy', path: '/privacy' },
+  { label: 'Terms of Service', path: '/terms' },
 ];
 
 const socialLinks = [
@@ -27,7 +27,7 @@ const socialLinks = [
 
 export default function Footer() {
   return (
-    <footer className="bg-black border-t border-white/5">
+    <footer className="theme-bg border-t theme-border-card">
       <div className="container-main pt-16 pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand Column */}
@@ -104,15 +104,15 @@ export default function Footer() {
               Follow us for updates, featured DJs, and exclusive content.
             </p>
             <div className="flex items-center gap-1 text-sm text-text-muted">
-              <span>SLE</span>
-              <span className="mx-2">|</span>
               <span>English</span>
+              <span className="mx-2">|</span>
+              <span>Krio</span>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-8 border-t theme-border-card flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-xs">
             &copy; 2025 Deck Salone. A Sound It Entertainment platform.
           </p>

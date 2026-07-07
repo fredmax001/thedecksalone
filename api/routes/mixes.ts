@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { uploadMix } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processCover } = require('../utils/imageProcessor');
+const { resolveAudioUrl } = require('../utils/audioResolver');
 
 const router = express.Router();
 
@@ -28,6 +29,7 @@ const createMixSchema = z.object({
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
   isPublic: z.coerce.boolean().optional(),
+  audioUrl: z.string().optional(),
 });
 
 const updateMixSchema = z.object({
@@ -38,6 +40,7 @@ const updateMixSchema = z.object({
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
   isPublic: z.coerce.boolean().optional(),
+  audioUrl: z.string().optional(),
 });
 
 // GET /api/mixes - List mixes with filtering
@@ -96,6 +99,38 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/mixes/hall-of-fame - Legendary mixes in Hall of Fame
+router.get('/hall-of-fame', async (req, res) => {
+  try {
+    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 6));
+
+    let mixes = await prisma.mix.findMany({
+      where: { hallOfFame: true, isPublic: true },
+      orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
+      take: limitNum,
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    // Fallback: if no Hall of Fame mixes, return top trending mixes
+    if (mixes.length === 0) {
+      mixes = await prisma.mix.findMany({
+        where: { isPublic: true },
+        orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
+        take: limitNum,
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true } },
+        },
+      });
+    }
+
+    return res.json({ success: true, data: mixes });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/mixes/categories - Get all categories
 router.get('/categories', async (req, res) => {
   try {
@@ -149,13 +184,8 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    // Increment plays
-    await prisma.mix.update({
-      where: { id: req.params.id },
-      data: { plays: { increment: 1 } },
-    });
-
-    return res.json({ success: true, data: { ...mix, plays: mix.plays + 1 } });
+    // Play tracking is handled by POST /:id/play to support dedup and analytics
+    return res.json({ success: true, data: mix });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -181,6 +211,8 @@ router.post('/', authMiddleware, uploadMix, async (req, res) => {
     const coverFile = req.files?.coverImage?.[0];
 
     let audioUrl = null;
+    let audioSource = null;
+    let originalUrl = null;
     let coverUrl = null;
 
     if (audioFile) {
@@ -188,6 +220,25 @@ router.post('/', authMiddleware, uploadMix, async (req, res) => {
         contentType: audioFile.mimetype,
         ext: audioFile.originalname.split('.').pop() || 'mp3',
       });
+      audioSource = 'upload';
+    } else if (data.audioUrl) {
+      const resolved = await resolveAudioUrl(data.audioUrl);
+      if (!resolved) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Unable to use this audio link. Please provide a direct audio file, Audiomack, or Hearthis.at link.',
+        });
+      }
+      audioUrl = resolved.audioUrl;
+      audioSource = resolved.audioSource;
+      originalUrl = data.audioUrl;
+      if (!data.duration && resolved.duration) {
+        data.duration = resolved.duration;
+      }
+      if (!coverUrl && resolved.coverImage) {
+        coverUrl = resolved.coverImage;
+      }
     }
     if (coverFile) {
       const { buffer, contentType, ext } = await processCover(coverFile.buffer);
@@ -199,6 +250,8 @@ router.post('/', authMiddleware, uploadMix, async (req, res) => {
         ...data,
         djId,
         audioUrl,
+        audioSource,
+        originalUrl,
         coverImage: coverUrl,
       },
     });
@@ -245,6 +298,27 @@ router.put('/:id', authMiddleware, uploadMix, async (req, res) => {
         contentType: audioFile.mimetype,
         ext: audioFile.originalname.split('.').pop() || 'mp3',
       });
+      updateData.audioSource = 'upload';
+      updateData.originalUrl = null;
+    } else if (updateData.audioUrl) {
+      const originalAudioUrl = updateData.audioUrl;
+      const resolved = await resolveAudioUrl(originalAudioUrl);
+      if (!resolved) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Unable to use this audio link. Please provide a direct audio file, Audiomack, or Hearthis.at link.',
+        });
+      }
+      updateData.audioUrl = resolved.audioUrl;
+      updateData.audioSource = resolved.audioSource;
+      updateData.originalUrl = originalAudioUrl;
+      if (!updateData.duration && resolved.duration) {
+        updateData.duration = resolved.duration;
+      }
+      if (!updateData.coverImage && resolved.coverImage) {
+        updateData.coverImage = resolved.coverImage;
+      }
     }
     if (coverFile) {
       const { buffer, contentType, ext } = await processCover(coverFile.buffer);
@@ -289,27 +363,59 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/mixes/:id/like - Like a mix
+// POST /api/mixes/:id/like - Toggle like on a mix (deduped via MixLike join table)
 router.post('/:id/like', authMiddleware, async (req, res) => {
   try {
-    await prisma.mix.update({
-      where: { id: req.params.id },
-      data: { likes: { increment: 1 } },
+    const mixId = req.params.id;
+    const userId = req.user.id;
+
+    // Check if mix exists
+    const mix = await prisma.mix.findUnique({ where: { id: mixId }, select: { id: true } });
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    // Check for existing like
+    const existing = await prisma.mixLike.findUnique({
+      where: { mixId_userId: { mixId, userId } },
     });
-    return res.json({ success: true, data: { message: 'Mix liked' } });
+
+    if (existing) {
+      // Unlike: remove the record and decrement
+      await prisma.$transaction([
+        prisma.mixLike.delete({ where: { mixId_userId: { mixId, userId } } }),
+        prisma.mix.update({ where: { id: mixId }, data: { likes: { decrement: 1 } } }),
+      ]);
+      return res.json({ success: true, data: { liked: false, message: 'Mix unliked' } });
+    }
+
+    // Like: create the record and increment atomically
+    await prisma.$transaction([
+      prisma.mixLike.create({ data: { mixId, userId } }),
+      prisma.mix.update({ where: { id: mixId }, data: { likes: { increment: 1 } } }),
+    ]);
+    return res.json({ success: true, data: { liked: true, message: 'Mix liked' } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// POST /api/mixes/:id/download - Download a mix (increment counter)
-router.post('/:id/download', authMiddleware, async (req, res) => {
+// POST /api/mixes/:id/play - Track a play (call from the player, not on GET)
+router.post('/:id/play', async (req, res) => {
   try {
-    await prisma.mix.update({
+    const mix = await prisma.mix.findUnique({
       where: { id: req.params.id },
-      data: { downloads: { increment: 1 } },
+      select: { id: true, plays: true },
     });
-    return res.json({ success: true, data: { message: 'Download counted' } });
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+    const updated = await prisma.mix.update({
+      where: { id: req.params.id },
+      data: { plays: { increment: 1 } },
+      select: { plays: true },
+    });
+    return res.json({ success: true, data: { plays: updated.plays } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

@@ -155,7 +155,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-3">
               <Link
-                to="/mixes"
+                to="/dashboard/mixes"
                 className="inline-flex items-center gap-2 h-11 px-5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] transition-transform"
               >
                 <Music className="w-4 h-4" />
