@@ -16,16 +16,6 @@ import {
   Globe,
   Loader2,
 } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
 import FadeIn from '@/components/FadeIn';
 import { useRankings } from '@/hooks/useRankings';
 
@@ -462,30 +452,30 @@ export default function Rankings() {
               <p className="section-label text-center mb-6">HOW SCORES ARE CALCULATED</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-gold">~85%</span>
+                  <span className="font-mono text-3xl font-bold text-gold">~45%</span>
                   <p className="text-sm font-semibold text-text-primary mt-1">Digital Score</p>
                   <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
                     <li>Streams & Followers</li>
-                    <li>Mix Uploads</li>
+                    <li>Mix Uploads & Plays</li>
                     <li>Platform Engagement</li>
                   </ul>
                 </div>
                 <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-purple">~10%</span>
+                  <span className="font-mono text-3xl font-bold text-purple">~35%</span>
                   <p className="text-sm font-semibold text-text-primary mt-1">Industry Score</p>
                   <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
                     <li>Booking Count</li>
                     <li>Events Played</li>
-                    <li>Awards & Recognition</li>
+                    <li>Battle Performance</li>
                   </ul>
                 </div>
                 <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-green">~5%</span>
+                  <span className="font-mono text-3xl font-bold text-green">~20%</span>
                   <p className="text-sm font-semibold text-text-primary mt-1">Community Score</p>
                   <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
                     <li>User Ratings</li>
                     <li>Reviews & Feedback</li>
-                    <li>Profile Engagement</li>
+                    <li>Verified Reviews</li>
                   </ul>
                 </div>
               </div>
@@ -552,56 +542,7 @@ export default function Rankings() {
         </>
       )}
 
-      {/* Trend Chart */}
-      <section className="py-16 bg-black-elevated">
-        <div className="container-main">
-          <FadeIn>
-            <div className="text-center mb-12">
-              <p className="section-label mb-2">TRENDS</p>
-              <h2 className="font-display text-2xl sm:text-3xl font-semibold uppercase tracking-tight text-text-primary">
-                TOP 5 RANKING TRAJECTORY
-              </h2>
-            </div>
-          </FadeIn>
-          <div className="bg-black rounded-2xl border border-white/5 p-6 h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={TREND_DATA}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
-                <XAxis dataKey="week" stroke="#6B6B6B" fontSize={12} />
-                <YAxis stroke="#6B6B6B" fontSize={12} reversed />
-                <Tooltip
-                  contentStyle={{ background: '#111111', border: '1px solid #2A2A2A', borderRadius: 8, color: '#F5F5F5' }}
-                />
-                <Legend />
-                {['Fred Max', 'Rampage', 'Kaywize Salone', 'Bow', 'Cess'].map((name, i) => (
-                  <Line
-                    key={name}
-                    type="monotone"
-                    dataKey={name}
-                    stroke={['#D4A24A', '#8B5CF6', '#22C55E', '#F97316', '#3B82F6'][i]}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
 
-// Placeholder trend data until backend provides history aggregation
-const TREND_DATA = [
-  { week: 'Jan W1', 'Fred Max': 3, 'Rampage': 4, 'Kaywize Salone': 8, 'Bow': 5, 'Cess': 10 },
-  { week: 'Jan W2', 'Fred Max': 2, 'Rampage': 3, 'Kaywize Salone': 7, 'Bow': 4, 'Cess': 9 },
-  { week: 'Jan W3', 'Fred Max': 2, 'Rampage': 3, 'Kaywize Salone': 6, 'Bow': 4, 'Cess': 7 },
-  { week: 'Jan W4', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 5, 'Bow': 3, 'Cess': 8 },
-  { week: 'Feb W1', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 4, 'Bow': 4, 'Cess': 7 },
-  { week: 'Feb W2', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 4, 'Bow': 4, 'Cess': 6 },
-  { week: 'Feb W3', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 3, 'Bow': 4, 'Cess': 5 },
-  { week: 'Feb W4', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 3, 'Bow': 4, 'Cess': 5 },
-  { week: 'Mar W1', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 3, 'Bow': 4, 'Cess': 5 },
-  { week: 'Mar W2', 'Fred Max': 1, 'Rampage': 2, 'Kaywize Salone': 3, 'Bow': 4, 'Cess': 5 },
-];

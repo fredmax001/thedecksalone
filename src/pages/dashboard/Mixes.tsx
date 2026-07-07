@@ -47,6 +47,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { useImportHearthis } from '@/hooks/useMixes';
 
 interface Mix {
   id: string;
@@ -67,14 +68,17 @@ interface Mix {
 
 const GENRES = [
   'Afrobeats',
-  'Dancehall',
-  'Hip-Hop',
-  'R&B',
-  'House',
   'Amapiano',
+  'Dancehall',
+  'Hip Hop',
+  'Gospel',
+  'Salone Mix',
+  'Club Mix',
+  'Throwback',
+  'R&B',
   'Reggae',
   'Soca',
-  'Gospel',
+  'Wedding Mix',
   'Open Format',
 ];
 
@@ -127,6 +131,18 @@ export default function Mixes() {
   const [deletingMixId, setDeletingMixId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Hearthis import state
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importUrls, setImportUrls] = useState('');
+  const [importGenre, setImportGenre] = useState('Open Format');
+  const [importCategory, setImportCategory] = useState('Salone Mix');
+  const [importResult, setImportResult] = useState<{
+    count: number;
+    errorCount: number;
+    errors: Array<{ url: string; error: string }>;
+  } | null>(null);
+  const { mutate: importHearthis, isPending: importLoading } = useImportHearthis();
 
   useEffect(() => {
     if (!isDj || !djId) {
@@ -284,13 +300,24 @@ export default function Mixes() {
   };
 
   const handlePlay = (mix: Mix) => {
-    const url = mix.originalUrl || mix.audioUrl;
-    if (url) {
-      // Open audio in new tab for playback
-      window.open(url, '_blank');
-    } else {
+    const url = mix.audioUrl || mix.originalUrl;
+    if (!url) {
       toast.info('Audio playback coming soon');
+      return;
     }
+    const track = {
+      id: mix.id,
+      title: mix.title,
+      dj: user?.djProfile?.stageName || 'Unknown DJ',
+      duration: typeof mix.duration === 'string' ? parseInt(mix.duration, 10) || 0 : 0,
+      cover: mix.coverImage || '/placeholder.jpg',
+      genre: mix.genre || mix.category || 'Mix',
+      audioUrl: url,
+      audioSource: mix.audioSource,
+      originalUrl: mix.originalUrl,
+      plays: mix.plays,
+    };
+    window.dispatchEvent(new CustomEvent('play-mix', { detail: track }));
   };
 
   if (loading) {
@@ -327,13 +354,23 @@ export default function Mixes() {
             Manage your mixes, track performance, and upload new content.
           </p>
         </div>
-        <Button
-          className="bg-gold-gradient text-black hover:opacity-90"
-          onClick={() => setIsUploadOpen(true)}
-        >
-          <Upload className="w-4 h-4 mr-2" />
-          Upload New Mix
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-gold/50 text-gold hover:bg-gold/10"
+            onClick={() => { setImportResult(null); setIsImportOpen(true); }}
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Import from Hearthis
+          </Button>
+          <Button
+            className="bg-gold-gradient text-black hover:opacity-90"
+            onClick={() => setIsUploadOpen(true)}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload New Mix
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="my-mixes" className="w-full">
@@ -353,15 +390,25 @@ export default function Mixes() {
                 <Music className="w-12 h-12 text-text-muted mx-auto mb-3" />
                 <p className="text-text-secondary mb-2">No mixes uploaded yet</p>
                 <p className="text-sm text-text-muted mb-4">
-                  Upload your mixes to showcase your talent and attract bookings.
+                  Upload your mixes or import them directly from Hearthis.at.
                 </p>
-                <Button
-                  className="bg-gold-gradient text-black"
-                  onClick={() => setIsUploadOpen(true)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Upload Your First Mix
-                </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Button
+                    className="bg-gold-gradient text-black"
+                    onClick={() => setIsUploadOpen(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Upload Your First Mix
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-gold/50 text-gold hover:bg-gold/10"
+                    onClick={() => { setImportResult(null); setIsImportOpen(true); }}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Import from Hearthis
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -485,7 +532,7 @@ export default function Mixes() {
       <AnimatePresence>
         {isUploadOpen && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -675,11 +722,169 @@ export default function Mixes() {
         )}
       </AnimatePresence>
 
+      {/* Hearthis Import Modal */}
+      <AnimatePresence>
+        {isImportOpen && (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsImportOpen(false)}
+          >
+            <motion.div
+              className="relative w-full max-w-lg bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setIsImportOpen(false)}
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors"
+              >
+                <X size={20} className="text-text-muted" />
+              </button>
+
+              <h2 className="font-display text-xl font-semibold text-text-primary uppercase tracking-tight">
+                Import from Hearthis.at
+              </h2>
+              <p className="mt-2 text-sm text-text-secondary">
+                Paste your Hearthis.at track or set links below (one per line). Single tracks and entire sets/playlist links will be imported as mixes on your profile.
+              </p>
+
+              <form
+                className="mt-6 space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setImportResult(null);
+                  if (!importUrls.trim()) {
+                    toast.error('Please paste at least one Hearthis URL');
+                    return;
+                  }
+                  importHearthis(
+                    {
+                      urls: importUrls,
+                      defaultGenre: importGenre,
+                      defaultCategory: importCategory,
+                    },
+                    {
+                      onSuccess: (res) => {
+                        const result = res.data || {};
+                        const { count = 0, errorCount = 0, errors = [] } = result;
+                        setImportResult({ count, errorCount, errors });
+                        if (count > 0) {
+                          toast.success(`Imported ${count} mix(es)`);
+                          setMixes((prev) => [
+                            ...(result.imported || []),
+                            ...prev,
+                          ]);
+                        }
+                        if (errorCount > 0) {
+                          toast.error(`${errorCount} URL(s) could not be imported`);
+                        }
+                        if (errorCount === 0 && count > 0) {
+                          setTimeout(() => {
+                            setIsImportOpen(false);
+                            setImportUrls('');
+                            setImportResult(null);
+                          }, 1200);
+                        }
+                      },
+                      onError: (err: any) => {
+                        const message = err?.response?.data?.error || err?.message || 'Import failed';
+                        toast.error(message);
+                        setImportResult({ count: 0, errorCount: 1, errors: [{ url: 'Request', error: message }] });
+                      },
+                    }
+                  );
+                }}
+              >
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Hearthis URLs</Label>
+                  <Textarea
+                    value={importUrls}
+                    onChange={(e) => { setImportUrls(e.target.value); setImportResult(null); }}
+                    placeholder="https://hearthis.at/artist/track-name/&#10;https://hearthis.at/artist/set/set-name/"
+                    rows={6}
+                    className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                    required
+                    disabled={importLoading}
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Default Genre</Label>
+                  <select
+                    value={importGenre}
+                    onChange={(e) => setImportGenre(e.target.value)}
+                    disabled={importLoading}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none disabled:opacity-50"
+                  >
+                    {GENRES.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Default Category</Label>
+                  <select
+                    value={importCategory}
+                    onChange={(e) => setImportCategory(e.target.value)}
+                    disabled={importLoading}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none disabled:opacity-50"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {importResult && (
+                  <div className={`rounded-lg border p-3 text-sm ${importResult.errorCount === 0 ? 'bg-green/10 border-green/30 text-green' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
+                    <p className="font-semibold">
+                      Imported {importResult.count} mix{importResult.count === 1 ? '' : 'es'}
+                      {importResult.errorCount > 0 ? ` • ${importResult.errorCount} failed` : ''}
+                    </p>
+                    {importResult.errors.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-xs max-h-32 overflow-y-auto">
+                        {importResult.errors.slice(0, 10).map((err, i) => (
+                          <li key={i} className="break-all">
+                            <span className="text-text-secondary">{err.url}:</span> {err.error}
+                          </li>
+                        ))}
+                        {importResult.errors.length > 10 && (
+                          <li className="text-text-muted">...and {importResult.errors.length - 10} more</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={importLoading || !importUrls.trim()}
+                  className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90 disabled:opacity-50"
+                >
+                  {importLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                  )}
+                  {importLoading ? 'Importing...' : 'Import Mixes'}
+                </Button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Edit Modal */}
       <AnimatePresence>
         {editingMix && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

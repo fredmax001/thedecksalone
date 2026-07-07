@@ -35,7 +35,9 @@ const discoverDjsSchema = z.object({
   search: z.string().optional(),
   page: z.string().optional(),
   limit: z.string().optional(),
-  sortBy: z.enum(['ranking', 'followers', 'bookings', 'newest']).optional(),
+  sortBy: z.enum(['ranking', 'followers', 'bookings', 'newest', 'mixes', 'rating']).optional(),
+  minFee: z.string().optional(),
+  maxFee: z.string().optional(),
 });
 
 /* ──────────────────── Mix Discovery ──────────────────── */
@@ -107,7 +109,7 @@ router.get('/djs', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
     }
 
-    const { city, genre, search, page, limit, sortBy } = parsed.data;
+    const { city, genre, search, page, limit, sortBy, minFee, maxFee } = parsed.data;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
@@ -115,6 +117,8 @@ router.get('/djs', async (req, res) => {
     const where: any = { isPublic: true };
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (genre) where.genres = { has: genre };
+    if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
+    if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
     if (search) {
       where.OR = [
         { stageName: { contains: search, mode: 'insensitive' } },
@@ -127,7 +131,9 @@ router.get('/djs', async (req, res) => {
     if (sortBy === 'followers') orderBy.followers = { _count: 'desc' };
     else if (sortBy === 'bookings') orderBy.bookingsAsDj = { _count: 'desc' };
     else if (sortBy === 'newest') orderBy.createdAt = 'desc';
-    else orderBy.rankingScore = 'desc';
+    else if (sortBy === 'mixes') orderBy.mixes = { _count: 'desc' };
+    else if (sortBy === 'rating') orderBy.averageRating = 'desc';
+    else orderBy.createdAt = 'desc'; // Never sort by stale stored rankingScore
 
     // Fetch active profile promotion campaigns and apply the same filters to promoted DJs
     const [campaigns, promotedDjs] = await Promise.all([
@@ -164,6 +170,14 @@ router.get('/djs', async (req, res) => {
       const realTotalBookings = dj._count.bookingsAsDj;
       const realTotalStreams = dj.streamingPlatforms.reduce((sum, p) => sum + (p.streams || 0), 0);
 
+      // Compute a real ranking score from actual data (never trust stored fake values)
+      const followerScore = Math.min(20, realTotalFollowers / 50);
+      const mixScore = Math.min(25, realTotalMixes * 2);
+      const bookingScore = Math.min(20, realTotalBookings * 2);
+      const streamScore = Math.min(15, realTotalStreams / 1000);
+      const ratingScore = Math.min(20, (dj.averageRating || 0) * 4);
+      const realRankingScore = Math.round((followerScore + mixScore + bookingScore + streamScore + ratingScore) * 10) / 10;
+
       return {
         ...dj,
         username: dj.user.username,
@@ -174,6 +188,7 @@ router.get('/djs', async (req, res) => {
         totalStreams: realTotalStreams,
         mixCount: realTotalMixes,
         bookingCount: realTotalBookings,
+        rankingScore: realRankingScore, // Override stored fake value
       };
     };
 

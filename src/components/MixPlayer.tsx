@@ -32,8 +32,19 @@ export interface MixTrack {
   originalUrl?: string;
 }
 
-function isEmbedSource(source?: string): boolean {
-  return ['audiomack', 'youtube', 'soundcloud', 'mixcloud'].includes(source || '');
+function isEmbedSource(source?: string, audioUrl?: string): boolean {
+  const knownEmbed = ['audiomack', 'youtube', 'soundcloud', 'mixcloud'];
+  if (knownEmbed.includes(source || '')) return true;
+  // Auto-detect from URL when source is not set
+  if (!audioUrl) return false;
+  const url = audioUrl.toLowerCase();
+  return (
+    url.includes('audiomack.com') ||
+    url.includes('soundcloud.com') ||
+    url.includes('youtube.com') ||
+    url.includes('youtu.be') ||
+    url.includes('mixcloud.com')
+  );
 }
 
 interface MixPlayerProps {
@@ -217,17 +228,19 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
   const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playTrackedRef = useRef(false);
 
-  const embed = isEmbedSource(track?.audioSource);
+  const embed = isEmbedSource(track?.audioSource, track?.audioUrl);
 
   // Reset when track changes
   useEffect(() => {
     setProgress(0);
     setCurrentTime(0);
-    setIsPlaying(!embed);
+    setIsPlaying(false); // start paused to avoid browser autoplay blocking
     setLiked(false);
+    setAudioError(null);
     playTrackedRef.current = false;
     if (audioRef.current) {
       audioRef.current.pause();
@@ -252,16 +265,24 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
       setIsPlaying(false);
     };
 
+    const onError = () => {
+      console.error('Audio failed to load:', track?.audioUrl);
+      setAudioError('Audio unavailable');
+      setIsPlaying(false);
+    };
+
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
 
     return () => {
       audio.pause();
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
       audioRef.current = null;
     };
-  }, [track?.id, track?.audioUrl]);
+  }, [track?.id, track?.audioUrl, track?.duration, embed]);
 
   // Play / pause control
   useEffect(() => {
@@ -329,6 +350,7 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
       setIsExpanded(true);
       return;
     }
+    setAudioError(null);
     setIsPlaying((p) => !p);
   }, [embed]);
   const toggleMute = useCallback(() => setIsMuted((m) => !m), []);
@@ -452,6 +474,9 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
                         {formatTime(track.duration)}
                       </span>
                     </div>
+                    {audioError && (
+                      <p className="text-[10px] text-red mt-1">{audioError}</p>
+                    )}
                   </>
                 )}
               </div>
@@ -593,6 +618,9 @@ export default function MixPlayer({ track, onClose, onNext, onPrev }: MixPlayerP
                         <SkipForward size={24} />
                       </button>
                     </div>
+                    {audioError && (
+                      <p className="text-xs text-red mt-3">{audioError}</p>
+                    )}
                   </>
                 )}
 

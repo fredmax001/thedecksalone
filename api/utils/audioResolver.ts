@@ -106,6 +106,7 @@ export function buildAudiomackEmbedUrl(parts: AudiomackParts): string {
 interface HearthisParts {
   artist: string;
   slug: string;
+  isSet?: boolean;
 }
 
 export function parseHearthisUrl(url: string): HearthisParts | null {
@@ -113,19 +114,29 @@ export function parseHearthisUrl(url: string): HearthisParts | null {
   if (!parsed) return null;
 
   // Paths: /artist/slug/ or /artist/slug
-  const match = parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/?$/);
-  if (!match) return null;
-  const artist = decodeURIComponent(match[1]);
-  const slug = decodeURIComponent(match[2]);
-  // Reject static pages like /search, /tags, etc.
-  if (
-    ['search', 'tags', 'genres', 'charts', 'login', 'register', 'upload'].includes(
-      artist.toLowerCase()
-    )
-  ) {
-    return null;
+  const singleMatch = parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/?$/);
+  if (singleMatch) {
+    const artist = decodeURIComponent(singleMatch[1]);
+    const slug = decodeURIComponent(singleMatch[2]);
+    // Reject static pages like /search, /tags, etc.
+    if (
+      !['search', 'tags', 'genres', 'charts', 'login', 'register', 'upload'].includes(
+        artist.toLowerCase()
+      )
+    ) {
+      return { artist, slug };
+    }
   }
-  return { artist, slug };
+
+  // Set/playlist paths: /artist/set/slug/ or /artist/set/slug
+  const setMatch = parsed.pathname.match(/^\/([^/]+)\/set\/([^/]+)\/?$/);
+  if (setMatch) {
+    const artist = decodeURIComponent(setMatch[1]);
+    const slug = decodeURIComponent(setMatch[2]);
+    return { artist, slug, isSet: true };
+  }
+
+  return null;
 }
 
 async function resolveAudiomack(url: string): Promise<ResolvedAudio | null> {
@@ -190,29 +201,72 @@ async function resolveHearthis(url: string): Promise<ResolvedAudio | null> {
 
     if (!data || typeof data !== 'object') return null;
 
-    const streamUrl = data.stream_url;
-    if (!streamUrl || typeof streamUrl !== 'string') return null;
-
-    const durationRaw = data.duration;
-    let duration: number | undefined;
-    if (durationRaw) {
-      const parsed = parseInt(durationRaw, 10);
-      if (!isNaN(parsed) && parsed > 0) duration = parsed;
-    }
-
-    return {
-      audioUrl: streamUrl,
-      audioSource: 'hearthis',
-      title: data.title && typeof data.title === 'string' ? data.title : undefined,
-      duration,
-      coverImage:
-        data.artwork_url && typeof data.artwork_url === 'string'
-          ? data.artwork_url
-          : undefined,
-    };
+    return resolveHearthisTrackData(data);
   } catch (err) {
     console.warn('[audioResolver] Hearthis resolution failed:', err.message);
     return null;
+  }
+}
+
+function resolveHearthisTrackData(data: any): ResolvedAudio | null {
+  // Prefer stream_url because it resolves directly to an MP3; download_url often
+  // redirects through a temporary secret page that is less reliable for playback.
+  const streamUrl = data.stream_url || data.download_url;
+  if (!streamUrl || typeof streamUrl !== 'string') return null;
+
+  const durationRaw = data.duration;
+  let duration: number | undefined;
+  if (durationRaw) {
+    const parsed = parseInt(durationRaw, 10);
+    if (!isNaN(parsed) && parsed > 0) duration = parsed;
+  }
+
+  return {
+    audioUrl: streamUrl,
+    audioSource: 'upload',
+    title: data.title && typeof data.title === 'string' ? data.title : undefined,
+    duration,
+    coverImage:
+      data.artwork_url && typeof data.artwork_url === 'string'
+        ? data.artwork_url
+        : undefined,
+  };
+}
+
+export async function resolveHearthisSet(
+  url: string
+): Promise<Array<{ resolved: ResolvedAudio; originalUrl: string }>> {
+  const parts = parseHearthisUrl(url);
+  if (!parts || !parts.isSet) return [];
+
+  try {
+    const { data } = await axios.get(
+      `https://api-v2.hearthis.at/${encodeURIComponent(parts.artist)}/set/${encodeURIComponent(
+        parts.slug
+      )}/`,
+      { timeout: 15000 }
+    );
+
+    if (!Array.isArray(data)) return [];
+
+    const results = [];
+    for (const item of data) {
+      if (!item || typeof item !== 'object') continue;
+      const resolved = resolveHearthisTrackData(item);
+      if (!resolved) continue;
+
+      const originalUrl =
+        item.permalink_url && typeof item.permalink_url === 'string'
+          ? item.permalink_url
+          : url;
+
+      results.push({ resolved, originalUrl });
+    }
+
+    return results;
+  } catch (err) {
+    console.warn('[audioResolver] Hearthis set resolution failed:', err.message);
+    return [];
   }
 }
 
@@ -254,4 +308,5 @@ module.exports = {
   parseAudiomackUrl,
   buildAudiomackEmbedUrl,
   parseHearthisUrl,
+  resolveHearthisSet,
 };

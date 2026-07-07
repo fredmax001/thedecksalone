@@ -28,7 +28,7 @@ export function useDJs(filters: DJFilters = {}) {
       if (minFee) params.set('minFee', String(minFee));
       if (maxFee) params.set('maxFee', String(maxFee));
 
-      const res = await api.get(`/djs?${params.toString()}`);
+      const res = await api.get(`/discover/djs?${params.toString()}`);
       const response = res.data;
 
       // Defensive: backend may return { success: false, error: '...' } on non-500 errors

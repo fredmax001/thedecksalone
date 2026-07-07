@@ -32,11 +32,14 @@ export function useMixes(filters: MixFilters = {}) {
   });
 }
 
-export function useTrendingMixes(limit = 6) {
+export function useTrendingMixes(limit = 6, genre?: string) {
   return useQuery({
-    queryKey: ['trendingMixes', limit],
+    queryKey: ['trendingMixes', limit, genre],
     queryFn: async () => {
-      const res = await api.get(`/mixes/trending?limit=${limit}`);
+      const params = new URLSearchParams();
+      params.set('limit', String(limit));
+      if (genre) params.set('genre', genre);
+      const res = await api.get(`/mixes/trending?${params.toString()}`);
       return res.data.data || [];
     },
   });
@@ -47,6 +50,16 @@ export function useMixCategories() {
     queryKey: ['mixCategories'],
     queryFn: async () => {
       const res = await api.get('/mixes/categories');
+      return res.data.data || [];
+    },
+  });
+}
+
+export function useMixGenres() {
+  return useQuery({
+    queryKey: ['mixGenres'],
+    queryFn: async () => {
+      const res = await api.get('/mixes/genres');
       return res.data.data || [];
     },
   });
@@ -86,6 +99,20 @@ export function useHallOfFameMixes(limit = 6) {
     queryFn: async () => {
       const res = await api.get(`/mixes/hall-of-fame?limit=${limit}`);
       return res.data.data || [];
+    },
+  });
+}
+
+export function useImportHearthis() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { urls: string; defaultGenre?: string; defaultCategory?: string; isPublic?: boolean }) => {
+      const res = await api.post('/mixes/import-hearthis', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mixes'] });
+      queryClient.invalidateQueries({ queryKey: ['trendingMixes'] });
     },
   });
 }

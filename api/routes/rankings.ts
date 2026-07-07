@@ -141,13 +141,32 @@ router.get('/', async (req, res) => {
     const computedDjs = djs.map(computeRealDjMetrics);
     computedDjs.sort((a, b) => b.rankingScore - a.rankingScore);
 
-    // Paginate in memory after sorting by real score
+    // Fetch last week's history to compute trend (scoreChange) for each DJ
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const allDjIds = computedDjs.map((d) => d.id);
+    const lastWeekHistory: any = await prisma.rankingHistory.findMany({
+      where: {
+        djId: { in: allDjIds },
+        week: { gte: oneWeekAgo },
+      },
+      orderBy: { week: 'desc' },
+      distinct: ['djId'],
+      select: { djId: true, score: true },
+    });
+    const historyMap = new Map<string, any>(lastWeekHistory.map((h: any) => [h.djId, h]));
+
+    // Paginate in memory after sorting by real score and attach trend
     const total = computedDjs.length;
     const paginated = computedDjs.slice(skip, skip + limitNum);
-    const ranked = paginated.map((dj, index) => ({
-      ...dj,
-      rankingPosition: skip + index + 1,
-    }));
+    const ranked = paginated.map((dj, index) => {
+      const last: any = historyMap.get(dj.id);
+      const scoreChange = last ? dj.rankingScore - last.score : 0;
+      return {
+        ...dj,
+        rankingPosition: skip + index + 1,
+        trend: Math.round(scoreChange * 10) / 10,
+      };
+    });
 
     return res.json({
       success: true,

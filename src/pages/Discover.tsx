@@ -267,7 +267,7 @@ export default function Discover() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
-  const [ratingMin, setRatingMin] = useState(1);
+  const [ratingMin, setRatingMin] = useState(0);
   const [sortBy, setSortBy] = useState<SortValue>('ranking');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOpen, setSortOpen] = useState(false);
@@ -492,14 +492,17 @@ export default function Discover() {
                           <p className="text-xs text-text-muted">Loading cities...</p>
                         ) : (
                           cityOptions.map((city) => (
-                            <label key={city} className="flex items-center gap-2.5 cursor-pointer group">
+                            <label
+                              key={city}
+                              className="flex items-center gap-2.5 cursor-pointer group"
+                              onClick={() => toggleCity(city)}
+                            >
                               <div
                                 className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                                   selectedCity === city
                                     ? 'bg-gold border-gold'
                                     : 'border-dark-gray group-hover:border-text-muted'
                                 }`}
-                                onClick={() => toggleCity(city)}
                               >
                                 {selectedCity === city && (
                                   <CheckCircle2 className="w-3 h-3 text-black" />
@@ -547,14 +550,17 @@ export default function Discover() {
                       </h4>
                       <div className="space-y-2">
                         {EQUIPMENT.map((eq) => (
-                          <label key={eq} className="flex items-center gap-2.5 cursor-pointer group">
+                          <label
+                            key={eq}
+                            className="flex items-center gap-2.5 cursor-pointer group"
+                            onClick={() => toggleEquipment(eq)}
+                          >
                             <div
                               className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                                 selectedEquipment.includes(eq)
                                   ? 'bg-gold border-gold'
                                   : 'border-dark-gray group-hover:border-text-muted'
                               }`}
-                              onClick={() => toggleEquipment(eq)}
                             >
                               {selectedEquipment.includes(eq) && (
                                 <CheckCircle2 className="w-3 h-3 text-black" />

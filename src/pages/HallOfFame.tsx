@@ -179,6 +179,21 @@ export default function HallOfFame() {
     setTimeout(() => setSubmitted(false), 3000);
   };
 
+  const handlePlay = (mix: HallOfFameMix) => {
+    if (!mix.audioUrl) return;
+    const track = {
+      id: mix.id,
+      title: mix.title,
+      dj: mix.dj?.stageName || 'Unknown DJ',
+      duration: 0,
+      cover: mix.coverImage || '/placeholder.jpg',
+      genre: 'Hall of Fame',
+      audioUrl: mix.audioUrl,
+      plays: mix.plays,
+    };
+    window.dispatchEvent(new CustomEvent('play-mix', { detail: track }));
+  };
+
   return (
     <div className="bg-black min-h-[100dvh]">
       {/* ═══════════════ ADMIN BAR ═══════════════ */}
@@ -696,7 +711,10 @@ export default function HallOfFame() {
                         </td>
                         <td className="py-5 px-4 text-center">
                           {mix.audioUrl ? (
-                            <button className="w-8 h-8 rounded-full bg-gold/10 hover:bg-gold/20 flex items-center justify-center transition-colors">
+                            <button
+                              onClick={() => handlePlay(mix)}
+                              className="w-8 h-8 rounded-full bg-gold/10 hover:bg-gold/20 flex items-center justify-center transition-colors"
+                            >
                               <Play className="w-4 h-4 text-gold fill-gold" />
                             </button>
                           ) : (

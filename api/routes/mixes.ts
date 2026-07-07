@@ -5,7 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { uploadMix } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processCover } = require('../utils/imageProcessor');
-const { resolveAudioUrl } = require('../utils/audioResolver');
+const { resolveAudioUrl, resolveHearthisSet } = require('../utils/audioResolver');
 
 const router = express.Router();
 
@@ -150,13 +150,32 @@ router.get('/categories', async (req, res) => {
   }
 });
 
+// GET /api/mixes/genres - Get all distinct genres
+router.get('/genres', async (req, res) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT DISTINCT genre
+      FROM mixes
+      WHERE "isPublic" = true AND genre IS NOT NULL AND genre <> ''
+      ORDER BY genre
+    `;
+    return res.json({ success: true, data: rows.map((r: any) => r.genre) });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/mixes/trending - Trending mixes
 router.get('/trending', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+    const genre = req.query.genre;
+
+    const where: any = { isPublic: true };
+    if (genre) where.genre = { equals: genre, mode: 'insensitive' };
 
     const mixes = await prisma.mix.findMany({
-      where: { isPublic: true },
+      where,
       orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
       take: limitNum,
       include: {
@@ -165,6 +184,140 @@ router.get('/trending', async (req, res) => {
     });
 
     return res.json({ success: true, data: mixes });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/mixes/import-hearthis - Bulk import Hearthis.at track URLs for the authenticated DJ
+router.post('/import-hearthis', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, error: 'Must be a DJ to import mixes' });
+    }
+
+    const djId = dj ? dj.id : req.body.djId;
+    if (!djId) {
+      return res.status(400).json({ success: false, error: 'DJ ID required' });
+    }
+
+    const rawUrls = req.body.urls;
+    if (!rawUrls || (Array.isArray(rawUrls) && rawUrls.length === 0)) {
+      return res.status(400).json({ success: false, error: 'No URLs provided' });
+    }
+
+    const urls = Array.isArray(rawUrls)
+      ? rawUrls.map((u) => String(u).trim()).filter(Boolean)
+      : String(rawUrls)
+          .split(/\n/)
+          .map((u) => u.trim())
+          .filter(Boolean);
+
+    const defaultGenre = String(req.body.defaultGenre || 'Open Format').slice(0, 100);
+    const defaultCategory = String(req.body.defaultCategory || 'Salone Mix').slice(0, 100);
+    const isPublic = req.body.isPublic !== false;
+
+    const imported = [];
+    const errors = [];
+
+    for (const url of urls) {
+      try {
+        const parts = require('../utils/audioResolver').parseHearthisUrl(url);
+
+        // Handle Hearthis sets (playlists) which contain multiple tracks
+        if (parts && parts.isSet) {
+          const setTracks = await resolveHearthisSet(url);
+          if (setTracks.length === 0) {
+            errors.push({ url, error: 'Unable to resolve Hearthis set or set is empty' });
+            continue;
+          }
+
+          let setImportedCount = 0;
+          for (const { resolved, originalUrl } of setTracks) {
+            const existing = await prisma.mix.findFirst({
+              where: { djId, originalUrl },
+            });
+            if (existing) {
+              errors.push({ url: originalUrl, error: 'Already imported' });
+              continue;
+            }
+
+            const mix = await prisma.mix.create({
+              data: {
+                title: resolved.title || 'Imported Mix',
+                description: `Imported from Hearthis.at`,
+                genre: defaultGenre,
+                category: defaultCategory,
+                djId,
+                audioUrl: resolved.audioUrl,
+                audioSource: resolved.audioSource,
+                originalUrl,
+                coverImage: resolved.coverImage,
+                duration: resolved.duration,
+                isPublic,
+              },
+            });
+
+            imported.push(mix);
+            setImportedCount += 1;
+          }
+
+          if (setImportedCount > 0) {
+            await prisma.djProfile.update({
+              where: { id: djId },
+              data: { totalMixes: { increment: setImportedCount } },
+            });
+          }
+          continue;
+        }
+
+        const resolved = await resolveAudioUrl(url);
+        if (!resolved) {
+          errors.push({ url, error: 'Unable to resolve Hearthis URL' });
+          continue;
+        }
+
+        // Avoid duplicates by originalUrl
+        const existing = await prisma.mix.findFirst({
+          where: { djId, originalUrl: url },
+        });
+        if (existing) {
+          errors.push({ url, error: 'Already imported' });
+          continue;
+        }
+
+        const mix = await prisma.mix.create({
+          data: {
+            title: resolved.title || 'Imported Mix',
+            description: `Imported from Hearthis.at`,
+            genre: defaultGenre,
+            category: defaultCategory,
+            djId,
+            audioUrl: resolved.audioUrl,
+            audioSource: resolved.audioSource,
+            originalUrl: url,
+            coverImage: resolved.coverImage,
+            duration: resolved.duration,
+            isPublic,
+          },
+        });
+
+        await prisma.djProfile.update({
+          where: { id: djId },
+          data: { totalMixes: { increment: 1 } },
+        });
+
+        imported.push(mix);
+      } catch (err) {
+        errors.push({ url, error: err.message || 'Import failed' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: { imported, count: imported.length, errors, errorCount: errors.length },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

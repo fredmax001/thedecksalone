@@ -19,7 +19,17 @@ export function useRankings(filters: RankingFilters = {}) {
       if (genre) params.set('genre', genre);
 
       const res = await api.get(`/rankings?${params.toString()}`);
-      return res.data.data || [];
+      const response = res.data;
+
+      if (response && typeof response === 'object' && response.success === false) {
+        throw new Error(response.error || 'Failed to fetch rankings');
+      }
+
+      if (response && typeof response === 'object' && Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      throw new Error('Unexpected response format from rankings endpoint');
     },
   });
 }
@@ -29,7 +39,17 @@ export function useRankingOverview() {
     queryKey: ['rankingsOverview'],
     queryFn: async () => {
       const res = await api.get('/rankings/overview');
-      return res.data.data;
+      const response = res.data;
+
+      if (response && typeof response === 'object' && response.success === false) {
+        throw new Error(response.error || 'Failed to fetch rankings overview');
+      }
+
+      if (response && typeof response === 'object' && response.data) {
+        return response.data;
+      }
+
+      throw new Error('Unexpected response format from rankings overview endpoint');
     },
   });
 }
@@ -40,7 +60,17 @@ export function useRankingHistory(djId: string | undefined) {
     queryFn: async () => {
       if (!djId) return [];
       const res = await api.get(`/rankings/${djId}/history`);
-      return res.data.data || [];
+      const response = res.data;
+
+      if (response && typeof response === 'object' && response.success === false) {
+        throw new Error(response.error || 'Failed to fetch ranking history');
+      }
+
+      if (response && typeof response === 'object' && Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      throw new Error('Unexpected response format from ranking history endpoint');
     },
     enabled: !!djId,
   });

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Play,
   Heart,
@@ -10,8 +10,8 @@ import {
   Loader2,
   Upload,
 } from 'lucide-react';
-import MixPlayer, { type MixTrack } from '@/components/MixPlayer';
-import { useMixes, useTrendingMixes, useMixCategories, useLikeMix } from '@/hooks/useMixes';
+import { type MixTrack } from '@/components/MixPlayer';
+import { useMixes, useTrendingMixes, useMixCategories, useLikeMix, useMixGenres } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
 
 /* ──────────────────────── Animation helpers ──────────────────────── */
@@ -201,19 +201,22 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
 export default function MixHub() {
   const { user } = useAuthStore();
   const [activeCategory, setActiveCategory] = useState('all');
-  const [currentTrack, setCurrentTrack] = useState<MixTrack | null>(null);
+  const [activeGenre, setActiveGenre] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showPlayer, setShowPlayer] = useState(false);
   const [page, setPage] = useState(1);
 
   const heroRef = useRef<HTMLDivElement>(null);
 
-  // Read category from URL query params on mount
+  // Read filters from URL query params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const catParam = params.get('category');
     if (catParam) {
       setActiveCategory(catParam);
+    }
+    const genreParam = params.get('genre');
+    if (genreParam) {
+      setActiveGenre(genreParam);
     }
   }, []);
 
@@ -228,8 +231,20 @@ export default function MixHub() {
     window.history.replaceState({}, '', url.toString());
   }, [activeCategory]);
 
+  // Sync activeGenre to URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeGenre === 'all') {
+      url.searchParams.delete('genre');
+    } else {
+      url.searchParams.set('genre', activeGenre);
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [activeGenre]);
+
   const { data: categories = [], isLoading: categoriesLoading } = useMixCategories();
-  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8);
+  const { data: genres = [], isLoading: genresLoading } = useMixGenres();
+  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8, activeGenre !== 'all' ? activeGenre : undefined);
 
   const activeCategoryName = useMemo(() => {
     if (activeCategory === 'all') return undefined;
@@ -239,6 +254,7 @@ export default function MixHub() {
 
   const { data: latestData, isLoading: latestLoading } = useMixes({
     category: activeCategoryName,
+    genre: activeGenre !== 'all' ? activeGenre : undefined,
     search: searchQuery || undefined,
     sortBy: 'newest',
     page,
@@ -247,41 +263,10 @@ export default function MixHub() {
 
   const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
   const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
-  const allMixes = useMemo(() => {
-    const seen = new Set<string>();
-    const result: MixTrack[] = [];
-    for (const mix of [...trending, ...latest]) {
-      if (!seen.has(mix.id)) {
-        seen.add(mix.id);
-        result.push(mix);
-      }
-    }
-    return result;
-  }, [trending, latest]);
 
   const handlePlay = useCallback((mix: MixTrack) => {
-    setCurrentTrack(mix);
-    setShowPlayer(true);
+    window.dispatchEvent(new CustomEvent('play-mix', { detail: mix }));
   }, []);
-
-  const handleClosePlayer = useCallback(() => {
-    setShowPlayer(false);
-    setCurrentTrack(null);
-  }, []);
-
-  const handleNext = useCallback(() => {
-    if (!currentTrack || allMixes.length === 0) return;
-    const idx = allMixes.findIndex((m) => m.id === currentTrack.id);
-    const next = allMixes[(idx + 1) % allMixes.length];
-    setCurrentTrack(next);
-  }, [currentTrack, allMixes]);
-
-  const handlePrev = useCallback(() => {
-    if (!currentTrack || allMixes.length === 0) return;
-    const idx = allMixes.findIndex((m) => m.id === currentTrack.id);
-    const prev = allMixes[(idx - 1 + allMixes.length) % allMixes.length];
-    setCurrentTrack(prev);
-  }, [currentTrack, allMixes]);
 
   const categoryButtons = useMemo(() => {
     const base = [{ id: 'all', label: 'All', image: '' }];
@@ -293,7 +278,7 @@ export default function MixHub() {
     return [...base, ...mapped];
   }, [categories]);
 
-  const isLoading = categoriesLoading || trendingLoading || latestLoading;
+  const isLoading = categoriesLoading || genresLoading || trendingLoading || latestLoading;
   const featuredMix = trending[0];
   const isDj = user?.role === 'DJ';
 
@@ -385,6 +370,44 @@ export default function MixHub() {
         </div>
       </div>
 
+      {/* Genre Filter */}
+      <div className="sticky top-[118px] z-30 bg-black border-b border-white/5">
+        <div className="max-w-container mx-auto px-6 py-3">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <span className="text-[10px] uppercase tracking-wider text-text-muted mr-1 shrink-0">Genre</span>
+            {genresLoading ? (
+              <Loader2 className="w-3 h-3 text-text-muted animate-spin" />
+            ) : (
+              <>
+                <button
+                  onClick={() => { setActiveGenre('all'); setPage(1); }}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
+                    activeGenre === 'all'
+                      ? 'bg-gold/10 text-gold border border-gold/50'
+                      : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
+                  }`}
+                >
+                  All Genres
+                </button>
+                {genres.map((g: string) => (
+                  <button
+                    key={g}
+                    onClick={() => { setActiveGenre(g); setPage(1); }}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
+                      activeGenre === g
+                        ? 'bg-gold/10 text-gold border border-gold/50'
+                        : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Trending Mixes */}
       <section className="max-w-container mx-auto px-6 pt-8">
         <div className="flex items-center justify-between mb-6">
@@ -420,7 +443,9 @@ export default function MixHub() {
           {latest.length === 0 && !latestLoading && (
             <div className="col-span-full text-center py-12">
               <p className="text-text-muted text-sm">
-                {activeCategory === 'all' ? 'No mixes uploaded yet.' : `No mixes found in this category.`}
+                {activeCategory === 'all' && activeGenre === 'all'
+                  ? 'No mixes uploaded yet.'
+                  : `No mixes found with the selected filters.`}
               </p>
               {isDj && (
                 <Link to="/dashboard/mixes" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
@@ -439,14 +464,6 @@ export default function MixHub() {
           </div>
         )}
       </section>
-
-      {/* Player */}
-      <AnimatePresence>
-        {showPlayer && currentTrack && (
-          <MixPlayer track={currentTrack} onClose={handleClosePlayer} onNext={handleNext} onPrev={handlePrev} />
-        )}
-      </AnimatePresence>
-      {showPlayer && <div className="h-[80px]" />}
     </div>
   );
 }
