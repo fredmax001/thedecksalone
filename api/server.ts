@@ -26,6 +26,8 @@ const ogRoutes = require('./routes/og');
 const userRoutes = require('./routes/users');
 const discoverRoutes = require('./routes/discover');
 const campaignRoutes = require('./routes/campaigns');
+const gigRoutes = require('./routes/gigs');
+const photoRoutes = require('./routes/photos');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -84,13 +86,18 @@ app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/discover', discoverRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/gigs', gigRoutes);
+app.use('/api/photos', photoRoutes);
 
 // OG Meta routes for social media sharing (own file)
 app.use('/og', ogRoutes);
 
 // Serve built frontend static files (production build) with cache-busting
 const path = require('path');
-app.use(express.static(path.join(__dirname, '../dist'), {
+// Handle both ts-node (runs from api/) and compiled dist (runs from api/dist/)
+const isCompiled = __dirname.endsWith('/dist') || __dirname.endsWith('\\dist');
+const distDir = path.join(__dirname, isCompiled ? '../../dist' : '../dist');
+app.use(express.static(distDir, {
   setHeaders: (res, filePath) => {
     // No cache for HTML (always fresh)
     if (filePath.endsWith('.html')) {
@@ -113,7 +120,7 @@ app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+  res.sendFile(path.join(distDir, 'index.html'));
 });
 
 // 404 handler

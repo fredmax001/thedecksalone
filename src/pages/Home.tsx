@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, memo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useInView } from 'framer-motion';
 import {
   Search,
@@ -165,6 +165,7 @@ const howItWorksSteps = [
 
 /* ──────────────────────── SECTION 1: HERO ──────────────────────── */
 function HeroSection() {
+  const navigate = useNavigate();
   return (
     <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden">
       {/* Background */}
@@ -181,14 +182,14 @@ function HeroSection() {
       <AnimatedWaveform />
 
       {/* Content */}
-      <div className="relative z-10 container-main text-center pt-20">
+      <div className="hero-content relative z-10 container-main text-center pt-20">
         <motion.p
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
           className="section-label mb-6"
         >
-          Sierra Leone's Official DJ Ecosystem
+          Sierra Leone's Official DJ Platform
         </motion.p>
 
         <motion.h1
@@ -254,6 +255,7 @@ function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 1.3 + i * 0.05 }}
+              onClick={() => navigate(`/mixes?genre=${encodeURIComponent(filter)}`)}
               className="px-4 py-1.5 border border-white/20 rounded-full text-xs font-medium uppercase tracking-wide text-text-secondary hover:border-gold/50 hover:text-gold transition-all duration-200"
             >
               {filter}
@@ -606,16 +608,16 @@ function RankingsSection({ rankings }: { rankings: any[] }) {
 
 /* ──────────────────────── SECTION 5: MIX CATEGORIES ──────────────────────── */
 function MixCategoriesSection({ categories }: { categories: any[] }) {
-  // Map categories to placeholder images
+  // Map categories to generated genre images
   const imageMap: Record<string, string> = {
-    'salone-mix': '/placeholder.jpg',
-    'afrobeats': '/placeholder.jpg',
-    'amapiano': '/placeholder.jpg',
-    'dancehall': '/placeholder.jpg',
-    'throwbacks': '/placeholder.jpg',
-    'club-mixes': '/placeholder.jpg',
-    'wedding-mixes': '/placeholder.jpg',
-    'gospel': '/placeholder.jpg',
+    'salone-mix': '/images/genres/salone-mix.jpg',
+    'afrobeats': '/images/genres/afrobeats.jpg',
+    'amapiano': '/images/genres/amapiano.jpg',
+    'dancehall': '/images/genres/dancehall.jpg',
+    'throwbacks': '/images/genres/throwbacks.jpg',
+    'club-mixes': '/images/genres/club-mixes.jpg',
+    'wedding-mixes': '/images/genres/wedding-mixes.jpg',
+    'gospel': '/images/genres/gospel.jpg',
   };
 
   return (
@@ -654,7 +656,7 @@ function MixCategoriesSection({ categories }: { categories: any[] }) {
                     className="w-full h-full object-cover transition-transform duration-400 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                  <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4">
+                  <div className="overlay-text absolute bottom-3 left-3 sm:bottom-4 sm:left-4">
                     <h3 className="font-display text-sm sm:text-lg font-semibold uppercase text-text-primary">
                       {cat.name}
                     </h3>
@@ -879,7 +881,7 @@ function BattleArenaSection({ battle }: { battle: any }) {
           <FadeIn direction="right" className="lg:w-1/2">
             <div className="relative h-64 sm:h-80 lg:h-full min-h-[400px]">
               <img
-                src="/placeholder.jpg"
+                src="/images/battle-arena.jpg"
                 alt="Battle Arena"
                 className="w-full h-full object-cover"
               />

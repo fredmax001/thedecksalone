@@ -30,7 +30,7 @@ import { useAuthStore } from '../stores/authStore';
 interface HallOfFameDj {
   id: string;
   stageName: string;
-  yearsActive: number | null;
+  startYear: number | null;
   city: string | null;
   avatar: string | null;
   bio: string | null;
@@ -598,8 +598,8 @@ export default function HallOfFame() {
                         {pioneer.stageName}
                       </h3>
                       <p className="font-mono text-sm text-gold mt-1">
-                        {pioneer.yearsActive
-                          ? `Active for ${pioneer.yearsActive} years`
+                        {pioneer.startYear
+                          ? `Active Since '${pioneer.startYear.toString().slice(-2)}'`
                           : 'Verified Pioneer'}
                       </p>
                       <p className="text-sm text-text-secondary mt-3 leading-relaxed">

@@ -187,6 +187,34 @@ async function resolveAudiomack(url: string): Promise<ResolvedAudio | null> {
   return result;
 }
 
+async function followAudioRedirect(url: string, depth = 0): Promise<string> {
+  if (depth > 5) return url;
+  try {
+    const res = await axios.head(url, {
+      maxRedirects: 0,
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    if (res.status >= 200 && res.status < 300) {
+      return res.request?.res?.responseUrl || url;
+    }
+    const location = res.headers?.location;
+    if (location && [301, 302, 303, 307, 308].includes(res.status)) {
+      return followAudioRedirect(location, depth + 1);
+    }
+  } catch (err: any) {
+    const response = err?.response;
+    if (
+      response &&
+      [301, 302, 303, 307, 308].includes(response.status) &&
+      response.headers?.location
+    ) {
+      return followAudioRedirect(response.headers.location, depth + 1);
+    }
+  }
+  return url;
+}
+
 async function resolveHearthis(url: string): Promise<ResolvedAudio | null> {
   const parts = parseHearthisUrl(url);
   if (!parts) return null;
@@ -201,7 +229,12 @@ async function resolveHearthis(url: string): Promise<ResolvedAudio | null> {
 
     if (!data || typeof data !== 'object') return null;
 
-    return resolveHearthisTrackData(data);
+    const resolved = resolveHearthisTrackData(data);
+    if (!resolved) return null;
+
+    // Follow signed redirect chain to the actual MP3 file.
+    resolved.audioUrl = await followAudioRedirect(resolved.audioUrl);
+    return resolved;
   } catch (err) {
     console.warn('[audioResolver] Hearthis resolution failed:', err.message);
     return null;
@@ -223,7 +256,7 @@ function resolveHearthisTrackData(data: any): ResolvedAudio | null {
 
   return {
     audioUrl: streamUrl,
-    audioSource: 'upload',
+    audioSource: 'hearthis',
     title: data.title && typeof data.title === 'string' ? data.title : undefined,
     duration,
     coverImage:
@@ -254,6 +287,9 @@ export async function resolveHearthisSet(
       if (!item || typeof item !== 'object') continue;
       const resolved = resolveHearthisTrackData(item);
       if (!resolved) continue;
+
+      // Resolve signed redirect chain to the final MP3.
+      resolved.audioUrl = await followAudioRedirect(resolved.audioUrl);
 
       const originalUrl =
         item.permalink_url && typeof item.permalink_url === 'string'

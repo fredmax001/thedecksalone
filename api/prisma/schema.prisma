@@ -74,26 +74,34 @@ model AuditLog {
 }
 
 model DjProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  stageName       String
-  fullName        String
-  bio             String?
-  avatar          String?
-  coverBanner     String?
-  yearsActive     Int?
-  country         String   @default("Sierra Leone")
-  city            String?
-  genres          String[]
-  awards          String[]
-  equipment       String[]
-  languages       String[] @default(["English"])
-  bookingFeeMin   Float?
-  bookingFeeMax   Float?
-  currency        String   @default("SLE")
-  availability    String?
-  website         String?
-  whatsappNumber  String?
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  stageName         String
+  fullName          String
+  bio               String?
+  avatar            String?
+  coverBanner       String?
+  startYear       Int?
+  country           String   @default("Sierra Leone")
+  city              String?
+  genres            String[]
+  eventTypes        String[] @default([])
+  awards            String[]
+  equipment         String[]
+  languages         String[] @default(["English"])
+  bookingFeeMin     Float?
+  bookingFeeMax     Float?
+  hourlyRate        Float?
+  fullDayRate       Float?
+  depositPercent    Int?     @default(30)
+  currency          String   @default("SLE")
+  availability      String?
+  willTravel        Boolean  @default(false)
+  maxTravelDistanceKm Int?
+  services          Json?    // [{ name, price, description }]
+  website           String?
+  whatsappNumber    String?
+  isPro             Boolean  @default(false)
   socialLinks     Json?    // { instagram, twitter, tiktok, youtube, facebook }
   streamingLinks  Json?    // { audiomack, mixcloud, soundcloud, youtube, hearthis, appleMusic, spotify }
   verified        Boolean  @default(false)
@@ -126,11 +134,13 @@ model DjProfile {
   bookingsAsDj    Booking[] @relation("DjBookings")
   reviews         Review[] @relation("DjReviews")
   events          Event[]
+  applications    GigApplication[]
   streamingPlatforms StreamingPlatform[]
   rankingHistory  RankingHistory[]
   battleEntries   BattleEntry[]
   followers       Follow[]
   campaigns       AdCampaign[]
+  photos          DjPhoto[]
   @@map("dj_profiles")
   @@index([userId])
   @@index([city])
@@ -211,7 +221,7 @@ model MixLike {
 
 model Booking {
   id            String        @id @default(cuid())
-  clientId      String
+  clientId      String?
   djId          String
   eventType     String
   eventDate     DateTime
@@ -223,19 +233,78 @@ model Booking {
   status        BookingStatus @default(PENDING)
   notes         String?
   requirements  String?
+  eventTypes    String[]      @default([])
+  musicStyles   String[]      @default([])
+  equipmentNeeded String[]    @default([])
+  budgetMin     Float?
+  budgetMax     Float?
+  services      Json?
+  travelNotes   String?
   rating        Int?
   review        String?
+  // Guest booking fields
+  guestName     String?
+  guestEmail    String?
+  guestPhone    String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   payments      Payment[]
   messages      Message[]
-  client        User      @relation("ClientBookings", fields: [clientId], references: [id])
+  client        User?      @relation("ClientBookings", fields: [clientId], references: [id])
   dj            DjProfile @relation("DjBookings", fields: [djId], references: [id])
   @@map("bookings")
   @@index([clientId])
   @@index([djId])
   @@index([status])
   @@index([eventDate])
+}
+
+model Gig {
+  id                String   @id @default(cuid())
+  clientName        String?
+  clientEmail       String?
+  clientPhone       String?
+  clientToken       String   @unique @default(cuid())
+  eventType         String
+  eventDate         DateTime
+  startTime         String?
+  durationHours     Int?
+  location          String
+  city              String?
+  budgetMin         Float?
+  budgetMax         Float?
+  musicStyles       String[] @default([])
+  equipmentNeeded   String[] @default([])
+  notes             String?
+  status            String   @default("OPEN")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  applications      GigApplication[]
+
+  @@map("gigs")
+  @@index([status])
+  @@index([city])
+  @@index([eventDate])
+  @@index([createdAt])
+}
+
+model GigApplication {
+  id            String   @id @default(cuid())
+  gigId         String
+  djId          String
+  proposedPrice Float?
+  message       String?
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  gig           Gig      @relation(fields: [gigId], references: [id], onDelete: Cascade)
+  dj            DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@unique([gigId, djId])
+  @@map("gig_applications")
+  @@index([gigId])
+  @@index([djId])
+  @@index([status])
 }
 
 model Message {
@@ -424,6 +493,22 @@ model AdCampaign {
   @@index([status])
   @@index([advertiserId])
   @@index([targetType, status])
+}
+
+model DjPhoto {
+  id          String    @id @default(cuid())
+  djId        String
+  url         String    // photo URL (uploaded to server or external)
+  caption     String?   // optional caption/description
+  sortOrder   Int       @default(0) // for ordering photos
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  dj DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@map("dj_photos")
+  @@index([djId])
 }
 
 enum UserStatus {

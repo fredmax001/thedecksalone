@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserActivity, type ActivityItem } from '@/hooks/useUserDashboard';
+import { imageFallback } from '@/lib/utils';
 
 const activityConfig: Record<string, { icon: typeof Heart; color: string; label: string }> = {
   LIKE_MIX: { icon: Heart, color: 'text-red', label: 'Liked a mix' },
@@ -70,7 +71,7 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
         {/* Thumbnail */}
         {item.thumbnail && (
           <div className="w-14 h-14 rounded-lg bg-black-surface flex-shrink-0 overflow-hidden">
-            <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+            <img src={item.thumbnail || '/placeholder.jpg'} alt="" onError={imageFallback} className="w-full h-full object-cover" />
           </div>
         )}
       </div>

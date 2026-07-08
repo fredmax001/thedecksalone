@@ -24,7 +24,24 @@ import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
 
 /* ─── Constants ─── */
-const CITIES = ['Freetown', 'Bo', 'Kenema', 'Makeni', 'Other'] as const;
+const CITIES = [
+  'Freetown',
+  'Bo',
+  'Kenema',
+  'Makeni',
+  'Koidu Town',
+  'Port Loko',
+  'Lunsar',
+  'Waterloo',
+  'Kabala',
+  'Magburaka',
+  'Kailahun',
+  'Moyamba',
+  'Pujehun',
+  'Bonthe',
+  'Kambia',
+  'Other',
+] as const;
 
 const GENRES = [
   'Afrobeats',
@@ -61,13 +78,13 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   city: z.string().min(1, 'Please select a city'),
   genres: z.array(z.string()).min(1, 'Select at least one genre'),
-  yearsActive: z
+  startYear: z
     .string()
-    .min(1, 'Years active is required')
+    .min(1, 'Year started is required')
     .refine((val) => {
       const num = parseInt(val, 10);
-      return !isNaN(num) && num >= 0 && num <= 60;
-    }, 'Must be between 0 and 60'),
+      return !isNaN(num) && num >= 1980 && num <= new Date().getFullYear();
+    }, 'Enter a valid year (e.g., 2015)'),
   bio: z.string().max(500, 'Bio must not exceed 500 characters').optional(),
 });
 
@@ -139,7 +156,7 @@ export default function Register() {
     resolver: zodResolver(step2Schema),
     defaultValues: {
       genres: [],
-      yearsActive: '',
+      startYear: '',
     },
   });
 
@@ -178,7 +195,7 @@ export default function Register() {
           formData.append('fullName', step1.fullName);
           formData.append('city', data.city);
           data.genres.forEach((g) => formData.append('genres', g));
-          formData.append('yearsActive', data.yearsActive);
+          formData.append('startYear', data.startYear);
           if (data.bio) formData.append('bio', data.bio);
           const avatarFromInput = avatarInputRef.current?.files?.[0];
           if (avatarFromInput) formData.append('avatar', avatarFromInput);
@@ -688,31 +705,31 @@ export default function Register() {
                 )}
               </motion.div>
 
-              {/* Years Active */}
+              {/* Year Started DJing */}
               <motion.div variants={fadeUpItem} initial="hidden" animate="show">
                 <label className="block text-sm font-medium text-text-primary mb-1.5">
-                  Years Active
+                  Year Started DJing
                 </label>
                 <div className="relative">
                   <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted pointer-events-none" />
                   <input
                     type="number"
-                    min={0}
-                    max={60}
-                    placeholder="0"
-                    {...registerStep2('yearsActive')}
+                    min={1980}
+                    max={new Date().getFullYear()}
+                    placeholder="e.g. 2015"
+                    {...registerStep2('startYear')}
                     className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,162,74,0.1)] ${
-                      errorsStep2.yearsActive ? 'border-red' : 'border-medium-gray'
+                      errorsStep2.startYear ? 'border-red' : 'border-medium-gray'
                     }`}
                   />
                 </div>
-                {errorsStep2.yearsActive && (
+                {errorsStep2.startYear && (
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="mt-1.5 text-sm text-red"
                   >
-                    {errorsStep2.yearsActive.message}
+                    {errorsStep2.startYear.message}
                   </motion.p>
                 )}
               </motion.div>

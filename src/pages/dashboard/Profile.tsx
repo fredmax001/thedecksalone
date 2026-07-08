@@ -54,26 +54,65 @@ const CITIES = [
   'Bo',
   'Kenema',
   'Makeni',
-  'Koidu',
-  'Lunsar',
+  'Koidu Town',
   'Port Loko',
-  'Kailahun',
+  'Lunsar',
+  'Waterloo',
   'Kabala',
+  'Magburaka',
+  'Kailahun',
+  'Moyamba',
   'Pujehun',
+  'Bonthe',
+  'Kambia',
+];
+
+const COUNTRIES = [
+  'Sierra Leone',
+  'Nigeria',
+  'Ghana',
+  'Liberia',
+  'Guinea',
+  'United Kingdom',
+  'United States',
+  'Canada',
+  'Germany',
+  'Netherlands',
+  'France',
+  'Other',
 ];
 
 const LANGUAGES = ['English', 'Krio', 'Mende', 'Temne', 'Limba', 'Other'];
 
 const EQUIPMENT = [
-  'Pioneer DJ',
-  'Serato DJ',
-  'Traktor',
-  'Rekordbox',
+  'Controller',
   'CDJs',
   'Turntables',
-  'Controller',
+  'Mixer',
   'PA System',
+  'Speakers',
+  'Subwoofers',
   'Lighting',
+  'Smoke Machine',
+  'Microphones',
+  'LED Screens',
+  'Generator',
+  'Laptop',
+];
+
+const EVENT_TYPES = [
+  'Wedding',
+  'Birthday',
+  'Club',
+  'Festival',
+  'Corporate',
+  'Private Party',
+  'House Party',
+  'Beach Party',
+  'Religious Event',
+  'School Event',
+  'Graduation',
+  'Radio',
 ];
 
 export default function Profile() {
@@ -109,15 +148,23 @@ export default function Profile() {
     stageName: '',
     fullName: '',
     bio: '',
-    yearsActive: '',
+    startYear: '',
+    country: '',
     city: '',
     genres: [] as string[],
+    eventTypes: [] as string[],
     awards: [] as string[],
     equipment: [] as string[],
     languages: [] as string[],
     bookingFeeMin: '',
     bookingFeeMax: '',
+    hourlyRate: '',
+    fullDayRate: '',
+    depositPercent: '30',
     currency: 'SLE',
+    willTravel: false,
+    maxTravelDistanceKm: '',
+    services: [] as { name: string; price?: number; description?: string }[],
     website: '',
     whatsappNumber: '',
     socialLinks: {
@@ -155,33 +202,47 @@ export default function Profile() {
             stageName: dj.stageName || '',
             fullName: dj.fullName || '',
             bio: dj.bio || '',
-            yearsActive: String(dj.yearsActive || ''),
+            startYear: String(dj.startYear || ''),
+            country: dj.country || '',
             city: dj.city || '',
             genres: dj.genres || [],
+            eventTypes: dj.eventTypes || [],
             awards: dj.awards || [],
             equipment: dj.equipment || [],
             languages: dj.languages || [],
             bookingFeeMin: String(dj.bookingFeeMin || ''),
             bookingFeeMax: String(dj.bookingFeeMax || ''),
+            hourlyRate: String(dj.hourlyRate || ''),
+            fullDayRate: String(dj.fullDayRate || ''),
+            depositPercent: String(dj.depositPercent || '30'),
             currency: dj.currency || 'SLE',
+            willTravel: dj.willTravel || false,
+            maxTravelDistanceKm: String(dj.maxTravelDistanceKm || ''),
+            services: Array.isArray(dj.services) ? dj.services : [],
             website: dj.website || '',
             whatsappNumber: dj.whatsappNumber || '',
-            socialLinks: dj.socialLinks || {
-              instagram: '',
-              twitter: '',
-              tiktok: '',
-              youtube: '',
-              facebook: '',
-            },
-            streamingLinks: dj.streamingLinks || {
-              audiomack: '',
-              mixcloud: '',
-              soundcloud: '',
-              youtube: '',
-              hearthis: '',
-              appleMusic: '',
-              spotify: '',
-            },
+            socialLinks: (() => {
+              const sl = dj.socialLinks || {};
+              return {
+                instagram: sl.instagram ?? '',
+                twitter: sl.twitter ?? '',
+                tiktok: sl.tiktok ?? '',
+                youtube: sl.youtube ?? '',
+                facebook: sl.facebook ?? '',
+              };
+            })(),
+            streamingLinks: (() => {
+              const sl = dj.streamingLinks || {};
+              return {
+                audiomack: sl.audiomack ?? '',
+                mixcloud: sl.mixcloud ?? '',
+                soundcloud: sl.soundcloud ?? '',
+                youtube: sl.youtube ?? '',
+                hearthis: sl.hearthis ?? '',
+                appleMusic: sl.appleMusic ?? '',
+                spotify: sl.spotify ?? '',
+              };
+            })(),
           });
           if (dj.avatar) setAvatarPreview(dj.avatar);
           if (dj.coverBanner) setCoverPreview(dj.coverBanner);
@@ -204,17 +265,25 @@ export default function Profile() {
     if (form.stageName) formData.append('stageName', form.stageName);
     if (form.fullName) formData.append('fullName', form.fullName);
     if (form.bio) formData.append('bio', form.bio);
-    if (form.yearsActive) formData.append('yearsActive', form.yearsActive);
+    if (form.startYear) formData.append('startYear', form.startYear);
+    if (form.country) formData.append('country', form.country);
     if (form.city) formData.append('city', form.city);
     if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
+    if (form.eventTypes.length) form.eventTypes.forEach((e) => formData.append('eventTypes', e));
     if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
     if (form.equipment.length) form.equipment.forEach((e) => formData.append('equipment', e));
     if (form.languages.length) form.languages.forEach((l) => formData.append('languages', l));
     if (form.bookingFeeMin) formData.append('bookingFeeMin', form.bookingFeeMin);
     if (form.bookingFeeMax) formData.append('bookingFeeMax', form.bookingFeeMax);
+    if (form.hourlyRate) formData.append('hourlyRate', form.hourlyRate);
+    if (form.fullDayRate) formData.append('fullDayRate', form.fullDayRate);
+    if (form.depositPercent) formData.append('depositPercent', form.depositPercent);
     if (form.currency) formData.append('currency', form.currency);
     if (form.website) formData.append('website', form.website);
     if (form.whatsappNumber) formData.append('whatsappNumber', form.whatsappNumber);
+    formData.append('willTravel', String(form.willTravel));
+    if (form.maxTravelDistanceKm) formData.append('maxTravelDistanceKm', form.maxTravelDistanceKm);
+    formData.append('services', JSON.stringify(form.services));
     formData.append('socialLinks', JSON.stringify(form.socialLinks));
     formData.append('streamingLinks', JSON.stringify(form.streamingLinks));
     const avatarFromInput = avatarInputRef.current?.files?.[0];
@@ -257,7 +326,15 @@ export default function Profile() {
         await useAuthStore.getState().fetchMe();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save profile');
+      const details = err.response?.data?.details;
+      let msg = err.response?.data?.error || 'Failed to save profile';
+      if (details?.fieldErrors) {
+        const fields = Object.entries(details.fieldErrors)
+          .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
+          .join('; ');
+        msg += ` (${fields})`;
+      }
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -271,6 +348,22 @@ export default function Profile() {
         : [...current, value];
       return { ...prev, [field]: updated };
     });
+  };
+
+  const addService = () => {
+    const name = prompt('Service name (e.g. Wedding DJ Package):');
+    if (!name?.trim()) return;
+    const priceStr = prompt('Price (optional, e.g. 2500):');
+    const price = priceStr ? Number(priceStr) : undefined;
+    const description = prompt('Description (optional):') || undefined;
+    setForm((prev) => ({
+      ...prev,
+      services: [...prev.services, { name: name.trim(), price, description }],
+    }));
+  };
+
+  const removeService = (index: number) => {
+    setForm((prev) => ({ ...prev, services: prev.services.filter((_, i) => i !== index) }));
   };
 
   const addAward = () => {
@@ -375,6 +468,7 @@ export default function Profile() {
           <TabsTrigger value="photos" className="data-[state=active]:bg-gold data-[state=active]:text-black">Photos</TabsTrigger>
           <TabsTrigger value="genres" className="data-[state=active]:bg-gold data-[state=active]:text-black">Genres & Skills</TabsTrigger>
           <TabsTrigger value="pricing" className="data-[state=active]:bg-gold data-[state=active]:text-black">Pricing</TabsTrigger>
+          <TabsTrigger value="marketplace" className="data-[state=active]:bg-gold data-[state=active]:text-black">Marketplace</TabsTrigger>
           <TabsTrigger value="social" className="data-[state=active]:bg-gold data-[state=active]:text-black">Social & Links</TabsTrigger>
           <TabsTrigger value="verification" className="data-[state=active]:bg-gold data-[state=active]:text-black">Verification</TabsTrigger>
         </TabsList>
@@ -413,16 +507,33 @@ export default function Profile() {
                 <p className="text-xs text-text-muted mt-1">{form.bio.length}/2000 characters</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <Label className="text-text-secondary mb-2 block">Years Active</Label>
+                  <Label className="text-text-secondary mb-2 block">Year Started DJing</Label>
                   <Input
                     type="number"
-                    value={form.yearsActive}
-                    onChange={(e) => setForm({ ...form, yearsActive: e.target.value })}
+                    min={1980}
+                    max={new Date().getFullYear()}
+                    placeholder="e.g. 2015"
+                    value={form.startYear}
+                    onChange={(e) => setForm({ ...form, startYear: e.target.value })}
                     className="bg-black-elevated border-dark-gray text-text-primary"
                   />
                 </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Country</Label>
+                  <Select value={form.country} onValueChange={(v) => setForm({ ...form, country: v })}>
+                    <SelectTrigger className="bg-black-elevated border-dark-gray text-text-primary">
+                      <SelectValue placeholder="Select country" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-black-surface border-dark-gray">
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div>
                   <Label className="text-text-secondary mb-2 block">City</Label>
                   <Select value={form.city} onValueChange={(v) => setForm({ ...form, city: v })}>
@@ -606,6 +717,26 @@ export default function Profile() {
               </div>
 
               <div className="border-t border-dark-gray pt-6">
+                <Label className="text-text-secondary mb-3 block">Event Types You Cover</Label>
+                <div className="flex flex-wrap gap-2">
+                  {EVENT_TYPES.map((et) => (
+                    <button
+                      key={et}
+                      onClick={() => toggleArray('eventTypes', et)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                        form.eventTypes.includes(et)
+                          ? 'bg-gold/20 border-gold text-gold'
+                          : 'bg-black-elevated border-dark-gray text-text-secondary hover:border-gold/30'
+                      )}
+                    >
+                      {et}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-dark-gray pt-6">
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-text-secondary block">Awards</Label>
                   <Button variant="ghost" size="sm" className="text-gold hover:bg-gold/10" onClick={addAward}>
@@ -673,6 +804,114 @@ export default function Profile() {
               <p className="text-xs text-text-muted">
                 Setting a price range helps clients understand your rates before reaching out.
               </p>
+
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="marketplace" className="mt-4 space-y-4">
+          <Card className="bg-black-surface border-dark-gray">
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <Label className="text-text-secondary mb-3 block">Event Types You Cover</Label>
+                <div className="flex flex-wrap gap-2">
+                  {EVENT_TYPES.map((et) => (
+                    <button
+                      key={et}
+                      onClick={() => toggleArray('eventTypes', et)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                        form.eventTypes.includes(et)
+                          ? 'bg-gold/20 border-gold text-gold'
+                          : 'bg-black-elevated border-dark-gray text-text-secondary hover:border-gold/30'
+                      )}
+                    >
+                      {et}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-dark-gray pt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-text-secondary block">Services & Packages</Label>
+                  <Button variant="ghost" size="sm" className="text-gold hover:bg-gold/10" onClick={addService}>
+                    + Add Service
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {form.services.map((service, i) => (
+                    <div key={i} className="flex items-start justify-between p-3 rounded-lg bg-black-elevated border border-dark-gray">
+                      <div>
+                        <p className="text-sm font-medium text-text-primary">{service.name}</p>
+                        {service.price !== undefined && <p className="text-xs text-gold">SLE {service.price}</p>}
+                        {service.description && <p className="text-xs text-text-secondary mt-1">{service.description}</p>}
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-red hover:bg-red/10 h-6 px-2" onClick={() => removeService(i)}>
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  {form.services.length === 0 && <p className="text-sm text-text-muted italic">No services added yet</p>}
+                </div>
+              </div>
+
+              <div className="border-t border-dark-gray pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-black-elevated border border-dark-gray">
+                  <input
+                    type="checkbox"
+                    id="willTravel"
+                    checked={form.willTravel}
+                    onChange={(e) => setForm({ ...form, willTravel: e.target.checked })}
+                    className="w-4 h-4 accent-gold rounded border-dark-gray bg-black-surface"
+                  />
+                  <Label htmlFor="willTravel" className="text-text-secondary text-sm cursor-pointer">
+                    Willing to travel for events
+                  </Label>
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Max Travel Distance (km)</Label>
+                  <Input
+                    type="number"
+                    value={form.maxTravelDistanceKm}
+                    onChange={(e) => setForm({ ...form, maxTravelDistanceKm: e.target.value })}
+                    placeholder="e.g. 50"
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-dark-gray pt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Hourly Rate (SLE)</Label>
+                  <Input
+                    type="number"
+                    value={form.hourlyRate}
+                    onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Full Day Rate (SLE)</Label>
+                  <Input
+                    type="number"
+                    value={form.fullDayRate}
+                    onChange={(e) => setForm({ ...form, fullDayRate: e.target.value })}
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Deposit Required (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.depositPercent}
+                    onChange={(e) => setForm({ ...form, depositPercent: e.target.value })}
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

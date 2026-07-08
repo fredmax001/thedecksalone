@@ -10,6 +10,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useEvent } from '@/hooks/useEvents';
+import { imageFallback } from '@/lib/utils';
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -139,7 +140,7 @@ export default function EventDetail() {
                 >
                   <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center text-gold font-bold text-lg border border-gold/30 overflow-hidden">
                     {event.dj.avatar ? (
-                      <img src={event.dj.avatar} alt={event.dj.stageName} className="w-full h-full object-cover" />
+                      <img src={event.dj.avatar || '/default-avatar.jpg'} alt={event.dj.stageName} onError={imageFallback} className="w-full h-full object-cover" />
                     ) : (
                       event.dj.stageName.charAt(0).toUpperCase()
                     )}

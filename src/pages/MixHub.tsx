@@ -11,7 +11,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { type MixTrack } from '@/components/MixPlayer';
-import { useMixes, useTrendingMixes, useMixCategories, useLikeMix, useMixGenres } from '@/hooks/useMixes';
+import { useMixes, useTrendingMixes, useLikeMix, useMixGenres } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
 
 /* ──────────────────────── Animation helpers ──────────────────────── */
@@ -200,7 +200,6 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
 /* ═══════════════════════════ MAIN PAGE ═══════════════════════════ */
 export default function MixHub() {
   const { user } = useAuthStore();
-  const [activeCategory, setActiveCategory] = useState('all');
   const [activeGenre, setActiveGenre] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -210,26 +209,11 @@ export default function MixHub() {
   // Read filters from URL query params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const catParam = params.get('category');
-    if (catParam) {
-      setActiveCategory(catParam);
-    }
     const genreParam = params.get('genre');
     if (genreParam) {
       setActiveGenre(genreParam);
     }
   }, []);
-
-  // Sync activeCategory to URL
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (activeCategory === 'all') {
-      url.searchParams.delete('category');
-    } else {
-      url.searchParams.set('category', activeCategory);
-    }
-    window.history.replaceState({}, '', url.toString());
-  }, [activeCategory]);
 
   // Sync activeGenre to URL
   useEffect(() => {
@@ -242,18 +226,10 @@ export default function MixHub() {
     window.history.replaceState({}, '', url.toString());
   }, [activeGenre]);
 
-  const { data: categories = [], isLoading: categoriesLoading } = useMixCategories();
   const { data: genres = [], isLoading: genresLoading } = useMixGenres();
-  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8, activeGenre !== 'all' ? activeGenre : undefined);
-
-  const activeCategoryName = useMemo(() => {
-    if (activeCategory === 'all') return undefined;
-    const cat = (categories || []).find((c: any) => c.id === activeCategory);
-    return cat?.name;
-  }, [activeCategory, categories]);
+  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8);
 
   const { data: latestData, isLoading: latestLoading } = useMixes({
-    category: activeCategoryName,
     genre: activeGenre !== 'all' ? activeGenre : undefined,
     search: searchQuery || undefined,
     sortBy: 'newest',
@@ -268,17 +244,7 @@ export default function MixHub() {
     window.dispatchEvent(new CustomEvent('play-mix', { detail: mix }));
   }, []);
 
-  const categoryButtons = useMemo(() => {
-    const base = [{ id: 'all', label: 'All', image: '' }];
-    const mapped = categories.map((cat: any) => ({
-      id: cat.id,
-      label: cat.name,
-      image: `/placeholder.jpg`,
-    }));
-    return [...base, ...mapped];
-  }, [categories]);
-
-  const isLoading = categoriesLoading || genresLoading || trendingLoading || latestLoading;
+  const isLoading = genresLoading || trendingLoading || latestLoading;
   const featuredMix = trending[0];
   const isDj = user?.role === 'DJ';
 
@@ -348,30 +314,8 @@ export default function MixHub() {
         </div>
       )}
 
-      {/* Category Navigation */}
-      <div className="sticky top-[72px] z-40 bg-black-elevated border-b border-white/5">
-        <div className="max-w-container mx-auto px-6 py-4">
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-            {categoryButtons.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => { setActiveCategory(cat.id); setPage(1); }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-200 ${
-                  activeCategory === cat.id
-                    ? 'bg-gold/10 text-gold border border-gold/50'
-                    : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
-                }`}
-              >
-                {cat.image && <img src={cat.image} alt="" className="w-5 h-5 rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Genre Filter */}
-      <div className="sticky top-[118px] z-30 bg-black border-b border-white/5">
+      <div className="sticky top-[72px] z-30 bg-black-elevated border-b border-white/5">
         <div className="max-w-container mx-auto px-6 py-3">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
             <span className="text-[10px] uppercase tracking-wider text-text-muted mr-1 shrink-0">Genre</span>
@@ -443,9 +387,9 @@ export default function MixHub() {
           {latest.length === 0 && !latestLoading && (
             <div className="col-span-full text-center py-12">
               <p className="text-text-muted text-sm">
-                {activeCategory === 'all' && activeGenre === 'all'
+                {activeGenre === 'all'
                   ? 'No mixes uploaded yet.'
-                  : `No mixes found with the selected filters.`}
+                  : `No mixes found for genre "${activeGenre}".`}
               </p>
               {isDj && (
                 <Link to="/dashboard/mixes" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">

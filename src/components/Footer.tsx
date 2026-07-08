@@ -11,6 +11,7 @@ const platformLinks = [
 ];
 
 const resourceLinks = [
+  { label: 'About', path: '/about' },
   { label: 'Hall of Fame', path: '/hall-of-fame' },
   { label: 'Blog', path: '/blog' },
   { label: 'Help Center', path: '/help' },

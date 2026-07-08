@@ -27,7 +27,7 @@ import {
   UserPlus,
   UserCheck,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, imageFallback } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
 import { useReviews } from "@/hooks/useReviews";
@@ -60,6 +60,8 @@ interface Mix {
   createdAt: string;
   category?: string;
   genre?: string;
+  audioUrl?: string;
+  audioSource?: string;
 }
 
 interface Review {
@@ -95,7 +97,7 @@ interface DJ {
   equipment: string[];
   languages: string[];
   awards: string[];
-  yearsActive: number;
+  startYear: number;
   bookingFeeMin: number;
   bookingFeeMax: number;
   currency: string;
@@ -117,6 +119,7 @@ interface DJ {
   mixes: Mix[];
   reviews: Review[];
   events: Event[];
+  photos?: { id: string; url: string; caption?: string }[];
   socialLinks?: Record<string, string>;
   streamingLinks?: Record<string, string>;
   website?: string;
@@ -875,7 +878,15 @@ function MixesTab({ dj }: { dj: DJ }) {
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
               {/* Play button on hover */}
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-110 transition-transform">
+                <button
+                  onClick={() => {
+                    if (mix.audioUrl) {
+                      window.dispatchEvent(new CustomEvent('play-mix', { detail: mix }));
+                    }
+                  }}
+                  className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
+                  disabled={!mix.audioUrl}
+                >
                   <Play size={20} className="text-black ml-0.5" fill="black" />
                 </button>
               </div>
@@ -939,6 +950,54 @@ function MixesTab({ dj }: { dj: DJ }) {
           <p>No mixes yet</p>
         </div>
       )}
+    </motion.div>
+  );
+}
+
+function PhotosTab({ dj }: { dj: DJ }) {
+  const photos = dj.photos || [];
+
+  if (photos.length === 0) {
+    return (
+      <motion.div
+        className="text-center py-20 text-text-muted"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <p>No photos yet</p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      {photos.map((photo, i) => (
+        <motion.div
+          key={photo.id}
+          className="group relative aspect-square rounded-xl overflow-hidden bg-[#111111] border border-[rgba(255,255,255,0.05)]"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: i * 0.05 }}
+        >
+          <img
+            src={photo.url}
+            alt={photo.caption || `${dj.stageName} photo`}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).src = '/default-avatar.jpg'; }}
+          />
+          {photo.caption && (
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+              <p className="text-xs text-white/80 truncate">{photo.caption}</p>
+            </div>
+          )}
+        </motion.div>
+      ))}
     </motion.div>
   );
 }
@@ -1602,6 +1661,7 @@ export default function DjProfile() {
     () => [
       { key: "overview", label: "Overview" },
       { key: "mixes", label: "Mixes", count: dj?.totalMixes },
+      { key: "photos", label: "Photos", count: dj?.photos?.length },
       { key: "stats", label: "Stats" },
       { key: "reviews", label: "Reviews", count: dj?.reviews?.length },
       { key: "events", label: "Events" },
@@ -1658,6 +1718,7 @@ export default function DjProfile() {
         <img
           src={dj.coverBanner || "/cover-placeholder.jpg"}
           alt={`${dj.stageName} cover`}
+          onError={imageFallback}
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-hero-overlay" />
@@ -1675,8 +1736,9 @@ export default function DjProfile() {
           >
             <div className="w-[100px] h-[100px] sm:w-[140px] sm:h-[140px] rounded-full border-[3px] border-gold overflow-hidden bg-[#111111]">
               <img
-                src={dj.avatar}
+                src={dj.avatar || '/default-avatar.jpg'}
                 alt={dj.stageName}
+                onError={imageFallback}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -1706,24 +1768,26 @@ export default function DjProfile() {
 
             {/* Badges Row */}
             <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              {dj.badges.map((badge, i) => (
-                <motion.span
-                  key={badge}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wighter border border-gold/30 text-gold bg-[rgba(212,162,74,0.1)]"
-                  )}
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 500,
-                    damping: 30,
-                    delay: 0.7 + i * 0.1,
-                  }}
-                >
-                  {badge}
-                </motion.span>
-              ))}
+              {dj.badges
+                .filter((b) => b !== 'Verified DJ')
+                .map((badge, i) => (
+                  <motion.span
+                    key={badge}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wighter border border-gold/30 text-gold bg-[rgba(212,162,74,0.1)]"
+                    )}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 500,
+                      damping: 30,
+                      delay: 0.7 + i * 0.1,
+                    }}
+                  >
+                    {badge}
+                  </motion.span>
+                ))}
             </div>
 
             {/* Meta Row */}
@@ -1744,7 +1808,7 @@ export default function DjProfile() {
                 {dj.city}, {dj.country}
               </span>
               <span className="hidden sm:inline text-text-muted">·</span>
-              <span>Active since {dj.yearsActive}</span>
+              <span>Active Since {dj.startYear ? `'${dj.startYear.toString().slice(-2)}'` : ''}</span>
             </div>
           </motion.div>
 
@@ -1878,6 +1942,7 @@ export default function DjProfile() {
           >
             {activeTab === "overview" && <OverviewTab dj={dj} />}
             {activeTab === "mixes" && <MixesTab dj={dj} />}
+            {activeTab === "photos" && <PhotosTab dj={dj} />}
             {activeTab === "stats" && <StatsTab dj={dj} />}
             {activeTab === "reviews" && <ReviewsTab dj={dj} />}
             {activeTab === "events" && <EventsTab dj={dj} />}

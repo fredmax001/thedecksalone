@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { bookingLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
@@ -22,6 +22,16 @@ const createBookingSchema = z.object({
   budget: z.number().min(0),
   notes: z.string().optional(),
   requirements: z.string().optional(),
+  eventTypes: z.array(z.string()).optional(),
+  musicStyles: z.array(z.string()).optional(),
+  equipmentNeeded: z.array(z.string()).optional(),
+  budgetMin: z.number().min(0).optional(),
+  budgetMax: z.number().min(0).optional(),
+  services: z.any().optional(),
+  travelNotes: z.string().optional(),
+  guestName: z.string().optional(),
+  guestEmail: z.string().email().optional(),
+  guestPhone: z.string().optional(),
 });
 
 const statusUpdateSchema = z.object({
@@ -236,8 +246,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/bookings - Create booking
-router.post('/', authMiddleware, bookingLimiter, async (req, res) => {
+// POST /api/bookings - Create booking (authenticated users OR guests)
+router.post('/', softAuthMiddleware, bookingLimiter, async (req, res) => {
   try {
     const parsed = createBookingSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -252,17 +262,22 @@ router.post('/', authMiddleware, bookingLimiter, async (req, res) => {
       return res.status(404).json({ success: false, error: 'DJ not found' });
     }
 
-    // Prevent booking yourself
-    if (dj.userId === req.user.id) {
+    // Prevent self-booking for authenticated users
+    if (req.user && dj.userId === req.user.id) {
       return res.status(400).json({ success: false, error: 'You cannot book yourself' });
     }
 
+    const bookingData = {
+      ...data,
+      clientId: req.user?.id || null,
+      guestName: req.user ? null : data.guestName || null,
+      guestEmail: req.user ? null : data.guestEmail || null,
+      guestPhone: req.user ? null : data.guestPhone || null,
+      eventDate: new Date(data.eventDate),
+    };
+
     const booking = await prisma.booking.create({
-      data: {
-        ...data,
-        clientId: req.user.id,
-        eventDate: new Date(data.eventDate),
-      },
+      data: bookingData,
       include: {
         client: { select: { id: true, email: true } },
         dj: { select: { id: true, stageName: true, avatar: true } },

@@ -47,7 +47,7 @@ interface RankedDJ {
 }
 
 const CATEGORIES = ['Global', 'By City', 'By Genre', 'Fastest Rising', 'Most Booked', 'Most Streamed'];
-const CITIES = ['Freetown', 'Bo', 'Kenema', 'Makeni'];
+const CITIES = ['Freetown', 'Bo', 'Kenema', 'Makeni', 'Koidu Town', 'Port Loko', 'Lunsar', 'Waterloo', 'Kabala', 'Magburaka', 'Kailahun', 'Moyamba', 'Pujehun', 'Bonthe', 'Kambia'];
 const GENRES = ['Afrobeats', 'Amapiano', 'Dancehall', 'Hip Hop', 'Gospel', 'Salone Mix', 'Club Mix', 'Throwback', 'R&B', 'Reggae'];
 
 /* ─────────────────── Helpers ─────────────────── */

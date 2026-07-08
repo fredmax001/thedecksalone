@@ -18,7 +18,24 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 };
 
-const CITIES = ['All Cities', 'Freetown', 'Bo', 'Kenema', 'Makeni'];
+const CITIES = [
+  'All Cities',
+  'Freetown',
+  'Bo',
+  'Kenema',
+  'Makeni',
+  'Koidu Town',
+  'Port Loko',
+  'Lunsar',
+  'Waterloo',
+  'Kabala',
+  'Magburaka',
+  'Kailahun',
+  'Moyamba',
+  'Pujehun',
+  'Bonthe',
+  'Kambia',
+];
 const SORT_OPTIONS = ['Soonest', 'Alphabetical'];
 
 function formatEventDate(dateStr: string) {

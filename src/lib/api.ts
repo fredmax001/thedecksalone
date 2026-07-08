@@ -25,6 +25,7 @@ api.interceptors.request.use((config) => {
   // Let the browser set multipart/form-data boundary for FormData
   if (config.data instanceof FormData) {
     delete config.headers['Content-Type'];
+    delete config.headers['content-type'];
   }
   return config;
 });

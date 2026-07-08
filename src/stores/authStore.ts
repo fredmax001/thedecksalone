@@ -16,6 +16,7 @@ export interface User {
     stageName: string;
     avatar?: string;
     verified?: boolean;
+    isPro?: boolean;
   } | null;
 }
 
@@ -50,6 +51,8 @@ export const useAuthStore = create<AuthState>()(
           if (res.data.success) {
             const { user, token } = res.data.data;
             set({ user, token, isAuthenticated: true });
+            // Fetch full profile (including djProfile) immediately after login
+            get().fetchMe();
             return { success: true };
           }
           return { success: false, error: 'Login failed' };

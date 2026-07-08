@@ -20,6 +20,34 @@ function parseHearthisUrl(url) {
   }
 }
 
+async function followAudioRedirect(url: string, depth = 0): Promise<string> {
+  if (depth > 5) return url;
+  try {
+    const res = await axios.head(url, {
+      maxRedirects: 0,
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    if (res.status >= 200 && res.status < 300) {
+      return res.request?.res?.responseUrl || url;
+    }
+    const location = res.headers?.location;
+    if (location && [301, 302, 303, 307, 308].includes(res.status)) {
+      return followAudioRedirect(location, depth + 1);
+    }
+  } catch (err: any) {
+    const response = err?.response;
+    if (
+      response &&
+      [301, 302, 303, 307, 308].includes(response.status) &&
+      response.headers?.location
+    ) {
+      return followAudioRedirect(response.headers.location, depth + 1);
+    }
+  }
+  return url;
+}
+
 async function reResolveHearthisMixes() {
   try {
     // Find all mixes with HearThis URLs (either by source or URL pattern)
@@ -65,6 +93,8 @@ async function reResolveHearthisMixes() {
           continue;
         }
 
+        const directUrl = await followAudioRedirect(streamUrl);
+
         const durationRaw = data.duration;
         let duration = mix.duration;
         if (durationRaw) {
@@ -79,8 +109,8 @@ async function reResolveHearthisMixes() {
         await prisma.mix.update({
           where: { id: mix.id },
           data: {
-            audioUrl: streamUrl,
-            audioSource: 'upload',
+            audioUrl: directUrl,
+            audioSource: 'hearthis',
             duration,
             coverImage,
           },

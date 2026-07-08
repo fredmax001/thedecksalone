@@ -47,12 +47,17 @@ const CITIES = [
   'Bo',
   'Kenema',
   'Makeni',
-  'Koidu',
-  'Lunsar',
+  'Koidu Town',
   'Port Loko',
-  'Kailahun',
+  'Lunsar',
+  'Waterloo',
   'Kabala',
+  'Magburaka',
+  'Kailahun',
+  'Moyamba',
   'Pujehun',
+  'Bonthe',
+  'Kambia',
 ];
 
 export default function UserProfile() {

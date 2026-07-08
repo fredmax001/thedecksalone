@@ -26,16 +26,29 @@ const createDjSchema = z.object({
   stageName: z.string().min(1).max(100),
   fullName: z.string().min(1).max(200),
   bio: z.string().max(2000).optional(),
-  yearsActive: z.number().int().min(0).max(50).optional(),
+  startYear: z.number().int().min(1980).max(2099).optional(),
+  country: z.string().max(100).optional(),
   city: z.string().max(100).optional(),
   genres: z.array(z.string()).max(5).optional(),
+  eventTypes: z.array(z.string()).optional(),
   awards: z.array(z.string()).optional(),
   equipment: z.array(z.string()).optional(),
   languages: z.array(z.string()).optional(),
   bookingFeeMin: z.number().min(0).optional(),
   bookingFeeMax: z.number().min(0).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  fullDayRate: z.number().min(0).optional(),
+  depositPercent: z.number().int().min(0).max(100).optional(),
   currency: z.string().max(10).optional(),
   availability: z.string().optional(),
+  willTravel: z.boolean().optional(),
+  maxTravelDistanceKm: z.number().int().min(0).optional(),
+  services: z.array(z.object({
+    name: z.string().min(1),
+    price: z.number().min(0).optional(),
+    description: z.string().optional(),
+  })).optional(),
+  isPro: z.boolean().optional(),
   website: z.string().url().optional().or(z.literal('')),
   whatsappNumber: z.string().max(20).optional(),
   isPublic: z.boolean().optional(),
@@ -65,7 +78,7 @@ function parseFormFields(body) {
   const parsed = { ...body };
 
   // Parse JSON fields
-  ['socialLinks', 'streamingLinks'].forEach((key) => {
+  ['socialLinks', 'streamingLinks', 'services'].forEach((key) => {
     if (typeof parsed[key] === 'string') {
       try {
         parsed[key] = JSON.parse(parsed[key]);
@@ -75,22 +88,44 @@ function parseFormFields(body) {
     }
   });
 
+  // Normalize null values inside JSON objects to empty strings
+  // (Prisma Json fields may contain nulls that Zod rejects)
+  ['socialLinks', 'streamingLinks'].forEach((key) => {
+    if (parsed[key] && typeof parsed[key] === 'object') {
+      Object.keys(parsed[key]).forEach((subKey) => {
+        if (parsed[key][subKey] === null) {
+          parsed[key][subKey] = '';
+        }
+      });
+    }
+  });
+
+  // Normalize website null → undefined so .optional() accepts it
+  if (parsed.website === null) {
+    delete parsed.website;
+  }
+
   // Coerce number fields from FormData strings
-  if (parsed.yearsActive !== undefined && parsed.yearsActive !== '') {
-    const n = parseInt(parsed.yearsActive, 10);
-    if (!isNaN(n)) parsed.yearsActive = n;
+  const numberFields = ['startYear', 'bookingFeeMin', 'bookingFeeMax', 'hourlyRate', 'fullDayRate', 'depositPercent', 'maxTravelDistanceKm'];
+  numberFields.forEach((key) => {
+    if (parsed[key] !== undefined && parsed[key] !== '') {
+      const n = key === 'startYear' || key === 'depositPercent' || key === 'maxTravelDistanceKm'
+        ? parseInt(parsed[key], 10)
+        : parseFloat(parsed[key]);
+      if (!isNaN(n)) parsed[key] = n;
+    }
+  });
+
+  // Coerce boolean fields from FormData strings
+  if (parsed.willTravel !== undefined) {
+    parsed.willTravel = parsed.willTravel === true || parsed.willTravel === 'true';
   }
-  if (parsed.bookingFeeMin !== undefined && parsed.bookingFeeMin !== '') {
-    const n = parseFloat(parsed.bookingFeeMin);
-    if (!isNaN(n)) parsed.bookingFeeMin = n;
-  }
-  if (parsed.bookingFeeMax !== undefined && parsed.bookingFeeMax !== '') {
-    const n = parseFloat(parsed.bookingFeeMax);
-    if (!isNaN(n)) parsed.bookingFeeMax = n;
+  if (parsed.isPro !== undefined) {
+    parsed.isPro = parsed.isPro === true || parsed.isPro === 'true';
   }
 
   // Ensure array fields are arrays (multer may send single string for one item)
-  ['genres', 'awards', 'equipment', 'languages'].forEach((key) => {
+  ['genres', 'eventTypes', 'awards', 'equipment', 'languages'].forEach((key) => {
     if (parsed[key] !== undefined && !Array.isArray(parsed[key])) {
       parsed[key] = [parsed[key]].filter(Boolean);
     }
@@ -334,6 +369,7 @@ router.get('/:identifier', async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 20,
       },
+      photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
       events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
       _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
     };

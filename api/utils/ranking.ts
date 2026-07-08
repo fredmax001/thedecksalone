@@ -68,7 +68,9 @@ function calculateIndustryScore(dj, bookingCount, eventCount) {
   score += eventScore;
 
   // Years active (max 15 pts) - veteran DJs get recognition
-  const experienceScore = Math.min(15, ((dj.yearsActive || 0) / 15) * 15); // 15 years = max
+  const currentYear = new Date().getFullYear();
+  const yearsActive = dj.startYear ? currentYear - dj.startYear : 0;
+  const experienceScore = Math.min(15, yearsActive); // 15 years = max
   score += experienceScore;
 
   // Awards (max 15 pts)

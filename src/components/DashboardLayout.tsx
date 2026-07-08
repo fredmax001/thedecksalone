@@ -7,6 +7,7 @@ import {
   CalendarDays,
   MessageSquare,
   Music,
+  Camera,
   BarChart3,
   Wallet,
   User,
@@ -19,6 +20,7 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import api from '@/lib/api';
 import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,7 @@ const navItems = [
   { icon: Calendar, label: 'Bookings', path: '/dashboard/bookings' },
   { icon: MessageSquare, label: 'Messages', path: '/dashboard/messages' },
   { icon: Music, label: 'Mixes', path: '/dashboard/mixes' },
+  { icon: Camera, label: 'Photos', path: '/dashboard/photos' },
   { icon: CalendarDays, label: 'Events', path: '/dashboard/events' },
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
@@ -56,8 +59,22 @@ export default function DashboardLayout() {
   const isDj = user?.role === 'DJ';
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
-  const avatarUrl = djProfile?.avatar || '';
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
+  const avatarUrl = djProfile?.avatar || localAvatarUrl || '';
   const initials = djName.slice(0, 2).toUpperCase();
+
+  // Fetch DJ profile directly if auth store doesn't have avatar yet
+  useEffect(() => {
+    if (isDj && !djProfile?.avatar) {
+      api.get('/djs/me')
+        .then((res) => {
+          if (res.data.success && res.data.data?.avatar) {
+            setLocalAvatarUrl(res.data.data.avatar);
+          }
+        })
+        .catch(() => {}); // 404 means no DJ profile yet
+    }
+  }, [isDj, djProfile?.avatar]);
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === '/dashboard';

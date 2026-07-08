@@ -1,0 +1,5 @@
+◇ injected env (7) from ../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (1) from .env // tip: ⌘ enable debugging { debug: true }
+[Auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set. Google OAuth will not work.
+Deck Salone API running on port 5002
+Health check: http://localhost:5002/health

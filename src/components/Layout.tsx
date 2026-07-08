@@ -36,7 +36,7 @@ export default function Layout() {
   return (
     <div className="min-h-[100dvh] flex flex-col theme-bg">
       <Navbar />
-      <main className="flex-1 pb-16 lg:pb-0">
+      <main className="flex-1 pb-40 lg:pb-24">
         <Outlet />
       </main>
       <Footer />

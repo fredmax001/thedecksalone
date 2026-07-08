@@ -57,18 +57,35 @@ router.get('/', async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const where: any = { isPublic: true };
-    if (category) where.category = { equals: category, mode: 'insensitive' };
-    if (genre) where.genre = { equals: genre, mode: 'insensitive' };
+    const where: any = { isPublic: true, AND: [] };
+    if (category) {
+      where.AND.push({
+        OR: [
+          { category: { equals: category, mode: 'insensitive' } },
+          { genre: { equals: category, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (genre) {
+      where.AND.push({
+        OR: [
+          { genre: { equals: genre, mode: 'insensitive' } },
+          { category: { equals: genre, mode: 'insensitive' } },
+        ],
+      });
+    }
     if (djId) where.djId = djId;
     if (featured === 'true') where.featured = true;
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { tags: { has: search } },
-      ];
+      where.AND.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { tags: { has: search } },
+        ],
+      });
     }
+    if (where.AND.length === 0) delete where.AND;
 
     const orderBy: any = {};
     if (sortBy === 'plays') orderBy.plays = order === 'asc' ? 'asc' : 'desc';
@@ -131,19 +148,20 @@ router.get('/hall-of-fame', async (req, res) => {
   }
 });
 
-// GET /api/mixes/categories - Get all categories
+// GET /api/mixes/categories - Get all categories (alias for genres)
 router.get('/categories', async (req, res) => {
   try {
-    const categories = [
-      { id: 'salone-mix', name: 'Salone Mix', description: 'Sierra Leone vibes' },
-      { id: 'throwbacks', name: 'Throwbacks', description: 'Classic hits' },
-      { id: 'afrobeats', name: 'Afrobeats', description: 'Naija and African hits' },
-      { id: 'amapiano', name: 'Amapiano', description: 'South African piano sound' },
-      { id: 'dancehall', name: 'Dancehall', description: 'Jamaican and Caribbean vibes' },
-      { id: 'club-mixes', name: 'Club Mixes', description: 'High energy club sets' },
-      { id: 'wedding-mixes', name: 'Wedding Mixes', description: 'Wedding celebration sets' },
-      { id: 'gospel', name: 'Gospel', description: 'Inspirational gospel mixes' },
-    ];
+    const rows = await prisma.$queryRaw`
+      SELECT DISTINCT genre as name
+      FROM mixes
+      WHERE "isPublic" = true AND genre IS NOT NULL AND genre <> ''
+      ORDER BY genre
+    `;
+    const categories = (rows || []).map((r: any) => ({
+      id: r.name.toLowerCase().replace(/\s+/g, '-'),
+      name: r.name,
+      description: '',
+    }));
     return res.json({ success: true, data: categories });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -172,7 +190,12 @@ router.get('/trending', async (req, res) => {
     const genre = req.query.genre;
 
     const where: any = { isPublic: true };
-    if (genre) where.genre = { equals: genre, mode: 'insensitive' };
+    if (genre) {
+      where.OR = [
+        { genre: { equals: genre, mode: 'insensitive' } },
+        { category: { equals: genre, mode: 'insensitive' } },
+      ];
+    }
 
     const mixes = await prisma.mix.findMany({
       where,

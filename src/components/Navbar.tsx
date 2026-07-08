@@ -18,6 +18,7 @@ const navLinks = [
   { label: 'Mixes', path: '/mixes' },
   { label: 'Events', path: '/events' },
   { label: 'Battles', path: '/battles' },
+  { label: 'Request DJ', path: '/request-dj' },
 ];
 
 export default function Navbar() {

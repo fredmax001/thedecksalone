@@ -25,12 +25,15 @@ const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Help = lazy(() => import('./pages/Help'));
 const Blog = lazy(() => import('./pages/Blog'));
+const About = lazy(() => import('./pages/About'));
+const RequestDj = lazy(() => import('./pages/RequestDj'));
 
 /* ─── DJ Dashboard pages ─── */
 const DashboardOverview = lazy(() => import('./pages/dashboard/Overview'));
 const DashboardBookings = lazy(() => import('./pages/dashboard/Bookings'));
 const DashboardMessages = lazy(() => import('./pages/dashboard/Messages'));
 const DashboardMixes = lazy(() => import('./pages/dashboard/Mixes'));
+const DashboardPhotos = lazy(() => import('./pages/dashboard/Photos'));
 const DashboardEvents = lazy(() => import('./pages/dashboard/DjEvents'));
 const DashboardAnalytics = lazy(() => import('./pages/dashboard/Analytics'));
 const DashboardEarnings = lazy(() => import('./pages/dashboard/Earnings'));
@@ -82,6 +85,7 @@ export default function App() {
               <Route path="dashboard/bookings" element={<DashboardBookings />} />
               <Route path="dashboard/messages" element={<DashboardMessages />} />
               <Route path="dashboard/mixes" element={<DashboardMixes />} />
+              <Route path="dashboard/photos" element={<DashboardPhotos />} />
               <Route path="dashboard/events" element={<DashboardEvents />} />
               <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
               <Route path="dashboard/earnings" element={<DashboardEarnings />} />
@@ -126,6 +130,8 @@ export default function App() {
             <Route path="privacy" element={<Privacy />} />
             <Route path="help" element={<Help />} />
             <Route path="blog" element={<Blog />} />
+            <Route path="about" element={<About />} />
+            <Route path="request-dj" element={<RequestDj />} />
           </Route>
         </Routes>
       </Suspense>

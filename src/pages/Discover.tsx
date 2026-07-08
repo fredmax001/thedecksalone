@@ -17,7 +17,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import FadeIn from '@/components/FadeIn';
-import { useDJs, useDJCities, useDJGenres } from '@/hooks/useDJs';
+import { useDJs, useDJGenres } from '@/hooks/useDJs';
+import { imageFallback } from '@/lib/utils';
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -37,7 +38,7 @@ interface DJ {
   bookingFeeMin: number;
   bookingFeeMax: number;
   currency: string;
-  yearsActive: number;
+  startYear: number;
   equipment: string[];
 }
 
@@ -54,6 +55,24 @@ type DJsResponse = {
 /* ─────────────────── Constants ─────────────────── */
 
 const EQUIPMENT = ['Pioneer DJ', 'Serato', 'Traktor', 'Rekordbox'];
+
+const CITIES = [
+  'Freetown',
+  'Bo',
+  'Kenema',
+  'Makeni',
+  'Koidu Town',
+  'Port Loko',
+  'Lunsar',
+  'Waterloo',
+  'Kabala',
+  'Magburaka',
+  'Kailahun',
+  'Moyamba',
+  'Pujehun',
+  'Bonthe',
+  'Kambia',
+];
 
 const SORT_OPTIONS = [
   { label: 'Rank (Default)', value: 'ranking' },
@@ -106,6 +125,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
         <img
           src={dj.avatar || '/default-avatar.jpg'}
           alt={dj.stageName}
+          onError={imageFallback}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
@@ -224,7 +244,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-gold/40 text-gold bg-gold/5"
     >
       {label}
-      <button onClick={onRemove} className="hover:text-white transition-colors">
+      <button onClick={onRemove} className="hover:text-text-primary transition-colors">
         <X className="w-3 h-3" />
       </button>
     </motion.span>
@@ -283,7 +303,6 @@ export default function Discover() {
     limit: ITEMS_PER_PAGE,
   });
 
-  const citiesQuery = useDJCities();
   const genresQuery = useDJGenres();
 
   /* ── Debug logging ── */
@@ -303,7 +322,6 @@ export default function Discover() {
   }, [djsQuery.data]);
 
   const djsData = djsQuery.data as DJsResponse | undefined;
-  const cityOptions = (citiesQuery.data as string[] | undefined) ?? [];
   const genreOptions = useMemo(
     () => ['All', ...((genresQuery.data as string[] | undefined) ?? [])],
     [genresQuery.data]
@@ -488,32 +506,28 @@ export default function Discover() {
                         City
                       </h4>
                       <div className="space-y-2">
-                        {cityOptions.length === 0 && citiesQuery.isLoading ? (
-                          <p className="text-xs text-text-muted">Loading cities...</p>
-                        ) : (
-                          cityOptions.map((city) => (
-                            <label
-                              key={city}
-                              className="flex items-center gap-2.5 cursor-pointer group"
-                              onClick={() => toggleCity(city)}
+                        {CITIES.map((city) => (
+                          <label
+                            key={city}
+                            className="flex items-center gap-2.5 cursor-pointer group"
+                            onClick={() => toggleCity(city)}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                selectedCity === city
+                                  ? 'bg-gold border-gold'
+                                  : 'border-dark-gray group-hover:border-text-muted'
+                              }`}
                             >
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                                  selectedCity === city
-                                    ? 'bg-gold border-gold'
-                                    : 'border-dark-gray group-hover:border-text-muted'
-                                }`}
-                              >
-                                {selectedCity === city && (
-                                  <CheckCircle2 className="w-3 h-3 text-black" />
-                                )}
-                              </div>
-                              <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                                {city}
-                              </span>
-                            </label>
-                          ))
-                        )}
+                              {selectedCity === city && (
+                                <CheckCircle2 className="w-3 h-3 text-black" />
+                              )}
+                            </div>
+                            <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
+                              {city}
+                            </span>
+                          </label>
+                        ))}
                       </div>
                     </div>
 
@@ -831,13 +845,13 @@ export default function Discover() {
               <FadeIn direction="right" delay={0.3}>
                 <div className="relative">
                   <img
-                    src="/placeholder.jpg"
+                    src="/images/dj-promo/promo-1.jpg"
                     alt="DJ performing"
                     className="w-48 h-60 object-cover rounded-xl border-[3px] border-gold shadow-card"
                     style={{ transform: 'rotate(-3deg)' }}
                   />
                   <img
-                    src="/placeholder.jpg"
+                    src="/images/dj-promo/promo-2.jpg"
                     alt="DJ at club"
                     className="w-44 h-56 object-cover rounded-xl border-[3px] border-gold shadow-card absolute top-8 left-28"
                     style={{ transform: 'rotate(3deg)' }}

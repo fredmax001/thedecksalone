@@ -21,6 +21,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
+import { cn, imageFallback } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,22 +68,6 @@ interface Mix {
 }
 
 const GENRES = [
-  'Afrobeats',
-  'Amapiano',
-  'Dancehall',
-  'Hip Hop',
-  'Gospel',
-  'Salone Mix',
-  'Club Mix',
-  'Throwback',
-  'R&B',
-  'Reggae',
-  'Soca',
-  'Wedding Mix',
-  'Open Format',
-];
-
-const CATEGORIES = [
   'Salone Mix',
   'Throwbacks',
   'Afrobeats',
@@ -103,7 +88,6 @@ export default function Mixes() {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     genre: '',
-    category: '',
     description: '',
     isPublic: true,
     audioUrl: '',
@@ -121,7 +105,6 @@ export default function Mixes() {
   const [editForm, setEditForm] = useState({
     title: '',
     genre: '',
-    category: '',
     description: '',
     isPublic: true,
   });
@@ -135,8 +118,7 @@ export default function Mixes() {
   // Hearthis import state
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importUrls, setImportUrls] = useState('');
-  const [importGenre, setImportGenre] = useState('Open Format');
-  const [importCategory, setImportCategory] = useState('Salone Mix');
+  const [importGenre, setImportGenre] = useState('Salone Mix');
   const [importResult, setImportResult] = useState<{
     count: number;
     errorCount: number;
@@ -176,8 +158,8 @@ export default function Mixes() {
       toast.error('Audio URL required');
       return;
     }
-    if (!uploadForm.title || !uploadForm.genre || !uploadForm.category) {
-      toast.error('Title, genre, and category are required');
+    if (!uploadForm.title || !uploadForm.genre) {
+      toast.error('Title and genre are required');
       return;
     }
 
@@ -185,7 +167,7 @@ export default function Mixes() {
     const formData = new FormData();
     formData.append('title', uploadForm.title);
     formData.append('genre', uploadForm.genre);
-    formData.append('category', uploadForm.category);
+    formData.append('category', uploadForm.genre);
     formData.append('description', uploadForm.description);
     formData.append('isPublic', String(uploadForm.isPublic));
     if (audioSource === 'file' && audioFile) {
@@ -201,7 +183,7 @@ export default function Mixes() {
         toast.success('Mix uploaded successfully!');
         setMixes((prev) => [res.data.data, ...prev]);
         setIsUploadOpen(false);
-        setUploadForm({ title: '', genre: '', category: '', description: '', isPublic: true, audioUrl: '' });
+        setUploadForm({ title: '', genre: '', description: '', isPublic: true, audioUrl: '' });
         setAudioFile(null);
         setCoverFile(null);
         setAudioSource('file');
@@ -220,7 +202,6 @@ export default function Mixes() {
     setEditForm({
       title: mix.title,
       genre: mix.genre,
-      category: mix.category || '',
       description: mix.description || '',
       isPublic: mix.isPublic,
     });
@@ -229,8 +210,8 @@ export default function Mixes() {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMix) return;
-    if (!editForm.title || !editForm.genre || !editForm.category) {
-      toast.error('Title, genre, and category are required');
+    if (!editForm.title || !editForm.genre) {
+      toast.error('Title and genre are required');
       return;
     }
 
@@ -239,7 +220,7 @@ export default function Mixes() {
       const res = await api.put(`/mixes/${editingMix.id}`, {
         title: editForm.title,
         genre: editForm.genre,
-        category: editForm.category,
+        category: editForm.genre,
         description: editForm.description,
         isPublic: editForm.isPublic,
       });
@@ -424,8 +405,9 @@ export default function Mixes() {
                     <div className="relative aspect-square bg-black-elevated">
                       {mix.coverImage ? (
                         <img
-                          src={mix.coverImage}
+                          src={mix.coverImage || '/mix-placeholder.jpg'}
                           alt={mix.title}
+                          onError={imageFallback}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -582,21 +564,6 @@ export default function Mixes() {
                     <option value="">Select genre</option>
                     {GENRES.map((g) => (
                       <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <Label className="text-text-secondary mb-2 block">Category</Label>
-                  <select
-                    value={uploadForm.category}
-                    onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
-                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
-                    required
-                  >
-                    <option value="">Select category</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
@@ -766,7 +733,7 @@ export default function Mixes() {
                     {
                       urls: importUrls,
                       defaultGenre: importGenre,
-                      defaultCategory: importCategory,
+                      defaultCategory: importGenre,
                     },
                     {
                       onSuccess: (res) => {
@@ -823,20 +790,6 @@ export default function Mixes() {
                   >
                     {GENRES.map((g) => (
                       <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <Label className="text-text-secondary mb-2 block">Default Category</Label>
-                  <select
-                    value={importCategory}
-                    onChange={(e) => setImportCategory(e.target.value)}
-                    disabled={importLoading}
-                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none disabled:opacity-50"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
@@ -939,21 +892,6 @@ export default function Mixes() {
                 </div>
 
                 <div>
-                  <Label className="text-text-secondary mb-2 block">Category</Label>
-                  <select
-                    value={editForm.category}
-                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
-                    required
-                  >
-                    <option value="">Select category</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
                   <Label className="text-text-secondary mb-2 block">Description</Label>
                   <Textarea
                     value={editForm.description}
@@ -1031,6 +969,3 @@ export default function Mixes() {
   );
 }
 
-function cn(...classes: (string | boolean | undefined | null)[]) {
-  return classes.filter(Boolean).join(' ');
-}

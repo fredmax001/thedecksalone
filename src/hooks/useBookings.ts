@@ -10,6 +10,13 @@ export interface BookingData {
   budget: number;
   notes?: string;
   requirements?: string;
+  eventTypes?: string[];
+  musicStyles?: string[];
+  equipmentNeeded?: string[];
+  budgetMin?: number;
+  budgetMax?: number;
+  services?: any;
+  travelNotes?: string;
 }
 
 export function useBookings() {

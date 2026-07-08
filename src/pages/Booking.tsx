@@ -28,11 +28,53 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { useDJs, useDJCities, useDJGenres } from "@/hooks/useDJs";
+import { cn, imageFallback } from "@/lib/utils";
+import { useDJs, useDJ, useDJCities, useDJGenres } from "@/hooks/useDJs";
 import { useEventTypes } from "@/hooks/useEvents";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
+
+const EVENT_TYPES = [
+  'Wedding',
+  'Birthday',
+  'Festival',
+  'Club',
+  'Corporate',
+  'Private Party',
+  'House Party',
+  'Beach Party',
+  'Religious Event',
+  'School Event',
+  'Graduation',
+];
+
+const MUSIC_STYLES = [
+  'Afrobeats',
+  'Amapiano',
+  'Hip Hop',
+  'R&B',
+  'Dancehall',
+  'Reggae',
+  'Soca',
+  'Highlife',
+  'Jazz',
+  'Classical',
+  'Electronic',
+  'House',
+  'Techno',
+  'Pop',
+  'Rock',
+  'Gospel',
+  'Traditional',
+];
+
+const EQUIPMENT_OPTIONS = [
+  'Speakers',
+  'Lighting',
+  'Microphone',
+  'MC',
+  'Full Setup',
+];
 
 /* ───── Static Data (moved from mockData.ts) ───── */
 const pricingGuide = [
@@ -215,20 +257,37 @@ function BookingRequestModal({
   onClose: () => void;
   dj: BookingDJ | null;
 }) {
-  const { data: eventTypesData = [] } = useEventTypes();
   const createBooking = useCreateBooking();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
+  const { data: djDetails } = useDJ(dj?.id);
+
   const [form, setForm] = useState({
-    eventType: "",
+    eventTypes: [] as string[],
     eventDate: "",
     venue: "",
     duration: "",
     requirements: "",
-    budget: "",
+    budgetMin: "",
+    budgetMax: "",
+    musicStyles: [] as string[],
+    equipmentNeeded: [] as string[],
+    services: [] as string[],
+    travelNotes: "",
+    notes: "",
   });
 
   const durations = ["1-2 hours", "2-3 hours", "3-4 hours", "4-5 hours", "5+ hours"];
+
+  const toggleArray = (field: keyof typeof form, value: string) => {
+    setForm((prev) => {
+      const current = (prev[field] as string[]).slice();
+      const idx = current.indexOf(value);
+      if (idx >= 0) current.splice(idx, 1);
+      else current.push(value);
+      return { ...prev, [field]: current };
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,14 +299,25 @@ function BookingRequestModal({
       return;
     }
 
+    const budgetMinNum = parseBudget(form.budgetMin);
+    const budgetMaxNum = parseBudget(form.budgetMax);
+
     const data: BookingData = {
       djId: dj.id,
-      eventType: form.eventType,
+      eventType: form.eventTypes[0] || 'General',
       eventDate: form.eventDate,
       eventLocation: form.venue,
       duration: parseDuration(form.duration),
-      budget: parseBudget(form.budget),
+      budget: budgetMaxNum || budgetMinNum,
+      budgetMin: budgetMinNum || undefined,
+      budgetMax: budgetMaxNum || undefined,
       requirements: form.requirements,
+      notes: form.notes,
+      eventTypes: form.eventTypes,
+      musicStyles: form.musicStyles,
+      equipmentNeeded: form.equipmentNeeded,
+      services: form.services,
+      travelNotes: form.travelNotes,
     };
 
     createBooking.mutate(data, {
@@ -306,21 +376,25 @@ function BookingRequestModal({
             {/* Event Type */}
             <div>
               <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                Event Type
+                Event Type <span className="text-text-secondary normal-case">(select all that apply)</span>
               </label>
-              <select
-                required
-                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                value={form.eventType}
-                onChange={(e) => setForm({ ...form, eventType: e.target.value })}
-              >
-                <option value="">Select event type</option>
-                {eventTypesData.map((t: any) => (
-                  <option key={t.id || t.name || t} value={t.name || t}>
-                    {t.name || t}
-                  </option>
+              <div className="flex flex-wrap gap-2">
+                {EVENT_TYPES.map((et) => (
+                  <button
+                    key={et}
+                    type="button"
+                    onClick={() => toggleArray('eventTypes', et)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      form.eventTypes.includes(et)
+                        ? 'bg-gold/20 border-gold text-gold'
+                        : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
+                    )}
+                  >
+                    {et}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
             {/* Date & Venue */}
@@ -386,19 +460,144 @@ function BookingRequestModal({
               />
             </div>
 
-            {/* Budget */}
+            {/* Budget Range */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                  Min Budget (SLE)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Minimum budget"
+                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
+                  value={form.budgetMin}
+                  onChange={(e) => setForm({ ...form, budgetMin: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                  Max Budget (SLE)
+                </label>
+                <input
+                  required
+                  type="number"
+                  min={0}
+                  placeholder="Maximum budget"
+                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
+                  value={form.budgetMax}
+                  onChange={(e) => setForm({ ...form, budgetMax: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Music Styles */}
             <div>
               <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                Budget (SLE)
+                Music Styles <span className="text-text-secondary normal-case">(select all that apply)</span>
               </label>
-              <input
-                required
-                type="number"
-                min={0}
-                placeholder="Enter your budget"
-                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                value={form.budget}
-                onChange={(e) => setForm({ ...form, budget: e.target.value })}
+              <div className="flex flex-wrap gap-2">
+                {MUSIC_STYLES.map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    onClick={() => toggleArray('musicStyles', style)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      form.musicStyles.includes(style)
+                        ? 'bg-gold/20 border-gold text-gold'
+                        : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
+                    )}
+                  >
+                    {style}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Equipment Needed */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                Equipment Needed
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EQUIPMENT_OPTIONS.map((eq) => (
+                  <button
+                    key={eq}
+                    type="button"
+                    onClick={() => toggleArray('equipmentNeeded', eq)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      form.equipmentNeeded.includes(eq)
+                        ? 'bg-gold/20 border-gold text-gold'
+                        : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
+                    )}
+                  >
+                    {eq}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Services / Packages */}
+            {djDetails?.services && Array.isArray(djDetails.services) && djDetails.services.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                  Services / Packages
+                </label>
+                <div className="space-y-2">
+                  {djDetails.services.map((svc: any) => (
+                    <label
+                      key={svc.name}
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
+                        form.services.includes(svc.name)
+                          ? 'bg-gold/10 border-gold'
+                          : 'bg-[#181818] border-[#1E1E1E] hover:border-dark-gray'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-gold rounded border-dark-gray"
+                        checked={form.services.includes(svc.name)}
+                        onChange={() => toggleArray('services', svc.name)}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-text-primary">{svc.name}</p>
+                        {svc.price !== undefined && <p className="text-xs text-gold">SLE {svc.price}</p>}
+                        {svc.description && <p className="text-xs text-text-secondary">{svc.description}</p>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Travel Notes */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                Travel / Location Notes
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Any travel requirements, distance, parking or setup details"
+                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all resize-none"
+                value={form.travelNotes}
+                onChange={(e) => setForm({ ...form, travelNotes: e.target.value })}
+              />
+            </div>
+
+            {/* Additional Notes */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                Additional Notes
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Anything else the DJ should know"
+                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all resize-none"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
 
@@ -475,7 +674,7 @@ export default function Booking() {
       rating: dj.averageRating || 0,
       priceMin: dj.bookingFeeMin || 0,
       priceMax: dj.bookingFeeMax || dj.bookingFeeMin || 0,
-      experience: dj.yearsActive || 0,
+      experience: dj.startYear || 0,
       responseTime: "24h",
     }));
   }, [djData]);
@@ -885,8 +1084,9 @@ export default function Booking() {
                     <div className="sm:w-[200px] shrink-0">
                       <div className="aspect-[4/3] sm:h-full sm:aspect-auto relative overflow-hidden">
                         <img
-                          src={dj.avatar}
+                          src={dj.avatar || '/default-avatar.jpg'}
                           alt={dj.name}
+                          onError={imageFallback}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
                         />
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/50 sm:bg-gradient-to-t sm:from-black/60 sm:to-transparent" />
@@ -938,7 +1138,7 @@ export default function Booking() {
                       </div>
 
                       <p className="mt-2 text-xs text-text-muted">
-                        {dj.experience}+ years active
+                        {dj.experience ? `Active Since '${dj.experience.toString().slice(-2)}'` : 'New DJ'}
                       </p>
 
                       {/* Availability */}

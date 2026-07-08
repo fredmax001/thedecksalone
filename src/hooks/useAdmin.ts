@@ -60,7 +60,7 @@ export interface DjProfile {
   socialLinks: Record<string, string> | null;
   streamingLinks: Record<string, string> | null;
   streamingPlatforms?: { platform: string; url: string; followers: number; streams: number; uploads: number }[];
-  yearsActive: number | null;
+  startYear: number | null;
   verified: boolean;
   isPublic: boolean;
   totalFollowers: number;
