@@ -50,7 +50,7 @@ export default function Navbar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-24 lg:h-28 overflow-hidden ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-16 lg:h-28 overflow-hidden ${
         isScrolled
           ? 'glass-nav border-b border-white/5 dark:border-white/5 shadow-nav'
           : 'bg-transparent'
@@ -59,10 +59,17 @@ export default function Navbar() {
       <div className="max-w-container mx-auto h-full flex items-center justify-between px-2 sm:px-4 lg:px-8">
         {/* Logo — kept at current rendered size, pushed slightly left on mobile */}
         <Link to="/" className="flex items-center shrink-0 -ml-2 sm:-ml-1 lg:ml-0">
+          {/* Mobile icon logo */}
           <img
-            src="/logo.png"
+            src="/logo-icon.png"
             alt="Deck Salone"
-            className="h-32 w-auto object-contain"
+            className="lg:hidden h-9 w-auto object-contain"
+          />
+          {/* Desktop wordmark logo */}
+          <img
+            src="/logo-web.png"
+            alt="Deck Salone"
+            className="hidden lg:block h-10 w-auto object-contain"
           />
         </Link>
 

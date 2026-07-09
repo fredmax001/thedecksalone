@@ -3,8 +3,14 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { requireRole } = require('../middleware/auth');
 const { recalculateAllRankings } = require('../utils/ranking');
+const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
 
 const router = express.Router();
+
+const configuredProPrice = Number(process.env.PRO_SUBSCRIPTION_PRICE);
+const PRO_SUBSCRIPTION_PRICE = Number.isFinite(configuredProPrice) && configuredProPrice > 0 ? configuredProPrice : 250;
+const configuredLegendPrice = Number(process.env.LEGEND_SUBSCRIPTION_PRICE);
+const LEGEND_SUBSCRIPTION_PRICE = Number.isFinite(configuredLegendPrice) && configuredLegendPrice > 0 ? configuredLegendPrice : 750;
 
 // All routes require admin or moderator role
 router.use(requireRole('ADMIN', 'MODERATOR', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'));
@@ -51,6 +57,10 @@ const campaignStatusSchema = z.object({
 
 const verifyDjSchema = z.object({
   notes: z.string().optional(),
+});
+
+const subscriptionReviewSchema = z.object({
+  note: z.string().max(500).optional(),
 });
 
 // GET /api/admin/stats - Platform-wide stats
@@ -524,6 +534,131 @@ router.get('/payments', async (req, res) => {
   }
 });
 
+// GET /api/admin/pro-subscription-requests - Manual Orange Money Pro requests
+router.get('/pro-subscription-requests', async (req, res) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const where = status && status !== 'all' ? { status } : {};
+
+    const requests = await prisma.proSubscriptionRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            isPro: true,
+            subscriptionTier: true,
+            user: { select: { id: true, email: true, phone: true } },
+          },
+        },
+      },
+    });
+
+    return res.json({ success: true, data: requests });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/pro-subscription-requests/:id/approve - Activate Pro
+router.post('/pro-subscription-requests/:id/approve', async (req, res) => {
+  try {
+    const parsed = subscriptionReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
+    const request = await prisma.proSubscriptionRequest.findUnique({
+      where: { id: req.params.id },
+      include: { dj: true },
+    });
+
+    if (!request) {
+      return res.status(404).json({ success: false, error: 'Subscription request not found' });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      // Activate all subscription features based on tier
+      await activateSubscriptionFeatures(request.dj.userId, request.plan);
+
+      return tx.proSubscriptionRequest.update({
+        where: { id: request.id },
+        data: {
+          status: 'approved',
+          reviewedById: req.user.id,
+          adminNote: parsed.data.note || null,
+          reviewedAt: new Date(),
+        },
+        include: {
+          dj: {
+            select: {
+              id: true,
+              stageName: true,
+              avatar: true,
+              isPro: true,
+              subscriptionTier: true,
+              canReceivePayments: true,
+              canViewAnalytics: true,
+              isVerifiedEligible: true,
+              isLegendFeatured: true,
+              user: { select: { id: true, email: true, phone: true } },
+            },
+          },
+        },
+      });
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/pro-subscription-requests/:id/reject - Reject proof
+router.post('/pro-subscription-requests/:id/reject', async (req, res) => {
+  try {
+    const parsed = subscriptionReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
+    const request = await prisma.proSubscriptionRequest.findUnique({ where: { id: req.params.id } });
+    if (!request) {
+      return res.status(404).json({ success: false, error: 'Subscription request not found' });
+    }
+
+    const updated = await prisma.proSubscriptionRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'rejected',
+        reviewedById: req.user.id,
+        adminNote: parsed.data.note || null,
+        reviewedAt: new Date(),
+      },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            isPro: true,
+            subscriptionTier: true,
+            user: { select: { id: true, email: true, phone: true } },
+          },
+        },
+      },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/admin/messages - Recent message threads overview
 router.get('/messages', async (req, res) => {
   try {
@@ -918,24 +1053,30 @@ router.get('/security-logs', async (req, res) => {
 // GET /api/admin/subscriptions - Subscription overview (derived from DJ tiers)
 router.get('/subscriptions', async (req, res) => {
   try {
-    const [djCount, verifiedDjCount, totalRevenue, activeBookings] = await Promise.all([
+    const [djCount, proDjCount, legendDjCount, pendingRequests, approvedRevenue, activeBookings] = await Promise.all([
       prisma.djProfile.count(),
-      prisma.djProfile.count({ where: { verified: true } }),
-      prisma.booking.aggregate({ where: { status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } }, _sum: { finalPrice: true } }),
+      prisma.djProfile.count({ where: { subscriptionTier: 'pro' } }),
+      prisma.djProfile.count({ where: { subscriptionTier: 'legend' } }),
+      prisma.proSubscriptionRequest.count({ where: { status: 'pending' } }),
+      prisma.proSubscriptionRequest.aggregate({ where: { status: 'approved' }, _sum: { amount: true } }),
       prisma.booking.count({ where: { status: { in: ['PENDING', 'NEGOTIATING', 'CONFIRMED'] } } }),
     ]);
 
     const plans = [
-      { id: 'free', name: 'Free Tier', price: 0, users: djCount - verifiedDjCount, features: ['Basic profile', 'Limited uploads'] },
-      { id: 'verified', name: 'Verified DJ', price: 0, users: verifiedDjCount, features: ['Verified badge', 'Unlimited uploads', 'Booking enabled'] },
+      { id: 'free', name: 'Free Tier', price: 0, users: djCount - proDjCount - legendDjCount, features: ['Basic profile', 'Limited uploads'] },
+      { id: 'pro', name: 'Pro DJ', price: PRO_SUBSCRIPTION_PRICE, users: proDjCount, features: ['Unlimited uploads', 'Priority discovery', 'Advanced analytics'] },
+      { id: 'legend', name: 'Legend DJ', price: LEGEND_SUBSCRIPTION_PRICE, users: legendDjCount, features: ['Everything in Pro', 'Featured placement', 'Dedicated support'] },
     ];
 
     return res.json({
       success: true,
       data: {
         plans,
-        totalRevenue: Math.round(totalRevenue._sum.finalPrice || 0),
+        totalRevenue: Math.round(approvedRevenue._sum.amount || 0),
         activeBookings,
+        pendingRequests,
+        mrr: Math.round((proDjCount * PRO_SUBSCRIPTION_PRICE) + (legendDjCount * LEGEND_SUBSCRIPTION_PRICE)),
+        arr: Math.round(((proDjCount * PRO_SUBSCRIPTION_PRICE) + (legendDjCount * LEGEND_SUBSCRIPTION_PRICE)) * 12),
       },
     });
   } catch (error) {

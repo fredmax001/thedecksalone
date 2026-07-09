@@ -14,8 +14,17 @@ export interface MixFilters {
 export function useMixes(filters: MixFilters = {}) {
   const { category, genre, search, sortBy, djId, page = 1, limit = 12 } = filters;
 
+  // Build a clean query key that only includes defined values — avoids
+  // undefined-key comparison issues and makes the cache key stable
+  const queryKey: (string | number)[] = ['mixes', page, limit];
+  if (genre) queryKey.push('genre', genre);
+  if (category) queryKey.push('category', category);
+  if (search) queryKey.push('search', search);
+  if (sortBy) queryKey.push('sortBy', sortBy);
+  if (djId) queryKey.push('djId', djId);
+
   return useQuery({
-    queryKey: ['mixes', filters],
+    queryKey,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -29,12 +38,18 @@ export function useMixes(filters: MixFilters = {}) {
       const res = await api.get(`/mixes?${params.toString()}`);
       return res.data;
     },
+    staleTime: 0,           // Always consider data stale — refetch on mount/key change
+    refetchOnMount: true,   // Ensure fresh data when component mounts
+    gcTime: 1000 * 60 * 2,  // Keep in garbage cache for 2 minutes
   });
 }
 
 export function useTrendingMixes(limit = 6, genre?: string) {
+  const queryKey: (string | number)[] = ['trendingMixes', limit];
+  if (genre) queryKey.push('genre', genre);
+
   return useQuery({
-    queryKey: ['trendingMixes', limit, genre],
+    queryKey,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('limit', String(limit));
@@ -42,6 +57,7 @@ export function useTrendingMixes(limit = 6, genre?: string) {
       const res = await api.get(`/mixes/trending?${params.toString()}`);
       return res.data.data || [];
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes — trending data can be slightly stale
   });
 }
 
@@ -52,6 +68,7 @@ export function useMixCategories() {
       const res = await api.get('/mixes/categories');
       return res.data.data || [];
     },
+    staleTime: 1000 * 60 * 10, // Categories change rarely
   });
 }
 
@@ -62,6 +79,7 @@ export function useMixGenres() {
       const res = await api.get('/mixes/genres');
       return res.data.data || [];
     },
+    staleTime: 1000 * 60 * 5, // Genres change when new mixes are uploaded
   });
 }
 
@@ -74,6 +92,7 @@ export function useMix(id: string | undefined) {
       return res.data.data;
     },
     enabled: !!id,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -100,6 +119,7 @@ export function useHallOfFameMixes(limit = 6) {
       const res = await api.get(`/mixes/hall-of-fame?limit=${limit}`);
       return res.data.data || [];
     },
+    staleTime: 1000 * 60 * 10,
   });
 }
 
@@ -113,7 +133,8 @@ export function useImportHearthis() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mixes'] });
       queryClient.invalidateQueries({ queryKey: ['trendingMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['mixGenres'] });
+      queryClient.invalidateQueries({ queryKey: ['mixCategories'] });
     },
   });
 }
-

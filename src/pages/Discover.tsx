@@ -612,7 +612,7 @@ export default function Discover() {
       </section>
 
       {/* ════════ Section 2: Active Filters Bar ════════ */}
-      <section className="bg-black border-b border-white/5 py-3 sticky top-[72px] z-40">
+      <section className="bg-black border-b border-white/5 py-3 sticky top-16 lg:top-28 z-40">
         <div className="container-main flex flex-wrap items-center gap-3">
           {/* Active filter chips */}
           <div className="flex flex-wrap items-center gap-2 flex-1">

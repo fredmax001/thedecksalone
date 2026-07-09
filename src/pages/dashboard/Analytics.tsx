@@ -13,6 +13,8 @@ import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { FeatureLock } from '@/components/FeatureLock';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import {
   BarChart,
   Bar,
@@ -30,6 +32,7 @@ const COLORS = ['#D4A24A', '#22C55E', '#3B82F6', '#8B5CF6', '#EF4444', '#F97316'
 
 export default function Analytics() {
   const { user } = useAuthStore();
+  const { isFree } = useFeatureAccess();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const isDj = user?.role === 'DJ';
@@ -138,7 +141,8 @@ export default function Analytics() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <FeatureLock isLocked={isFree} tier="pro" message="Advanced analytics and charts">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-black-surface border-dark-gray">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-text-primary">Monthly Activity</CardTitle>
@@ -219,6 +223,7 @@ export default function Analytics() {
           </div>
         </CardContent>
       </Card>
+      </FeatureLock>
     </div>
   );
 }

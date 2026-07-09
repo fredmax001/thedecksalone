@@ -23,8 +23,8 @@ export default function MobileTabBar({ items }: MobileTabBarProps) {
   };
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t theme-border-card pb-safe" style={{ background: 'var(--bg-glass)' }}>
-      <div className="flex items-center overflow-x-auto scrollbar-hide h-16 px-2">
+    <nav className="lg:hidden fixed bottom-3 left-4 right-4 z-50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-black/90">
+      <div className="flex items-center overflow-x-auto scrollbar-hide h-14 px-2">
         {items.map((item) => {
           const active = isActive(item.path);
           const Icon = item.icon;

@@ -179,7 +179,7 @@ const VoteButton = memo(function VoteButton({
       whileTap={disabled ? undefined : { scale: 0.98 }}
     >
       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-      Vote for {djName}
+      <span className="truncate max-w-[10rem]">Vote for {djName}</span>
     </motion.button>
   );
 });
@@ -303,7 +303,7 @@ export default function Battles() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.7, type: 'spring', stiffness: 200 }}
           >
-            <span className="font-mono text-[80px] sm:text-[120px] font-bold text-gold animate-pulse-glow leading-none">
+            <span className="font-mono text-6xl sm:text-8xl lg:text-[120px] font-bold text-gold animate-pulse-glow leading-none">
               VS
             </span>
           </motion.div>
@@ -469,6 +469,14 @@ export default function Battles() {
                       </div>
                     </div>
                   </motion.div>
+                </FadeIn>
+
+                {/* Mobile VS badge between stacked cards */}
+                <FadeIn delay={0.25} className="lg:hidden flex flex-col items-center justify-center py-2">
+                  <div className="w-12 h-12 rounded-full bg-black-elevated border border-white/10 flex items-center justify-center">
+                    <span className="font-mono text-lg font-bold text-gold">VS</span>
+                  </div>
+                  <p className="mt-1 font-mono text-[10px] text-text-muted uppercase">{totalVotes} votes</p>
                 </FadeIn>
 
                 {/* Center VS */}

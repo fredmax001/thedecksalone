@@ -169,14 +169,36 @@ async function discoverMixes(options: any = {}) {
   const skip = (pageNum - 1) * limitNum;
 
   const where: any = { isPublic: true };
-  if (genre) where.genre = { equals: genre, mode: 'insensitive' };
-  if (category) where.category = { equals: category, mode: 'insensitive' };
+  const andConditions: any[] = [];
+
+  if (genre) {
+    andConditions.push({
+      OR: [
+        { genre: { equals: genre, mode: 'insensitive' } },
+        { category: { equals: genre, mode: 'insensitive' } },
+      ],
+    });
+  }
+  if (category) {
+    andConditions.push({
+      OR: [
+        { category: { equals: category, mode: 'insensitive' } },
+        { genre: { equals: category, mode: 'insensitive' } },
+      ],
+    });
+  }
   if (search) {
-    where.OR = [
-      { title: { contains: search, mode: 'insensitive' } },
-      { description: { contains: search, mode: 'insensitive' } },
-      { tags: { has: search } },
-    ];
+    andConditions.push({
+      OR: [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { tags: { has: search } },
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) {
+    where.AND = andConditions;
   }
 
   // Fetch mixes with DJ ranking scores

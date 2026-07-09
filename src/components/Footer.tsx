@@ -29,15 +29,16 @@ const socialLinks = [
 export default function Footer() {
   return (
     <footer className="theme-bg border-t theme-border-card">
-      <div className="container-main pt-16 pb-8">
+      {/* Full footer — desktop only */}
+      <div className="container-main pt-16 pb-8 hidden lg:block">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand Column */}
           <div className="lg:col-span-1">
             <Link to="/" className="flex items-center mb-4">
               <img
-                src="/logo.png"
+                src="/logo-web.png"
                 alt="Deck Salone"
-                className="h-24 w-auto object-contain"
+                className="h-12 w-auto object-contain"
               />
             </Link>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs">
@@ -121,6 +122,13 @@ export default function Footer() {
             All rights reserved.
           </p>
         </div>
+      </div>
+
+      {/* Compact footer — mobile/tablet only */}
+      <div className="lg:hidden py-4 px-4">
+        <p className="text-center text-text-muted text-xs">
+          &copy; 2025 Deck Salone
+        </p>
       </div>
     </footer>
   );

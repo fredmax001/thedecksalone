@@ -57,6 +57,94 @@ router.get('/', async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
+    // Build where clause using explicit AND array for clean Prisma queries
+    const andConditions: any[] = [];
+
+    // Genre filter: match either genre OR category (for backward compat with dual-field uploads)
+    if (genre) {
+      andConditions.push({
+        OR: [
+          { genre: { equals: genre, mode: 'insensitive' } },
+          { category: { equals: genre, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Category filter (legacy support)
+    if (category) {
+      andConditions.push({
+        OR: [
+          { category: { equals: category, mode: 'insensitive' } },
+          { genre: { equals: category, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (djId) andConditions.push({ djId });
+    if (featured === 'true') andConditions.push({ featured: true });
+
+    if (search) {
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { tags: { has: search } },
+        ],
+      });
+    }
+
+    const where: any = { isPublic: true };
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    console.log('[Mixes API] Filter request:', { genre, category, search, pageNum, limitNum });
+    console.log('[Mixes API] Prisma where:', JSON.stringify(where));
+
+    const orderBy: any = {};
+    if (sortBy === 'plays') orderBy.plays = order === 'asc' ? 'asc' : 'desc';
+    else if (sortBy === 'likes') orderBy.likes = order === 'asc' ? 'asc' : 'desc';
+    else if (sortBy === 'downloads') orderBy.downloads = order === 'asc' ? 'asc' : 'desc';
+    else orderBy.createdAt = 'desc';
+
+    const [mixes, total] = await Promise.all([
+      prisma.mix.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limitNum,
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+        },
+      }),
+      prisma.mix.count({ where }),
+    ]);
+
+    console.log(`[Mixes API] Found ${mixes.length} mixes (total: ${total})`);
+
+    return res.json({
+      success: true,
+      data: mixes,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    console.error('[Mixes API] Error:', error.message);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+router.get('/', async (req, res) => {
+  try {
+    const parsed = mixFilterSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
+    }
+
+    const { category, genre, djId, search, featured, sortBy, order, page, limit } = parsed.data;
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
     const where: any = { isPublic: true, AND: [] };
     if (category) {
       where.AND.push({
@@ -184,6 +272,36 @@ router.get('/genres', async (req, res) => {
 });
 
 // GET /api/mixes/trending - Trending mixes
+router.get('/trending', async (req, res) => {
+  try {
+    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+    const genre = req.query.genre;
+
+    const where: any = { isPublic: true };
+    if (genre) {
+      // Must wrap OR inside AND so isPublic is always enforced
+      where.AND = {
+        OR: [
+          { genre: { equals: genre, mode: 'insensitive' } },
+          { category: { equals: genre, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const mixes = await prisma.mix.findMany({
+      where,
+      orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
+      take: limitNum,
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    return res.json({ success: true, data: mixes });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 router.get('/trending', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
@@ -378,6 +496,16 @@ router.post('/', authMiddleware, uploadMix, async (req, res) => {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj && req.user.role !== 'ADMIN') {
       return res.status(403).json({ success: false, error: 'Must be a DJ to upload mixes' });
+    }
+
+    // Check upload limits
+    const FREE_TIER_LIMIT = 5;
+    if (dj && dj.subscriptionTier === 'free' && dj.totalMixes >= FREE_TIER_LIMIT) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Upload limit reached. Upgrade to Pro to upload unlimited mixes.',
+        requiresUpgrade: true 
+      });
     }
 
     const djId = dj ? dj.id : req.body.djId;

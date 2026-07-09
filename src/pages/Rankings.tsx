@@ -275,52 +275,54 @@ function FastestRisingSection({ djs }: { djs: RankedDJ[] }) {
         <TrendingUp className="w-4 h-4 text-green" />
         <p className="section-label">FASTEST RISING</p>
       </div>
-      <div className="bg-black-elevated rounded-2xl border border-white/5 overflow-hidden">
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-white/5 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          <div className="col-span-1">Rank</div>
-          <div className="col-span-4">DJ</div>
-          <div className="col-span-3 text-center">Change</div>
-          <div className="col-span-2 text-center">Score</div>
-          <div className="col-span-2 text-center">Position</div>
-        </div>
-        {rising.map((dj, i) => (
-          <motion.div
-            key={dj.id}
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.1, ease: easeSmooth }}
-            className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 last:border-0 hover:bg-medium-gray/50 transition-colors items-center"
-          >
-            <div className="col-span-1">
-              <span className="font-mono text-base font-bold text-green">{i + 1}</span>
-            </div>
-            <div className="col-span-4 flex items-center gap-3">
-              <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
-              <div>
-                <p className="text-sm font-semibold text-text-primary">{dj.stageName}</p>
-                {(dj.trend || 0) > 3 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-green/15 text-green">
-                    <Star className="w-3 h-3" />
-                    Rising Star
-                  </span>
-                )}
+      <div className="rounded-2xl border border-white/5 overflow-hidden">
+        <div className="bg-black-elevated min-w-[640px] overflow-hidden">
+          <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-white/5 text-xs font-semibold uppercase tracking-wider text-text-muted">
+            <div className="col-span-1">Rank</div>
+            <div className="col-span-4">DJ</div>
+            <div className="col-span-3 text-center">Change</div>
+            <div className="col-span-2 text-center">Score</div>
+            <div className="col-span-2 text-center">Position</div>
+          </div>
+          {rising.map((dj, i) => (
+            <motion.div
+              key={dj.id}
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, ease: easeSmooth }}
+              className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 last:border-0 hover:bg-medium-gray/50 transition-colors items-center"
+            >
+              <div className="col-span-1">
+                <span className="font-mono text-base font-bold text-green">{i + 1}</span>
               </div>
-            </div>
-            <div className="col-span-3 text-center">
-              <span className="font-mono text-lg font-bold text-green">+{dj.trend}%</span>
-            </div>
-            <div className="col-span-2 text-center">
-              <span className="font-mono text-sm font-semibold text-text-primary">{dj.rankingScore.toFixed(1)}</span>
-            </div>
-            <div className="col-span-2 text-center">
-              <span className="font-mono text-sm text-text-muted">#{dj.rankingPosition}</span>
-            </div>
-          </motion.div>
-        ))}
-        {rising.length === 0 && (
-          <div className="px-6 py-8 text-center text-text-muted text-sm">No rising DJs this week</div>
-        )}
+              <div className="col-span-4 flex items-center gap-3">
+                <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">{dj.stageName}</p>
+                  {(dj.trend || 0) > 3 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-green/15 text-green">
+                      <Star className="w-3 h-3" />
+                      Rising Star
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="col-span-3 text-center">
+                <span className="font-mono text-lg font-bold text-green">+{dj.trend}%</span>
+              </div>
+              <div className="col-span-2 text-center">
+                <span className="font-mono text-sm font-semibold text-text-primary">{dj.rankingScore.toFixed(1)}</span>
+              </div>
+              <div className="col-span-2 text-center">
+                <span className="font-mono text-sm text-text-muted">#{dj.rankingPosition}</span>
+              </div>
+            </motion.div>
+          ))}
+          {rising.length === 0 && (
+            <div className="px-6 py-8 text-center text-text-muted text-sm">No rising DJs this week</div>
+          )}
+        </div>
       </div>
     </motion.div>
   );

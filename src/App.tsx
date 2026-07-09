@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
 import UserDashboardLayout from './components/UserDashboardLayout';
+import MixPlayer from './components/MixPlayer';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -41,6 +42,9 @@ const DashboardProfile = lazy(() => import('./pages/dashboard/Profile'));
 const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
+const DashboardOpportunities = lazy(() =>
+  import('./pages/Opportunities').then((m) => ({ default: m.Opportunities }))
+);
 
 /* ─── User Dashboard pages ─── */
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
@@ -91,6 +95,7 @@ export default function App() {
               <Route path="dashboard/earnings" element={<DashboardEarnings />} />
               <Route path="dashboard/profile" element={<DashboardProfile />} />
               <Route path="dashboard/subscription" element={<DashboardSubscription />} />
+              <Route path="dashboard/opportunities" element={<DashboardOpportunities />} />
               <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
               <Route path="dashboard/settings" element={<DashboardSettings />} />
             </Route>
@@ -134,6 +139,7 @@ export default function App() {
             <Route path="request-dj" element={<RequestDj />} />
           </Route>
         </Routes>
+        <MixPlayer />
       </Suspense>
     </BrowserRouter>
   );

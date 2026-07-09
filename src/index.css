@@ -171,7 +171,7 @@
   }
 
   .container-main {
-    @apply max-w-container mx-auto px-4 sm:px-6 lg:px-8;
+    @apply max-w-container mx-auto px-3 sm:px-6 lg:px-8;
   }
 
   .theme-bg {

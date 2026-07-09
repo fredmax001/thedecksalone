@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import {
   Wallet,
   Loader2,
-  TrendingUp,
   Clock,
   ArrowUpRight,
   Download,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FeatureLock } from '@/components/FeatureLock';
 import {
   BarChart,
   Bar,
@@ -108,125 +109,135 @@ export default function Earnings() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-black-surface border-dark-gray">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Wallet className="w-4 h-4 text-gold" />
-              <span className="text-xs text-text-secondary">Total Earnings</span>
-            </div>
-            <p className="text-2xl font-bold text-text-primary font-display">SLE {totalEarnings.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-black-surface border-dark-gray">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-green" />
-              <span className="text-xs text-text-secondary">This Month</span>
-            </div>
-            <p className="text-2xl font-bold text-text-primary font-display">SLE {thisMonthEarnings.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-black-surface border-dark-gray">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-yellow-500" />
-              <span className="text-xs text-text-secondary">Pending Payout</span>
-            </div>
-            <p className="text-2xl font-bold text-text-primary font-display">SLE {pendingPayout.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-black-surface border-dark-gray">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <ArrowUpRight className="w-4 h-4 text-blue" />
-              <span className="text-xs text-text-secondary">Next Payout</span>
-            </div>
-            <p className="text-2xl font-bold text-text-primary font-display">Jul 1</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Earnings Chart */}
-      <Card className="bg-black-surface border-dark-gray">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-text-primary">Monthly Earnings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={realMonthlyEarnings}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
-                <XAxis dataKey="month" stroke="#666" fontSize={12} />
-                <YAxis stroke="#666" fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#111111',
-                    border: '1px solid #2A2A2A',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    color: '#F5F5F5',
-                  }}
-                  formatter={(value: number) => [`SLE ${value.toLocaleString()}`, 'Earnings']}
-                />
-                <Bar dataKey="earnings" fill="#D4A24A" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Transactions */}
-      <Card className="bg-black-surface border-dark-gray">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-text-primary">Recent Transactions</CardTitle>
-          <Button variant="outline" size="sm" className="border-dark-gray text-text-primary">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {payments.length === 0 ? (
-            <div className="text-center py-8">
-              <Wallet className="w-12 h-12 text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary mb-2">No transactions yet</p>
-              <p className="text-sm text-text-muted">
-                Completed bookings will appear here as payments.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {payments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-black-elevated"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-text-primary">
-                      {payment.booking?.eventType || 'Booking'} Payment
-                    </p>
-                    <p className="text-xs text-text-secondary">
-                      {new Date(payment.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gold">SLE {payment.amount.toLocaleString()}</p>
-                    <Badge
-                      className={cn(
-                        'border-0 text-xs',
-                        payment.status === 'COMPLETED' ? 'bg-green/10 text-green' : 'bg-yellow-500/10 text-yellow-500'
-                      )}
-                    >
-                      {payment.status}
-                    </Badge>
-                  </div>
+      <FeatureLock feature="Earnings Tracking" requiredTier="pro">
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-black-surface border-dark-gray">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet className="w-4 h-4 text-gold" />
+                  <span className="text-xs text-text-secondary">Total Earnings</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <p className="text-2xl font-bold text-text-primary font-display">SLE {totalEarnings.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-black-surface border-dark-gray">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-4 h-4 text-green" />
+                  <span className="text-xs text-text-secondary">This Month</span>
+                </div>
+                <p className="text-2xl font-bold text-text-primary font-display">SLE {thisMonthEarnings.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-black-surface border-dark-gray">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-4 h-4 text-yellow-500" />
+                  <span className="text-xs text-text-secondary">Pending Payout</span>
+                </div>
+                <p className="text-2xl font-bold text-text-primary font-display">SLE {pendingPayout.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-black-surface border-dark-gray">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowUpRight className="w-4 h-4 text-blue" />
+                  <span className="text-xs text-text-secondary">Next Payout</span>
+                </div>
+                <p className="text-2xl font-bold text-text-primary font-display">Jul 1</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Earnings Chart */}
+          <Card className="bg-black-surface border-dark-gray">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-text-primary">Monthly Earnings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={realMonthlyEarnings}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                    <XAxis dataKey="month" stroke="#666" fontSize={12} />
+                    <YAxis stroke="#666" fontSize={12} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#111111',
+                        border: '1px solid #2A2A2A',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        color: '#F5F5F5',
+                      }}
+                      formatter={(value: number) => [`SLE ${value.toLocaleString()}`, 'Earnings']}
+                    />
+                    <Bar dataKey="earnings" fill="#D4A24A" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Transactions */}
+          <Card className="bg-black-surface border-dark-gray">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold text-text-primary">Recent Transactions</CardTitle>
+              <Button variant="outline" size="sm" className="border-dark-gray text-text-primary">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {payments.length === 0 ? (
+                <div className="text-center py-8">
+                  <Wallet className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                  <p className="text-text-secondary mb-2">No transactions yet</p>
+                  <p className="text-sm text-text-muted">
+                    Completed bookings will appear here as payments.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {payments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-black border border-dark-gray"
+                    >
+                      <div>
+                        <p className="font-semibold text-text-primary text-sm">
+                          {payment.type === 'BOOKING' && payment.booking
+                            ? `Booking: ${payment.booking.eventType}`
+                            : 'Payout'}
+                        </p>
+                        <p className="text-xs text-text-muted mt-1">
+                          {new Date(payment.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-gold text-sm font-display">
+                          +SLE {payment.amount.toLocaleString()}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] mt-1 ${
+                            payment.status === 'COMPLETED'
+                              ? 'text-green border-green/30'
+                              : 'text-yellow-500 border-yellow-500/30'
+                          }`}
+                        >
+                          {payment.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </FeatureLock>
 
       {/* Payout Settings */}
       <Card className="bg-black-surface border-dark-gray">
@@ -248,6 +259,3 @@ export default function Earnings() {
   );
 }
 
-function cn(...classes: (string | boolean | undefined | null)[]) {
-  return classes.filter(Boolean).join(' ');
-}

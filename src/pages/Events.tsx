@@ -242,8 +242,7 @@ export default function Events() {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15 }}
                 onClick={() => navigate(`/events/${ev.id}`)}
-                className="group relative rounded-2xl overflow-hidden cursor-pointer border border-white/5 hover:border-gold/30 transition-all duration-300"
-                style={{ aspectRatio: '2/1' }}
+                className="group relative rounded-2xl overflow-hidden cursor-pointer border border-white/5 hover:border-gold/30 transition-all duration-300 aspect-[16/10] sm:aspect-[2/1]"
               >
                 <img src={ev.image} alt={ev.title} className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300" />
                 <div className="absolute inset-0 bg-hero-overlay" />

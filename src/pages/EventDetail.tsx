@@ -69,8 +69,7 @@ export default function EventDetail() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative rounded-2xl overflow-hidden border border-white/5"
-          style={{ aspectRatio: '21/9' }}
+          className="relative rounded-2xl overflow-hidden border border-white/5 aspect-[4/3] sm:aspect-[16/9] lg:aspect-[21/9]"
         >
           <img
             src={event.image || '/placeholder.jpg'}
@@ -160,7 +159,7 @@ export default function EventDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="space-y-4"
+            className="space-y-4 order-first lg:order-none"
           >
             <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
               <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4">

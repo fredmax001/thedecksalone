@@ -17,6 +17,7 @@ export interface User {
     avatar?: string;
     verified?: boolean;
     isPro?: boolean;
+    subscriptionTier?: string;
   } | null;
 }
 

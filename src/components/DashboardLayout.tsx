@@ -18,8 +18,11 @@ import {
   ChevronRight,
   CreditCard,
   Megaphone,
+  Crown,
+  Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { usePlayerStore } from '@/stores/playerStore';
 import api from '@/lib/api';
 import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
@@ -33,6 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { UpgradeModal } from '@/components/UpgradeModal';
+import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
@@ -53,6 +58,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -168,18 +174,47 @@ export default function DashboardLayout() {
           'flex items-center gap-3',
           collapsed && 'flex-col gap-1'
         )}>
-          <Avatar className="w-10 h-10 border-2 border-gold/30">
-            <AvatarImage src={avatarUrl} alt={djName} />
-            <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar className={cn(
+              "w-10 h-10 border-2 relative z-10",
+              djProfile?.subscriptionTier === 'legend' 
+                ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+                : "border-gold/30"
+            )}>
+              <AvatarImage src={avatarUrl} alt={djName} />
+              <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {djProfile?.subscriptionTier === 'legend' && (
+              <div className="absolute inset-0 rounded-full border border-yellow-400/50 animate-ping opacity-30 z-0" style={{ animationDuration: '3s' }} />
+            )}
+          </div>
           {!collapsed && (
             <div className="overflow-hidden flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">{djName}</p>
-              <p className="text-xs text-text-muted truncate">
-                {isDj ? 'DJ Account' : 'Fan Account'}
+              <p className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
+                {djName}
+                {djProfile?.subscriptionTier === 'legend' && (
+                  <Crown size={12} className="text-yellow-400 shrink-0" />
+                )}
               </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <p className="text-xs text-text-muted truncate">
+                  {isDj ? 'DJ Account' : 'Fan Account'}
+                </p>
+                {user?.djProfile?.subscriptionTier === 'legend' && (
+                  <span className="flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-yellow-400/20 text-yellow-400 text-[9px] font-bold uppercase tracking-wider border border-yellow-400/30">
+                    <Crown className="w-2.5 h-2.5" />
+                    Legend
+                  </span>
+                )}
+                {user?.djProfile?.subscriptionTier === 'pro' && (
+                  <span className="flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-gold/20 text-gold text-[9px] font-bold uppercase tracking-wider border border-gold/30">
+                    <Zap className="w-2.5 h-2.5" />
+                    Pro
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -309,7 +344,10 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main
-          className="flex-1 p-4 lg:p-6 overflow-y-auto pb-20 lg:pb-6"
+          className={cn(
+            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300',
+            currentTrack ? 'pb-40 lg:pb-24' : 'pb-20 lg:pb-6'
+          )}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -326,6 +364,21 @@ export default function DashboardLayout() {
       </div>
 
       <MobileTabBar items={navItems} />
+
+      {/* Global Upgrade Modal — triggered from any component via useUpgradeModalStore */}
+      <GlobalUpgradeModal />
     </div>
+  );
+}
+
+function GlobalUpgradeModal() {
+  const { isOpen, feature, requiredTier, close } = useUpgradeModalStore();
+  return (
+    <UpgradeModal
+      isOpen={isOpen}
+      onClose={close}
+      feature={feature}
+      requiredTier={requiredTier}
+    />
   );
 }

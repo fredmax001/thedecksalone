@@ -1,5 +1,185 @@
-◇ injected env (7) from ../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (1) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (6) from ../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (1) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 [Auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set. Google OAuth will not work.
 Deck Salone API running on port 5002
 Health check: http://localhost:5002/health
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 20
+}
+[Mixes API] Prisma where: {"isPublic":true,"AND":[{"djId":"cmr8qx90v0002o3b3wpquco30"}]}
+[Mixes API] Found 20 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 20
+}
+[Mixes API] Prisma where: {"isPublic":true,"AND":[{"djId":"cmr8qx90v0002o3b3wpquco30"}]}
+[Mixes API] Found 20 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: 'Afrobeats',
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true,"AND":[{"OR":[{"genre":{"equals":"Afrobeats","mode":"insensitive"}},{"category":{"equals":"Afrobeats","mode":"insensitive"}}]}]}
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 2 mixes (total: 2)
+[Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 12
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 12 mixes (total: 21)

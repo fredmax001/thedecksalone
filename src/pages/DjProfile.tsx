@@ -26,6 +26,7 @@ import {
   Loader2,
   UserPlus,
   UserCheck,
+  Zap,
 } from "lucide-react";
 import { cn, imageFallback } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
@@ -124,6 +125,7 @@ interface DJ {
   streamingLinks?: Record<string, string>;
   website?: string;
   whatsappNumber?: string;
+  subscriptionTier?: 'free' | 'pro' | 'legend';
 }
 
 interface RankingHistoryPoint {
@@ -881,7 +883,9 @@ function MixesTab({ dj }: { dj: DJ }) {
                 <button
                   onClick={() => {
                     if (mix.audioUrl) {
-                      window.dispatchEvent(new CustomEvent('play-mix', { detail: mix }));
+                      window.dispatchEvent(new CustomEvent('play-mix', { 
+                        detail: { track: mix, queue: dj.mixes.filter((m: any) => m.audioUrl) } 
+                      }));
                     }
                   }}
                   className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
@@ -1722,6 +1726,9 @@ export default function DjProfile() {
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-hero-overlay" />
+        {dj.subscriptionTier === 'legend' && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-yellow-400/10 to-transparent pointer-events-none mix-blend-screen" />
+        )}
       </motion.div>
 
       {/* Content Layer */}
@@ -1734,7 +1741,15 @@ export default function DjProfile() {
             initial="hidden"
             animate="visible"
           >
-            <div className="w-[100px] h-[100px] sm:w-[140px] sm:h-[140px] rounded-full border-[3px] border-gold overflow-hidden bg-[#111111]">
+            <div className={cn(
+              "w-[100px] h-[100px] sm:w-[140px] sm:h-[140px] rounded-full border-[3px] overflow-hidden bg-[#111111] relative z-10",
+              dj.subscriptionTier === 'legend' 
+                ? "border-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.3)]"
+                : "border-gold"
+            )}>
+              {dj.subscriptionTier === 'legend' && (
+                <div className="absolute inset-0 rounded-full border border-yellow-400/50 animate-ping opacity-20" style={{ animationDuration: '3s' }} />
+              )}
               <img
                 src={dj.avatar || '/default-avatar.jpg'}
                 alt={dj.stageName}
@@ -1757,9 +1772,23 @@ export default function DjProfile() {
             transition={{ duration: 0.5, delay: 0.5 }}
           >
             {/* Name */}
-            <h1 className="font-display text-2xl sm:text-4xl font-semibold uppercase tracking-tight text-text-primary">
-              {dj.stageName}
-            </h1>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <h1 className="font-display text-2xl sm:text-4xl font-semibold uppercase tracking-tight text-text-primary">
+                {dj.stageName}
+              </h1>
+              {dj.subscriptionTier === 'legend' && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-gradient-to-r from-yellow-400/20 to-amber-500/20 text-yellow-400 text-xs font-black uppercase tracking-widest border border-yellow-400/50 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                  <Crown className="w-4 h-4" />
+                  Legend
+                </span>
+              )}
+              {dj.subscriptionTier === 'pro' && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-gold/20 text-gold text-xs font-bold uppercase tracking-widest border border-gold/30">
+                  <Zap className="w-4 h-4" />
+                  Pro
+                </span>
+              )}
+            </div>
 
             {/* Real name */}
             {dj.fullName && (
@@ -1814,7 +1843,7 @@ export default function DjProfile() {
 
           {/* Action Buttons */}
           <motion.div
-            className="flex flex-row sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0"
+            className="flex flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.6 }}
@@ -1892,7 +1921,7 @@ export default function DjProfile() {
       {/* ══════ Section 2: Profile Tabs ══════ */}
       <div
         className={cn(
-          "sticky top-[64px] sm:top-[72px] z-40 mt-8 transition-all duration-300",
+          "sticky top-16 lg:top-28 z-40 mt-8 transition-all duration-300",
           scrolledPastHeader
             ? "bg-black/95 backdrop-blur-lg border-b border-[rgba(255,255,255,0.05)] shadow-nav"
             : "bg-black border-b border-[rgba(255,255,255,0.05)]"
@@ -1956,33 +1985,7 @@ export default function DjProfile() {
       {/* ══════ Booking Modal ══════ */}
       <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} dj={dj} />
 
-      {/* ══════ Sticky Booking FAB (mobile) ══════ */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#111111] border-t border-[rgba(255,255,255,0.05)] p-3 sm:hidden">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img
-              src={dj.avatar}
-              alt={dj.stageName}
-              className="w-10 h-10 rounded-full object-cover"
-            />
-            <div>
-              <p className="text-xs font-medium text-text-primary">{dj.stageName}</p>
-              <p className="text-xs text-gold font-mono-data">
-                {formatFee(dj.bookingFeeMin, dj.bookingFeeMax, dj.currency)}/event
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsBookingOpen(true)}
-            className="px-5 py-2.5 rounded-full bg-gold-gradient text-black text-xs font-semibold uppercase"
-          >
-            Book Now
-          </button>
-        </div>
-      </div>
 
-      {/* Spacer for mobile FAB */}
-      <div className="h-16 sm:hidden" />
     </div>
   );
 }

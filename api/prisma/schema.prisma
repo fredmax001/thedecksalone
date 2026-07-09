@@ -102,6 +102,8 @@ model DjProfile {
   website           String?
   whatsappNumber    String?
   isPro             Boolean  @default(false)
+  subscriptionTier  String   @default("free")
+  subscriptionActivatedAt DateTime?
   socialLinks     Json?    // { instagram, twitter, tiktok, youtube, facebook }
   streamingLinks  Json?    // { audiomack, mixcloud, soundcloud, youtube, hearthis, appleMusic, spotify }
   verified        Boolean  @default(false)
@@ -127,6 +129,18 @@ model DjProfile {
   communityScore  Float    @default(0)
   rankingPosition Int      @default(0)
   badges          String[] @default([])
+  
+  // Feature access tracking
+  totalMixUploads Int      @default(0)           // Count of uploaded mixes (for Free tier limit of 5)
+  hearThisConnected Boolean @default(false)       // Pro+: HearThis sync enabled
+  hearThisId      String?                         // HearThis account ID/username
+  canReceivePayments Boolean @default(false)      // Pro+: Direct booking payments
+  canViewAnalytics Boolean  @default(false)      // Pro+: Advanced analytics
+  isVerifiedEligible Boolean @default(false)     // Pro+: Can apply for verification
+  isLegendFeatured Boolean @default(false)       // Legend: Featured on homepage
+  hasAccountManager Boolean @default(false)       // Legend: Dedicated account manager
+  apiAccessEnabled Boolean @default(false)        // Legend: API access
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -141,6 +155,8 @@ model DjProfile {
   followers       Follow[]
   campaigns       AdCampaign[]
   photos          DjPhoto[]
+  proSubscriptionRequests ProSubscriptionRequest[]
+  opportunityApplications OppApplications[]
   @@map("dj_profiles")
   @@index([userId])
   @@index([city])
@@ -353,6 +369,30 @@ model Payment {
   @@index([providerRef])
 }
 
+model ProSubscriptionRequest {
+  id            String   @id @default(cuid())
+  djId          String
+  plan          String   @default("pro")
+  amount        Float    @default(250)
+  currency      String   @default("SLE")
+  paymentMethod String   @default("Orange Money")
+  paymentNumber String   @default("+23272011156")
+  proofUrl      String
+  note          String?
+  status        String   @default("pending")
+  reviewedById  String?
+  adminNote     String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  dj            DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@map("pro_subscription_requests")
+  @@index([djId])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model Event {
   id            String   @id @default(cuid())
   djId          String?
@@ -508,6 +548,53 @@ model DjPhoto {
   dj DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
 
   @@map("dj_photos")
+  @@index([djId])
+}
+
+model Opportunity {
+  id           String   @id @default(cuid())
+  organizerId  String?  // Admin/organizer who posted (optional - could be admin)
+  title        String
+  description  String
+  eventType    String   // 'wedding', 'club', 'festival', 'corporate', etc.
+  eventDate    DateTime
+  eventLocation String
+  budget       Float
+  budgetCurrency String @default("SLE")
+  genres       String[] // Music genres needed
+  musicStyle   String?
+  hours        Int?     // Duration in hours
+  equipmentNeeded String[]
+  requirements String?
+  notes        String?
+  isFeatured   Boolean  @default(false)     // Legend-exclusive opportunities
+  requiredTier String   @default("pro")     // 'pro' or 'legend'
+  applicants   OppApplications[]
+  status       String   @default("open")    // 'open', 'filled', 'cancelled'
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("opportunities")
+  @@index([eventDate])
+  @@index([status])
+  @@index([requiredTier])
+  @@index([isFeatured])
+}
+
+model OppApplications {
+  id            String   @id @default(cuid())
+  opportunityId String
+  djId          String
+  message       String?
+  status        String   @default("pending")  // 'pending', 'accepted', 'rejected'
+  appliedAt     DateTime @default(now())
+  respondedAt   DateTime?
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  dj            DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
+  
+  @@unique([opportunityId, djId])
+  @@map("opp_applications")
+  @@index([opportunityId])
   @@index([djId])
 }
 

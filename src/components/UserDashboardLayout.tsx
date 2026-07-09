@@ -15,6 +15,7 @@ import {
   Home,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { usePlayerStore } from '@/stores/playerStore';
 import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ export default function UserDashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -295,7 +297,10 @@ export default function UserDashboardLayout() {
 
         {/* Page Content */}
         <main
-          className="flex-1 p-4 lg:p-6 overflow-y-auto pb-20 lg:pb-6"
+          className={cn(
+            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300',
+            currentTrack ? 'pb-40 lg:pb-6' : 'pb-20 lg:pb-6'
+          )}
         >
           <AnimatePresence mode="wait">
             <motion.div

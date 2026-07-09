@@ -13,6 +13,7 @@ import {
 import { type MixTrack } from '@/components/MixPlayer';
 import { useMixes, useTrendingMixes, useLikeMix, useMixGenres } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
+import { cn } from '@/lib/utils';
 
 /* ──────────────────────── Animation helpers ──────────────────────── */
 const fadeUp = {
@@ -73,6 +74,7 @@ function toMixTrack(mix: any): MixTrack {
     audioSource: mix.audioSource,
     originalUrl: mix.originalUrl,
     plays: mix.plays || 0,
+    djTier: mix.dj?.subscriptionTier,
   };
 }
 
@@ -107,8 +109,14 @@ function MixCard({
       transition={{ delay: index * 0.06 }}
       className="group"
     >
-      <div className="relative overflow-hidden rounded-xl bg-black-elevated border border-white/5 hover:border-gold/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-card">
+      <div className={cn(
+        "relative overflow-hidden rounded-xl bg-black-elevated border transition-all duration-300 hover:-translate-y-1 hover:shadow-card",
+        mix.djTier === 'legend' ? "border-yellow-400/50 hover:border-yellow-400" : "border-white/5 hover:border-gold/30"
+      )}>
         <div className="relative aspect-square overflow-hidden">
+          {mix.djTier === 'legend' && (
+            <div className="absolute inset-0 bg-yellow-400/5 pointer-events-none mix-blend-screen z-10" />
+          )}
           <img
             src={mix.cover}
             alt={mix.title}
@@ -171,11 +179,17 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
       transition={{ delay: index * 0.08 }}
       className="group flex-shrink-0 w-[260px] sm:w-[280px]"
     >
-      <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
+      <div className={cn(
+        "relative aspect-square rounded-xl overflow-hidden mb-2 border-2",
+        mix.djTier === 'legend' ? "border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.25)]" : "border-transparent"
+      )}>
+        {mix.djTier === 'legend' && (
+          <div className="absolute inset-0 bg-yellow-400/10 pointer-events-none mix-blend-screen z-10" />
+        )}
         <img src={mix.cover} alt={mix.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-0" />
         <div
-          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer z-20"
           onClick={() => onPlay(mix)}
         >
           <div className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform">
@@ -184,7 +198,10 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
         </div>
       </div>
       <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">{mix.title}</h4>
-      <p className="text-xs text-gold mt-0.5">{mix.dj}</p>
+      <p className="text-xs text-gold mt-0.5 flex items-center gap-1">
+        {mix.djTier === 'legend' && <Flame size={12} className="text-yellow-400 fill-yellow-400" />}
+        {mix.dj}
+      </p>
       <div className="flex items-center gap-2 mt-1">
         <span className="text-[10px] text-text-muted font-mono">{formatCompact(mix.plays || 0)} plays</span>
         <span className="text-text-muted">|</span>
@@ -241,8 +258,13 @@ export default function MixHub() {
   const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
 
   const handlePlay = useCallback((mix: MixTrack) => {
-    window.dispatchEvent(new CustomEvent('play-mix', { detail: mix }));
-  }, []);
+    // Build a queue from all currently visible mixes so next/prev works
+    const allVisible = [...trending, ...latest];
+    const uniqueQueue = allVisible.filter(
+      (t, i, arr) => arr.findIndex((x) => x.id === t.id) === i
+    );
+    window.dispatchEvent(new CustomEvent('play-mix', { detail: { track: mix, queue: uniqueQueue.length > 1 ? uniqueQueue : undefined } }));
+  }, [trending, latest]);
 
   const isLoading = genresLoading || trendingLoading || latestLoading;
   const featuredMix = trending[0];
@@ -315,7 +337,7 @@ export default function MixHub() {
       )}
 
       {/* Genre Filter */}
-      <div className="sticky top-[72px] z-30 bg-black-elevated border-b border-white/5">
+      <div className="sticky top-16 lg:top-28 z-30 bg-black-elevated border-b border-white/5">
         <div className="max-w-container mx-auto px-6 py-3">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
             <span className="text-[10px] uppercase tracking-wider text-text-muted mr-1 shrink-0">Genre</span>

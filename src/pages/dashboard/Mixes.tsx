@@ -49,6 +49,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useImportHearthis } from '@/hooks/useMixes';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { Progress } from '@/components/ui/progress';
 
 interface Mix {
   id: string;
@@ -81,6 +83,7 @@ const GENRES = [
 export default function Mixes() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { isFree, openUpgradeModal } = useFeatureAccess();
   const [mixes, setMixes] = useState<Mix[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -147,6 +150,14 @@ export default function Mixes() {
 
     fetchMixes();
   }, [isDj, djId]);
+
+  const handleUploadClick = () => {
+    if (isFree && mixes.length >= 5) {
+      openUpgradeModal('Unlimited Mix Uploads', 'pro');
+      return;
+    }
+    setIsUploadOpen(true);
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,7 +309,19 @@ export default function Mixes() {
       originalUrl: mix.originalUrl,
       plays: mix.plays,
     };
-    window.dispatchEvent(new CustomEvent('play-mix', { detail: track }));
+    const queue = mixes.filter(m => m.audioUrl || m.originalUrl).map(m => ({
+      id: m.id,
+      title: m.title,
+      dj: user?.djProfile?.stageName || 'Unknown DJ',
+      duration: typeof m.duration === 'string' ? parseInt(m.duration, 10) || 0 : 0,
+      cover: m.coverImage || '/placeholder.jpg',
+      genre: m.genre || m.category || 'Mix',
+      audioUrl: m.audioUrl || m.originalUrl,
+      audioSource: m.audioSource,
+      originalUrl: m.originalUrl,
+      plays: m.plays,
+    }));
+    window.dispatchEvent(new CustomEvent('play-mix', { detail: { track, queue } }));
   };
 
   if (loading) {
@@ -335,18 +358,34 @@ export default function Mixes() {
             Manage your mixes, track performance, and upload new content.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {isFree && (
+            <div className="flex flex-col items-end mr-4">
+              <div className="flex justify-between w-full text-xs text-white/50 mb-1">
+                <span>Free Tier Limit</span>
+                <span>{mixes.length} / 5</span>
+              </div>
+              <Progress value={(mixes.length / 5) * 100} className="w-32 h-1.5" />
+            </div>
+          )}
           <Button
             variant="outline"
             className="border-gold/50 text-gold hover:bg-gold/10"
-            onClick={() => { setImportResult(null); setIsImportOpen(true); }}
+            onClick={() => {
+              if (isFree) {
+                openUpgradeModal('HearThis.at Import', 'pro');
+              } else {
+                setImportResult(null);
+                setIsImportOpen(true);
+              }
+            }}
           >
             <ExternalLink className="w-4 h-4 mr-2" />
             Import from Hearthis
           </Button>
           <Button
             className="bg-gold-gradient text-black hover:opacity-90"
-            onClick={() => setIsUploadOpen(true)}
+            onClick={handleUploadClick}
           >
             <Upload className="w-4 h-4 mr-2" />
             Upload New Mix
@@ -376,7 +415,7 @@ export default function Mixes() {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Button
                     className="bg-gold-gradient text-black"
-                    onClick={() => setIsUploadOpen(true)}
+                    onClick={handleUploadClick}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Upload Your First Mix

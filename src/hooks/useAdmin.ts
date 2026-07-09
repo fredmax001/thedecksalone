@@ -244,6 +244,31 @@ export interface SubscriptionOverview {
   activeBookings: number;
   mrr: number;
   arr: number;
+  pendingRequests?: number;
+}
+
+export interface ProSubscriptionRequest {
+  id: string;
+  djId: string;
+  plan: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string;
+  paymentNumber: string;
+  proofUrl: string;
+  note?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  dj: {
+    id: string;
+    stageName: string;
+    avatar?: string | null;
+    isPro: boolean;
+    subscriptionTier?: string;
+    user: { id: string; email: string; phone?: string | null };
+  };
 }
 
 export interface AdCampaign {
@@ -520,6 +545,48 @@ export function useAdminSubscriptions() {
     queryFn: async () => {
       const res = await api.get('/admin/subscriptions');
       return res.data.data;
+    },
+  });
+}
+
+export function useAdminProSubscriptionRequests(status?: string) {
+  return useQuery<ProSubscriptionRequest[]>({
+    queryKey: ['adminProSubscriptionRequests', status || 'all'],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (status && status !== 'all') params.set('status', status);
+      const query = params.toString();
+      const res = await api.get(`/admin/pro-subscription-requests${query ? `?${query}` : ''}`);
+      return res.data.data;
+    },
+  });
+}
+
+export function useApproveProSubscriptionRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note }: { id: string; note?: string }) => {
+      const res = await api.post(`/admin/pro-subscription-requests/${id}/approve`, { note });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminProSubscriptionRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+    },
+  });
+}
+
+export function useRejectProSubscriptionRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note }: { id: string; note?: string }) => {
+      const res = await api.post(`/admin/pro-subscription-requests/${id}/reject`, { note });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminProSubscriptionRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
     },
   });
 }
@@ -815,6 +882,16 @@ export function useRecalculateRankings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminRankings'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useAdminOpportunities() {
+  return useQuery({
+    queryKey: ['admin-opportunities'],
+    queryFn: async () => {
+      const res = await api.get('/opportunities');
+      return res.data.data;
     },
   });
 }

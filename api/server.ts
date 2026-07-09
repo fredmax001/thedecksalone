@@ -28,6 +28,7 @@ const discoverRoutes = require('./routes/discover');
 const campaignRoutes = require('./routes/campaigns');
 const gigRoutes = require('./routes/gigs');
 const photoRoutes = require('./routes/photos');
+const opportunityRoutes = require('./routes/opportunities');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -87,6 +88,7 @@ app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/discover', discoverRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/gigs', gigRoutes);
+app.use('/api/opportunities', authMiddleware, opportunityRoutes);
 app.use('/api/photos', photoRoutes);
 
 // OG Meta routes for social media sharing (own file)

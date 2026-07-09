@@ -2,8 +2,21 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { uploadDocument } = require('../utils/upload');
+const { uploadBuffer, deleteFile } = require('../utils/storage');
 
 const router = express.Router();
+
+const PLATFORM_PAYMENT_NUMBER = process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156';
+const PLATFORM_WHATSAPP_NUMBER = process.env.PLATFORM_WHATSAPP_NUMBER || PLATFORM_PAYMENT_NUMBER;
+const configuredProPrice = Number(process.env.PRO_SUBSCRIPTION_PRICE);
+const PRO_SUBSCRIPTION_PRICE = Number.isFinite(configuredProPrice) && configuredProPrice > 0 ? configuredProPrice : 250;
+const configuredLegendPrice = Number(process.env.LEGEND_SUBSCRIPTION_PRICE);
+const LEGEND_SUBSCRIPTION_PRICE = Number.isFinite(configuredLegendPrice) && configuredLegendPrice > 0 ? configuredLegendPrice : 750;
+const SUBSCRIPTION_PLANS = {
+  pro: { id: 'pro', name: 'Pro', price: PRO_SUBSCRIPTION_PRICE },
+  legend: { id: 'legend', name: 'Legend', price: LEGEND_SUBSCRIPTION_PRICE },
+};
 
 const paymentSchema = z.object({
   bookingId: z.string(),
@@ -15,6 +28,141 @@ const paymentSchema = z.object({
 const paymentProcessSchema = z.object({
   provider: z.string().default('manual'), // 'paystack', 'stripe', 'manual'
   providerRef: z.string().optional(),
+});
+
+const proSubscriptionSchema = z.object({
+  plan: z.enum(['pro', 'legend']).default('pro'),
+  note: z.string().max(500).optional(),
+});
+
+function extFromMime(mimetype: string, fallbackName = '') {
+  const fromMime: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  };
+  if (fromMime[mimetype]) return fromMime[mimetype];
+  const ext = fallbackName.split('.').pop();
+  return ext && ext.length <= 5 ? ext : 'bin';
+}
+
+// GET /api/payments/pro-subscription/config - Manual Orange Money instructions
+router.get('/pro-subscription/config', authMiddleware, async (_req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      paymentMethod: 'Orange Money',
+      paymentNumber: PLATFORM_PAYMENT_NUMBER,
+      whatsappNumber: PLATFORM_WHATSAPP_NUMBER,
+      proPrice: PRO_SUBSCRIPTION_PRICE,
+      legendPrice: LEGEND_SUBSCRIPTION_PRICE,
+      currency: 'SLE',
+      plans: Object.values(SUBSCRIPTION_PLANS),
+    },
+  });
+});
+
+// GET /api/payments/pro-subscription/current - Current DJ pro status and latest request
+router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: {
+        id: true,
+        stageName: true,
+        isPro: true,
+        subscriptionTier: true,
+        subscriptionActivatedAt: true,
+        proSubscriptionRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        isPro: dj.isPro,
+        activePlan: dj.subscriptionTier || (dj.isPro ? 'pro' : 'free'),
+        subscriptionActivatedAt: dj.subscriptionActivatedAt,
+        latestRequest: dj.proSubscriptionRequests[0] || null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/payments/pro-subscription - Submit Orange Money proof for Pro review
+router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+  try {
+    const parsed = proSubscriptionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Payment proof is required' });
+    }
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, isPro: true, subscriptionTier: true },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    const requestedPlan = parsed.data.plan;
+    const activePlan = dj.subscriptionTier || (dj.isPro ? 'pro' : 'free');
+
+    if (activePlan === requestedPlan) {
+      return res.status(400).json({ success: false, error: `Your ${SUBSCRIPTION_PLANS[requestedPlan].name} subscription is already active` });
+    }
+
+    const proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
+      ext: extFromMime(req.file.mimetype, req.file.originalname),
+      contentType: req.file.mimetype,
+    });
+
+    const existingPending = await prisma.proSubscriptionRequest.findFirst({
+      where: { djId: dj.id, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const data = {
+      plan: requestedPlan,
+      amount: SUBSCRIPTION_PLANS[requestedPlan].price,
+      currency: 'SLE',
+      paymentMethod: 'Orange Money',
+      paymentNumber: PLATFORM_PAYMENT_NUMBER,
+      proofUrl,
+      note: parsed.data.note || null,
+      status: 'pending',
+      adminNote: null,
+      reviewedAt: null,
+      reviewedById: null,
+    };
+
+    const request = existingPending
+      ? await prisma.proSubscriptionRequest.update({ where: { id: existingPending.id }, data })
+      : await prisma.proSubscriptionRequest.create({ data: { ...data, djId: dj.id } });
+
+    if (existingPending?.proofUrl) {
+      deleteFile(existingPending.proofUrl).catch(() => {});
+    }
+
+    return res.status(existingPending ? 200 : 201).json({ success: true, data: request });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // GET /api/payments - List payments for the authenticated user
