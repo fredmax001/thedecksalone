@@ -183,3 +183,13 @@ Health check: http://localhost:5002/health
 }
 [Mixes API] Prisma where: {"isPublic":true}
 [Mixes API] Found 12 mixes (total: 21)
+[Mixes API] Filter request: {
+  genre: undefined,
+  category: undefined,
+  search: undefined,
+  pageNum: 1,
+  limitNum: 1
+}
+[Mixes API] Prisma where: {"isPublic":true}
+[Mixes API] Found 1 mixes (total: 21)
+Shutting down...

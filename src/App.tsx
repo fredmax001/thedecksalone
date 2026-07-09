@@ -22,6 +22,8 @@ const HallOfFame = lazy(() => import('./pages/HallOfFame'));
 const Battles = lazy(() => import('./pages/Battles'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Help = lazy(() => import('./pages/Help'));
@@ -118,6 +120,8 @@ export default function App() {
           {/* Auth screens (Standalone layout) */}
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password" element={<ResetPassword />} />
 
           {/* Public site */}
           <Route element={<Layout />}>

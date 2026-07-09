@@ -421,8 +421,71 @@ export default function Profile() {
 
   if (!isDj) {
     return (
-      <div className="text-center py-12">
-        <p className="text-text-secondary">Profile editing is only available for DJs.</p>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
+            Fan Profile
+          </h1>
+          <p className="text-sm text-text-secondary mt-1">
+            Manage your personal account details.
+          </p>
+        </div>
+
+        <Card className="bg-black-surface border-dark-gray">
+          <CardContent className="p-6 space-y-6">
+            <div>
+              <Label className="text-text-secondary mb-3 block">Avatar</Label>
+              <div className="flex items-center gap-4">
+                <Avatar className="w-20 h-20 border-2 border-gold/30">
+                  <AvatarImage src={avatarPreview || user?.avatar} />
+                  <AvatarFallback className="bg-gold/20 text-gold text-xl font-bold">
+                    {(user?.name || user?.username || 'U').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setAvatarFile(file);
+                        const reader = new FileReader();
+                        reader.onloadend = () => setAvatarPreview(reader.result as string);
+                        reader.readAsDataURL(file);
+
+                        // Upload immediately
+                        const formData = new FormData();
+                        formData.append('avatar', file);
+                        try {
+                          await api.put('/users/avatar', formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                          });
+                          toast.success('Avatar updated successfully!');
+                        } catch (err: any) {
+                          toast.error(err.response?.data?.error || 'Failed to update avatar');
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-black-elevated border-dark-gray hover:border-gold/50 text-text-primary"
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Change Avatar
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* In the future, add Name/Bio inputs here and hit /users/profile */}
+          </CardContent>
+        </Card>
       </div>
     );
   }

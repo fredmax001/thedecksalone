@@ -1,11 +1,11 @@
 const sharp = require('sharp');
-const { fileTypeFromBuffer } = require('file-type');
+const { fromBuffer } = require('file-type');
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
 async function validateImage(buffer, options = {}) {
-  const type = await fileTypeFromBuffer(buffer);
+  const type = await fromBuffer(buffer);
   if (!type || !ALLOWED_IMAGE_TYPES.has(type.mime)) {
     throw new Error('Invalid image format. Allowed: JPG, PNG, WebP');
   }

@@ -1758,7 +1758,7 @@ export default function DjProfile() {
               />
             </div>
             {dj.verified && (
-              <div className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-green flex items-center justify-center border-2 border-black">
+              <div className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-green flex items-center justify-center border-2 border-black z-20">
                 <Check size={14} className="text-white" strokeWidth={3} />
               </div>
             )}

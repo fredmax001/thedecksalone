@@ -8,6 +8,7 @@ const { signToken } = require('../utils/jwt');
 const { authMiddleware } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter } = require('../utils/rateLimiter');
+const { sendEmail, isEmailConfigured } = require('../utils/email');
 
 const router = express.Router();
 
@@ -268,12 +269,26 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
     });
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
 
-    // TODO: Replace with actual email provider (SendGrid, AWS SES, etc.)
-    // The reset URL must be sent via email — do NOT log in production.
-    if (process.env.NODE_ENV === 'development') {
+    // Send the reset email if SMTP is configured; otherwise log the URL in development
+    if (isEmailConfigured()) {
+      const emailResult = await sendEmail({
+        to: email,
+        subject: 'Reset your Deck Salone password',
+        text: `You requested a password reset. Click the link below to reset your password:\n\n${resetUrl}\n\nThis link expires in 15 minutes. If you did not request this, please ignore this email.`,
+        html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Click here to reset your password</a></p><p>This link expires in 15 minutes. If you did not request this, please ignore this email.</p>`,
+      });
+
+      if (!emailResult.success) {
+        // Don't expose email configuration issues to the client
+        console.error('[Auth] Failed to send password reset email:', emailResult.error);
+      }
+    } else if (process.env.NODE_ENV === 'development') {
       console.log(`[Dev] Password reset URL for ${email}: ${resetUrl}`);
+    } else {
+      console.warn('[Auth] SMTP not configured; password reset email cannot be sent.');
     }
 
     return res.json(successResponse);
