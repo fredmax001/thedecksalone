@@ -37,7 +37,7 @@ import {
 import api from '@/lib/api';
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
@@ -94,6 +95,27 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setSaveError('');
+    setIsDeletingAccount(true);
+
+    try {
+      const res = await api.delete('/users/account');
+      if (res.data.success) {
+        logout();
+        window.location.href = '/';
+      } else {
+        setSaveError(res.data.error || 'Failed to delete account');
+        setIsDeletingAccount(false);
+        setShowDeleteDialog(false);
+      }
+    } catch (error: any) {
+      setSaveError(error.response?.data?.error || 'Failed to delete account');
+      setIsDeletingAccount(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     setPasswordError('');
     setPasswordSuccess(false);
@@ -133,9 +155,6 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Settings
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Manage your account, notifications, and preferences.
-          </p>
         </div>
         {saved && (
           <div className="flex items-center gap-2 text-green text-sm">
@@ -470,8 +489,16 @@ export default function SettingsPage() {
             <Button variant="outline" className="border-dark-gray text-text-primary" onClick={() => setShowDeleteDialog(false)}>
               Cancel
             </Button>
-            <Button className="bg-red hover:bg-red/90 text-black">
-              <Trash2 className="w-4 h-4 mr-2" />
+            <Button
+              className="bg-red hover:bg-red/90 text-black"
+              onClick={handleDeleteAccount}
+              disabled={isDeletingAccount}
+            >
+              {isDeletingAccount ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
               Delete Account
             </Button>
           </DialogFooter>

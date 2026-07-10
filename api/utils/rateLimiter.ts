@@ -3,11 +3,12 @@ const rateLimit = require('express-rate-limit');
 // General API rate limiter: 100 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // increased for local dev / same-origin serving
+  max: 100, // tightened for production
   skip: (req) => {
-    // Skip rate limit for local/internal IPs during development
+    // Only skip rate limit for local/internal IPs during development
+    if (process.env.NODE_ENV === 'production') return false;
     const ip = req.ip || req.connection.remoteAddress || '';
-    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
     success: false,
@@ -17,13 +18,15 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Strict auth rate limiter: 10 attempts per 15 minutes per IP (reset for dev)
+// Strict auth rate limiter: 10 attempts per 15 minutes per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // relaxed for development testing
+  max: 10, // strict: 10 auth attempts per window
   skip: (req) => {
+    // Only skip rate limit for local/internal IPs during development
+    if (process.env.NODE_ENV === 'production') return false;
     const ip = req.ip || req.connection.remoteAddress || '';
-    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
     success: false,

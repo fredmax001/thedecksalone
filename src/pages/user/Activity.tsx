@@ -115,9 +115,6 @@ export default function Activity() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             My Activity
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Your likes, ratings, votes, and saved events.
-          </p>
         </div>
         <Select value={filter} onValueChange={setFilter}>
           <SelectTrigger className="w-[180px] bg-black-elevated border-dark-gray text-text-primary">

@@ -103,9 +103,6 @@ export default function Earnings() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Earnings
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Track your income, payouts, and financial performance.
-          </p>
         </div>
       </div>
 

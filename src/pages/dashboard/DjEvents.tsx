@@ -214,9 +214,6 @@ export default function DjEvents() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             My Events
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Announce your upcoming gigs and share ticket links with fans.
-          </p>
         </div>
         {isDj && (
           <Button

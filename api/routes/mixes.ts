@@ -1,7 +1,9 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
+const { requirePro } = require('../middleware/permissions');
+const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthlyListeners');
 const { uploadMix } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processCover } = require('../utils/imageProcessor');
@@ -705,21 +707,141 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
 });
 
 // POST /api/mixes/:id/play - Track a play (call from the player, not on GET)
-router.post('/:id/play', async (req, res) => {
+router.post('/:id/play', softAuthMiddleware, async (req, res) => {
   try {
     const mix = await prisma.mix.findUnique({
       where: { id: req.params.id },
-      select: { id: true, plays: true },
+      select: { id: true, djId: true, plays: true },
     });
     if (!mix) {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
-    const updated = await prisma.mix.update({
-      where: { id: req.params.id },
-      data: { plays: { increment: 1 } },
-      select: { plays: true },
-    });
+
+    const [updated] = await prisma.$transaction([
+      prisma.mix.update({
+        where: { id: req.params.id },
+        data: { plays: { increment: 1 } },
+        select: { plays: true },
+      }),
+      recordMixPlay(mix.id, mix.djId, {
+        userId: req.user?.id,
+        ip: req.ip,
+      }),
+    ]);
+
+    // Update cached monthly listener count asynchronously (do not block response)
+    recalculateMonthlyListeners(mix.djId).catch(() => {});
+
     return res.json({ success: true, data: { plays: updated.plays } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RE-UPS (Pro+ only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/mixes/:id/reup - Re-up another DJ's mix
+router.post('/:id/reup', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+    const djId = req.djProfile.id;
+
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      include: { dj: { select: { userId: true } } },
+    });
+
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    if (!mix.isPublic) {
+      return res.status(400).json({ success: false, error: 'Cannot re-up a private mix' });
+    }
+
+    if (mix.djId === djId) {
+      return res.status(400).json({ success: false, error: 'You cannot re-up your own mix' });
+    }
+
+    if (mix.dj.userId === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You cannot re-up your own mix' });
+    }
+
+    const existing = await prisma.mixReup.findUnique({
+      where: { djId_mixId: { djId, mixId } },
+    });
+
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'You have already re-upped this mix' });
+    }
+
+    const reup = await prisma.mixReup.create({
+      data: { djId, mixId },
+    });
+
+    return res.status(201).json({ success: true, data: reup });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/mixes/:id/reup - Remove a re-up
+router.delete('/:id/reup', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+    const djId = req.djProfile.id;
+
+    const existing = await prisma.mixReup.findUnique({
+      where: { djId_mixId: { djId, mixId } },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Re-up not found' });
+    }
+
+    await prisma.mixReup.delete({
+      where: { djId_mixId: { djId, mixId } },
+    });
+
+    return res.json({ success: true, data: { reupped: false } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/mixes/:id/reup-status - Check if current DJ has re-upped this mix
+router.get('/:id/reup-status', softAuthMiddleware, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+
+    if (!req.user) {
+      const count = await prisma.mixReup.count({ where: { mixId } });
+      return res.json({ success: true, data: { reupped: false, count } });
+    }
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true },
+    });
+
+    if (!dj || dj.subscriptionTier === 'free') {
+      const count = await prisma.mixReup.count({ where: { mixId } });
+      return res.json({ success: true, data: { reupped: false, count } });
+    }
+
+    const [reup, count] = await Promise.all([
+      prisma.mixReup.findUnique({
+        where: { djId_mixId: { djId: dj.id, mixId } },
+      }),
+      prisma.mixReup.count({ where: { mixId } }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: { reupped: !!reup, count },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

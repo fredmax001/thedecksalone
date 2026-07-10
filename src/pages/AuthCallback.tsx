@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { fetchMe } = useAuthStore();
+  const { fetchMe, setAuth } = useAuthStore();
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -17,14 +17,16 @@ export default function AuthCallback() {
     }
 
     if (token) {
-      localStorage.setItem('soundit_token', token);
+      // Store token via Zustand persist (soundit-auth key) so the auth store picks it up.
+      // We set a minimal user object and let fetchMe populate the full profile.
+      setAuth({ id: '', email: '', username: '', role: 'USER' } as any, token);
       fetchMe().then(() => {
         navigate('/dashboard');
       });
     } else {
       navigate('/login');
     }
-  }, [searchParams, navigate, fetchMe]);
+  }, [searchParams, navigate, fetchMe, setAuth]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black text-text-primary">

@@ -437,11 +437,6 @@ export default function Rankings() {
               SIERRA LEONE DJ RANKINGS
             </h1>
           </FadeIn>
-          <FadeIn delay={0.3}>
-            <p className="mt-4 text-text-secondary text-center max-w-xl mx-auto text-sm sm:text-base">
-              Transparent, data-driven rankings updated weekly. See exactly how scores are calculated.
-            </p>
-          </FadeIn>
           <FadeIn delay={0.4}>
             <div className="flex items-center justify-center gap-2 mt-4 text-text-muted">
               <RefreshCw className="w-3.5 h-3.5" />
@@ -547,4 +542,3 @@ export default function Rankings() {
     </div>
   );
 }
-

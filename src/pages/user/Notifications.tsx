@@ -144,9 +144,6 @@ export default function Notifications() {
             <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
               Notifications
             </h1>
-            <p className="text-sm text-text-secondary mt-1">
-              Booking updates, DJ replies, and new content.
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">

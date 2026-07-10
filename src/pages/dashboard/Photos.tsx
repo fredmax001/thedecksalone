@@ -87,9 +87,6 @@ export default function PhotosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-semibold uppercase text-text-primary">Photos</h1>
-          <p className="text-sm text-text-muted mt-1">
-            {photos.length}/10 photos uploaded
-          </p>
         </div>
         <div>
           <input

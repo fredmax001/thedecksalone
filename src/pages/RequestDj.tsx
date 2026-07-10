@@ -152,9 +152,6 @@ export default function RequestDj() {
           <h1 className="font-display text-3xl sm:text-4xl font-bold text-text-primary uppercase tracking-tight mt-2">
             Request a DJ
           </h1>
-          <p className="text-text-secondary mt-3 max-w-lg mx-auto">
-            Tell us about your event and we&apos;ll match you with available DJs. No account required.
-          </p>
         </motion.div>
 
         <motion.div

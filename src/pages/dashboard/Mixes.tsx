@@ -354,9 +354,6 @@ export default function Mixes() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Mixes
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Manage your mixes, track performance, and upload new content.
-          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           {isFree && (

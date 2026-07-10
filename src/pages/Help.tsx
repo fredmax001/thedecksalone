@@ -156,15 +156,6 @@ export default function Help() {
             >
               Help <span className="text-gradient-gold">Center</span>
             </motion.h1>
-            <motion.p
-              className="mt-5 text-lg text-text-secondary max-w-xl mx-auto leading-relaxed"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              Find answers to common questions about Deck Salone.
-            </motion.p>
-
             {/* Search */}
             <motion.div
               className="mt-8 max-w-lg mx-auto"

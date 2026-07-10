@@ -2,6 +2,7 @@ const express = require('express');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { computeDjScore } = require('../utils/ranking');
+const { getMonthlyListeners } = require('../utils/monthlyListeners');
 
 const router = express.Router();
 
@@ -94,6 +95,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     // Calculate live ranking score
     const liveScores = await computeDjScore(dj.id);
+    const monthlyListeners = await getMonthlyListeners(dj.id);
 
     return res.json({
       success: true,
@@ -108,6 +110,7 @@ router.get('/', authMiddleware, async (req, res) => {
           rankingPosition: dj.rankingPosition,
           rankingScore: dj.rankingScore,
           totalFollowers,
+          monthlyListeners,
           liveScores,
         },
         recentBookings,
@@ -148,6 +151,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
       mixLikesThisMonth,
       topGenre,
       totalMixesAllTime,
+      monthlyListeners,
     ] = await Promise.all([
       prisma.mix.count({
         where: { djId: dj.id, createdAt: { gte: thirtyDaysAgo } },
@@ -176,6 +180,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
         take: 1,
       }),
       prisma.mix.count({ where: { djId: dj.id } }),
+      getMonthlyListeners(dj.id),
     ]);
 
     // Monthly activity (last 6 months) — single query instead of 12 sequential ones
@@ -247,6 +252,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
         newStreams: totalStreamsAllTime._sum.plays || 0,
         newStreamsThisWeek: newStreamsThisWeek._sum.plays || 0,
         profileViews: null,
+        monthlyListeners,
         mixLikesThisMonth: mixLikesThisMonth._sum.likes || 0,
         topGenre: topGenre[0]?.genre || 'Unknown',
         engagementRate,

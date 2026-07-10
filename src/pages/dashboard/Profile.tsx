@@ -262,17 +262,21 @@ export default function Profile() {
 
   const buildFormData = () => {
     const formData = new FormData();
+    const appendArray = (key: string, value: string[]) => {
+      formData.append(key, JSON.stringify(value));
+    };
+
     if (form.stageName) formData.append('stageName', form.stageName);
     if (form.fullName) formData.append('fullName', form.fullName);
     if (form.bio) formData.append('bio', form.bio);
     if (form.startYear) formData.append('startYear', form.startYear);
     if (form.country) formData.append('country', form.country);
     if (form.city) formData.append('city', form.city);
-    if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
-    if (form.eventTypes.length) form.eventTypes.forEach((e) => formData.append('eventTypes', e));
-    if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
-    if (form.equipment.length) form.equipment.forEach((e) => formData.append('equipment', e));
-    if (form.languages.length) form.languages.forEach((l) => formData.append('languages', l));
+    appendArray('genres', form.genres);
+    appendArray('eventTypes', form.eventTypes);
+    appendArray('awards', form.awards);
+    appendArray('equipment', form.equipment);
+    appendArray('languages', form.languages);
     if (form.bookingFeeMin) formData.append('bookingFeeMin', form.bookingFeeMin);
     if (form.bookingFeeMax) formData.append('bookingFeeMax', form.bookingFeeMax);
     if (form.hourlyRate) formData.append('hourlyRate', form.hourlyRate);
@@ -305,7 +309,7 @@ export default function Profile() {
       let res;
 
       if (djId) {
-        res = await api.put(`/djs/${djId}`, buildFormData());
+        res = await api.put('/djs/me', buildFormData());
       } else {
         res = await api.post('/djs', buildFormData());
       }
@@ -426,9 +430,6 @@ export default function Profile() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Fan Profile
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Manage your personal account details.
-          </p>
         </div>
 
         <Card className="bg-black-surface border-dark-gray">
@@ -497,9 +498,6 @@ export default function Profile() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Profile
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Edit your public DJ profile. This is what clients see when they visit your page.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           {saved && (

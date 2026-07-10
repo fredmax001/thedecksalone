@@ -9,6 +9,29 @@ const stats = [
   { icon: Calendar, value: '200+', label: 'Events Hosted' },
 ];
 
+const productScreens = [
+  {
+    title: 'Home',
+    image: '/images/about/mobile-home.png',
+    className: 'lg:translate-y-10',
+  },
+  {
+    title: 'Discover',
+    image: '/images/about/mobile-discover.png',
+    className: '',
+  },
+  {
+    title: 'DJ Dashboard',
+    image: '/images/about/desktop-dashboard-dj.png',
+    className: 'lg:translate-y-16',
+  },
+  {
+    title: 'Mix Hub',
+    image: '/images/about/mobile-mixes.png',
+    className: 'lg:translate-y-4',
+  },
+];
+
 export default function About() {
   return (
     <div className="min-h-screen bg-black">
@@ -16,7 +39,6 @@ export default function About() {
       <section className="relative pt-32 pb-20 sm:pb-24 overflow-hidden">
         <div className="container-main">
           <FadeIn>
-            <p className="section-label mb-4">Our Story</p>
             <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold uppercase tracking-tight text-text-primary max-w-4xl">
               About{' '}
               <span className="text-gold">Deck Salone</span>
@@ -95,8 +117,44 @@ export default function About() {
         </div>
       </section>
 
-      {/* ─── STATS ─── */}
+      {/* ─── PLATFORM PREVIEW ─── */}
       <section className="py-16 sm:py-20 bg-black">
+        <div className="container-main">
+          <FadeIn className="mb-10 sm:mb-12">
+            <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold uppercase tracking-tight text-text-primary max-w-4xl">
+              Discover the{' '}
+              <span className="text-gold">Best DJs</span>
+            </h2>
+            <p className="mt-4 text-text-secondary max-w-2xl leading-relaxed">
+              The first digital platform connecting DJs, promoters, and fans across
+              Sierra Leone. Upload mixes, get booked, track rankings, and be part of
+              the movement.
+            </p>
+          </FadeIn>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+            {productScreens.map((screen, i) => (
+              <FadeIn key={screen.title} delay={i * 0.08}>
+                <figure className={`group ${screen.className}`}>
+                  <div className="overflow-hidden rounded-xl border border-white/10 bg-black-surface shadow-card">
+                    <img
+                      src={screen.image}
+                      alt={`${screen.title} page screenshot`}
+                      className="h-[420px] sm:h-[480px] lg:h-[520px] w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                  </div>
+                  <figcaption className="mt-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    {screen.title}
+                  </figcaption>
+                </figure>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── STATS ─── */}
+      <section className="py-16 sm:py-20 bg-black-elevated">
         <div className="container-main">
           <FadeIn className="text-center mb-12">
             <p className="section-label mb-3">By The Numbers</p>
@@ -131,11 +189,6 @@ export default function About() {
             <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold uppercase tracking-tight text-text-primary">
               More Than a Directory
             </h2>
-            <p className="mt-3 text-text-secondary max-w-lg mx-auto">
-              An ecosystem designed to strengthen Sierra Leone's entertainment
-              industry while also connecting it to the global music scene through
-              technology, innovation, and community.
-            </p>
           </FadeIn>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -187,10 +240,6 @@ export default function About() {
             <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold uppercase tracking-tight text-text-primary">
               Ready to Join the Movement?
             </h2>
-            <p className="mt-4 text-text-secondary max-w-lg mx-auto">
-              Whether you're a DJ looking to grow your career or a fan discovering
-              new talent, Deck Salone is your platform.
-            </p>
           </FadeIn>
           <FadeIn delay={0.2}>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">

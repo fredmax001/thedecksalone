@@ -168,9 +168,6 @@ export default function Events() {
               <motion.h1 variants={fadeUp} className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary uppercase tracking-tight mt-3">
                 WHAT&apos;S HAPPENING IN SIERRA LEONE
               </motion.h1>
-              <motion.p variants={fadeUp} className="text-text-secondary text-base lg:text-lg mt-4 max-w-md leading-relaxed">
-                Discover upcoming events, festivals, and club nights. DJs — find open slots and apply to perform.
-              </motion.p>
             </motion.div>
             <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.3 }} className="relative w-full lg:w-[45%] max-w-md">
               <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }} className="relative">

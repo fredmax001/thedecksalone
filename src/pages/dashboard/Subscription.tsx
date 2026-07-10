@@ -329,9 +329,6 @@ export default function Subscription() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Subscription
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Choose a tier, pay with Orange Money, then upload proof for admin confirmation.
-          </p>
         </div>
         <Badge
           variant="outline"

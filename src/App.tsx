@@ -91,6 +91,7 @@ export default function App() {
               <Route path="dashboard/bookings" element={<DashboardBookings />} />
               <Route path="dashboard/messages" element={<DashboardMessages />} />
               <Route path="dashboard/mixes" element={<DashboardMixes />} />
+              <Route path="dashboard/sets" element={<DashboardMixes />} />
               <Route path="dashboard/photos" element={<DashboardPhotos />} />
               <Route path="dashboard/events" element={<DashboardEvents />} />
               <Route path="dashboard/analytics" element={<DashboardAnalytics />} />

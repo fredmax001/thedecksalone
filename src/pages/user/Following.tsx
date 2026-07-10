@@ -317,9 +317,6 @@ export default function Following() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Following
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            DJs you follow and their latest uploads & events.
-          </p>
         </div>
 
         <div className="flex items-center gap-3">

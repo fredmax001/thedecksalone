@@ -56,13 +56,40 @@ interface Mix {
   id: string;
   title: string;
   coverImage?: string;
-  duration?: string;
+  duration?: string | number;
   plays: number;
+  likes?: number;
   createdAt: string;
   category?: string;
   genre?: string;
   audioUrl?: string;
   audioSource?: string;
+  dj?: { id: string; stageName: string; avatar?: string; city?: string };
+}
+
+interface HighlightItem {
+  id: string;
+  mixId: string;
+  sortOrder: number;
+  mix: Mix;
+}
+
+interface SetSummary {
+  id: string;
+  title: string;
+  description?: string;
+  coverImage?: string;
+  genre?: string;
+  isPublic: boolean;
+  createdAt: string;
+  mixCount: number;
+}
+
+interface ReupItem {
+  id: string;
+  mixId: string;
+  createdAt: string;
+  mix: Mix;
 }
 
 interface Review {
@@ -126,6 +153,10 @@ interface DJ {
   website?: string;
   whatsappNumber?: string;
   subscriptionTier?: 'free' | 'pro' | 'legend';
+  monthlyListeners: number;
+  highlights: HighlightItem[];
+  sets: SetSummary[];
+  reups: ReupItem[];
 }
 
 interface RankingHistoryPoint {

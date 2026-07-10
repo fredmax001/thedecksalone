@@ -199,9 +199,6 @@ export default function UserProfile() {
         <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
           Profile
         </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Customize your public profile and preferences.
-        </p>
       </div>
 
       {/* Avatar Section */}

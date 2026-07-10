@@ -152,9 +152,6 @@ export default function Campaigns() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Promotions
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Boost your profile, mixes, or battles in discovery feeds.
-          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>

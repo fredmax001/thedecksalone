@@ -86,9 +86,6 @@ export default function Analytics() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Analytics
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Deep dive into your performance data and audience insights.
-          </p>
         </div>
       </div>
 

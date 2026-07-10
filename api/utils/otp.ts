@@ -4,6 +4,7 @@
  * (e.g., Twilio, MessageBird, Termii for Sierra Leone).
  */
 
+const crypto = require('crypto');
 const { signToken } = require('./jwt');
 
 // In-memory OTP store: { phone: { code, expiry, attempts } }
@@ -14,8 +15,8 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 3;
 
 function generateOtp() {
-  // 6-digit numeric OTP
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // 6-digit numeric OTP using cryptographically secure random
+  return crypto.randomInt(100000, 999999).toString();
 }
 
 /**

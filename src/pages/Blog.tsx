@@ -51,14 +51,6 @@ export default function Blog() {
             >
               The <span className="text-gradient-gold">Blog</span>
             </motion.h1>
-            <motion.p
-              className="mt-5 text-lg text-text-secondary max-w-xl mx-auto leading-relaxed"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              News, stories, and insights from the Deck Salone community and Sierra Leone&apos;s DJ culture.
-            </motion.p>
           </div>
         </div>
       </section>

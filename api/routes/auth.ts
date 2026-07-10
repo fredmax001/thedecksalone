@@ -340,11 +340,38 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 });
 
 // Google OAuth Routes
-// GET /api/auth/google - Initiate Google OAuth
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+// GET /api/auth/google - Initiate Google OAuth with state for CSRF protection
+router.get('/google', (req, res, next) => {
+  const state = crypto.randomBytes(32).toString('hex');
+  // Store state in a short-lived cookie (5 minutes) for validation on callback
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 5 * 60 * 1000, // 5 minutes
+  });
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state,
+  })(req, res, next);
+});
 
 // GET /api/auth/google/callback - Google OAuth callback
-router.get('/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
+router.get('/google/callback', (req, res, next) => {
+  // Validate state parameter to prevent CSRF attacks
+  const stateFromQuery = req.query.state;
+  const stateFromCookie = req.cookies?.oauth_state;
+
+  if (!stateFromQuery || !stateFromCookie || stateFromQuery !== stateFromCookie) {
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+  }
+
+  // Clear the state cookie after validation
+  res.clearCookie('oauth_state');
+
+  passport.authenticate('google', { session: false })(req, res, next);
+}, (req, res) => {
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   try {
     if (!req.user) {

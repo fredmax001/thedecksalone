@@ -82,7 +82,6 @@ export default function Overview() {
   const [error, setError] = useState<string | null>(null);
 
   const isDj = user?.role === 'DJ';
-  const djProfile = user?.djProfile;
 
   useEffect(() => {
     if (!isDj) {
@@ -140,9 +139,6 @@ export default function Overview() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Overview
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Welcome back, {djProfile?.stageName || 'DJ'}. Here's how you're performing.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <Link to="/dashboard/bookings">

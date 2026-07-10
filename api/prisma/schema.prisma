@@ -119,6 +119,7 @@ model DjProfile {
   isPublic        Boolean  @default(false)
   totalFollowers  Int      @default(0)
   totalStreams    Int      @default(0)
+  monthlyListeners Int     @default(0)
   totalMixes      Int      @default(0)
   totalEvents     Int      @default(0)
   totalBookings   Int      @default(0)
@@ -157,6 +158,9 @@ model DjProfile {
   photos          DjPhoto[]
   proSubscriptionRequests ProSubscriptionRequest[]
   opportunityApplications OppApplications[]
+  reups           MixReup[]
+  highlights      DjHighlight[]
+  sets            DjSet[]
   @@map("dj_profiles")
   @@index([userId])
   @@index([city])
@@ -214,6 +218,10 @@ model Mix {
   updatedAt   DateTime @updatedAt
   dj          DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
   mixLikes    MixLike[]
+  mixPlays    MixPlay[]
+  reups       MixReup[]
+  highlights  DjHighlight[]
+  setItems    DjSetItem[]
   @@map("mixes")
   @@index([djId])
   @@index([category])
@@ -233,6 +241,84 @@ model MixLike {
   @@map("mix_likes")
   @@index([mixId])
   @@index([userId])
+}
+
+model MixPlay {
+  id        String   @id @default(cuid())
+  mixId     String
+  djId      String
+  userId    String?
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  mix Mix @relation(fields: [mixId], references: [id], onDelete: Cascade)
+
+  @@map("mix_plays")
+  @@index([djId, createdAt])
+  @@index([mixId, createdAt])
+}
+
+model MixReup {
+  id        String   @id @default(cuid())
+  djId      String
+  mixId     String
+  createdAt DateTime @default(now())
+
+  dj  DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  mix Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
+
+  @@unique([djId, mixId])
+  @@map("mix_reups")
+  @@index([djId, createdAt])
+  @@index([mixId])
+}
+
+model DjHighlight {
+  id        String   @id @default(cuid())
+  djId      String
+  mixId     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  dj  DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  mix Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
+
+  @@unique([djId, mixId])
+  @@map("dj_highlights")
+  @@index([djId, sortOrder])
+}
+
+model DjSet {
+  id          String   @id @default(cuid())
+  djId        String
+  title       String
+  description String?
+  coverImage  String?
+  genre       String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dj    DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
+  items DjSetItem[]
+
+  @@map("dj_sets")
+  @@index([djId, createdAt])
+}
+
+model DjSetItem {
+  id        String   @id @default(cuid())
+  setId     String
+  mixId     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  set DjSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  mix Mix   @relation(fields: [mixId], references: [id], onDelete: Cascade)
+
+  @@unique([setId, mixId])
+  @@map("dj_set_items")
+  @@index([setId, sortOrder])
 }
 
 model Booking {

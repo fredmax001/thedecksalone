@@ -278,9 +278,6 @@ export default function Messages() {
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Messages
           </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Communicate with clients and fans.
-          </p>
         </div>
       </div>
 

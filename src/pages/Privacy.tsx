@@ -60,14 +60,6 @@ export default function Privacy() {
             >
               Privacy <span className="text-gradient-gold">Policy</span>
             </motion.h1>
-            <motion.p
-              className="mt-5 text-lg text-text-secondary max-w-xl mx-auto leading-relaxed"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              Your privacy matters. Learn how we collect, use, and protect your personal information.
-            </motion.p>
           </div>
         </div>
       </section>

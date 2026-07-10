@@ -425,12 +425,6 @@ export default function Discover() {
               FIND YOUR PERFECT DJ
             </h1>
           </FadeIn>
-          <FadeIn delay={0.3}>
-            <p className="mt-4 text-text-secondary text-center max-w-xl mx-auto text-sm sm:text-base">
-              Browse verified DJs across Sierra Leone. Filter by genre, city, budget, and availability.
-            </p>
-          </FadeIn>
-
           {/* Search Bar */}
           <FadeIn delay={0.4}>
             <div className="max-w-2xl mx-auto mt-8">

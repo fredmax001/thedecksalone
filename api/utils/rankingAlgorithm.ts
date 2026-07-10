@@ -85,6 +85,10 @@ function calculateMixEngagementScore(dj, mixes) {
   const recentMixes = mixes.filter((m) => new Date(m.createdAt) >= thirtyDaysAgo).length;
   score += Math.min(15, recentMixes * 3);
 
+  // Monthly listeners bonus (max 10 pts) — 50k monthly listeners = max
+  const monthlyListeners = dj.monthlyListeners || 0;
+  score += Math.min(10, (monthlyListeners / 50000) * 10);
+
   return Math.round(score * 10) / 10;
 }
 
@@ -144,7 +148,10 @@ async function calculateBattleScore(djId) {
 async function computeDjScoreV2(djId) {
   const dj = await prisma.djProfile.findUnique({
     where: { id: djId },
-    include: {
+    select: {
+      id: true,
+      averageRating: true,
+      monthlyListeners: true,
       streamingPlatforms: true,
       mixes: { select: { id: true, plays: true, likes: true, createdAt: true } },
       reviews: { select: { rating: true, verified: true } },
@@ -195,7 +202,11 @@ async function recalculateAllRankingsV2() {
       skip: cursor ? 1 : 0,
       ...(cursor ? { cursor: { id: cursor } } : {}),
       orderBy: { id: 'asc' },
-      include: {
+      select: {
+        id: true,
+        averageRating: true,
+        monthlyListeners: true,
+        badges: true,
         streamingPlatforms: true,
         mixes: { select: { id: true, plays: true, likes: true, createdAt: true } },
         reviews: { select: { rating: true, verified: true } },

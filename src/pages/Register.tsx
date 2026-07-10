@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Headphones,
   Users,
+  Chrome,
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
@@ -38,6 +39,8 @@ const GENRES = [
 ] as const;
 
 const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+const googleLoginUrl = `${API_URL.replace('/api', '')}/api/auth/google`;
 
 /* ─── Schemas ─── */
 
@@ -361,6 +364,20 @@ export default function Register() {
               <ChevronRight className="w-5 h-5 text-text-muted group-hover:text-gold ml-auto flex-shrink-0 transition-colors" />
             </motion.button>
           </div>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-dark-gray" />
+            <span className="text-xs uppercase tracking-wider text-text-muted">or</span>
+            <div className="h-px flex-1 bg-dark-gray" />
+          </div>
+
+          <a
+            href={googleLoginUrl}
+            className="w-full h-[48px] rounded-full border border-dark-gray bg-black-elevated text-text-primary text-sm font-semibold flex items-center justify-center gap-2 hover:border-gold/50 transition-colors"
+          >
+            <Chrome className="w-5 h-5" />
+            Continue with Google
+          </a>
 
           <p className="mt-6 text-center text-sm text-text-secondary">
             Already have an account?{' '}

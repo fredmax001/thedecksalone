@@ -1,11 +1,17 @@
 const sharp = require('sharp');
-const { fromBuffer } = require('file-type');
+const fileType = require('file-type');
+
+const detectFileTypeFromBuffer = fileType.fileTypeFromBuffer || fileType.fromBuffer;
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
 async function validateImage(buffer, options = {}) {
-  const type = await fromBuffer(buffer);
+  if (typeof detectFileTypeFromBuffer !== 'function') {
+    throw new Error('Image validation is not available on this server');
+  }
+
+  const type = await detectFileTypeFromBuffer(buffer);
   if (!type || !ALLOWED_IMAGE_TYPES.has(type.mime)) {
     throw new Error('Invalid image format. Allowed: JPG, PNG, WebP');
   }

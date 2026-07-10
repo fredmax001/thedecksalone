@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
+const { requirePro } = require('../middleware/permissions');
 const { uploadAvatar, uploadDjProfileImages, uploadDocument } = require('../utils/upload');
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
@@ -78,7 +79,7 @@ function parseFormFields(body) {
   const parsed = { ...body };
 
   // Parse JSON fields
-  ['socialLinks', 'streamingLinks', 'services'].forEach((key) => {
+  ['socialLinks', 'streamingLinks', 'services', 'genres', 'eventTypes', 'awards', 'equipment', 'languages'].forEach((key) => {
     if (typeof parsed[key] === 'string') {
       try {
         parsed[key] = JSON.parse(parsed[key]);
@@ -100,15 +101,19 @@ function parseFormFields(body) {
     }
   });
 
-  // Normalize website null → undefined so .optional() accepts it
-  if (parsed.website === null) {
-    delete parsed.website;
-  }
+  // Normalize empty optional scalar fields so .optional() accepts cleared values.
+  ['website', 'whatsappNumber', 'country', 'city', 'availability'].forEach((key) => {
+    if (parsed[key] === null || parsed[key] === '') {
+      delete parsed[key];
+    }
+  });
 
   // Coerce number fields from FormData strings
   const numberFields = ['startYear', 'bookingFeeMin', 'bookingFeeMax', 'hourlyRate', 'fullDayRate', 'depositPercent', 'maxTravelDistanceKm'];
   numberFields.forEach((key) => {
-    if (parsed[key] !== undefined && parsed[key] !== '') {
+    if (parsed[key] === '') {
+      delete parsed[key];
+    } else if (parsed[key] !== undefined) {
       const n = key === 'startYear' || key === 'depositPercent' || key === 'maxTravelDistanceKm'
         ? parseInt(parsed[key], 10)
         : parseFloat(parsed[key]);
@@ -132,6 +137,54 @@ function parseFormFields(body) {
   });
 
   return parsed;
+}
+
+async function updateDjProfile(req, res, id) {
+  const dj = await prisma.djProfile.findUnique({ where: { id } });
+  if (!dj) {
+    return res.status(404).json({ success: false, error: 'DJ not found' });
+  }
+  if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+
+  const parsed = updateDjSchema.safeParse(parseFormFields(req.body));
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+  }
+
+  const updateData = { ...parsed.data };
+
+  if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
+    const file = req.files['avatar'][0];
+    const { buffer, contentType } = await processAvatar(file.buffer);
+    const avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
+    updateData.avatar = avatarUrl;
+    if (dj.avatar) {
+      await deleteFile(dj.avatar).catch(() => {});
+    }
+  }
+
+  if (req.files && req.files['coverBanner'] && req.files['coverBanner'][0]) {
+    const file = req.files['coverBanner'][0];
+    const { buffer, contentType } = await processCover(file.buffer);
+    const coverUrl = await uploadBuffer(buffer, 'covers', { contentType });
+    updateData.coverBanner = coverUrl;
+    if (dj.coverBanner) {
+      await deleteFile(dj.coverBanner).catch(() => {});
+    }
+  }
+
+  if (updateData.genres && updateData.genres.length > 5) {
+    return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
+  }
+
+  const updated = await prisma.djProfile.update({
+    where: { id },
+    data: updateData,
+  });
+
+  return res.json({ success: true, data: updated });
 }
 
 // GET /api/djs - List DJs with filtering
@@ -371,7 +424,34 @@ router.get('/:identifier', async (req, res) => {
       },
       photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
       events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
-      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
+      highlights: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          mix: {
+            include: {
+              dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+            },
+          },
+        },
+      },
+      sets: {
+        where: { isPublic: true },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          _count: { select: { items: true } },
+        },
+      },
+      reups: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          mix: {
+            include: {
+              dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+            },
+          },
+        },
+      },
+      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true, sets: true } },
     };
 
     let dj = await prisma.djProfile.findUnique({
@@ -403,6 +483,11 @@ router.get('/:identifier', async (req, res) => {
         totalMixes: dj._count.mixes,
         totalEvents: dj._count.events,
         totalStreams: computeTotalStreams(dj.streamingPlatforms),
+        monthlyListeners: dj.monthlyListeners,
+        sets: dj.sets.map((set: any) => ({
+          ...set,
+          mixCount: set._count.items,
+        })),
       },
     });
   } catch (error) {
@@ -466,58 +551,21 @@ router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
 });
 
 // PUT /api/djs/:id - Update DJ profile
+router.put('/me', authMiddleware, uploadDjProfileImages, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+    return updateDjProfile(req, res, dj.id);
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
   try {
-    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-    if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    const parsed = updateDjSchema.safeParse(parseFormFields(req.body));
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const updateData = { ...parsed.data };
-
-    // Handle avatar upload with processing pipeline
-    if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
-      const file = req.files['avatar'][0];
-      const { buffer, contentType } = await processAvatar(file.buffer);
-      const avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
-      updateData.avatar = avatarUrl;
-      // Delete old avatar if exists
-      if (dj.avatar) {
-        await deleteFile(dj.avatar).catch(() => {});
-      }
-    }
-
-    // Handle cover banner upload with processing pipeline
-    if (req.files && req.files['coverBanner'] && req.files['coverBanner'][0]) {
-      const file = req.files['coverBanner'][0];
-      const { buffer, contentType } = await processCover(file.buffer);
-      const coverUrl = await uploadBuffer(buffer, 'covers', { contentType });
-      updateData.coverBanner = coverUrl;
-      // Delete old cover if exists
-      if (dj.coverBanner) {
-        await deleteFile(dj.coverBanner).catch(() => {});
-      }
-    }
-
-    // Enforce genre limit
-    if (updateData.genres && updateData.genres.length > 5) {
-      return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
-    }
-
-    const updated = await prisma.djProfile.update({
-      where: { id: req.params.id },
-      data: updateData,
-    });
-
-    return res.json({ success: true, data: updated });
+    return updateDjProfile(req, res, req.params.id);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -630,6 +678,232 @@ router.post('/:id/recalculate', authMiddleware, async (req, res) => {
     });
 
     return res.json({ success: true, data: { scores, dj: updated } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HIGHLIGHTS (Pro+ only, max 4 per DJ)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MAX_HIGHLIGHTS = 4;
+const highlightSchema = z.object({
+  mixId: z.string().min(1),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
+// GET /api/djs/me/highlights - Current DJ's highlights
+router.get('/me/highlights', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const djId = req.djProfile.id;
+    const highlights = await prisma.djHighlight.findMany({
+      where: { djId },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    });
+    return res.json({ success: true, data: highlights });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/:id/highlights - Public highlights for a DJ
+router.get('/:id/highlights', async (req, res) => {
+  try {
+    const highlights = await prisma.djHighlight.findMany({
+      where: { djId: req.params.id },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    });
+    return res.json({ success: true, data: highlights });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/djs/me/highlights - Add a mix to highlights
+router.post('/me/highlights', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const parsed = highlightSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const djId = req.djProfile.id;
+    const { mixId, sortOrder = 0 } = parsed.data;
+
+    const mix = await prisma.mix.findUnique({ where: { id: mixId } });
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    if (!mix.isPublic) {
+      return res.status(400).json({ success: false, error: 'Cannot highlight a private mix' });
+    }
+
+    // DJs can only highlight their own mixes or mixes they have re-upped
+    const canHighlight = mix.djId === djId || !!(await prisma.mixReup.findUnique({
+      where: { djId_mixId: { djId, mixId } },
+    }));
+
+    if (!canHighlight) {
+      return res.status(403).json({ success: false, error: 'You can only highlight your own mixes or mixes you have re-upped' });
+    }
+
+    const currentCount = await prisma.djHighlight.count({ where: { djId } });
+    if (currentCount >= MAX_HIGHLIGHTS) {
+      return res.status(403).json({ success: false, error: `You can only highlight up to ${MAX_HIGHLIGHTS} mixes` });
+    }
+
+    const highlight = await prisma.djHighlight.create({
+      data: { djId, mixId, sortOrder },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    });
+
+    return res.status(201).json({ success: true, data: highlight });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/djs/me/highlights/reorder - Reorder highlights
+router.put('/me/highlights/reorder', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const djId = req.djProfile.id;
+    const items = req.body.items;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'items array is required' });
+    }
+
+    await prisma.$transaction(
+      items.map((item: any) =>
+        prisma.djHighlight.updateMany({
+          where: { djId, mixId: item.mixId },
+          data: { sortOrder: Number(item.sortOrder) || 0 },
+        })
+      )
+    );
+
+    const highlights = await prisma.djHighlight.findMany({
+      where: { djId },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    });
+
+    return res.json({ success: true, data: highlights });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/djs/me/highlights/:mixId - Remove a highlight
+router.delete('/me/highlights/:mixId', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const djId = req.djProfile.id;
+    const mixId = req.params.mixId;
+
+    const existing = await prisma.djHighlight.findUnique({
+      where: { djId_mixId: { djId, mixId } },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Highlight not found' });
+    }
+
+    await prisma.djHighlight.delete({
+      where: { djId_mixId: { djId, mixId } },
+    });
+
+    return res.json({ success: true, data: { highlighted: false } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SETS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/djs/me/sets - Current DJ's sets (with item counts)
+router.get('/me/sets', authMiddleware, requirePro, async (req, res) => {
+  try {
+    const djId = req.djProfile.id;
+    const sets = await prisma.djSet.findMany({
+      where: { djId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { items: true } },
+      },
+    });
+    return res.json({
+      success: true,
+      data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/:id/sets - Public sets for a DJ
+router.get('/:id/sets', async (req, res) => {
+  try {
+    const sets = await prisma.djSet.findMany({
+      where: { djId: req.params.id, isPublic: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { items: true } },
+      },
+    });
+    return res.json({
+      success: true,
+      data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/:id/reups - Public re-ups for a DJ
+router.get('/:id/reups', async (req, res) => {
+  try {
+    const reups = await prisma.mixReup.findMany({
+      where: { djId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    });
+    return res.json({ success: true, data: reups });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

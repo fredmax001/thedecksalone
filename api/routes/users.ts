@@ -666,4 +666,60 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/users/account - Delete the authenticated user's account and all related data
+router.delete('/account', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { djProfile: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // User-scoped relations that do not cascade on user delete
+      await tx.battleVote.deleteMany({ where: { userId } });
+      await tx.mixLike.deleteMany({ where: { userId } });
+      await tx.follow.deleteMany({ where: { userId } });
+      await tx.message.deleteMany({ where: { senderId: userId } });
+      await tx.message.deleteMany({ where: { receiverId: userId } });
+      await tx.review.deleteMany({ where: { userId } });
+      await tx.payment.deleteMany({ where: { clientId: userId } });
+      await tx.booking.deleteMany({ where: { clientId: userId } });
+
+      // DJ-scoped relations (if the user has a DJ profile)
+      if (user.djProfile) {
+        const djId = user.djProfile.id;
+
+        await tx.review.deleteMany({ where: { djId } });
+        await tx.payment.deleteMany({ where: { djId } });
+        await tx.booking.deleteMany({ where: { djId } });
+        await tx.event.deleteMany({ where: { djId } });
+        await tx.battleEntry.deleteMany({ where: { djId } });
+        await tx.mix.deleteMany({ where: { djId } });
+        await tx.djPhoto.deleteMany({ where: { djId } });
+        await tx.streamingPlatform.deleteMany({ where: { djId } });
+        await tx.rankingHistory.deleteMany({ where: { djId } });
+        await tx.gigApplication.deleteMany({ where: { djId } });
+        await tx.proSubscriptionRequest.deleteMany({ where: { djId } });
+        await tx.oppApplications.deleteMany({ where: { djId } });
+        await tx.follow.deleteMany({ where: { djId } });
+
+        await tx.djProfile.delete({ where: { id: djId } });
+      }
+
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    return res.json({ success: true, data: { deleted: true } });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
