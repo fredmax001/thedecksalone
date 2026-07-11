@@ -409,6 +409,7 @@ export default function MixPlayer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || embed) return;
+    audio.muted = isMuted || volume === 0;
     audio.volume = isMuted ? 0 : volume;
   }, [volume, isMuted, embed]);
 
@@ -640,8 +641,8 @@ export default function MixPlayer() {
                   )}
                 </button>
 
-                {/* Volume slider (Desktop only) */}
-                <div className="hidden md:flex items-center gap-2 group mr-2">
+                {/* Volume slider */}
+                <div className="hidden sm:flex items-center gap-2 group mr-2">
                   <button
                     onClick={toggleMute}
                     className="p-1.5 text-white/30 hover:text-white/60 transition-colors"
@@ -815,7 +816,7 @@ export default function MixPlayer() {
 
                 {/* Volume bar */}
                 {!embed && (
-                  <div className="hidden md:flex items-center gap-3 mt-6 px-4">
+                  <div className="flex items-center gap-3 mt-6 px-4">
                     <button
                       onClick={toggleMute}
                       className="p-2 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"

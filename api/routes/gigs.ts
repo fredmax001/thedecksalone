@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { bookingLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ const gigListFilterSchema = z.object({
 });
 
 // POST /api/gigs - Public: create a DJ request/opportunity
-router.post('/', async (req, res) => {
+router.post('/', bookingLimiter, async (req, res) => {
   try {
     const parsed = createGigSchema.safeParse(req.body);
     if (!parsed.success) {

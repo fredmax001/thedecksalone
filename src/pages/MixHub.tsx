@@ -5,6 +5,8 @@ import {
   Play,
   Heart,
   Clock,
+  Grid2X2,
+  List,
   Search,
   Flame,
   Loader2,
@@ -169,6 +171,64 @@ function MixCard({
   );
 }
 
+function MixListItem({
+  mix,
+  onPlay,
+  isNew,
+}: {
+  mix: MixTrack;
+  onPlay: (mix: MixTrack) => void;
+  isNew?: boolean;
+}) {
+  const [liked, setLiked] = useState(false);
+  const { mutate: likeMix } = useLikeMix();
+  const { isAuthenticated } = useAuthStore();
+
+  const handleLike = useCallback(() => {
+    setLiked((prev) => !prev);
+    if (isAuthenticated) likeMix(mix.id);
+  }, [mix.id, isAuthenticated, likeMix]);
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-black-elevated p-3 transition-colors hover:border-gold/30 sm:gap-4">
+      <button
+        type="button"
+        onClick={() => onPlay(mix)}
+        className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-20"
+      >
+        <img src={mix.cover} alt={mix.title} className="h-full w-full object-cover" />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/45">
+          <Play size={18} className="text-gold" />
+        </span>
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h4 className="truncate font-display text-sm font-semibold uppercase text-text-primary sm:text-base">
+            {mix.title}
+          </h4>
+          {isNew && (
+            <span className="shrink-0 rounded-full bg-red px-2 py-0.5 text-[9px] font-bold uppercase text-white">
+              New
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 truncate text-xs font-medium text-gold">{mix.dj}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-text-muted">
+          <span>{formatCompact(mix.plays || 0)} plays</span>
+          <span className="inline-flex items-center gap-1">
+            <Clock size={10} />
+            {formatDuration(mix.duration)}
+          </span>
+          <span className="rounded-full border border-gold/30 px-2 py-0.5 text-gold">{mix.genre}</span>
+        </div>
+      </div>
+      <button onClick={handleLike} className="shrink-0 rounded-full p-2 hover:bg-white/5">
+        <Heart size={16} className={liked ? 'fill-red text-red' : 'text-text-muted'} />
+      </button>
+    </div>
+  );
+}
+
 /* ──────────────────────── Trending Card ──────────────────────── */
 function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: MixTrack) => void; index: number }) {
   return (
@@ -219,6 +279,8 @@ export default function MixHub() {
   const { user } = useAuthStore();
   const [activeGenre, setActiveGenre] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(1);
 
   const heroRef = useRef<HTMLDivElement>(null);
@@ -249,7 +311,7 @@ export default function MixHub() {
   const { data: latestData, isLoading: latestLoading } = useMixes({
     genre: activeGenre !== 'all' ? activeGenre : undefined,
     search: searchQuery || undefined,
-    sortBy: 'newest',
+    sortBy,
     page,
     limit: 12,
   });
@@ -332,40 +394,71 @@ export default function MixHub() {
         </div>
       )}
 
-      {/* Genre Filter */}
+      {/* Filters */}
       <div className="sticky top-16 lg:top-28 z-30 bg-black-elevated border-b border-white/5">
-        <div className="max-w-container mx-auto px-6 py-3">
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-            <span className="text-[10px] uppercase tracking-wider text-text-muted mr-1 shrink-0">Genre</span>
-            {genresLoading ? (
-              <Loader2 className="w-3 h-3 text-text-muted animate-spin" />
-            ) : (
-              <>
-                <button
-                  onClick={() => { setActiveGenre('all'); setPage(1); }}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
-                    activeGenre === 'all'
-                      ? 'bg-gold/10 text-gold border border-gold/50'
-                      : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
-                  }`}
-                >
-                  All Genres
-                </button>
-                {genres.map((g: string) => (
+        <div className="max-w-container mx-auto px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-muted mr-1 shrink-0">Genre</span>
+              {genresLoading ? (
+                <Loader2 className="w-3 h-3 text-text-muted animate-spin" />
+              ) : (
+                <>
                   <button
-                    key={g}
-                    onClick={() => { setActiveGenre(g); setPage(1); }}
+                    onClick={() => { setActiveGenre('all'); setPage(1); }}
                     className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
-                      activeGenre === g
+                      activeGenre === 'all'
                         ? 'bg-gold/10 text-gold border border-gold/50'
                         : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
                     }`}
                   >
-                    {g}
+                    All Genres
                   </button>
-                ))}
-              </>
-            )}
+                  {genres.map((g: string) => (
+                    <button
+                      key={g}
+                      onClick={() => { setActiveGenre(g); setPage(1); }}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
+                        activeGenre === g
+                          ? 'bg-gold/10 text-gold border border-gold/50'
+                          : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <select
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+                className="h-9 rounded-full border border-dark-gray bg-black px-3 text-xs font-medium text-text-secondary outline-none focus:border-gold"
+              >
+                <option value="newest">Newest</option>
+                <option value="popular">Popular</option>
+                <option value="trending">Trending</option>
+              </select>
+              <div className="flex rounded-full border border-dark-gray bg-black p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={cn('rounded-full p-2 transition-colors', viewMode === 'grid' ? 'bg-gold text-black' : 'text-text-muted hover:text-text-primary')}
+                  aria-label="Grid view"
+                >
+                  <Grid2X2 size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={cn('rounded-full p-2 transition-colors', viewMode === 'list' ? 'bg-gold text-black' : 'text-text-muted hover:text-text-primary')}
+                  aria-label="List view"
+                >
+                  <List size={15} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -398,9 +491,13 @@ export default function MixHub() {
             <h2 className="font-display text-2xl lg:text-3xl font-semibold text-text-primary uppercase tracking-tight mt-1">LATEST UPLOADS</h2>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5' : 'space-y-3'}>
           {latest.map((mix: any, i: any) => (
-            <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
+            viewMode === 'grid' ? (
+              <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
+            ) : (
+              <MixListItem key={mix.id} mix={mix} onPlay={handlePlay} isNew={i < 3 && page === 1} />
+            )
           ))}
           {latest.length === 0 && !latestLoading && (
             <div className="col-span-full text-center py-12">

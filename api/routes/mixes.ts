@@ -100,9 +100,6 @@ router.get('/', async (req, res) => {
       where.AND = andConditions;
     }
 
-    console.log('[Mixes API] Filter request:', { genre, category, search, pageNum, limitNum });
-    console.log('[Mixes API] Prisma where:', JSON.stringify(where));
-
     const orderBy: any = {};
     if (sortBy === 'plays') orderBy.plays = order === 'asc' ? 'asc' : 'desc';
     else if (sortBy === 'likes') orderBy.likes = order === 'asc' ? 'asc' : 'desc';
@@ -121,8 +118,6 @@ router.get('/', async (req, res) => {
       }),
       prisma.mix.count({ where }),
     ]);
-
-    console.log(`[Mixes API] Found ${mixes.length} mixes (total: ${total})`);
 
     return res.json({
       success: true,
@@ -131,77 +126,6 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('[Mixes API] Error:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-router.get('/', async (req, res) => {
-  try {
-    const parsed = mixFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { category, genre, djId, search, featured, sortBy, order, page, limit } = parsed.data;
-
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const where: any = { isPublic: true, AND: [] };
-    if (category) {
-      where.AND.push({
-        OR: [
-          { category: { equals: category, mode: 'insensitive' } },
-          { genre: { equals: category, mode: 'insensitive' } },
-        ],
-      });
-    }
-    if (genre) {
-      where.AND.push({
-        OR: [
-          { genre: { equals: genre, mode: 'insensitive' } },
-          { category: { equals: genre, mode: 'insensitive' } },
-        ],
-      });
-    }
-    if (djId) where.djId = djId;
-    if (featured === 'true') where.featured = true;
-    if (search) {
-      where.AND.push({
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { tags: { has: search } },
-        ],
-      });
-    }
-    if (where.AND.length === 0) delete where.AND;
-
-    const orderBy: any = {};
-    if (sortBy === 'plays') orderBy.plays = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'likes') orderBy.likes = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'downloads') orderBy.downloads = order === 'asc' ? 'asc' : 'desc';
-    else orderBy.createdAt = 'desc';
-
-    const [mixes, total] = await Promise.all([
-      prisma.mix.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limitNum,
-        include: {
-          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-        },
-      }),
-      prisma.mix.count({ where }),
-    ]);
-
-    return res.json({
-      success: true,
-      data: mixes,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });

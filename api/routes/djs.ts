@@ -424,34 +424,7 @@ router.get('/:identifier', async (req, res) => {
       },
       photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
       events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
-      highlights: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
-          mix: {
-            include: {
-              dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-            },
-          },
-        },
-      },
-      sets: {
-        where: { isPublic: true },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          _count: { select: { items: true } },
-        },
-      },
-      reups: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          mix: {
-            include: {
-              dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-            },
-          },
-        },
-      },
-      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true, sets: true } },
+      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
     };
 
     let dj = await prisma.djProfile.findUnique({
@@ -484,10 +457,9 @@ router.get('/:identifier', async (req, res) => {
         totalEvents: dj._count.events,
         totalStreams: computeTotalStreams(dj.streamingPlatforms),
         monthlyListeners: dj.monthlyListeners,
-        sets: dj.sets.map((set: any) => ({
-          ...set,
-          mixCount: set._count.items,
-        })),
+        sets: [],
+        highlights: [],
+        reups: [],
       },
     });
   } catch (error) {

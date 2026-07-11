@@ -2,6 +2,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const MB = 1024 * 1024;
+const MAX_IMAGE_UPLOAD_MB = Number(process.env.MAX_IMAGE_UPLOAD_MB || 10);
+const MAX_DOCUMENT_UPLOAD_MB = Number(process.env.MAX_DOCUMENT_UPLOAD_MB || 10);
+const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 100);
+
 // Ensure upload directories exist (used for local fallback)
 const uploadDirs = {
   avatars: path.join(process.cwd(), 'uploads', 'avatars'),
@@ -35,31 +40,31 @@ function fileFilter(allowedMimes) {
 const uploadAvatar = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadCover = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadMixAudio = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac']),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: MAX_AUDIO_UPLOAD_MB * MB },
 });
 
 const uploadMixCover = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadEventImage = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadDocument = multer({
@@ -70,14 +75,14 @@ const uploadDocument = multer({
     'image/webp',
     'application/pdf',
   ]),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_DOCUMENT_UPLOAD_MB * MB },
 });
 
 // Combined upload for DJ profile update (avatar + cover)
 const uploadDjProfileImages = multer({
   storage: memoryStorage,
   fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for any image
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 }).fields([
   { name: 'avatar', maxCount: 1 },
   { name: 'coverBanner', maxCount: 1 },
@@ -95,7 +100,7 @@ const uploadMix = multer({
     }
     cb(new Error('Unexpected field'), false);
   },
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max for audio
+  limits: { fileSize: MAX_AUDIO_UPLOAD_MB * MB },
 }).fields([
   { name: 'audio', maxCount: 1 },
   { name: 'coverImage', maxCount: 1 },

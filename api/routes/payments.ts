@@ -292,8 +292,10 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/payments/:id/process - Mark a payment as completed (manual or webhook)
-router.post('/:id/process', authMiddleware, async (req, res) => {
+// POST /api/payments/:id/process - Mark a payment as completed after staff verification.
+// Public/client-side payment completion must be done by a real payment provider webhook,
+// not by trusting the browser to claim money was paid.
+router.post('/:id/process', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
   try {
     const parsed = paymentProcessSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -309,11 +311,6 @@ router.post('/:id/process', authMiddleware, async (req, res) => {
 
     if (!payment) {
       return res.status(404).json({ success: false, error: 'Payment not found' });
-    }
-
-    // Only the client or an admin can process a payment
-    if (payment.clientId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
     if (payment.status === 'COMPLETED') {

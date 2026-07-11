@@ -1,13 +1,5 @@
 import { Link } from 'react-router-dom';
 import FadeIn from '@/components/FadeIn';
-import { Music, Users, Radio, Calendar } from 'lucide-react';
-
-const stats = [
-  { icon: Music, value: '100+', label: 'DJs Onboard' },
-  { icon: Users, value: '50K+', label: 'Monthly Listeners' },
-  { icon: Radio, value: '10K+', label: 'Mixes Streamed' },
-  { icon: Calendar, value: '200+', label: 'Events Hosted' },
-];
 
 const productScreens = [
   {
@@ -147,34 +139,6 @@ export default function About() {
                     {screen.title}
                   </figcaption>
                 </figure>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── STATS ─── */}
-      <section className="py-16 sm:py-20 bg-black-elevated">
-        <div className="container-main">
-          <FadeIn className="text-center mb-12">
-            <p className="section-label mb-3">By The Numbers</p>
-            <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold uppercase tracking-tight text-text-primary">
-              Growing the DJ Community
-            </h2>
-          </FadeIn>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, i) => (
-              <FadeIn key={stat.label} delay={i * 0.1}>
-                <div className="bg-black-elevated border border-white/5 rounded-2xl p-6 text-center hover:border-gold/30 transition-all duration-300">
-                  <stat.icon className="w-8 h-8 text-gold mx-auto mb-3" />
-                  <p className="font-mono-data text-2xl sm:text-3xl font-bold text-text-primary">
-                    {stat.value}
-                  </p>
-                  <p className="text-text-muted text-xs uppercase tracking-wider mt-1">
-                    {stat.label}
-                  </p>
-                </div>
               </FadeIn>
             ))}
           </div>

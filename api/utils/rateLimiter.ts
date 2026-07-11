@@ -1,9 +1,10 @@
 const rateLimit = require('express-rate-limit');
 
-// General API rate limiter: 100 requests per 15 minutes per IP
+// General API rate limiter. Keep this high enough for normal app navigation,
+// while still limiting automated scraping/abuse.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // tightened for production
+  max: 300,
   skip: (req) => {
     // Only skip rate limit for local/internal IPs during development
     if (process.env.NODE_ENV === 'production') return false;

@@ -11,6 +11,7 @@ import {
   LogOut,
   Radio,
   Search,
+  Settings,
   Trophy,
   Upload,
   Users,
@@ -26,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import BottomNav from '@/components/BottomNav';
 import { cn } from '@/lib/utils';
 
 const browseItems = [
@@ -50,6 +52,8 @@ export default function Layout() {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const { user, isAuthenticated, logout } = useAuthStore();
   const isDj = user?.role === 'DJ';
+  const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
+  const shouldShowGetPro = isDj && subscriptionTier === 'free';
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
   const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -133,21 +137,41 @@ export default function Layout() {
 
       <div className="min-h-[100dvh] lg:ml-[300px]">
         <header className="sticky top-0 z-30 border-b border-white/10 bg-black/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-10">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             <Link to="/" className="flex shrink-0 items-center lg:hidden">
               <img src="/logo-icon.png" alt="Deck Salone" className="h-9 w-9 object-contain" />
             </Link>
 
-            {isDj && (
+            {shouldShowGetPro && (
               <Link
                 to="/dashboard/subscription"
-                className="hidden shrink-0 rounded-full bg-white/10 px-4 py-3 text-xs font-bold uppercase text-text-primary transition-colors hover:bg-white/15 sm:inline-flex"
+                className="shrink-0 rounded-full bg-white/10 px-3 py-3 text-[11px] font-bold uppercase text-text-primary transition-colors hover:bg-white/15 sm:px-4 sm:text-xs"
               >
                 Get Pro
               </Link>
             )}
 
-            <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-xl">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="ml-auto shrink-0 text-text-secondary hover:text-gold lg:hidden">
+                  <Search className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] border-dark-gray bg-black-surface p-3">
+                <form onSubmit={handleSearch} className="relative">
+                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
+                  <input
+                    name="q"
+                    type="search"
+                    autoFocus
+                    placeholder="Search DJs, mixes, genres"
+                    className="h-12 w-full rounded-full border border-white/10 bg-white/10 py-3 pl-11 pr-4 text-sm font-medium text-text-primary outline-none placeholder:text-text-muted focus:border-gold/50"
+                  />
+                </form>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-xl lg:block">
               <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-gold" />
               <input
                 name="q"
@@ -163,10 +187,45 @@ export default function Layout() {
               </Button>
             )}
 
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="shrink-0 text-text-secondary hover:text-text-primary lg:hidden">
+                  <Settings className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface">
+                <DropdownMenuItem asChild>
+                  <Link to="/rankings" className="cursor-pointer">Ranking</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/events" className="cursor-pointer">Events</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/request-dj" className="cursor-pointer">Request DJ</Link>
+                </DropdownMenuItem>
+                {isAuthenticated && (
+                  <>
+                    <DropdownMenuSeparator className="bg-dark-gray" />
+                    <DropdownMenuItem asChild>
+                      <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer">Settings</Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {!isAuthenticated && (
+                  <>
+                    <DropdownMenuSeparator className="bg-dark-gray" />
+                    <DropdownMenuItem asChild>
+                      <Link to="/login" className="cursor-pointer">Login</Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-12 shrink-0 gap-2 rounded-full px-2 hover:bg-white/10">
+                  <Button variant="ghost" className="hidden h-12 shrink-0 gap-2 rounded-full px-2 hover:bg-white/10 lg:flex">
                     <Avatar className="h-9 w-9 border border-gold/30">
                       <AvatarImage src={avatarUrl} />
                       <AvatarFallback className="bg-gold/20 text-xs font-bold text-gold">
@@ -196,7 +255,7 @@ export default function Layout() {
             ) : (
               <Link
                 to="/login"
-                className="hidden shrink-0 rounded-full border border-white/15 px-5 py-3 text-sm font-bold text-text-primary transition-colors hover:border-gold/50 sm:inline-flex"
+                className="hidden shrink-0 rounded-full border border-white/15 px-4 py-3 text-xs font-bold text-text-primary transition-colors hover:border-gold/50 sm:px-5 sm:text-sm lg:inline-flex"
               >
                 Login
               </Link>
@@ -222,6 +281,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }

@@ -46,9 +46,18 @@ app.use(helmet({
   contentSecurityPolicy: false, // API returns JSON; CSP is enforced by the frontend
 }));
 
-// Middleware — permissive CORS for local dev; restrict in production
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+}
+
+// Middleware - restrict browser origins in production.
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -62,9 +71,6 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Passport initialization
 app.use(passport.initialize());
 
-// Global rate limiting
-app.use(generalLimiter);
-
 // Serve uploaded files statically
 serveUploads(app);
 
@@ -72,6 +78,9 @@ serveUploads(app);
 app.get('/health', (req, res) => {
   res.json({ success: true, message: 'Deck Salone API is running', timestamp: new Date().toISOString() });
 });
+
+// Rate limit API traffic only. Static frontend assets should not consume API quota.
+app.use('/api', generalLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/djs', djRoutes);
