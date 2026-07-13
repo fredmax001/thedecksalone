@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import {
   MapPin,
   Clock,
@@ -12,6 +13,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useEvents, useEventTypes } from '@/hooks/useEvents';
+import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -385,6 +388,40 @@ function EventGridCard({ event, index, onClick }: { event: EventItem; index: num
 
 function DJSlotCard({ slot, index }: { slot: EventItem; index: number }) {
   const [showMessage, setShowMessage] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuthStore();
+
+  const handleApply = async () => {
+    if (!isAuthenticated) {
+      toast.info('Please log in to apply for DJ slots');
+      navigate('/login');
+      return;
+    }
+
+    if (!user?.djProfile) {
+      toast.error('Only DJs can apply for open slots');
+      return;
+    }
+
+    try {
+      setIsApplying(true);
+      const res = await api.post(`/events/${slot.id}/apply`, { message: '' });
+      if (res.data.success) {
+        toast.success('Application submitted successfully!');
+      }
+    } catch (err: any) {
+      const error = err.response?.data?.error || 'Failed to apply';
+      if (err.response?.status === 409) {
+        toast.info(error);
+      } else {
+        toast.error(error);
+      }
+    } finally {
+      setIsApplying(false);
+      setShowMessage(true);
+    }
+  };
 
   return (
     <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: index * 0.1 }} className="relative bg-black rounded-xl p-5 border-l-[3px] border-l-gold border border-white/5">
@@ -395,17 +432,26 @@ function DJSlotCard({ slot, index }: { slot: EventItem; index: number }) {
       <div className="flex items-center justify-between mt-3">
         <span className="text-[10px] text-text-muted">Apply to DJ</span>
         <motion.button
-          className="px-4 py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full"
-          animate={{ scale: [1, 1.03, 1] }}
+          className="px-4 py-1.5 bg-gold-gradient text-black text-[10px] font-bold uppercase rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+          animate={isApplying ? {} : { scale: [1, 1.03, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          onClick={() => setShowMessage(true)}
+          onClick={handleApply}
+          disabled={isApplying}
         >
-          Apply Now
+          {isApplying ? (
+            <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Applying...</span>
+          ) : (
+            'Apply Now'
+          )}
         </motion.button>
       </div>
       {showMessage && (
         <p className="mt-2 text-[10px] text-gold">
-          Applications coming soon. Contact the event organizer for now.
+          {isAuthenticated && user?.djProfile
+            ? 'Application submitted. The organizer will review your profile.'
+            : isAuthenticated
+            ? 'Only DJs can apply for open slots.'
+            : 'Please log in to apply.'}
         </p>
       )}
     </motion.div>

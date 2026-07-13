@@ -722,4 +722,140 @@ router.delete('/account', authMiddleware, async (req, res) => {
   }
 });
 
+/* ─────────────────── Settings Endpoints ─────────────────── */
+
+const notificationPrefsSchema = z.object({
+  emailBookings: z.boolean().optional(),
+  emailMessages: z.boolean().optional(),
+  emailMarketing: z.boolean().optional(),
+  pushBookings: z.boolean().optional(),
+  pushMessages: z.boolean().optional(),
+  pushNewMixes: z.boolean().optional(),
+});
+
+const privacyPrefsSchema = z.object({
+  profilePublic: z.boolean().optional(),
+  allowMessages: z.boolean().optional(),
+  showEarnings: z.boolean().optional(),
+  showActivity: z.boolean().optional(),
+});
+
+const settingsSchema = z.object({
+  notifications: notificationPrefsSchema.optional(),
+  privacy: privacyPrefsSchema.optional(),
+});
+
+// GET /api/users/settings - Get current user's settings (notifications + privacy)
+router.get('/settings', authMiddleware, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        notificationPreferences: true,
+        privacyPreferences: true,
+        djProfile: { select: { isPublic: true } },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Merge stored preferences with defaults
+    const defaultNotifications = {
+      emailBookings: true,
+      emailMessages: true,
+      emailMarketing: false,
+      pushBookings: true,
+      pushMessages: true,
+      pushNewMixes: true,
+    };
+
+    const defaultPrivacy = {
+      profilePublic: true,
+      allowMessages: true,
+      showEarnings: false,
+      showActivity: false,
+    };
+
+    const notifications = user.notificationPreferences
+      ? { ...defaultNotifications, ...(user.notificationPreferences as Record<string, boolean>) }
+      : defaultNotifications;
+
+    const privacy = user.privacyPreferences
+      ? { ...defaultPrivacy, ...(user.privacyPreferences as Record<string, boolean>) }
+      : defaultPrivacy;
+
+    // Override profilePublic with DjProfile.isPublic if DJ
+    if (user.djProfile) {
+      privacy.profilePublic = user.djProfile.isPublic;
+    }
+
+    return res.json({
+      success: true,
+      data: { notifications, privacy },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/users/settings - Update current user's settings
+router.put('/settings', authMiddleware, async (req, res) => {
+  try {
+    const parsed = settingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { notifications, privacy } = parsed.data;
+    const userId = req.user.id;
+
+    // Fetch current user to merge preferences
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true, privacyPreferences: true, djProfile: { select: { id: true } } },
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const updateData: any = {};
+
+    // Merge notification preferences
+    if (notifications !== undefined) {
+      const existing = (currentUser.notificationPreferences as Record<string, boolean>) || {};
+      updateData.notificationPreferences = { ...existing, ...notifications };
+    }
+
+    // Merge privacy preferences (excluding profilePublic which is handled via DjProfile)
+    if (privacy !== undefined) {
+      const { profilePublic, ...restPrivacy } = privacy;
+      const existing = (currentUser.privacyPreferences as Record<string, boolean>) || {};
+      updateData.privacyPreferences = { ...existing, ...restPrivacy };
+
+      // If profilePublic is provided and user has a DJ profile, update DjProfile.isPublic
+      if (profilePublic !== undefined && currentUser.djProfile?.id) {
+        await prisma.djProfile.update({
+          where: { id: currentUser.djProfile.id },
+          data: { isPublic: profilePublic },
+        });
+      }
+    }
+
+    // Update user preferences
+    if (Object.keys(updateData).length > 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+    }
+
+    return res.json({ success: true, data: { message: 'Settings updated' } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

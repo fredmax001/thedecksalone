@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Shield,
   Trash2,
@@ -12,6 +12,8 @@ import {
   Sun,
   Moon,
   Loader2,
+  Power,
+  PowerOff,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -34,10 +36,41 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 import api from '@/lib/api';
 
+interface UserSettings {
+  notifications: {
+    emailBookings: boolean;
+    emailMessages: boolean;
+    emailMarketing: boolean;
+    pushBookings: boolean;
+    pushMessages: boolean;
+  };
+  privacy: {
+    profilePublic: boolean;
+    allowMessages: boolean;
+    showEarnings: boolean;
+  };
+}
+
+const defaultSettings: UserSettings = {
+  notifications: {
+    emailBookings: true,
+    emailMessages: true,
+    emailMarketing: false,
+    pushBookings: true,
+    pushMessages: true,
+  },
+  privacy: {
+    profilePublic: true,
+    allowMessages: true,
+    showEarnings: false,
+  },
+};
+
 export default function SettingsPage() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, fetchMe } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -46,6 +79,9 @@ export default function SettingsPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
@@ -58,21 +94,38 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Notification settings
-  const [notifications, setNotifications] = useState({
-    emailBookings: true,
-    emailMessages: true,
-    emailMarketing: false,
-    pushBookings: true,
-    pushMessages: true,
-  });
+  // Settings state
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
 
-  // Privacy settings
-  const [privacy, setPrivacy] = useState({
-    profilePublic: true,
-    allowMessages: true,
-    showEarnings: false,
-  });
+  // Fetch settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setSettingsLoading(true);
+        const res = await api.get('/users/settings');
+        if (res.data?.success) {
+          setSettings({
+            notifications: { ...defaultSettings.notifications, ...res.data.data.notifications },
+            privacy: { ...defaultSettings.privacy, ...res.data.data.privacy },
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to load settings:', err);
+        // Silently fall back to defaults
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Sync local user state when auth store updates
+  useEffect(() => {
+    if (user) {
+      setUsername(user.username || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
 
   const handleSaveProfile = async () => {
     setSaveError('');
@@ -83,7 +136,8 @@ export default function SettingsPage() {
       const res = await api.put('/auth/me', { username, email });
       if (res.data.success) {
         setSaved(true);
-        useAuthStore.getState().fetchMe();
+        fetchMe();
+        toast.success('Profile updated successfully');
         setTimeout(() => setSaved(false), 3000);
       } else {
         setSaveError(res.data.error || 'Failed to update profile');
@@ -137,6 +191,7 @@ export default function SettingsPage() {
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        toast.success('Password updated successfully');
         setTimeout(() => setPasswordSuccess(false), 3000);
       } else {
         setPasswordError(res.data.error || 'Failed to change password');
@@ -145,6 +200,57 @@ export default function SettingsPage() {
       setPasswordError(error.response?.data?.error || 'Failed to change password');
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const updateNotification = (key: keyof UserSettings['notifications'], value: boolean) => {
+    const next = { ...settings, notifications: { ...settings.notifications, [key]: value } };
+    setSettings(next);
+    setSettingsDirty(true);
+  };
+
+  const updatePrivacy = (key: keyof UserSettings['privacy'], value: boolean) => {
+    const next = { ...settings, privacy: { ...settings.privacy, [key]: value } };
+    setSettings(next);
+    setSettingsDirty(true);
+  };
+
+  const handleSaveSettings = async () => {
+    setSaveError('');
+    setSaved(false);
+    try {
+      const res = await api.put('/users/settings', {
+        notifications: settings.notifications,
+        privacy: settings.privacy,
+      });
+      if (res.data?.success) {
+        setSaved(true);
+        setSettingsDirty(false);
+        toast.success('Settings saved successfully');
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaveError(res.data?.error || 'Failed to save settings');
+      }
+    } catch (err: any) {
+      setSaveError(err.response?.data?.error || 'Failed to save settings');
+    }
+  };
+
+  const handleDeactivateProfile = async () => {
+    setIsDeactivating(true);
+    try {
+      const nextPublic = !settings.privacy.profilePublic;
+      const res = await api.put('/users/settings', {
+        privacy: { profilePublic: nextPublic },
+      });
+      if (res.data?.success) {
+        setSettings((prev) => ({ ...prev, privacy: { ...prev.privacy, profilePublic: nextPublic } }));
+        toast.success(nextPublic ? 'Profile activated' : 'Profile deactivated');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update profile status');
+    } finally {
+      setIsDeactivating(false);
     }
   };
 
@@ -304,8 +410,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Get notified when someone books you</p>
                 </div>
                 <Switch
-                  checked={notifications.emailBookings}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, emailBookings: v })}
+                  checked={settings.notifications.emailBookings}
+                  onCheckedChange={(v) => updateNotification('emailBookings', v)}
+                  disabled={settingsLoading}
                 />
               </div>
               <div className="border-t border-dark-gray" />
@@ -315,8 +422,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Get notified when you receive a message</p>
                 </div>
                 <Switch
-                  checked={notifications.emailMessages}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, emailMessages: v })}
+                  checked={settings.notifications.emailMessages}
+                  onCheckedChange={(v) => updateNotification('emailMessages', v)}
+                  disabled={settingsLoading}
                 />
               </div>
               <div className="border-t border-dark-gray" />
@@ -326,8 +434,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">News, tips, and platform updates</p>
                 </div>
                 <Switch
-                  checked={notifications.emailMarketing}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, emailMarketing: v })}
+                  checked={settings.notifications.emailMarketing}
+                  onCheckedChange={(v) => updateNotification('emailMarketing', v)}
+                  disabled={settingsLoading}
                 />
               </div>
             </CardContent>
@@ -344,8 +453,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Real-time alerts for bookings</p>
                 </div>
                 <Switch
-                  checked={notifications.pushBookings}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, pushBookings: v })}
+                  checked={settings.notifications.pushBookings}
+                  onCheckedChange={(v) => updateNotification('pushBookings', v)}
+                  disabled={settingsLoading}
                 />
               </div>
               <div className="border-t border-dark-gray" />
@@ -355,12 +465,23 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Real-time alerts for messages</p>
                 </div>
                 <Switch
-                  checked={notifications.pushMessages}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, pushMessages: v })}
+                  checked={settings.notifications.pushMessages}
+                  onCheckedChange={(v) => updateNotification('pushMessages', v)}
+                  disabled={settingsLoading}
                 />
               </div>
             </CardContent>
           </Card>
+
+          {settingsDirty && (
+            <Button
+              className="bg-gold-gradient text-black hover:opacity-90"
+              onClick={handleSaveSettings}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Notification Settings
+            </Button>
+          )}
         </TabsContent>
 
         <TabsContent value="privacy" className="mt-4">
@@ -375,8 +496,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Make your profile visible to everyone</p>
                 </div>
                 <Switch
-                  checked={privacy.profilePublic}
-                  onCheckedChange={(v) => setPrivacy({ ...privacy, profilePublic: v })}
+                  checked={settings.privacy.profilePublic}
+                  onCheckedChange={(v) => updatePrivacy('profilePublic', v)}
+                  disabled={settingsLoading}
                 />
               </div>
               <div className="border-t border-dark-gray" />
@@ -386,8 +508,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Let clients and fans message you</p>
                 </div>
                 <Switch
-                  checked={privacy.allowMessages}
-                  onCheckedChange={(v) => setPrivacy({ ...privacy, allowMessages: v })}
+                  checked={settings.privacy.allowMessages}
+                  onCheckedChange={(v) => updatePrivacy('allowMessages', v)}
+                  disabled={settingsLoading}
                 />
               </div>
               <div className="border-t border-dark-gray" />
@@ -397,12 +520,23 @@ export default function SettingsPage() {
                   <p className="text-xs text-text-secondary">Display earnings on your public profile</p>
                 </div>
                 <Switch
-                  checked={privacy.showEarnings}
-                  onCheckedChange={(v) => setPrivacy({ ...privacy, showEarnings: v })}
+                  checked={settings.privacy.showEarnings}
+                  onCheckedChange={(v) => updatePrivacy('showEarnings', v)}
+                  disabled={settingsLoading}
                 />
               </div>
             </CardContent>
           </Card>
+
+          {settingsDirty && (
+            <Button
+              className="bg-gold-gradient text-black hover:opacity-90"
+              onClick={handleSaveSettings}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Privacy Settings
+            </Button>
+          )}
         </TabsContent>
 
         <TabsContent value="appearance" className="mt-4">
@@ -447,11 +581,35 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <p className="text-sm font-medium text-text-primary">Deactivate Profile</p>
-                  <p className="text-xs text-text-secondary">Temporarily hide your profile from public view</p>
+                  <p className="text-sm font-medium text-text-primary">
+                    {settings.privacy.profilePublic ? 'Deactivate Profile' : 'Activate Profile'}
+                  </p>
+                  <p className="text-xs text-text-secondary">
+                    {settings.privacy.profilePublic
+                      ? 'Temporarily hide your profile from public view'
+                      : 'Make your profile visible to the public again'}
+                  </p>
                 </div>
-                <Button variant="outline" className="border-dark-gray text-text-primary hover:bg-black-elevated">
-                  Deactivate
+                <Button
+                  variant="outline"
+                  className={settings.privacy.profilePublic
+                    ? 'border-dark-gray text-text-primary hover:bg-black-elevated'
+                    : 'border-green text-green hover:bg-green/10'
+                  }
+                  onClick={handleDeactivateProfile}
+                  disabled={isDeactivating}
+                >
+                  {isDeactivating ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : settings.privacy.profilePublic ? (
+                    <>
+                      <PowerOff className="w-4 h-4 mr-2" /> Deactivate
+                    </>
+                  ) : (
+                    <>
+                      <Power className="w-4 h-4 mr-2" /> Activate
+                    </>
+                  )}
                 </Button>
               </div>
               <div className="border-t border-dark-gray" />

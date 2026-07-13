@@ -89,15 +89,16 @@ const easeSmooth = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 /* ─────────────────── Helpers ─────────────────── */
 
-function formatFollowers(n: number) {
-  if (n >= 1000) {
-    return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+function formatFollowers(n: number | null | undefined) {
+  const num = n ?? 0;
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1).replace(/\.0$/, '')}K`;
   }
-  return n.toLocaleString();
+  return num.toLocaleString();
 }
 
 function formatPrice(dj: DJ) {
-  const min = dj.bookingFeeMin;
+  const min = dj.bookingFeeMin ?? 0;
   const max = dj.bookingFeeMax;
   if (max && max > min) {
     return `SLE ${min.toLocaleString()} - ${max.toLocaleString()}`;

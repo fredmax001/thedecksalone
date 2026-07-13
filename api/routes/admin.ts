@@ -4,6 +4,8 @@ const { prisma } = require('../utils/prisma');
 const { requireRole } = require('../middleware/auth');
 const { recalculateAllRankings } = require('../utils/ranking');
 const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
+const { sendEmail } = require('../utils/email');
+const { withCache, clearCache } = require('../utils/cache');
 
 const router = express.Router();
 
@@ -11,6 +13,35 @@ const configuredProPrice = Number(process.env.PRO_SUBSCRIPTION_PRICE);
 const PRO_SUBSCRIPTION_PRICE = Number.isFinite(configuredProPrice) && configuredProPrice > 0 ? configuredProPrice : 250;
 const configuredLegendPrice = Number(process.env.LEGEND_SUBSCRIPTION_PRICE);
 const LEGEND_SUBSCRIPTION_PRICE = Number.isFinite(configuredLegendPrice) && configuredLegendPrice > 0 ? configuredLegendPrice : 750;
+
+// ─── AuditLog helper ──────────────────────────────────────────────
+
+async function createAuditLog(params: {
+  actorId: string;
+  targetId?: string | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  metadata?: Record<string, any> | null;
+  req?: any;
+}) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: params.actorId,
+        targetId: params.targetId || null,
+        action: params.action,
+        entity: params.entity,
+        entityId: params.entityId || null,
+        metadata: params.metadata || null,
+        ipAddress: params.req?.ip || params.req?.socket?.remoteAddress || null,
+        userAgent: params.req?.headers?.['user-agent'] || null,
+      },
+    });
+  } catch (err: any) {
+    console.error('AuditLog write failed:', err.message);
+  }
+}
 
 // All routes require admin or moderator role
 router.use(requireRole('ADMIN', 'MODERATOR', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'));
@@ -24,6 +55,10 @@ const userFilterSchema = z.object({
 
 const updateRoleSchema = z.object({
   role: z.enum(['USER', 'DJ', 'ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN']),
+});
+
+const updateUserStatusSchema = z.object({
+  status: z.enum(['ACTIVE', 'SUSPENDED', 'BANNED']),
 });
 
 const rankingUpdateSchema = z.object({
@@ -63,48 +98,61 @@ const subscriptionReviewSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-// GET /api/admin/stats - Platform-wide stats
+const updateSetSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  genre: z.string().max(100).optional(),
+  coverImage: z.string().optional(),
+  isPublic: z.boolean().optional(),
+});
+
+const setItemSchema = z.object({
+  mixId: z.string().min(1),
+  sortOrder: z.number().int().min(0).optional(),
+  note: z.string().max(500).optional(),
+});
+
+// GET /api/admin/stats - Platform-wide stats (cached 30s)
 router.get('/stats', async (req, res) => {
   try {
-    const [
-      totalUsers,
-      totalDjs,
-      totalMixes,
-      totalStreams,
-      totalBookings,
-      totalEvents,
-      totalReviews,
-      totalFollowers,
-      pendingBookings,
-      pendingVerifications,
-    ] = await Promise.all([
-      prisma.user.count(),
-      prisma.djProfile.count(),
-      prisma.mix.count(),
-      prisma.mix.aggregate({ _sum: { plays: true } }),
-      prisma.booking.count(),
-      prisma.event.count(),
-      prisma.review.count(),
-      prisma.follow.count(),
-      prisma.booking.count({ where: { status: 'PENDING' } }),
-      prisma.djProfile.count({ where: { verificationStatus: 'pending' } }),
-    ]);
+    const data = await withCache('admin:stats', 30000, async () => {
+      const [
+        totalUsers,
+        totalDjs,
+        totalMixes,
+        totalStreams,
+        totalBookings,
+        totalEvents,
+        totalReviews,
+        totalFollowers,
+        pendingBookings,
+        pendingVerifications,
+      ] = await Promise.all([
+        prisma.user.count(),
+        prisma.djProfile.count(),
+        prisma.mix.count(),
+        prisma.mix.aggregate({ _sum: { plays: true } }),
+        prisma.booking.count(),
+        prisma.event.count(),
+        prisma.review.count(),
+        prisma.follow.count(),
+        prisma.booking.count({ where: { status: 'PENDING' } }),
+        prisma.djProfile.count({ where: { verificationStatus: 'pending' } }),
+      ]);
 
-    const bookingRevenue = await prisma.booking.aggregate({
-      where: { status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-      _sum: { finalPrice: true },
-    });
+      const bookingRevenue = await prisma.booking.aggregate({
+        where: { status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
+        _sum: { finalPrice: true },
+      });
 
-    const totalPayments = await prisma.payment.aggregate({
-      where: { status: 'COMPLETED' },
-      _sum: { amount: true },
-    });
+      const totalPayments = await prisma.payment.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { amount: true },
+      });
 
-    const activeBattles = await prisma.battle.count({ where: { status: 'ACTIVE' } });
+      const activeBattles = await prisma.battle.count({ where: { status: 'ACTIVE' } });
 
-    return res.json({
-      success: true,
-      data: {
+      return {
         totalUsers,
         totalDjs,
         totalMixes,
@@ -118,8 +166,10 @@ router.get('/stats', async (req, res) => {
         estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
         totalPayments: totalPayments._sum.amount || 0,
         activeBattles,
-      },
+      };
     });
+
+    return res.json({ success: true, data });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -155,7 +205,9 @@ router.get('/users', async (req, res) => {
         select: {
           id: true,
           email: true,
+          username: true,
           role: true,
+          status: true,
           phone: true,
           phoneVerified: true,
           createdAt: true,
@@ -184,11 +236,55 @@ router.put('/users/:id/role', async (req, res) => {
     }
 
     const { role } = parsed.data;
+    const targetId = req.params.id;
 
     const user = await prisma.user.update({
-      where: { id: req.params.id },
+      where: { id: targetId },
       data: { role },
       select: { id: true, email: true, role: true },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId,
+      action: 'USER_ROLE_CHANGE',
+      entity: 'USER',
+      entityId: targetId,
+      metadata: { newRole: role, previousRole: req.body.previousRole || null },
+      req,
+    });
+
+    return res.json({ success: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/users/:id/status - Update user account status
+router.put('/users/:id/status', async (req, res) => {
+  try {
+    const parsed = updateUserStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { status } = parsed.data;
+    const targetId = req.params.id;
+
+    const user = await prisma.user.update({
+      where: { id: targetId },
+      data: { status },
+      select: { id: true, email: true, status: true },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId,
+      action: 'USER_STATUS_CHANGE',
+      entity: 'USER',
+      entityId: targetId,
+      metadata: { newStatus: status },
+      req,
     });
 
     return res.json({ success: true, data: user });
@@ -238,9 +334,10 @@ router.put('/djs/:id/verify', async (req, res) => {
   try {
     const parsed = verifyDjSchema.safeParse(req.body);
     const notes = parsed.success ? parsed.data.notes : undefined;
+    const targetId = req.params.id;
 
     const dj = await prisma.djProfile.update({
-      where: { id: req.params.id },
+      where: { id: targetId },
       data: {
         verified: true,
         verificationStatus: 'approved',
@@ -249,6 +346,16 @@ router.put('/djs/:id/verify', async (req, res) => {
         badges: { push: 'Verified DJ' },
         ...(notes && { verificationNotes: notes }),
       },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: dj.userId,
+      action: 'DJ_VERIFY',
+      entity: 'DJ_PROFILE',
+      entityId: targetId,
+      metadata: { notes: notes || null, stageName: dj.stageName },
+      req,
     });
 
     return res.json({ success: true, data: dj });
@@ -265,12 +372,23 @@ router.put('/djs/:id/reject', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Rejection reason is required' });
     }
 
+    const targetId = req.params.id;
     const dj = await prisma.djProfile.update({
-      where: { id: req.params.id },
+      where: { id: targetId },
       data: {
         verificationStatus: 'rejected',
         verificationNotes: reason,
       },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: dj.userId,
+      action: 'DJ_VERIFY_REJECT',
+      entity: 'DJ_PROFILE',
+      entityId: targetId,
+      metadata: { reason, stageName: dj.stageName },
+      req,
     });
 
     return res.json({ success: true, data: dj });
@@ -346,14 +464,25 @@ router.put('/bookings/:id/status', async (req, res) => {
     }
 
     const { status } = parsed.data;
+    const bookingId = req.params.id;
     const booking = await prisma.booking.update({
-      where: { id: req.params.id },
+      where: { id: bookingId },
       data: { status },
       include: {
         client: { select: { id: true, email: true } },
         dj: { select: { id: true, stageName: true } },
         payments: true,
       },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: booking.clientId || booking.djId,
+      action: 'BOOKING_STATUS_CHANGE',
+      entity: 'BOOKING',
+      entityId: bookingId,
+      metadata: { newStatus: status, clientEmail: booking.client?.email, djStageName: booking.dj?.stageName },
+      req,
     });
 
     return res.json({ success: true, data: booking });
@@ -371,9 +500,20 @@ router.put('/mixes/:id/feature', async (req, res) => {
     }
 
     const { featured } = parsed.data;
+    const mixId = req.params.id;
     const mix = await prisma.mix.update({
-      where: { id: req.params.id },
+      where: { id: mixId },
       data: { featured },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: mix.djId,
+      action: featured ? 'MIX_FEATURE' : 'MIX_UNFEATURE',
+      entity: 'MIX',
+      entityId: mixId,
+      metadata: { title: mix.title, featured },
+      req,
     });
 
     return res.json({ success: true, data: mix });
@@ -419,12 +559,28 @@ router.put('/mixes/:id/hall-of-fame', async (req, res) => {
 // DELETE /api/admin/mixes/:id - Delete a mix
 router.delete('/mixes/:id', async (req, res) => {
   try {
-    const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
+    const mixId = req.params.id;
+    const mix = await prisma.mix.findUnique({ where: { id: mixId } });
     if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
 
-    await prisma.mix.delete({ where: { id: req.params.id } });
+    await prisma.mix.delete({ where: { id: mixId } });
 
-    return res.json({ success: true, data: { id: req.params.id, message: 'Mix deleted' } });
+    await prisma.djProfile.update({
+      where: { id: mix.djId },
+      data: { totalMixes: { decrement: 1 } },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: mix.djId,
+      action: 'MIX_DELETE',
+      entity: 'MIX',
+      entityId: mixId,
+      metadata: { title: mix.title },
+      req,
+    });
+
+    return res.json({ success: true, data: { id: mixId, message: 'Mix deleted' } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -470,35 +626,38 @@ router.post('/rankings/recalculate', async (req, res) => {
   }
 });
 
-// GET /api/admin/analytics - Monthly platform analytics
+// GET /api/admin/analytics - Monthly platform analytics (cached 60s)
 router.get('/analytics', async (req, res) => {
   try {
-    const now = new Date();
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const label = start.toLocaleString('en-US', { month: 'short' });
-      const [users, djs, mixes, bookings, revenue] = await Promise.all([
-        prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
-        prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
-        prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
-        prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
-        prisma.booking.aggregate({
-          where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-          _sum: { finalPrice: true },
-        }),
-      ]);
-      months.push({
-        month: label,
-        users,
-        djs,
-        mixes,
-        bookings,
-        revenue: Math.round(revenue._sum.finalPrice || 0),
-      });
-    }
-    return res.json({ success: true, data: months });
+    const data = await withCache('admin:analytics', 60000, async () => {
+      const now = new Date();
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        const label = start.toLocaleString('en-US', { month: 'short' });
+        const [users, djs, mixes, bookings, revenue] = await Promise.all([
+          prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
+          prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
+          prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
+          prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
+          prisma.booking.aggregate({
+            where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
+            _sum: { finalPrice: true },
+          }),
+        ]);
+        months.push({
+          month: label,
+          users,
+          djs,
+          mixes,
+          bookings,
+          revenue: Math.round(revenue._sum.finalPrice || 0),
+        });
+      }
+      return months;
+    });
+    return res.json({ success: true, data });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -612,6 +771,16 @@ router.post('/pro-subscription-requests/:id/approve', async (req, res) => {
       });
     });
 
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: request.dj.userId,
+      action: 'PRO_APPROVE',
+      entity: 'PRO_SUBSCRIPTION_REQUEST',
+      entityId: request.id,
+      metadata: { plan: request.plan, note: parsed.data.note || null, stageName: request.dj.stageName },
+      req,
+    });
+
     return res.json({ success: true, data: updated });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -651,6 +820,16 @@ router.post('/pro-subscription-requests/:id/reject', async (req, res) => {
           },
         },
       },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: updated.dj.user?.id || null,
+      action: 'PRO_REJECT',
+      entity: 'PRO_SUBSCRIPTION_REQUEST',
+      entityId: request.id,
+      metadata: { plan: request.plan, note: parsed.data.note || null, stageName: updated.dj.stageName },
+      req,
     });
 
     return res.json({ success: true, data: updated });
@@ -839,12 +1018,23 @@ router.get('/djs', async (req, res) => {
 // PUT /api/admin/djs/:id/suspend - Toggle DJ visibility (suspend)
 router.put('/djs/:id/suspend', async (req, res) => {
   try {
-    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+    const targetId = req.params.id;
+    const dj = await prisma.djProfile.findUnique({ where: { id: targetId } });
     if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
 
     const updated = await prisma.djProfile.update({
-      where: { id: req.params.id },
+      where: { id: targetId },
       data: { isPublic: !dj.isPublic },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: dj.userId,
+      action: updated.isPublic ? 'DJ_REINSTATE' : 'DJ_SUSPEND',
+      entity: 'DJ_PROFILE',
+      entityId: targetId,
+      metadata: { stageName: dj.stageName, isPublic: updated.isPublic },
+      req,
     });
 
     return res.json({ success: true, data: { isPublic: updated.isPublic, suspended: !updated.isPublic } });
@@ -856,7 +1046,20 @@ router.put('/djs/:id/suspend', async (req, res) => {
 // DELETE /api/admin/djs/:id - Delete DJ and associated data
 router.delete('/djs/:id', async (req, res) => {
   try {
-    await prisma.djProfile.delete({ where: { id: req.params.id } });
+    const targetId = req.params.id;
+    const dj = await prisma.djProfile.findUnique({ where: { id: targetId }, select: { userId: true, stageName: true } });
+    await prisma.djProfile.delete({ where: { id: targetId } });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: dj?.userId || null,
+      action: 'DJ_DELETE',
+      entity: 'DJ_PROFILE',
+      entityId: targetId,
+      metadata: { stageName: dj?.stageName || null },
+      req,
+    });
+
     return res.json({ success: true, message: 'DJ deleted' });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -1012,6 +1215,157 @@ router.get('/notifications', async (req, res) => {
   }
 });
 
+// GET /api/admin/battles - Admin battles list with full details
+router.get('/battles', async (req, res) => {
+  try {
+    const { status, page, limit } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [battles, total] = await Promise.all([
+      prisma.battle.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          entries: {
+            include: {
+              dj: { select: { id: true, stageName: true, avatar: true } },
+              votesCast: { select: { id: true } },
+            },
+          },
+        },
+      }),
+      prisma.battle.count({ where }),
+    ]);
+
+    const data = battles.map((b) => ({
+      ...b,
+      entries: b.entries.map((e) => ({
+        ...e,
+        voteCount: e.votesCast.length,
+      })),
+    }));
+
+    return res.json({
+      success: true,
+      data,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/battles - Create battle (admin endpoint)
+router.post('/battles', async (req, res) => {
+  try {
+    const { title, weekStart, weekEnd, theme, metricType } = req.body;
+    if (!title || !weekStart || !weekEnd) {
+      return res.status(400).json({ success: false, error: 'title, weekStart, and weekEnd are required' });
+    }
+
+    const battle = await prisma.battle.create({
+      data: {
+        title,
+        weekStart: new Date(weekStart),
+        weekEnd: new Date(weekEnd),
+        theme: theme || null,
+        metricType: metricType || 'COMPOSITE',
+      },
+      include: { entries: true },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: null,
+      action: 'BATTLE_CREATE',
+      entity: 'BATTLE',
+      entityId: battle.id,
+      metadata: { title, theme, metricType },
+      req,
+    });
+
+    return res.status(201).json({ success: true, data: battle });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/battles/:id/close - Close battle (admin endpoint)
+router.post('/battles/:id/close', async (req, res) => {
+  try {
+    const battleId = req.params.id;
+    const battle = await prisma.battle.findUnique({
+      where: { id: battleId },
+      include: {
+        entries: {
+          include: {
+            dj: { select: { id: true, stageName: true } },
+            votesCast: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    if (!battle) {
+      return res.status(404).json({ success: false, error: 'Battle not found' });
+    }
+    if (battle.status !== 'ACTIVE') {
+      return res.status(400).json({ success: false, error: 'Battle is already closed' });
+    }
+
+    const sortedEntries = [...battle.entries].sort((a, b) => b.finalScore - a.finalScore);
+
+    for (let i = 0; i < Math.min(3, sortedEntries.length); i++) {
+      const entry = sortedEntries[i];
+      const badge = i === 0 ? 'Battle Champion' : i === 1 ? 'Battle Runner-Up' : 'Battle Third Place';
+      await prisma.djProfile.update({
+        where: { id: entry.djId },
+        data: {
+          badges: { push: badge },
+          rankingScore: { increment: i === 0 ? 2 : i === 1 ? 1 : 0.5 },
+        },
+      });
+    }
+
+    const updated = await prisma.battle.update({
+      where: { id: battleId },
+      data: { status: 'CLOSED' },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: null,
+      action: 'BATTLE_CLOSE',
+      entity: 'BATTLE',
+      entityId: battleId,
+      metadata: { title: battle.title, winnerCount: Math.min(3, sortedEntries.length) },
+      req,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        battle: updated,
+        winners: sortedEntries.slice(0, 3).map((e, i) => ({
+          position: i + 1,
+          dj: e.dj,
+          score: e.finalScore,
+          votes: e.votesCast.length,
+        })),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // POST /api/admin/notifications - Send a notification (in-memory only for now)
 router.post('/notifications', async (req, res) => {
   try {
@@ -1116,7 +1470,12 @@ router.get('/ads', async (req, res) => {
 // POST /api/admin/ads - Create a new ad campaign
 router.post('/ads', async (req, res) => {
   try {
-    const data = createAdSchema.parse(req.body);
+    const parsed = createAdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const data = parsed.data;
 
     const campaign = await prisma.adCampaign.create({
       data: {
@@ -1130,9 +1489,6 @@ router.post('/ads', async (req, res) => {
 
     return res.status(201).json({ success: true, data: campaign });
   } catch (error) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ success: false, error: error.errors });
-    }
     return res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1146,15 +1502,438 @@ router.put('/campaigns/:id/status', async (req, res) => {
     }
 
     const { status, notes } = parsed.data;
+    const campaignId = req.params.id;
     const campaign = await prisma.adCampaign.update({
-      where: { id: req.params.id },
+      where: { id: campaignId },
       data: { status },
       include: {
         advertiser: { select: { id: true, stageName: true, avatar: true } },
       },
     });
 
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: campaign.advertiserId || null,
+      action: 'CAMPAIGN_STATUS_CHANGE',
+      entity: 'AD_CAMPAIGN',
+      entityId: campaignId,
+      metadata: { newStatus: status, notes: notes || null, name: campaign.name },
+      req,
+    });
+
     return res.json({ success: true, data: campaign });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/broadcast-email - Send email to all users or specific role
+const broadcastEmailSchema = z.object({
+  subject: z.string().min(1).max(200),
+  message: z.string().min(1).max(5000),
+  targetRole: z.enum(['ALL', 'USER', 'DJ', 'ADMIN']).optional().default('ALL'),
+});
+
+router.post('/broadcast-email', async (req, res) => {
+  try {
+    const parsed = broadcastEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { subject, message, targetRole } = parsed.data;
+
+    // Build recipient query
+    const where: any = {};
+    if (targetRole !== 'ALL') {
+      where.role = targetRole;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: { email: true, username: true },
+    });
+
+    if (users.length === 0) {
+      return res.json({ success: true, data: { sent: 0, message: 'No users match the target criteria' } });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://decksalone.com';
+    const logoUrl = `${frontendUrl}/assets/logo.jpg`;
+    const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#111;background:#fff">
+      <div style="text-align:center;margin-bottom:24px">
+        <img src="${logoUrl}" alt="Deck Salone" width="80" height="80" style="border-radius:50%;object-fit:cover;margin-bottom:12px" />
+        <h1 style="color:#d4a24a;margin:0;font-size:24px">Deck Salone</h1>
+      </div>
+      <div style="line-height:1.6;color:#333">
+        ${message.replace(/\n/g, '<br>')}
+      </div>
+      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center;color:#666;font-size:12px">
+        <p>Deck Salone — The Premier DJ Platform</p>
+        <p><a href="${frontendUrl}" style="color:#d4a24a">${frontendUrl}</a></p>
+        <p style="margin-top:8px">If you no longer wish to receive these emails, please contact <a href="mailto:support@decksalone.com" style="color:#d4a24a">support@decksalone.com</a></p>
+      </div>
+    </div>`;
+
+    // Send emails in batches to avoid overwhelming the SMTP server
+    const BATCH_SIZE = 50;
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((user) =>
+          sendEmail({
+            to: user.email,
+            subject,
+            text: message,
+            html,
+          })
+        )
+      );
+
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          sentCount++;
+        } else {
+          failedCount++;
+          const errorMsg = result.status === 'rejected' ? result.reason?.message : result.value?.error;
+          errors.push(`Failed to send to ${batch[idx].email}: ${errorMsg}`);
+        }
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        sent: sentCount,
+        failed: failedCount,
+        total: users.length,
+        targetRole,
+        errors: errors.slice(0, 10), // Limit error details
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// Live Sets (DJ Sets) Admin Routes
+// ───────────────────────────────────────────────────────────────────
+
+// GET /api/admin/sets - List all DJ sets with pagination and filters
+router.get('/sets', async (req, res) => {
+  try {
+    const { search, djId, isPublic, page, limit } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (djId) where.djId = djId;
+    if (isPublic !== undefined) where.isPublic = isPublic === 'true';
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [sets, total] = await Promise.all([
+      prisma.djSet.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true } },
+          items: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              mix: { select: { id: true, title: true, coverImage: true, genre: true, duration: true } },
+            },
+          },
+        },
+      }),
+      prisma.djSet.count({ where }),
+    ]);
+
+    const data = sets.map((s: any) => ({
+      ...s,
+      mixCount: s.items.length,
+    }));
+
+    return res.json({
+      success: true,
+      data,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/admin/sets/:id - Get a single set with full details
+router.get('/sets/:id', async (req, res) => {
+  try {
+    const set = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true, user: { select: { email: true } } } },
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            mix: {
+              include: {
+                dj: { select: { id: true, stageName: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!set) return res.status(404).json({ success: false, error: 'Set not found' });
+
+    return res.json({ success: true, data: { ...set, mixCount: set.items.length } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/sets/:id - Update any set (admin override)
+router.put('/sets/:id', async (req, res) => {
+  try {
+    const parsed = updateSetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const set = await prisma.djSet.update({
+      where: { id: req.params.id },
+      data: parsed.data,
+      include: {
+        dj: { select: { id: true, stageName: true } },
+        items: { select: { id: true } },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: set.djId,
+      action: 'SET_UPDATE',
+      entity: 'DJ_SET',
+      entityId: set.id,
+      metadata: { title: set.title, changes: parsed.data },
+      req,
+    });
+
+    return res.json({ success: true, data: { ...set, mixCount: set.items.length } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/admin/sets/:id - Delete any set (admin override)
+router.delete('/sets/:id', async (req, res) => {
+  try {
+    const set = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true } } },
+    });
+    if (!set) return res.status(404).json({ success: false, error: 'Set not found' });
+
+    await prisma.djSet.delete({ where: { id: req.params.id } });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: set.djId,
+      action: 'SET_DELETE',
+      entity: 'DJ_SET',
+      entityId: req.params.id,
+      metadata: { title: set.title, stageName: set.dj.stageName },
+      req,
+    });
+
+    return res.json({ success: true, data: { id: req.params.id, message: 'Set deleted' } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/sets/:id/mixes - Add a mix to a set (admin override)
+router.post('/sets/:id/mixes', async (req, res) => {
+  try {
+    const parsed = setItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const set = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true } } },
+    });
+    if (!set) return res.status(404).json({ success: false, error: 'Set not found' });
+
+    const mix = await prisma.mix.findUnique({ where: { id: parsed.data.mixId } });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    const item = await prisma.djSetItem.create({
+      data: { setId: req.params.id, mixId: parsed.data.mixId, sortOrder: parsed.data.sortOrder || 0 },
+      include: {
+        mix: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true } },
+          },
+        },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: set.djId,
+      action: 'SET_ADD_MIX',
+      entity: 'DJ_SET',
+      entityId: set.id,
+      metadata: { title: set.title, mixTitle: mix.title, mixId: mix.id },
+      req,
+    });
+
+    return res.status(201).json({ success: true, data: item });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/admin/sets/:id/mixes/:mixId - Remove a mix from a set (admin override)
+router.delete('/sets/:id/mixes/:mixId', async (req, res) => {
+  try {
+    const set = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true } } },
+    });
+    if (!set) return res.status(404).json({ success: false, error: 'Set not found' });
+
+    const item = await prisma.djSetItem.findUnique({
+      where: { setId_mixId: { setId: req.params.id, mixId: req.params.mixId } },
+    });
+    if (!item) return res.status(404).json({ success: false, error: 'Mix not found in this set' });
+
+    await prisma.djSetItem.delete({
+      where: { setId_mixId: { setId: req.params.id, mixId: req.params.mixId } },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: set.djId,
+      action: 'SET_REMOVE_MIX',
+      entity: 'DJ_SET',
+      entityId: set.id,
+      metadata: { title: set.title, mixId: req.params.mixId },
+      req,
+    });
+
+    return res.json({ success: true, data: { removed: true } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/sets/:id/reorder - Reorder items in a set (admin override)
+router.put('/sets/:id/reorder', async (req, res) => {
+  try {
+    const set = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true } } },
+    });
+    if (!set) return res.status(404).json({ success: false, error: 'Set not found' });
+
+    const items = req.body.items;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'items array is required' });
+    }
+
+    await prisma.$transaction(
+      items.map((item: any) =>
+        prisma.djSetItem.updateMany({
+          where: { setId: req.params.id, mixId: item.mixId },
+          data: { sortOrder: Number(item.sortOrder) || 0 },
+        })
+      )
+    );
+
+    const updated = await prisma.djSet.findUnique({
+      where: { id: req.params.id },
+      include: {
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            mix: {
+              include: {
+                dj: { select: { id: true, stageName: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: set.djId,
+      action: 'SET_REORDER',
+      entity: 'DJ_SET',
+      entityId: set.id,
+      metadata: { title: set.title, itemCount: items.length },
+      req,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/admin/sets/stats - Set statistics
+router.get('/sets/stats', async (req, res) => {
+  try {
+    const [totalSets, publicSets, privateSets, totalItems, topDjs] = await Promise.all([
+      prisma.djSet.count(),
+      prisma.djSet.count({ where: { isPublic: true } }),
+      prisma.djSet.count({ where: { isPublic: false } }),
+      prisma.djSetItem.count(),
+      prisma.djSet.groupBy({
+        by: ['djId'],
+        _count: { djId: true },
+        orderBy: { _count: { djId: 'desc' } },
+        take: 5,
+      }),
+    ]);
+
+    const djIds = topDjs.map((d: any) => d.djId);
+    const djs = await prisma.djProfile.findMany({
+      where: { id: { in: djIds } },
+      select: { id: true, stageName: true, avatar: true },
+    });
+
+    const djMap = new Map(djs.map((d: any) => [d.id, d]));
+
+    return res.json({
+      success: true,
+      data: {
+        totalSets,
+        publicSets,
+        privateSets,
+        totalItems,
+        topDjs: topDjs.map((d: any) => ({
+          ...(djMap.get(d.djId) as Record<string, any> || {}),
+          setCount: d._count.djId,
+        })),
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

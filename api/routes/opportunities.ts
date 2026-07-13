@@ -32,8 +32,11 @@ router.get('/', authMiddleware, async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.id },
-            include: { djProfile: { select: { subscriptionTier: true } } },
+            include: { djProfile: { select: { id: true, subscriptionTier: true, city: true } } },
         });
+        if (!user) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
 
         const isAdmin = user.role === 'ADMIN' || user.role === 'FINANCE_ADMIN';
         const tier = user.djProfile?.subscriptionTier || 'free';
@@ -59,7 +62,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
         const opportunities = await prisma.opportunity.findMany({
             where: whereClause,
-            orderBy: { isFeatured: 'desc', eventDate: 'asc' },
+            orderBy: [{ isFeatured: 'desc' }, { eventDate: 'asc' }],
             include: {
                 applicants: isAdmin ? {
                     include: { dj: true }
@@ -71,13 +74,20 @@ router.get('/', authMiddleware, async (req, res) => {
         });
 
         // Map to include canApply status
-        const mapped = opportunities.map((opp) => ({
-            ...opp,
-            userHasApplied: isAdmin ? false : opp.applicants.length > 0,
-            userApplication: isAdmin ? null : (opp.applicants[0] || null),
-            canApply: isAdmin ? false : (tier !== 'free' && opp.requiredTier !== 'legend' ? true : tier === 'legend'),
-            applicants: isAdmin ? opp.applicants : undefined, // Remove for non-admins
-        }));
+        const city = user.djProfile?.city?.toLowerCase();
+        const mapped = opportunities
+            .map((opp) => {
+                const nearYou = !!city && opp.eventLocation?.toLowerCase().includes(city);
+                return {
+                    ...opp,
+                    nearYou,
+                    userHasApplied: isAdmin ? false : opp.applicants.length > 0,
+                    userApplication: isAdmin ? null : (opp.applicants[0] || null),
+                    canApply: isAdmin ? false : (tier !== 'free' && opp.requiredTier !== 'legend' ? true : tier === 'legend'),
+                    applicants: isAdmin ? opp.applicants : undefined, // Remove for non-admins
+                };
+            })
+            .sort((a, b) => Number(b.nearYou) - Number(a.nearYou));
 
         return res.json({ success: true, data: mapped });
     } catch (error) {
@@ -88,12 +98,21 @@ router.get('/', authMiddleware, async (req, res) => {
 // GET /api/opportunities/:id - Get single opportunity details
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
+        const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'FINANCE_ADMIN';
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            include: { djProfile: { select: { id: true, subscriptionTier: true } } },
+        });
+
         const opportunity = await prisma.opportunity.findUnique({
             where: { id: req.params.id },
             include: {
-                applicants: {
-                    select: { id: true, djId: true, message: true, status: true, appliedAt: true },
-                },
+                applicants: isAdmin
+                    ? { select: { id: true, djId: true, message: true, status: true, appliedAt: true } }
+                    : {
+                        where: { djId: user?.djProfile?.id || 'none' },
+                        select: { id: true, status: true, appliedAt: true },
+                    },
             },
         });
 
@@ -101,7 +120,17 @@ router.get('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Opportunity not found' });
         }
 
-        return res.json({ success: true, data: opportunity });
+        const tier = user?.djProfile?.subscriptionTier || 'free';
+        return res.json({
+            success: true,
+            data: {
+                ...opportunity,
+                userHasApplied: isAdmin ? false : opportunity.applicants.length > 0,
+                userApplication: isAdmin ? null : (opportunity.applicants[0] || null),
+                canApply: isAdmin ? false : (tier !== 'free' && opportunity.requiredTier !== 'legend' ? true : tier === 'legend'),
+                applicants: isAdmin ? opportunity.applicants : undefined,
+            },
+        });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
     }
@@ -161,6 +190,9 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
 
         if (!opp) {
             return res.status(404).json({ success: false, error: 'Opportunity not found' });
+        }
+        if (opp.status !== 'open') {
+            return res.status(400).json({ success: false, error: 'This opportunity is no longer open' });
         }
 
         // Check if Legend-exclusive and user isn't Legend

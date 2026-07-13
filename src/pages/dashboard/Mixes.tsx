@@ -294,7 +294,7 @@ export default function Mixes() {
   const handlePlay = (mix: Mix) => {
     const url = mix.audioUrl || mix.originalUrl;
     if (!url) {
-      toast.info('Audio playback coming soon');
+      toast.error('This mix does not have an audio file. Upload an audio file to enable playback.');
       return;
     }
     const track = {
@@ -535,12 +535,109 @@ export default function Mixes() {
 
         <TabsContent value="analytics" className="mt-4">
           <Card className="bg-black-surface border-dark-gray">
-            <CardContent className="py-12 text-center">
-              <Eye className="w-12 h-12 text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary mb-2">Mix analytics coming soon</p>
-              <p className="text-sm text-text-muted">
-                Detailed play tracking, listener demographics, and engagement metrics will be available here.
-              </p>
+            <CardContent className="p-6">
+              {mixes.length === 0 ? (
+                <div className="text-center py-12">
+                  <Eye className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                  <p className="text-text-secondary mb-2">Upload mixes to see analytics here</p>
+                  <p className="text-sm text-text-muted">
+                    Your mix performance data will appear once you have uploaded mixes.
+                  </p>
+                  <Button
+                    className="mt-4 bg-gold-gradient text-black"
+                    onClick={handleUploadClick}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Your First Mix
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                      <p className="text-xs text-text-muted mb-1">Total Plays</p>
+                      <p className="text-2xl font-mono font-bold text-text-primary">
+                        {mixes.reduce((sum, mix) => sum + (mix.plays || 0), 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                      <p className="text-xs text-text-muted mb-1">Total Likes</p>
+                      <p className="text-2xl font-mono font-bold text-gold">
+                        {mixes.reduce((sum, mix) => sum + (mix.likes || 0), 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                      <p className="text-xs text-text-muted mb-1">Total Mixes</p>
+                      <p className="text-2xl font-mono font-bold text-green">
+                        {mixes.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Most Popular Mix */}
+                  {(() => {
+                    const mostPopular = [...mixes].sort((a, b) => (b.plays || 0) - (a.plays || 0))[0];
+                    return mostPopular ? (
+                      <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                        <p className="text-xs text-text-muted mb-3">Most Popular Mix</p>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
+                            <Music className="w-6 h-6 text-gold" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">{mostPopular.title}</p>
+                            <p className="text-xs text-text-muted">{mostPopular.genre}</p>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-text-muted">
+                            <span className="flex items-center gap-1">
+                              <Play className="w-3 h-3 text-gold" />
+                              {mostPopular.plays?.toLocaleString() || 0}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Heart className="w-3 h-3 text-red" />
+                              {mostPopular.likes?.toLocaleString() || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Mix Performance Table */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-primary mb-3">Mix Performance</h3>
+                    <div className="space-y-2">
+                      {[...mixes]
+                        .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+                        .map((mix, index) => (
+                          <div
+                            key={mix.id}
+                            className="flex items-center gap-4 p-3 rounded-lg bg-black-elevated border border-dark-gray hover:border-gold/20 transition-colors"
+                          >
+                            <div className="w-6 h-6 rounded bg-gold/10 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-gold">{index + 1}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-text-primary truncate">{mix.title}</p>
+                              <p className="text-xs text-text-muted">{mix.genre}</p>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-text-muted">
+                              <span className="flex items-center gap-1">
+                                <Play className="w-3 h-3" />
+                                {mix.plays?.toLocaleString() || 0}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Heart className="w-3 h-3" />
+                                {mix.likes?.toLocaleString() || 0}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

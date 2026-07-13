@@ -6,7 +6,7 @@ import {
   Trash2,
   ImageIcon,
   ExternalLink,
-  Eye,
+  BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -57,6 +57,8 @@ export default function Campaigns() {
   const deleteMutation = useDeleteCampaign();
   const [open, setOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [form, setForm] = useState({
     name: '',
     targetType: 'profile' as 'profile' | 'mix' | 'battle',
@@ -410,9 +412,12 @@ export default function Campaigns() {
                       variant="outline"
                       size="sm"
                       className="border-dark-gray text-text-primary"
-                      onClick={() => toast.info('Campaign analytics coming soon')}
+                      onClick={() => {
+                        setSelectedCampaign(campaign);
+                        setAnalyticsOpen(true);
+                      }}
                     >
-                      <Eye className="w-4 h-4" />
+                      <BarChart3 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -421,6 +426,80 @@ export default function Campaigns() {
           ))}
         </div>
       )}
+      {/* Campaign Analytics Modal */}
+      <Dialog open={analyticsOpen} onOpenChange={setAnalyticsOpen}>
+        <DialogContent className="bg-black-surface border-dark-gray text-text-primary max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-display uppercase tracking-wide flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-gold" />
+              Campaign Analytics
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCampaign && (
+            <div className="space-y-6 mt-2">
+              <div>
+                <h3 className="text-text-primary font-semibold text-lg">{selectedCampaign.name}</h3>
+                <p className="text-xs text-text-muted capitalize">
+                  {selectedCampaign.targetType} • Budget {selectedCampaign.currency} {selectedCampaign.budget}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                  <p className="text-xs text-text-muted mb-1">Impressions</p>
+                  <p className="text-2xl font-mono font-bold text-text-primary">
+                    {selectedCampaign.impressions.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                  <p className="text-xs text-text-muted mb-1">Clicks</p>
+                  <p className="text-2xl font-mono font-bold text-text-primary">
+                    {selectedCampaign.clicks.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                  <p className="text-xs text-text-muted mb-1">Reach Score</p>
+                  <p className="text-2xl font-mono font-bold text-gold">
+                    {selectedCampaign.reachScore.toFixed(1)}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                  <p className="text-xs text-text-muted mb-1">Click-Through Rate</p>
+                  <p className="text-2xl font-mono font-bold text-green">
+                    {selectedCampaign.impressions > 0
+                      ? ((selectedCampaign.clicks / selectedCampaign.impressions) * 100).toFixed(2)
+                      : '0.00'}%
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray">
+                <p className="text-xs text-text-muted mb-2">Campaign Status</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${STATUS_COLORS[selectedCampaign.status]}`}>
+                    {STATUS_LABELS[selectedCampaign.status]}
+                  </span>
+                  <span className="text-xs text-text-secondary">
+                    Created {new Date(selectedCampaign.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              {selectedCampaign.ctaUrl && (
+                <a
+                  href={selectedCampaign.ctaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-gold hover:underline"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  {selectedCampaign.ctaUrl}
+                </a>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

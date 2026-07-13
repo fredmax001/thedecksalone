@@ -4,7 +4,6 @@ const prisma = new PrismaClient();
 
 const KEEP_EMAILS = [
   'admin@soundit.sl',
-  'djfredmax221@outlook.com',
   'maxrick221@gmail.com'
 ];
 

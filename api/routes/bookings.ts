@@ -4,6 +4,8 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { bookingLimiter } = require('../utils/rateLimiter');
 
+const { createNotification, createNotificationForDj } = require('../utils/notifications');
+
 const router = express.Router();
 
 const bookingFilterSchema = z.object({
@@ -290,6 +292,34 @@ router.post('/', softAuthMiddleware, bookingLimiter, async (req, res) => {
       data: { totalBookings: { increment: 1 } },
     });
 
+    // Notify DJ about new booking
+    await createNotificationForDj({
+      djId: data.djId,
+      type: 'BOOKING_CREATED',
+      title: 'New Booking Request',
+      body: `${booking.client?.email || 'Someone'} requested you for ${data.eventType} on ${new Date(data.eventDate).toLocaleDateString()}`,
+      actionUrl: `/dashboard/bookings`,
+      entityId: booking.id,
+      entityType: 'booking',
+      metadata: { eventType: data.eventType, eventDate: data.eventDate, location: data.eventLocation },
+      sendEmail: true,
+      emailSubject: 'New Booking Request - Deck Salone',
+    });
+
+    // Notify client about booking confirmation
+    if (req.user) {
+      await createNotification({
+        userId: req.user.id,
+        type: 'BOOKING_CREATED',
+        title: 'Booking Request Sent',
+        body: `Your booking request for ${data.eventType} has been sent to ${dj.stageName}`,
+        actionUrl: `/user/bookings`,
+        entityId: booking.id,
+        entityType: 'booking',
+        metadata: { djId: data.djId, djName: dj.stageName },
+      });
+    }
+
     return res.status(201).json({ success: true, data: booking });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -357,6 +387,48 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         payments: true,
       },
     });
+
+    // Notify the other party about status change
+    const statusLabels = {
+      PENDING: 'Pending',
+      NEGOTIATING: 'Under Negotiation',
+      CONFIRMED: 'Confirmed',
+      DEPOSIT_PAID: 'Deposit Paid',
+      COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+      REFUNDED: 'Refunded',
+    };
+    const statusLabel = statusLabels[status] || status;
+
+    // Notify client if DJ changed status
+    if (isDj && updated.clientId) {
+      await createNotification({
+        userId: updated.clientId,
+        type: 'BOOKING_STATUS_CHANGED',
+        title: `Booking ${statusLabel}`,
+        body: `Your booking with ${updated.dj.stageName} is now ${statusLabel.toLowerCase()}`,
+        actionUrl: `/user/bookings`,
+        entityId: updated.id,
+        entityType: 'booking',
+        metadata: { status, djId: updated.dj.id, djName: updated.dj.stageName },
+        sendEmail: ['CONFIRMED', 'CANCELLED', 'DEPOSIT_PAID'].includes(status),
+        emailSubject: `Booking ${statusLabel} - Deck Salone`,
+      });
+    }
+
+    // Notify DJ if client changed status
+    if (isClient) {
+      await createNotificationForDj({
+        djId: updated.dj.id,
+        type: 'BOOKING_STATUS_CHANGED',
+        title: `Booking ${statusLabel}`,
+        body: `The booking with ${updated.client?.email || 'your client'} is now ${statusLabel.toLowerCase()}`,
+        actionUrl: `/dashboard/bookings`,
+        entityId: updated.id,
+        entityType: 'booking',
+        metadata: { status, clientId: updated.clientId },
+      });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {

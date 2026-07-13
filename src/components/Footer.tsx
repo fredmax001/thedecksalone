@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Instagram, Twitter, Youtube, Music } from 'lucide-react';
+import { Instagram, Twitter, Youtube, Music, Mail, Phone } from 'lucide-react';
 
 const platformLinks = [
   { label: 'Discover DJs', path: '/discover' },
@@ -29,8 +29,8 @@ const socialLinks = [
 export default function Footer() {
   return (
     <footer className="theme-bg border-t theme-border-card">
-      {/* Full footer — desktop only */}
-      <div className="container-main pt-16 pb-8 hidden lg:block">
+      {/* Full footer — desktop and tablet */}
+      <div className="container-main pt-16 pb-8 hidden md:block">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand Column */}
           <div className="lg:col-span-1">
@@ -38,7 +38,7 @@ export default function Footer() {
               <img
                 src="/logo-web.png"
                 alt="Deck Salone"
-                className="h-12 w-auto object-contain"
+                className="h-6 w-auto object-contain"
               />
             </Link>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs">
@@ -102,10 +102,21 @@ export default function Footer() {
             <h4 className="font-display text-sm font-semibold uppercase tracking-wider text-text-primary mb-4">
               Connect
             </h4>
-            <p className="text-text-secondary text-sm mb-4">
-              Follow us for updates, featured DJs, and exclusive content.
-            </p>
-            <div className="flex items-center gap-1 text-sm text-text-muted">
+            <ul className="space-y-3 text-sm text-text-muted">
+              <li className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-gold shrink-0" />
+                <a href="https://wa.me/23272011156" target="_blank" rel="noopener noreferrer" className="hover:text-text-primary transition-colors">
+                  +232 72 011 156
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-gold shrink-0" />
+                <a href="mailto:support@decksalone.com" className="hover:text-text-primary transition-colors">
+                  support@decksalone.com
+                </a>
+              </li>
+            </ul>
+            <div className="flex items-center gap-1 text-sm text-text-muted mt-4">
               <span>English</span>
               <span className="mx-2">|</span>
               <span>Krio</span>
@@ -124,11 +135,32 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Compact footer — mobile/tablet only */}
-      <div className="lg:hidden py-4 px-4">
-        <p className="text-center text-text-muted text-xs">
-          &copy; 2025 Deck Salone
-        </p>
+      {/* Compact footer — mobile only */}
+      <div className="md:hidden py-6 px-4">
+        <div className="flex flex-col items-center gap-3">
+          <Link to="/" className="flex items-center mb-1">
+            <img
+              src="/logo-web.png"
+              alt="Deck Salone"
+              className="h-4 w-auto object-contain"
+            />
+          </Link>
+          <div className="flex items-center gap-4">
+            {socialLinks.map((social) => (
+              <a
+                key={social.label}
+                href={social.href}
+                className="text-text-muted hover:text-gold transition-colors duration-200"
+                aria-label={social.label}
+              >
+                <social.icon className="w-4 h-4" />
+              </a>
+            ))}
+          </div>
+          <p className="text-center text-text-muted text-xs">
+            &copy; 2025 Deck Salone. A Sound It Entertainment platform.
+          </p>
+        </div>
       </div>
     </footer>
   );

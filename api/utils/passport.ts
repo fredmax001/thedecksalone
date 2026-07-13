@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { prisma } = require('./prisma');
 const { signToken } = require('./jwt');
+const { sendWelcomeEmail } = require('./email');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -58,7 +59,7 @@ passport.use(
     {
       clientID: GOOGLE_CLIENT_ID || 'dummy',
       clientSecret: GOOGLE_CLIENT_SECRET || 'dummy',
-      callbackURL: `${BACKEND_URL}/api/auth/google/callback`,
+      callbackURL: `${BACKEND_URL}/api/v1/auth/google/callback`,
       scope: ['profile', 'email'],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -66,6 +67,7 @@ passport.use(
         const email = profile.emails?.[0]?.value;
         const googleId = profile.id;
         const displayName = profile.displayName || email?.split('@')[0];
+        const avatar = profile.photos?.[0]?.value || null;
 
         if (!email) {
           return done(null, false, { message: 'Google account has no email.' });
@@ -73,6 +75,7 @@ passport.use(
 
         // Check if user exists by Google ID or email
         let user = await prisma.user.findUnique({ where: { googleId } });
+        let isNewUser = false;
 
         if (!user) {
           // Check by email for account linking
@@ -81,10 +84,11 @@ passport.use(
             // Link Google to existing account
             user = await prisma.user.update({
               where: { id: existingByEmail.id },
-              data: { googleId },
+              data: { googleId, avatar: avatar || existingByEmail.avatar },
             });
           } else {
             // Create new user with generated username and name
+            isNewUser = true;
             const username = await generateUsername(email);
             user = await prisma.user.create({
               data: {
@@ -92,12 +96,25 @@ passport.use(
                 username,
                 name: displayName || null,
                 googleId,
+                avatar,
                 role: 'USER',
               },
             });
 
-            // Optionally create a DJ profile if they signed up as a DJ
-            // For now, they remain a USER and can upgrade to DJ later
+            // Send welcome email and in-app notification asynchronously — don't block the OAuth flow
+            sendWelcomeEmail({ to: user.email, username: user.username, role: user.role }).catch((err) => {
+              console.error('[Auth] Failed to send welcome email:', err);
+            });
+            prisma.notification.create({
+              data: {
+                userId: user.id,
+                type: 'SYSTEM',
+                title: 'Welcome to Deck Salone!',
+                body: 'Your Google account is connected. Explore mixes, follow DJs, and book events.',
+              },
+            }).catch((err) => {
+              console.error('[Auth] Failed to create welcome notification:', err);
+            });
           }
         }
 

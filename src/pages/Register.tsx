@@ -40,7 +40,8 @@ const GENRES = [
 
 const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
 const API_URL = import.meta.env.VITE_API_URL || '/api';
-const googleLoginUrl = `${API_URL.replace('/api', '')}/api/auth/google`;
+const googleLoginUrl = `${API_URL.replace('/api', '')}/api/v1/auth/google`;
+const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
 /* ─── Schemas ─── */
 
@@ -365,19 +366,23 @@ export default function Register() {
             </motion.button>
           </div>
 
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-dark-gray" />
-            <span className="text-xs uppercase tracking-wider text-text-muted">or</span>
-            <div className="h-px flex-1 bg-dark-gray" />
-          </div>
+          {hasGoogleAuth && (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-dark-gray" />
+                <span className="text-xs uppercase tracking-wider text-text-muted">or</span>
+                <div className="h-px flex-1 bg-dark-gray" />
+              </div>
 
-          <a
-            href={googleLoginUrl}
-            className="w-full h-[48px] rounded-full border border-dark-gray bg-black-elevated text-text-primary text-sm font-semibold flex items-center justify-center gap-2 hover:border-gold/50 transition-colors"
-          >
-            <Chrome className="w-5 h-5" />
-            Continue with Google
-          </a>
+              <a
+                href={googleLoginUrl}
+                className="w-full h-[48px] rounded-full border border-dark-gray bg-black-elevated text-text-primary text-sm font-semibold flex items-center justify-center gap-2 hover:border-gold/50 transition-colors"
+              >
+                <Chrome className="w-5 h-5" />
+                Continue with Google
+              </a>
+            </>
+          )}
 
           <p className="mt-6 text-center text-sm text-text-secondary">
             Already have an account?{' '}

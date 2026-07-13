@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../../node_modules/.prisma/client"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -9,225 +9,253 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  username      String   @unique @db.VarChar(30)
-  password      String?
-  googleId      String?  @unique
-  phone         String?  @unique
-  phoneVerified Boolean  @default(false)
-  emailVerified Boolean  @default(false)
-  phoneOtp      String?   // Temporary OTP for phone verification
-  phoneOtpExpiry DateTime? // OTP expiration timestamp
-  passwordResetToken  String?   // Hashed reset token (SHA-256)
-  passwordResetExpiry DateTime? // Token expiration (15 minutes)
-  role          Role     @default(USER)
-  status        UserStatus @default(ACTIVE)
-  name          String?
-  bio           String?
-  location      String?
-  avatar        String?
-  favoriteGenres String[] @default([])
-  socialLinks   Json?    // { instagram, twitter, facebook }
-  lastLoginAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  djProfile     DjProfile?
-  bookingsAsClient Booking[] @relation("ClientBookings")
-  reviews       Review[]
-  votes         BattleVote[]
-  payments      Payment[] @relation("ClientPayments")
-  sentMessages  Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-  auditLogs     AuditLog[] @relation("ActorAuditLogs")
-  targetLogs    AuditLog[] @relation("TargetAuditLogs")
-  mixLikes      MixLike[]
-  follows       Follow[]
-  @@map("users")
+  id                      String       @id @default(cuid())
+  email                   String       @unique
+  password                String?
+  googleId                String?      @unique
+  phone                   String?      @unique
+  phoneVerified           Boolean      @default(false)
+  phoneOtp                String?
+  phoneOtpExpiry          DateTime?
+  role                    Role         @default(USER)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  avatar                  String?
+  bio                     String?
+  emailVerified           Boolean      @default(false)
+  favoriteGenres          String[]     @default([])
+  lastLoginAt             DateTime?
+  location                String?
+  name                    String?
+  passwordResetExpiry     DateTime?
+  passwordResetToken      String?
+  socialLinks             Json?
+  status                  UserStatus   @default(ACTIVE)
+  username                String       @unique @db.VarChar(30)
+  notificationPreferences Json?
+  privacyPreferences      Json?
+  notifications           Notification[]
+  auditLogs               AuditLog[]   @relation("ActorAuditLogs")
+  targetLogs              AuditLog[]   @relation("TargetAuditLogs")
+  votes                   BattleVote[]
+  bookingsAsClient        Booking[]    @relation("ClientBookings")
+  djProfile               DjProfile?
+  follows                 Follow[]
+  receivedMessages        Message[]    @relation("ReceivedMessages")
+  sentMessages            Message[]    @relation("SentMessages")
+  mixLikes                MixLike[]
+  payments                Payment[]    @relation("ClientPayments")
+  reviews                 Review[]
+
   @@index([email])
   @@index([username])
   @@index([phone])
   @@index([googleId])
   @@index([role])
   @@index([status, role, createdAt])
+  @@map("users")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  read      Boolean          @default(false)
+  actionUrl String?
+  entityId  String?          // ID of related entity (bookingId, messageId, etc.)
+  entityType String?         // Type of related entity
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([type])
+  @@map("notifications")
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  actorId     String
-  targetId    String?
-  action      String   // e.g. USER_SUSPEND, USER_REINSTATE, ROLE_CHANGE
-  entity      String   // e.g. USER
-  entityId    String?
-  metadata    Json?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  actorId   String
+  targetId  String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  actor     User     @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: Cascade)
+  target    User?    @relation("TargetAuditLogs", fields: [targetId], references: [id])
 
-  actor       User     @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: Cascade)
-  target      User?    @relation("TargetAuditLogs", fields: [targetId], references: [id], onDelete: SetNull)
-
-  @@map("audit_logs")
   @@index([actorId, createdAt])
   @@index([targetId, createdAt])
   @@index([action, entity, createdAt])
+  @@map("audit_logs")
 }
 
 model DjProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  stageName         String
-  fullName          String
-  bio               String?
-  avatar            String?
-  coverBanner       String?
-  startYear       Int?
-  country           String   @default("Sierra Leone")
-  city              String?
-  genres            String[]
-  eventTypes        String[] @default([])
-  awards            String[]
-  equipment         String[]
-  languages         String[] @default(["English"])
-  bookingFeeMin     Float?
-  bookingFeeMax     Float?
-  hourlyRate        Float?
-  fullDayRate       Float?
-  depositPercent    Int?     @default(30)
-  currency          String   @default("SLE")
-  availability      String?
-  willTravel        Boolean  @default(false)
-  maxTravelDistanceKm Int?
-  services          Json?    // [{ name, price, description }]
-  website           String?
-  whatsappNumber    String?
-  isPro             Boolean  @default(false)
-  subscriptionTier  String   @default("free")
+  id                      String                   @id @default(cuid())
+  userId                  String                   @unique
+  stageName               String
+  fullName                String
+  bio                     String?
+  avatar                  String?
+  coverBanner             String?
+  country                 String                   @default("Sierra Leone")
+  city                    String?
+  genres                  String[]
+  awards                  String[]
+  equipment               String[]
+  languages               String[]                 @default(["English"])
+  bookingFeeMin           Float?
+  bookingFeeMax           Float?
+  currency                String                   @default("SLE")
+  availability            String?
+  website                 String?
+  whatsappNumber          String?
+  verified                Boolean                  @default(false)
+  isPublic                Boolean                  @default(false)
+  totalFollowers          Int                      @default(0)
+  totalStreams            Int                      @default(0)
+  totalMixes              Int                      @default(0)
+  totalEvents             Int                      @default(0)
+  totalBookings           Int                      @default(0)
+  averageRating           Float                    @default(0)
+  rankingScore            Float                    @default(0)
+  digitalScore            Float                    @default(0)
+  industryScore           Float                    @default(0)
+  communityScore          Float                    @default(0)
+  rankingPosition         Int                      @default(0)
+  badges                  String[]                 @default([])
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  apiAccessEnabled        Boolean                  @default(false)
+  canReceivePayments      Boolean                  @default(false)
+  canViewAnalytics        Boolean                  @default(false)
+  depositPercent          Int?                     @default(30)
+  eventTypes              String[]                 @default([])
+  fullDayRate             Float?
+  hasAccountManager       Boolean                  @default(false)
+  hearThisConnected       Boolean                  @default(false)
+  hearThisId              String?
+  hourlyRate              Float?
+  idDocumentType          String?
+  idDocumentUrl           String?
+  isLegendFeatured        Boolean                  @default(false)
+  isPro                   Boolean                  @default(false)
+  isVerifiedEligible      Boolean                  @default(false)
+  legalName               String?
+  maxTravelDistanceKm     Int?
+  nationality             String?
+  services                Json?
+  socialLinks             Json?
+  socialProof             String?
+  startYear               Int?
+  streamingLinks          Json?
   subscriptionActivatedAt DateTime?
-  socialLinks     Json?    // { instagram, twitter, tiktok, youtube, facebook }
-  streamingLinks  Json?    // { audiomack, mixcloud, soundcloud, youtube, hearthis, appleMusic, spotify }
-  verified        Boolean  @default(false)
-  verificationStatus String @default("unverified")
-  nationality     String?
-  idDocumentType  String?
-  idDocumentUrl   String?
-  legalName       String?
-  socialProof     String?
-  verificationReason String?
-  verificationNotes String?
-  verifiedAt      DateTime?
-  isPublic        Boolean  @default(false)
-  totalFollowers  Int      @default(0)
-  totalStreams    Int      @default(0)
-  monthlyListeners Int     @default(0)
-  totalMixes      Int      @default(0)
-  totalEvents     Int      @default(0)
-  totalBookings   Int      @default(0)
-  averageRating   Float    @default(0)
-  rankingScore    Float    @default(0)
-  digitalScore    Float    @default(0)
-  industryScore   Float    @default(0)
-  communityScore  Float    @default(0)
-  rankingPosition Int      @default(0)
-  badges          String[] @default([])
-  
-  // Feature access tracking
-  totalMixUploads Int      @default(0)           // Count of uploaded mixes (for Free tier limit of 5)
-  hearThisConnected Boolean @default(false)       // Pro+: HearThis sync enabled
-  hearThisId      String?                         // HearThis account ID/username
-  canReceivePayments Boolean @default(false)      // Pro+: Direct booking payments
-  canViewAnalytics Boolean  @default(false)      // Pro+: Advanced analytics
-  isVerifiedEligible Boolean @default(false)     // Pro+: Can apply for verification
-  isLegendFeatured Boolean @default(false)       // Legend: Featured on homepage
-  hasAccountManager Boolean @default(false)       // Legend: Dedicated account manager
-  apiAccessEnabled Boolean @default(false)        // Legend: API access
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mixes           Mix[]
-  bookingsAsDj    Booking[] @relation("DjBookings")
-  reviews         Review[] @relation("DjReviews")
-  events          Event[]
-  applications    GigApplication[]
-  streamingPlatforms StreamingPlatform[]
-  rankingHistory  RankingHistory[]
-  battleEntries   BattleEntry[]
-  followers       Follow[]
-  campaigns       AdCampaign[]
-  photos          DjPhoto[]
-  proSubscriptionRequests ProSubscriptionRequest[]
+  subscriptionTier        String                   @default("free")
+  totalMixUploads         Int                      @default(0)
+  verificationNotes       String?
+  verificationReason      String?
+  verificationStatus      String                   @default("unverified")
+  verifiedAt              DateTime?
+  willTravel              Boolean                  @default(false)
+  monthlyListeners        Int                      @default(0)
+  hallOfFame              Boolean                  @default(false)
+  campaigns               AdCampaign[]
+  battleEntries           BattleEntry[]
+  bookingsAsDj            Booking[]                @relation("DjBookings")
+  highlights              DjHighlight[]
+  photos                  DjPhoto[]
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sets                    DjSet[]
+  eventApplications EventApplication[]
+  events                  Event[]
+  followers               Follow[]
+  applications            GigApplication[]
+  reups                   MixReup[]
+  mixes                   Mix[]
   opportunityApplications OppApplications[]
-  reups           MixReup[]
-  highlights      DjHighlight[]
-  sets            DjSet[]
-  @@map("dj_profiles")
+  proSubscriptionRequests ProSubscriptionRequest[]
+  rankingHistory          RankingHistory[]
+  reviews                 Review[]                 @relation("DjReviews")
+  streamingPlatforms      StreamingPlatform[]
+
   @@index([userId])
   @@index([city])
   @@index([verified])
   @@index([verificationStatus])
   @@index([rankingScore])
   @@index([isPublic])
+  @@map("dj_profiles")
 }
 
 model Follow {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   djId      String
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
   dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, djId])
-  @@map("follows")
   @@index([userId])
   @@index([djId])
+  @@map("follows")
 }
 
 model StreamingPlatform {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   djId      String
   platform  String
   url       String
-  followers Int    @default(0)
-  streams   Int    @default(0)
-  uploads   Int    @default(0)
+  followers Int       @default(0)
+  streams   Int       @default(0)
+  uploads   Int       @default(0)
   dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
-  @@map("streaming_platforms")
+
   @@index([djId])
+  @@map("streaming_platforms")
 }
 
 model Mix {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   djId        String
   title       String
   description String?
   coverImage  String?
   audioUrl    String?
-  originalUrl String?
-  audioSource String?
   duration    Int?
   genre       String
   tags        String[]
   category    String
-  plays       Int      @default(0)
-  likes       Int      @default(0)
-  downloads   Int      @default(0)
-  isPublic    Boolean  @default(true)
-  featured    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  dj          DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  plays       Int           @default(0)
+  likes       Int           @default(0)
+  downloads   Int           @default(0)
+  isPublic    Boolean       @default(true)
+  featured    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  audioSource String?
+  originalUrl String?
+  hallOfFame  Boolean       @default(false)
+  highlights  DjHighlight[]
+  setItems    DjSetItem[]
   mixLikes    MixLike[]
   mixPlays    MixPlay[]
   reups       MixReup[]
-  highlights  DjHighlight[]
-  setItems    DjSetItem[]
-  @@map("mixes")
+  dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
+
   @@index([djId])
   @@index([category])
   @@index([genre])
   @@index([featured])
   @@index([createdAt])
+  @@map("mixes")
 }
 
 model MixLike {
@@ -237,10 +265,11 @@ model MixLike {
   createdAt DateTime @default(now())
   mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([mixId, userId])
-  @@map("mix_likes")
   @@index([mixId])
   @@index([userId])
+  @@map("mix_likes")
 }
 
 model MixPlay {
@@ -250,60 +279,56 @@ model MixPlay {
   userId    String?
   ipHash    String?
   createdAt DateTime @default(now())
+  mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
 
-  mix Mix @relation(fields: [mixId], references: [id], onDelete: Cascade)
-
-  @@map("mix_plays")
   @@index([djId, createdAt])
   @@index([mixId, createdAt])
+  @@map("mix_plays")
 }
 
 model MixReup {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   djId      String
   mixId     String
-  createdAt DateTime @default(now())
-
-  dj  DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
-  mix Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  mix       Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
 
   @@unique([djId, mixId])
-  @@map("mix_reups")
   @@index([djId, createdAt])
   @@index([mixId])
+  @@map("mix_reups")
 }
 
 model DjHighlight {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   djId      String
   mixId     String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  dj  DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
-  mix Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  mix       Mix       @relation(fields: [mixId], references: [id], onDelete: Cascade)
 
   @@unique([djId, mixId])
-  @@map("dj_highlights")
   @@index([djId, sortOrder])
+  @@map("dj_highlights")
 }
 
 model DjSet {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   djId        String
   title       String
   description String?
   coverImage  String?
   genre       String?
-  isPublic    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isPublic    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       DjSetItem[]
+  dj          DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
 
-  dj    DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
-  items DjSetItem[]
-
-  @@map("dj_sets")
   @@index([djId, createdAt])
+  @@map("dj_sets")
 }
 
 model DjSetItem {
@@ -312,273 +337,294 @@ model DjSetItem {
   mixId     String
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
-
-  set DjSet @relation(fields: [setId], references: [id], onDelete: Cascade)
-  mix Mix   @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  set       DjSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
 
   @@unique([setId, mixId])
-  @@map("dj_set_items")
   @@index([setId, sortOrder])
+  @@map("dj_set_items")
 }
 
 model Booking {
-  id            String        @id @default(cuid())
-  clientId      String?
-  djId          String
-  eventType     String
-  eventDate     DateTime
-  eventLocation String
-  duration      Int
-  budget        Float
-  finalPrice    Float?
-  deposit       Float?
-  status        BookingStatus @default(PENDING)
-  notes         String?
-  requirements  String?
-  eventTypes    String[]      @default([])
-  musicStyles   String[]      @default([])
-  equipmentNeeded String[]    @default([])
-  budgetMin     Float?
-  budgetMax     Float?
-  services      Json?
-  travelNotes   String?
-  rating        Int?
-  review        String?
-  // Guest booking fields
-  guestName     String?
-  guestEmail    String?
-  guestPhone    String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  payments      Payment[]
-  messages      Message[]
-  client        User?      @relation("ClientBookings", fields: [clientId], references: [id])
-  dj            DjProfile @relation("DjBookings", fields: [djId], references: [id])
-  @@map("bookings")
+  id              String        @id @default(cuid())
+  clientId        String?
+  djId            String
+  eventType       String
+  eventDate       DateTime
+  eventLocation   String
+  duration        Int
+  budget          Float
+  finalPrice      Float?
+  deposit         Float?
+  status          BookingStatus @default(PENDING)
+  notes           String?
+  requirements    String?
+  rating          Int?
+  review          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  budgetMax       Float?
+  budgetMin       Float?
+  equipmentNeeded String[]      @default([])
+  eventTypes      String[]      @default([])
+  guestEmail      String?
+  guestName       String?
+  guestPhone      String?
+  musicStyles     String[]      @default([])
+  services        Json?
+  travelNotes     String?
+  client          User?         @relation("ClientBookings", fields: [clientId], references: [id])
+  dj              DjProfile     @relation("DjBookings", fields: [djId], references: [id])
+  messages        Message[]
+  payments        Payment[]
+
   @@index([clientId])
   @@index([djId])
   @@index([status])
   @@index([eventDate])
+  @@map("bookings")
 }
 
 model Gig {
-  id                String   @id @default(cuid())
-  clientName        String?
-  clientEmail       String?
-  clientPhone       String?
-  clientToken       String   @unique @default(cuid())
-  eventType         String
-  eventDate         DateTime
-  startTime         String?
-  durationHours     Int?
-  location          String
-  city              String?
-  budgetMin         Float?
-  budgetMax         Float?
-  musicStyles       String[] @default([])
-  equipmentNeeded   String[] @default([])
-  notes             String?
-  status            String   @default("OPEN")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  applications      GigApplication[]
+  id              String           @id @default(cuid())
+  clientName      String?
+  clientEmail     String?
+  clientPhone     String?
+  clientToken     String           @unique @default(cuid())
+  eventType       String
+  eventDate       DateTime
+  startTime       String?
+  durationHours   Int?
+  location        String
+  city            String?
+  budgetMin       Float?
+  budgetMax       Float?
+  musicStyles     String[]         @default([])
+  equipmentNeeded String[]         @default([])
+  notes           String?
+  status          String           @default("OPEN")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  applications    GigApplication[]
 
-  @@map("gigs")
   @@index([status])
   @@index([city])
   @@index([eventDate])
   @@index([createdAt])
+  @@map("gigs")
 }
 
 model GigApplication {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   gigId         String
   djId          String
   proposedPrice Float?
   message       String?
-  status        String   @default("PENDING")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  gig           Gig      @relation(fields: [gigId], references: [id], onDelete: Cascade)
+  status        String    @default("PENDING")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   dj            DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  gig           Gig       @relation(fields: [gigId], references: [id], onDelete: Cascade)
 
   @@unique([gigId, djId])
-  @@map("gig_applications")
   @@index([gigId])
   @@index([djId])
   @@index([status])
+  @@map("gig_applications")
 }
 
 model Message {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   senderId          String
   receiverId        String
-  content           String   @db.Text
+  content           String
   bookingId         String?
   readAt            DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  deletedBySender   Boolean  @default(false)
-  deletedByReceiver Boolean  @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedBySender   Boolean   @default(false)
+  deletedByReceiver Boolean   @default(false)
+  booking           Booking?  @relation(fields: [bookingId], references: [id])
+  receiver          User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender            User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
-  sender   User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  booking  Booking? @relation(fields: [bookingId], references: [id])
-
-  @@map("messages")
   @@index([senderId])
   @@index([receiverId])
   @@index([bookingId])
   @@index([createdAt])
+  @@map("messages")
 }
 
 model Payment {
-  id            String        @id @default(cuid())
-  bookingId     String
-  clientId      String
-  djId          String
-  amount        Float
-  currency      String        @default("SLE")
-  type          PaymentType   @default(DEPOSIT)
-  status        PaymentStatus @default(PENDING)
-  provider      String?       // e.g., "paystack", "stripe", "manual"
-  providerRef   String?       // Transaction ID from payment provider
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  client        User          @relation("ClientPayments", fields: [clientId], references: [id])
-  @@map("payments")
+  id          String        @id @default(cuid())
+  bookingId   String
+  clientId    String
+  djId        String
+  amount      Float
+  currency    String        @default("SLE")
+  type        PaymentType   @default(DEPOSIT)
+  status      PaymentStatus @default(PENDING)
+  provider    String?
+  providerRef String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client      User          @relation("ClientPayments", fields: [clientId], references: [id])
+
   @@index([bookingId])
   @@index([clientId])
   @@index([status])
   @@index([providerRef])
+  @@map("payments")
 }
 
 model ProSubscriptionRequest {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   djId          String
-  plan          String   @default("pro")
-  amount        Float    @default(250)
-  currency      String   @default("SLE")
-  paymentMethod String   @default("Orange Money")
-  paymentNumber String   @default("+23272011156")
+  plan          String    @default("pro")
+  amount        Float     @default(250)
+  currency      String    @default("SLE")
+  paymentMethod String    @default("Orange Money")
+  paymentNumber String    @default("+23272011156")
   proofUrl      String
   note          String?
-  status        String   @default("pending")
+  status        String    @default("pending")
   reviewedById  String?
   adminNote     String?
   reviewedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   dj            DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
 
-  @@map("pro_subscription_requests")
   @@index([djId])
   @@index([status])
   @@index([createdAt])
+  @@map("pro_subscription_requests")
 }
 
 model Event {
-  id            String   @id @default(cuid())
-  djId          String?
-  title         String
-  description   String?
-  type          String
-  date          DateTime
-  location      String
-  city          String
-  venue         String?
-  image         String?
-  isOpenSlot    Boolean  @default(false)
-  slots         Int      @default(0)
-  filledSlots   Int      @default(0)
-  compensation  Float?
-  requirements  String?
-  status        String   @default("upcoming")
-  ticketUrl     String? // Link to purchase tickets
-  // Sound It Salone integration fields
-  soundItSaloneEventId String? // Links to Sound It Salone event platform
-  soundItSaloneUrl     String? // Public URL on Sound It Salone
-  isSyncedToSalone     Boolean @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  dj            DjProfile? @relation(fields: [djId], references: [id])
-  @@map("events")
+  id                   String     @id @default(cuid())
+  djId                 String?
+  title                String
+  description          String?
+  type                 String
+  date                 DateTime
+  location             String
+  city                 String
+  venue                String?
+  image                String?
+  isOpenSlot           Boolean    @default(false)
+  slots                Int        @default(0)
+  filledSlots          Int        @default(0)
+  compensation         Float?
+  requirements         String?
+  status               String     @default("upcoming")
+  soundItSaloneEventId String?
+  soundItSaloneUrl     String?
+  isSyncedToSalone     Boolean    @default(false)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  ticketUrl            String?
+  dj                   DjProfile? @relation(fields: [djId], references: [id])
+  applications         EventApplication[]
+
   @@index([djId])
   @@index([city])
   @@index([date])
   @@index([soundItSaloneEventId])
   @@index([isSyncedToSalone])
+  @@map("events")
+}
+
+model EventApplication {
+  id        String   @id @default(cuid())
+  eventId   String
+  djId      String
+  message   String?
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, djId])
+  @@index([eventId])
+  @@index([djId])
+  @@index([status])
+  @@map("event_applications")
 }
 
 model Review {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   djId      String
   rating    Int
   comment   String?
   eventType String?
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User      @relation(fields: [userId], references: [id])
+  verified  Boolean   @default(false)
+  createdAt DateTime  @default(now())
   dj        DjProfile @relation("DjReviews", fields: [djId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
   @@unique([userId, djId])
-  @@map("reviews")
   @@index([djId])
   @@index([rating])
   @@index([createdAt])
+  @@map("reviews")
 }
 
 model Battle {
-  id          String   @id @default(cuid())
-  title       String
-  weekStart   DateTime
-  weekEnd     DateTime
-  status      String   @default("ACTIVE")
-  theme       String?  // e.g., "Amapiano Week", "Salone Vibes"
-  metricType  String   @default("COMPOSITE") // COMPOSITE, PLAYS, STREAMS, FOLLOWERS, LIKES
-  createdAt   DateTime @default(now())
-  entries     BattleEntry[]
-  @@map("battles")
+  id         String        @id @default(cuid())
+  title      String
+  weekStart  DateTime
+  weekEnd    DateTime
+  status     String        @default("ACTIVE")
+  theme      String?
+  metricType String        @default("COMPOSITE")
+  createdAt  DateTime      @default(now())
+  entries    BattleEntry[]
+
   @@index([status])
   @@index([weekStart])
+  @@map("battles")
 }
 
 model BattleEntry {
-  id      String @id @default(cuid())
-  battleId String
-  djId    String
-  mixId   String?
-  // Metric scores at time of entry
-  baseScore     Float  @default(0) // Calculated from DJ metrics at entry time
-  voteScore     Float  @default(0) // Derived from user votes
-  finalScore    Float  @default(0) // baseScore + voteScore (weighted)
-  votes   Int    @default(0)
-  battle  Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  dj      DjProfile @relation(fields: [djId], references: [id])
-  votesCast BattleVote[]
-  @@map("battle_entries")
+  id         String       @id @default(cuid())
+  battleId   String
+  djId       String
+  mixId      String?
+  baseScore  Float        @default(0)
+  voteScore  Float        @default(0)
+  finalScore Float        @default(0)
+  votes      Int          @default(0)
+  battle     Battle       @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  dj         DjProfile    @relation(fields: [djId], references: [id])
+  votesCast  BattleVote[]
+
   @@index([battleId])
   @@index([djId])
   @@index([finalScore])
+  @@map("battle_entries")
 }
 
 model BattleVote {
-  id      String @id @default(cuid())
+  id      String      @id @default(cuid())
   entryId String
   userId  String
-  weight  Float  @default(1.0) // Future: weighted votes for verified users
+  weight  Float       @default(1.0)
   entry   BattleEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  user    User @relation(fields: [userId], references: [id])
+  user    User        @relation(fields: [userId], references: [id])
+
   @@unique([entryId, userId])
-  @@map("battle_votes")
   @@index([entryId])
   @@index([userId])
+  @@map("battle_votes")
 }
 
 model RankingHistory {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   djId           String
   position       Int
   score          Float
@@ -587,101 +633,118 @@ model RankingHistory {
   communityScore Float
   week           DateTime
   dj             DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
-  @@map("ranking_history")
+
   @@index([djId])
   @@index([week])
+  @@map("ranking_history")
 }
 
 model AdCampaign {
-  id          String   @id @default(cuid())
-  name        String
-  advertiserId String?
-  targetType  String   @default("profile")
-  targetId    String?
-  status      String   @default("pending_payment")
-  budget      Float    @default(0)
-  currency    String   @default("SLE")
-  reachScore  Float    @default(0)
-  spent       Float    @default(0)
-  impressions Int      @default(0)
-  clicks      Int      @default(0)
-  ctr         Float    @default(0)
+  id               String     @id @default(cuid())
+  name             String
+  advertiserId     String?
+  targetType       String     @default("profile")
+  targetId         String?
+  status           String     @default("pending_payment")
+  budget           Float      @default(0)
+  currency         String     @default("SLE")
+  reachScore       Float      @default(0)
+  spent            Float      @default(0)
+  impressions      Int        @default(0)
+  clicks           Int        @default(0)
+  ctr              Float      @default(0)
   creativeImageUrl String?
-  ctaUrl      String?
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ctaUrl           String?
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  advertiser       DjProfile? @relation(fields: [advertiserId], references: [id])
 
-  advertiser  DjProfile? @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
-
-  @@map("ad_campaigns")
   @@index([status])
   @@index([advertiserId])
   @@index([targetType, status])
+  @@map("ad_campaigns")
 }
 
 model DjPhoto {
-  id          String    @id @default(cuid())
-  djId        String
-  url         String    // photo URL (uploaded to server or external)
-  caption     String?   // optional caption/description
-  sortOrder   Int       @default(0) // for ordering photos
-  isPublic    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  djId      String
+  url       String
+  caption   String?
+  sortOrder Int       @default(0)
+  isPublic  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  dj        DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
 
-  dj DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
-
-  @@map("dj_photos")
   @@index([djId])
+  @@map("dj_photos")
 }
 
 model Opportunity {
-  id           String   @id @default(cuid())
-  organizerId  String?  // Admin/organizer who posted (optional - could be admin)
-  title        String
-  description  String
-  eventType    String   // 'wedding', 'club', 'festival', 'corporate', etc.
-  eventDate    DateTime
-  eventLocation String
-  budget       Float
-  budgetCurrency String @default("SLE")
-  genres       String[] // Music genres needed
-  musicStyle   String?
-  hours        Int?     // Duration in hours
+  id              String            @id @default(cuid())
+  organizerId     String?
+  title           String
+  description     String
+  eventType       String
+  eventDate       DateTime
+  eventLocation   String
+  budget          Float
+  budgetCurrency  String            @default("SLE")
+  genres          String[]
+  musicStyle      String?
+  hours           Int?
   equipmentNeeded String[]
-  requirements String?
-  notes        String?
-  isFeatured   Boolean  @default(false)     // Legend-exclusive opportunities
-  requiredTier String   @default("pro")     // 'pro' or 'legend'
-  applicants   OppApplications[]
-  status       String   @default("open")    // 'open', 'filled', 'cancelled'
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  @@map("opportunities")
+  requirements    String?
+  notes           String?
+  isFeatured      Boolean           @default(false)
+  requiredTier    String            @default("pro")
+  status          String            @default("open")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  applicants      OppApplications[]
+
   @@index([eventDate])
   @@index([status])
   @@index([requiredTier])
   @@index([isFeatured])
+  @@map("opportunities")
 }
 
 model OppApplications {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   opportunityId String
   djId          String
   message       String?
-  status        String   @default("pending")  // 'pending', 'accepted', 'rejected'
-  appliedAt     DateTime @default(now())
+  status        String      @default("pending")
+  appliedAt     DateTime    @default(now())
   respondedAt   DateTime?
-  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   dj            DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
-  
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
   @@unique([opportunityId, djId])
-  @@map("opp_applications")
   @@index([opportunityId])
   @@index([djId])
+  @@map("opp_applications")
+}
+
+enum NotificationType {
+  BOOKING_CREATED
+  BOOKING_STATUS_CHANGED
+  COUNTER_OFFER
+  NEW_MESSAGE
+  NEW_FOLLOWER
+  MIX_LIKED
+  MIX_REUPPED
+  NEW_MIX
+  EVENT_REMINDER
+  SYSTEM
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  REVIEW_RECEIVED
+  VERIFICATION_STATUS
+  SUBSCRIPTION_STATUS
 }
 
 enum UserStatus {

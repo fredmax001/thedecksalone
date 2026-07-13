@@ -7,6 +7,7 @@ const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthly
 const { uploadMix } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processCover } = require('../utils/imageProcessor');
+const { withCache, clearCache } = require('../utils/cache');
 const { resolveAudioUrl, resolveHearthisSet } = require('../utils/audioResolver');
 
 const router = express.Router();
@@ -15,7 +16,7 @@ const mixFilterSchema = z.object({
   category: z.string().optional(),
   genre: z.string().optional(),
   djId: z.string().optional(),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   featured: z.string().optional(),
   sortBy: z.enum(['plays', 'likes', 'downloads', 'newest']).optional(),
   order: z.enum(['asc', 'desc']).optional(),
@@ -62,12 +63,14 @@ router.get('/', async (req, res) => {
     // Build where clause using explicit AND array for clean Prisma queries
     const andConditions: any[] = [];
 
-    // Genre filter: match either genre OR category (for backward compat with dual-field uploads)
+    // Genre filter: match either genre OR category OR title OR tags (smart genre search)
     if (genre) {
       andConditions.push({
         OR: [
           { genre: { equals: genre, mode: 'insensitive' } },
           { category: { equals: genre, mode: 'insensitive' } },
+          { title: { contains: genre, mode: 'insensitive' } },
+          { tags: { has: genre } },
         ],
       });
     }
@@ -162,36 +165,47 @@ router.get('/hall-of-fame', async (req, res) => {
   }
 });
 
-// GET /api/mixes/categories - Get all categories (alias for genres)
+// GET /api/mixes/categories - Get all categories (alias for genres) (cached 60s)
 router.get('/categories', async (req, res) => {
   try {
-    const rows = await prisma.$queryRaw`
-      SELECT DISTINCT genre as name
-      FROM mixes
-      WHERE "isPublic" = true AND genre IS NOT NULL AND genre <> ''
-      ORDER BY genre
-    `;
-    const categories = (rows || []).map((r: any) => ({
-      id: r.name.toLowerCase().replace(/\s+/g, '-'),
-      name: r.name,
-      description: '',
-    }));
+    const categories = await withCache('mixes:categories', 60000, async () => {
+      const rows = await prisma.$queryRaw`
+        SELECT genre as name, COUNT(*)::int as count
+        FROM mixes
+        WHERE "isPublic" = true AND genre IS NOT NULL AND genre <> ''
+        GROUP BY genre
+        ORDER BY count DESC, genre ASC
+      `;
+      return (rows || []).map((r: any) => ({
+        id: r.name.toLowerCase().replace(/\s+/g, '-'),
+        name: r.name,
+        description: '',
+        count: Number(r.count),
+      }));
+    });
     return res.json({ success: true, data: categories });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET /api/mixes/genres - Get all distinct genres
+// GET /api/mixes/genres - Get all distinct genres with mix counts
 router.get('/genres', async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT DISTINCT genre
+      SELECT genre, COUNT(*) as count
       FROM mixes
       WHERE "isPublic" = true AND genre IS NOT NULL AND genre <> ''
-      ORDER BY genre
+      GROUP BY genre
+      ORDER BY count DESC, genre ASC
     `;
-    return res.json({ success: true, data: rows.map((r: any) => r.genre) });
+    return res.json({
+      success: true,
+      data: rows.map((r: any) => ({
+        name: r.genre,
+        count: Number(r.count),
+      })),
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -205,40 +219,15 @@ router.get('/trending', async (req, res) => {
 
     const where: any = { isPublic: true };
     if (genre) {
-      // Must wrap OR inside AND so isPublic is always enforced
+      // Smart genre search: match genre, category, title, or tags
       where.AND = {
         OR: [
           { genre: { equals: genre, mode: 'insensitive' } },
           { category: { equals: genre, mode: 'insensitive' } },
+          { title: { contains: genre, mode: 'insensitive' } },
+          { tags: { has: genre } },
         ],
       };
-    }
-
-    const mixes = await prisma.mix.findMany({
-      where,
-      orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
-      take: limitNum,
-      include: {
-        dj: { select: { id: true, stageName: true, avatar: true } },
-      },
-    });
-
-    return res.json({ success: true, data: mixes });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-router.get('/trending', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const genre = req.query.genre;
-
-    const where: any = { isPublic: true };
-    if (genre) {
-      where.OR = [
-        { genre: { equals: genre, mode: 'insensitive' } },
-        { category: { equals: genre, mode: 'insensitive' } },
-      ];
     }
 
     const mixes = await prisma.mix.findMany({
@@ -641,17 +630,16 @@ router.post('/:id/play', softAuthMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    const [updated] = await prisma.$transaction([
-      prisma.mix.update({
-        where: { id: req.params.id },
-        data: { plays: { increment: 1 } },
-        select: { plays: true },
-      }),
-      recordMixPlay(mix.id, mix.djId, {
-        userId: req.user?.id,
-        ip: req.ip,
-      }),
-    ]);
+    const updated = await prisma.mix.update({
+      where: { id: req.params.id },
+      data: { plays: { increment: 1 } },
+      select: { plays: true },
+    });
+
+    recordMixPlay(mix.id, mix.djId, {
+      userId: req.user?.id,
+      ip: req.ip,
+    }).catch(() => {});
 
     // Update cached monthly listener count asynchronously (do not block response)
     recalculateMonthlyListeners(mix.djId).catch(() => {});

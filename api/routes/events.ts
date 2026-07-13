@@ -58,6 +58,14 @@ const updateEventSchema = z.object({
   isSyncedToSalone: z.boolean().optional(),
 });
 
+const applySchema = z.object({
+  message: z.string().max(2000).optional(),
+});
+
+const updateApplicationSchema = z.object({
+  status: z.enum(['PENDING', 'ACCEPTED', 'DECLINED']),
+});
+
 // GET /api/events - List events
 router.get('/', async (req, res) => {
   try {
@@ -285,6 +293,126 @@ router.post('/:id/sync-to-salone', authMiddleware, async (req, res) => {
         soundItSaloneUrl: soundItSaloneUrl || null,
       },
     });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/events/:id/apply - DJ applies to an event
+router.post('/:id/apply', authMiddleware, async (req, res) => {
+  try {
+    const parsed = applySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    if (!event.isOpenSlot) {
+      return res.status(400).json({ success: false, error: 'This event is not accepting applications' });
+    }
+
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required to apply' });
+    }
+
+    // Check if already applied
+    const existing = await prisma.eventApplication.findUnique({
+      where: { eventId_djId: { eventId: req.params.id, djId: dj.id } },
+    });
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'You have already applied to this event' });
+    }
+
+    const application = await prisma.eventApplication.create({
+      data: {
+        eventId: req.params.id,
+        djId: dj.id,
+        message: parsed.data.message || null,
+        status: 'PENDING',
+      },
+    });
+
+    return res.status(201).json({ success: true, data: application });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/events/:id/applications - Get applications for an event (admin/organizer only)
+router.get('/:id/applications', authMiddleware, async (req, res) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const isAdmin = req.user.role === 'ADMIN';
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const applications = await prisma.eventApplication.findMany({
+      where: { eventId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true, city: true, verified: true } },
+      },
+    });
+
+    return res.json({ success: true, data: applications });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PATCH /api/events/:id/applications/:appId - Update application status (admin/organizer only)
+router.patch('/:id/applications/:appId', authMiddleware, async (req, res) => {
+  try {
+    const parsed = updateApplicationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const isAdmin = req.user.role === 'ADMIN';
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const application = await prisma.eventApplication.findUnique({
+      where: { id: req.params.appId },
+    });
+    if (!application || application.eventId !== req.params.id) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    const updated = await prisma.eventApplication.update({
+      where: { id: req.params.appId },
+      data: { status: parsed.data.status },
+    });
+
+    // If accepted, increment filledSlots and link DJ to event
+    if (parsed.data.status === 'ACCEPTED') {
+      await prisma.event.update({
+        where: { id: req.params.id },
+        data: { filledSlots: { increment: 1 } },
+      });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {

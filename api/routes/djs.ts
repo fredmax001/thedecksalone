@@ -16,7 +16,7 @@ const djFilterSchema = z.object({
   verified: z.string().optional(),
   minFee: z.string().optional(),
   maxFee: z.string().optional(),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   sortBy: z.enum(['ranking', 'streams', 'followers', 'name', 'mixes', 'rating']).optional(),
   order: z.enum(['asc', 'desc']).optional(),
   page: z.string().optional(),

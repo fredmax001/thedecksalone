@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -34,6 +34,38 @@ import {
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
+interface UserSettings {
+  notifications: {
+    emailBookings: boolean;
+    emailMessages: boolean;
+    emailMarketing: boolean;
+    pushBookings: boolean;
+    pushMessages: boolean;
+    pushNewMixes: boolean;
+  };
+  privacy: {
+    profilePublic: boolean;
+    allowMessages: boolean;
+    showActivity: boolean;
+  };
+}
+
+const defaultSettings: UserSettings = {
+  notifications: {
+    emailBookings: true,
+    emailMessages: true,
+    emailMarketing: false,
+    pushBookings: true,
+    pushMessages: true,
+    pushNewMixes: true,
+  },
+  privacy: {
+    profilePublic: true,
+    allowMessages: true,
+    showActivity: false,
+  },
+};
+
 export default function UserSettings() {
   const { user, logout, fetchMe } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
@@ -44,6 +76,8 @@ export default function UserSettings() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
@@ -56,22 +90,38 @@ export default function UserSettings() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Notification settings
-  const [notifications, setNotifications] = useState({
-    emailBookings: true,
-    emailMessages: true,
-    emailMarketing: false,
-    pushBookings: true,
-    pushMessages: true,
-    pushNewMixes: true,
-  });
+  // Settings state
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
 
-  // Privacy settings
-  const [privacy, setPrivacy] = useState({
-    profilePublic: true,
-    allowMessages: true,
-    showActivity: false,
-  });
+  // Fetch settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setSettingsLoading(true);
+        const res = await api.get('/users/settings');
+        if (res.data?.success) {
+          setSettings({
+            notifications: { ...defaultSettings.notifications, ...res.data.data.notifications },
+            privacy: { ...defaultSettings.privacy, ...res.data.data.privacy },
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to load settings:', err);
+        // Silently fall back to defaults
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Sync local user state when auth store updates
+  useEffect(() => {
+    if (user) {
+      setUsername(user.username || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
 
   const handleSaveProfile = async () => {
     setSaveError('');
@@ -149,6 +199,39 @@ export default function UserSettings() {
       setSaveError(err.response?.data?.error || 'Failed to delete account');
       setIsDeletingAccount(false);
       setShowDeleteDialog(false);
+    }
+  };
+
+  const updateNotification = (key: keyof UserSettings['notifications'], value: boolean) => {
+    const next = { ...settings, notifications: { ...settings.notifications, [key]: value } };
+    setSettings(next);
+    setSettingsDirty(true);
+  };
+
+  const updatePrivacy = (key: keyof UserSettings['privacy'], value: boolean) => {
+    const next = { ...settings, privacy: { ...settings.privacy, [key]: value } };
+    setSettings(next);
+    setSettingsDirty(true);
+  };
+
+  const handleSaveSettings = async () => {
+    setSaveError('');
+    setSaved(false);
+    try {
+      const res = await api.put('/users/settings', {
+        notifications: settings.notifications,
+        privacy: settings.privacy,
+      });
+      if (res.data?.success) {
+        setSaved(true);
+        setSettingsDirty(false);
+        toast.success('Settings saved successfully');
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaveError(res.data?.error || 'Failed to save settings');
+      }
+    } catch (err: any) {
+      setSaveError(err.response?.data?.error || 'Failed to save settings');
     }
   };
 
@@ -298,8 +381,9 @@ export default function UserSettings() {
                 <p className="text-xs text-text-muted">Emails about booking status changes</p>
               </div>
               <Switch
-                checked={notifications.emailBookings}
-                onCheckedChange={(v) => setNotifications((prev) => ({ ...prev, emailBookings: v }))}
+                checked={settings.notifications.emailBookings}
+                onCheckedChange={(v) => updateNotification('emailBookings', v)}
+                disabled={settingsLoading}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -308,8 +392,9 @@ export default function UserSettings() {
                 <p className="text-xs text-text-muted">Emails when you receive a message</p>
               </div>
               <Switch
-                checked={notifications.emailMessages}
-                onCheckedChange={(v) => setNotifications((prev) => ({ ...prev, emailMessages: v }))}
+                checked={settings.notifications.emailMessages}
+                onCheckedChange={(v) => updateNotification('emailMessages', v)}
+                disabled={settingsLoading}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -318,8 +403,9 @@ export default function UserSettings() {
                 <p className="text-xs text-text-muted">Get notified when DJs you follow upload</p>
               </div>
               <Switch
-                checked={notifications.pushNewMixes}
-                onCheckedChange={(v) => setNotifications((prev) => ({ ...prev, pushNewMixes: v }))}
+                checked={settings.notifications.pushNewMixes}
+                onCheckedChange={(v) => updateNotification('pushNewMixes', v)}
+                disabled={settingsLoading}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -328,8 +414,9 @@ export default function UserSettings() {
                 <p className="text-xs text-text-muted">News, events, and special offers</p>
               </div>
               <Switch
-                checked={notifications.emailMarketing}
-                onCheckedChange={(v) => setNotifications((prev) => ({ ...prev, emailMarketing: v }))}
+                checked={settings.notifications.emailMarketing}
+                onCheckedChange={(v) => updateNotification('emailMarketing', v)}
+                disabled={settingsLoading}
               />
             </div>
           </div>
@@ -351,8 +438,9 @@ export default function UserSettings() {
               <p className="text-xs text-text-muted">Allow others to view your profile</p>
             </div>
             <Switch
-              checked={privacy.profilePublic}
-              onCheckedChange={(v) => setPrivacy((prev) => ({ ...prev, profilePublic: v }))}
+              checked={settings.privacy.profilePublic}
+              onCheckedChange={(v) => updatePrivacy('profilePublic', v)}
+              disabled={settingsLoading}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -361,8 +449,9 @@ export default function UserSettings() {
               <p className="text-xs text-text-muted">Let DJs message you</p>
             </div>
             <Switch
-              checked={privacy.allowMessages}
-              onCheckedChange={(v) => setPrivacy((prev) => ({ ...prev, allowMessages: v }))}
+              checked={settings.privacy.allowMessages}
+              onCheckedChange={(v) => updatePrivacy('allowMessages', v)}
+              disabled={settingsLoading}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -371,12 +460,24 @@ export default function UserSettings() {
               <p className="text-xs text-text-muted">Display your likes and ratings publicly</p>
             </div>
             <Switch
-              checked={privacy.showActivity}
-              onCheckedChange={(v) => setPrivacy((prev) => ({ ...prev, showActivity: v }))}
+              checked={settings.privacy.showActivity}
+              onCheckedChange={(v) => updatePrivacy('showActivity', v)}
+              disabled={settingsLoading}
             />
           </div>
         </CardContent>
       </Card>
+
+      {/* Save Settings Button */}
+      {settingsDirty && (
+        <Button
+          onClick={handleSaveSettings}
+          className="bg-gold text-black hover:bg-gold-light w-full"
+        >
+          <Save className="w-4 h-4 mr-2" />
+          Save Notification & Privacy Settings
+        </Button>
+      )}
 
       {/* Appearance */}
       <Card className="bg-black-elevated border-dark-gray">

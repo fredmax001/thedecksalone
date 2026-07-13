@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, User, LogOut } from 'lucide-react';
+import { Search, User, LogOut, Menu } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import NotificationBell from '@/components/NotificationBell';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
   DropdownMenu,
@@ -11,6 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetClose,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 const navLinks = [
   { label: 'Discover', path: '/discover' },
@@ -23,6 +32,7 @@ const navLinks = [
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -47,6 +57,11 @@ export default function Navbar() {
     logout();
     navigate('/');
   };
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <nav
@@ -100,6 +115,94 @@ export default function Navbar() {
           </button>
 
           <ThemeToggle className="hidden sm:flex" />
+
+          {isAuthenticated && user && (
+            <div className="hidden lg:flex">
+              <NotificationBell />
+            </div>
+          )}
+
+          {/* Mobile hamburger menu (lg:hidden) */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <button
+                className="lg:hidden text-text-secondary hover:text-gold transition-colors p-2"
+                aria-label="Open menu"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="right" className="bg-black-surface border-l border-dark-gray w-[280px] sm:w-[320px]">
+              <SheetHeader className="pb-4">
+                <SheetTitle className="text-text-primary text-sm font-semibold uppercase tracking-wider">Menu</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-1">
+                {navLinks.map((link) => (
+                  <SheetClose asChild key={link.path}>
+                    <Link
+                      to={link.path}
+                      className={`rounded-lg px-4 py-3 text-sm font-medium uppercase tracking-wide transition-colors ${
+                        location.pathname === link.path
+                          ? 'bg-white/10 text-gold'
+                          : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                      }`}
+                    >
+                      {link.label}
+                    </Link>
+                  </SheetClose>
+                ))}
+
+                <div className="my-3 border-t border-dark-gray" />
+
+                {isAuthenticated && user ? (
+                  <>
+                    <div className="px-4 py-2">
+                      <NotificationBell />
+                    </div>
+                    <SheetClose asChild>
+                      <Link
+                        to={profilePath}
+                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                      >
+                        Profile
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link
+                        to={dashboardPath}
+                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                      >
+                        Dashboard
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link
+                        to={settingsPath}
+                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                      >
+                        Settings
+                      </Link>
+                    </SheetClose>
+                    <button
+                      onClick={handleLogout}
+                      className="rounded-lg px-4 py-3 text-sm font-medium text-red hover:bg-white/5 transition-colors text-left"
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <SheetClose asChild>
+                    <Link
+                      to="/login"
+                      className="rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wide text-black bg-gold-gradient hover:brightness-110 transition-all text-center"
+                    >
+                      Join as DJ
+                    </Link>
+                  </SheetClose>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
 
           {isAuthenticated && user ? (
             <>
@@ -157,8 +260,9 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Mobile profile avatar dropdown (replaces hamburger menu) */}
-              <div className="lg:hidden">
+              {/* Mobile profile avatar dropdown */}
+              <div className="lg:hidden flex items-center gap-2">
+                <NotificationBell />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center justify-center rounded-full focus:outline-none">
@@ -196,12 +300,6 @@ export default function Navbar() {
                 className="hidden lg:inline-flex items-center px-6 py-2.5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
               >
                 Join as DJ
-              </Link>
-              <Link
-                to="/login"
-                className="lg:hidden inline-flex items-center px-3 py-1.5 bg-gold-gradient text-black text-xs font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
-              >
-                Login
               </Link>
             </>
           )}

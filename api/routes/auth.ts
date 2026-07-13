@@ -8,7 +8,7 @@ const { signToken } = require('../utils/jwt');
 const { authMiddleware } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter } = require('../utils/rateLimiter');
-const { sendEmail, isEmailConfigured } = require('../utils/email');
+const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -55,7 +55,9 @@ async function generateUsername(email) {
 
 const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+  }),
   username: z.string().optional(),
   phone: z.string().optional(),
   role: z.enum(['USER', 'DJ']).optional(),
@@ -75,13 +77,24 @@ const phoneVerifySchema = z.object({
   code: z.string().length(6),
 });
 
+const emailOtpSchema = z.object({
+  email: z.string().email(),
+});
+
+const emailOtpVerifySchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+});
+
 const passwordResetSchema = z.object({
   email: z.string().email(),
 });
 
 const passwordResetConfirmSchema = z.object({
   token: z.string(),
-  newPassword: z.string().min(6),
+  newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+  }),
 });
 
 // POST /api/auth/register
@@ -121,9 +134,25 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userRole = role === 'DJ' ? 'DJ' : 'USER';
     const user = await prisma.user.create({
-      data: { email, username, password: hashedPassword, phone: phone || null, role: role || 'USER' },
+      data: { email, username, password: hashedPassword, phone: phone || null, role: userRole },
       select: { id: true, email: true, username: true, role: true, createdAt: true },
+    });
+
+    // Send welcome email and in-app notification asynchronously — don't block the response
+    sendWelcomeEmail({ to: user.email, username: user.username, role: user.role }).catch((err) => {
+      console.error('[Auth] Failed to send welcome email:', err);
+    });
+    prisma.notification.create({
+      data: {
+        userId: user.id,
+        type: 'SYSTEM',
+        title: 'Welcome to Deck Salone!',
+        body: 'Your account has been created. Explore mixes, follow DJs, and book events.',
+      },
+    }).catch((err) => {
+      console.error('[Auth] Failed to create welcome notification:', err);
     });
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
@@ -239,6 +268,120 @@ router.post('/phone/verify', authLimiter, async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL OTP (for email verification & passwordless login)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// In-memory store for email OTPs (production: use Redis)
+const emailOtpStore = new Map();
+const EMAIL_OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const EMAIL_MAX_ATTEMPTS = 3;
+
+function generateEmailOtp() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+// POST /api/auth/email/send-otp - Send OTP to email
+router.post('/email/send-otp', authLimiter, async (req, res) => {
+  try {
+    const parsed = emailOtpSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid email' });
+    }
+
+    const { email } = parsed.data;
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const code = generateEmailOtp();
+    const expiry = Date.now() + EMAIL_OTP_EXPIRY_MS;
+
+    emailOtpStore.set(normalizedEmail, {
+      code,
+      expiry,
+      attempts: 0,
+    });
+
+    // Send OTP via email
+    if (isEmailConfigured()) {
+      const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      await sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        username: user?.username || user?.email?.split('@')[0],
+      });
+    } else {
+      console.log(`[Email OTP] Code for ${normalizedEmail}: ${code}`);
+    }
+
+    return res.json({
+      success: true,
+      data: { email: normalizedEmail, sent: true },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/auth/email/verify - Verify email OTP
+router.post('/email/verify', authLimiter, async (req, res) => {
+  try {
+    const parsed = emailOtpVerifySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
+    const { email, code } = parsed.data;
+    const normalizedEmail = email.toLowerCase().trim();
+    const record = emailOtpStore.get(normalizedEmail);
+
+    if (!record) {
+      return res.status(400).json({ success: false, error: 'OTP not found or expired. Request a new one.' });
+    }
+
+    if (Date.now() > record.expiry) {
+      emailOtpStore.delete(normalizedEmail);
+      return res.status(400).json({ success: false, error: 'OTP expired. Request a new one.' });
+    }
+
+    if (record.attempts >= EMAIL_MAX_ATTEMPTS) {
+      emailOtpStore.delete(normalizedEmail);
+      return res.status(400).json({ success: false, error: 'Too many attempts. Request a new OTP.' });
+    }
+
+    record.attempts += 1;
+
+    if (record.code !== code) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP code.' });
+    }
+
+    // OTP is valid - clean up
+    emailOtpStore.delete(normalizedEmail);
+
+    // Mark email as verified
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (user) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+    }
+
+    return res.json({ success: true, data: { message: 'Email verified successfully' } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Clean up expired email OTPs every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, record] of emailOtpStore.entries()) {
+    if (now > record.expiry) {
+      emailOtpStore.delete(email);
+    }
+  }
+}, 30 * 60 * 1000);
 
 // POST /api/auth/forgot-password - Request password reset
 router.post('/forgot-password', authLimiter, async (req, res) => {
@@ -379,7 +522,7 @@ router.get('/google/callback', (req, res, next) => {
     }
 
     const token = signToken({ id: req.user.id, email: req.user.email, role: req.user.role });
-    const redirectUrl = `${FRONTEND_URL}/auth/callback?token=${token}`;
+    const redirectUrl = `${FRONTEND_URL}/auth/callback#token=${token}`;
     return res.redirect(redirectUrl);
   } catch (error) {
     return res.redirect(`${FRONTEND_URL}/login?error=server_error`);
@@ -399,6 +542,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         phone: true,
         phoneVerified: true,
         createdAt: true,
+        notificationPreferences: true,
+        privacyPreferences: true,
         djProfile: true,
       },
     });
@@ -418,7 +563,9 @@ const updateProfileSchema = z.object({
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(6),
+  newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+  }),
 });
 
 // PUT /api/auth/me - Update current user's profile (username, email, etc.)

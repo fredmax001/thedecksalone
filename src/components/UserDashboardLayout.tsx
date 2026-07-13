@@ -17,6 +17,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import MobileTabBar from '@/components/MobileTabBar';
+import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -60,8 +61,6 @@ export default function UserDashboardLayout() {
     logout();
     navigate('/');
   };
-
-
 
   useEffect(() => {
     const handleResize = () => {
@@ -238,26 +237,7 @@ export default function UserDashboardLayout() {
 
             {/* Right: Notifications + Profile */}
             <div className="flex items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative text-text-secondary hover:text-text-primary"
-                  >
-                    <Bell className="w-5 h-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 bg-black-surface border-dark-gray">
-                  <div className="p-3 border-b border-dark-gray">
-                    <p className="text-sm font-medium text-text-primary">Notifications</p>
-                  </div>
-                  <div className="p-6 text-center">
-                    <Bell className="w-8 h-8 text-text-muted mx-auto mb-2" />
-                    <p className="text-sm text-text-secondary">No new notifications</p>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <NotificationBell />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

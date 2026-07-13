@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
 
-export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR';
+export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR' | 'FINANCE_ADMIN' | 'VERIFICATION_ADMIN';
 
 export interface User {
   id: string;

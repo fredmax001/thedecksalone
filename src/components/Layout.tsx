@@ -2,7 +2,6 @@ import { type FormEvent, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
-  Bell,
   Calendar,
   Flame,
   Headphones,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useAuthStore } from '@/stores/authStore';
+import NotificationBell from '@/components/NotificationBell';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import BottomNav from '@/components/BottomNav';
+import Footer from '@/components/Footer';
 import { cn } from '@/lib/utils';
 
 const browseItems = [
@@ -57,6 +58,9 @@ export default function Layout() {
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
   const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
+  const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
+  const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
+  const settingsPath = isDj ? '/dashboard/settings' : '/user/settings';
 
   // Scroll to top on route change
   useEffect(() => {
@@ -84,7 +88,8 @@ export default function Layout() {
 
   return (
     <div className="min-h-[100dvh] bg-black text-text-primary">
-      <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-[300px] flex-col border-r border-white/10 bg-black px-7 py-7">
+      {/* Sidebar — shown on md+ (tablet and desktop) */}
+      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-[260px] lg:w-[300px] flex-col border-r border-white/10 bg-black px-5 py-7 lg:px-7">
         <Link to="/" className="flex h-14 items-center">
           <img
             src="/logo-web.png"
@@ -135,10 +140,10 @@ export default function Layout() {
         </nav>
       </aside>
 
-      <div className="min-h-[100dvh] lg:ml-[300px]">
+      <div className="min-h-[100dvh] md:ml-[260px] lg:ml-[300px]">
         <header className="sticky top-0 z-30 border-b border-white/10 bg-black/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-10">
           <div className="flex items-center gap-2 lg:gap-3">
-            <Link to="/" className="flex shrink-0 items-center lg:hidden">
+            <Link to="/" className="flex shrink-0 items-center md:hidden">
               <img src="/logo-icon.png" alt="Deck Salone" className="h-9 w-9 object-contain" />
             </Link>
 
@@ -153,7 +158,7 @@ export default function Layout() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="ml-auto shrink-0 text-text-secondary hover:text-gold lg:hidden">
+                <Button variant="ghost" size="icon" className="ml-auto shrink-0 text-text-secondary hover:text-gold md:hidden">
                   <Search className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -171,7 +176,7 @@ export default function Layout() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-xl lg:block">
+            <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-xl md:block">
               <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-gold" />
               <input
                 name="q"
@@ -182,14 +187,12 @@ export default function Layout() {
             </form>
 
             {isAuthenticated && (
-              <Button variant="ghost" size="icon" className="relative shrink-0 text-text-secondary hover:text-text-primary">
-                <Bell className="h-5 w-5" />
-              </Button>
+              <NotificationBell className="shrink-0" />
             )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0 text-text-secondary hover:text-text-primary lg:hidden">
+                <Button variant="ghost" size="icon" className="shrink-0 text-text-secondary hover:text-text-primary md:hidden">
                   <Settings className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -223,39 +226,74 @@ export default function Layout() {
             </DropdownMenu>
 
             {isAuthenticated ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="hidden h-12 shrink-0 gap-2 rounded-full px-2 hover:bg-white/10 lg:flex">
-                    <Avatar className="h-9 w-9 border border-gold/30">
-                      <AvatarImage src={avatarUrl} />
-                      <AvatarFallback className="bg-gold/20 text-xs font-bold text-gold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface">
-                  <DropdownMenuItem asChild>
-                    <Link to={isDj ? '/dashboard/profile' : '/user/profile'} className="cursor-pointer">
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer">
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <>
+                {/* Mobile/tablet profile avatar dropdown */}
+                <div className="md:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center rounded-full focus:outline-none">
+                        <Avatar className="h-9 w-9 border border-gold/30">
+                          <AvatarImage src={avatarUrl} alt={displayName} />
+                          <AvatarFallback className="bg-gold/20 text-xs font-bold text-gold">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface">
+                      <DropdownMenuItem asChild>
+                        <Link to={profilePath} className="cursor-pointer">Profile</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={dashboardPath} className="cursor-pointer">Dashboard</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={settingsPath} className="cursor-pointer">Settings</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-dark-gray" />
+                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Desktop profile dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="hidden h-12 shrink-0 gap-2 rounded-full px-2 hover:bg-white/10 md:flex">
+                      <Avatar className="h-9 w-9 border border-gold/30">
+                        <AvatarImage src={avatarUrl} />
+                        <AvatarFallback className="bg-gold/20 text-xs font-bold text-gold">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface">
+                    <DropdownMenuItem asChild>
+                      <Link to={profilePath} className="cursor-pointer">
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to={settingsPath} className="cursor-pointer">
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-dark-gray" />
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             ) : (
               <Link
                 to="/login"
-                className="hidden shrink-0 rounded-full border border-white/15 px-4 py-3 text-xs font-bold text-text-primary transition-colors hover:border-gold/50 sm:px-5 sm:text-sm lg:inline-flex"
+                className="hidden shrink-0 rounded-full border border-white/15 px-4 py-3 text-xs font-bold text-text-primary transition-colors hover:border-gold/50 sm:px-5 sm:text-sm md:inline-flex"
               >
                 Login
               </Link>
@@ -275,11 +313,15 @@ export default function Layout() {
 
         <main
           className={`transition-all duration-300 ${
-            currentTrack ? 'pb-44 lg:pb-28' : 'pb-24 lg:pb-12'
+            currentTrack ? 'pb-44 md:pb-28' : 'pb-24 md:pb-12'
           }`}
         >
           <Outlet />
         </main>
+
+        <div className={currentTrack ? 'pb-20 md:pb-[80px]' : ''}>
+          <Footer />
+        </div>
       </div>
       <BottomNav />
     </div>

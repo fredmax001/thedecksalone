@@ -19,6 +19,7 @@ import {
   ChevronRight,
   CreditCard,
   Megaphone,
+  BriefcaseBusiness,
   Crown,
   Zap,
 } from 'lucide-react';
@@ -52,6 +53,7 @@ const navItems = [
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
   { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
+  { icon: BriefcaseBusiness, label: 'Opportunities', path: '/dashboard/opportunities' },
   { icon: Megaphone, label: 'Promotions', path: '/dashboard/campaigns' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];

@@ -79,7 +79,7 @@ export default function App() {
           <Route path="auth/callback" element={<AuthCallback />} />
 
           {/* Admin — protected, standalone layout */}
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR']} fallback="/login" />}>
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN']} fallback="/login" />}>
             <Route path="admin" element={<AdminDashboard />} />
           </Route>
 

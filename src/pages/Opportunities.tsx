@@ -10,6 +10,8 @@ import {
     CheckCircle,
     Clock,
     AlertCircle,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
@@ -28,7 +30,9 @@ interface Opportunity {
     musicStyle?: string;
     hours?: number;
     requirements?: string;
+    equipmentNeeded?: string[];
     isFeatured: boolean;
+    nearYou?: boolean;
     requiredTier: 'pro' | 'legend';
     status: string;
     userHasApplied: boolean;
@@ -41,8 +45,9 @@ export const Opportunities = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'applied' | 'featured'>('all');
     const [applying, setApplying] = useState<string | null>(null);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
-    const { tier, checkFeature } = useFeatureAccess();
+    const { checkFeature } = useFeatureAccess();
     const { open } = useUpgradeModalStore();
 
     // Fetch opportunities
@@ -72,7 +77,7 @@ export const Opportunities = () => {
     // Apply for opportunity
     const handleApply = async (opp: Opportunity) => {
         // Check tier first
-        if (!checkFeature('pro', 'Apply for Opportunities')) {
+        if (!checkFeature('pro', 'Contact Opportunity Organizers')) {
             return;
         }
 
@@ -82,18 +87,18 @@ export const Opportunities = () => {
             return;
         }
 
-        if (!checkFeature(opp.requiredTier, 'Apply for Opportunities')) {
+        if (!checkFeature(opp.requiredTier, 'Contact Opportunity Organizers')) {
             return;
         }
 
         try {
             setApplying(opp.id);
             const res = await api.post(`/opportunities/${opp.id}/apply`, {
-                message: 'Interested in this opportunity',
+                message: 'Interested in this opportunity. Please share the organizer contact details.',
             });
 
             if (res.data.success) {
-                toast.success('✓ Application sent! Organizer will review your profile.');
+                toast.success('Contact request sent. The organizer can review your profile.');
                 // Update UI
                 setOpportunities((prev) =>
                     prev.map((o) =>
@@ -132,13 +137,8 @@ export const Opportunities = () => {
                 {/* Header */}
                 <div>
                     <h1 className="text-3xl font-display font-bold text-text-primary uppercase tracking-wide">
-                        DJ Opportunities
+                        Opportunities
                     </h1>
-                    <p className="text-text-secondary mt-2">
-                        {tier === 'free'
-                            ? '📌 Browse available opportunities. Upgrade to Pro to apply and connect with organizers.'
-                            : '🎯 Find and apply for DJ gigs, events, and partnerships.'}
-                    </p>
                 </div>
 
                 {/* Filters */}
@@ -185,6 +185,9 @@ export const Opportunities = () => {
                                                 {opp.title}
                                                 {opp.isFeatured && (
                                                     <Badge className="bg-gold text-black text-xs">Featured</Badge>
+                                                )}
+                                                {opp.nearYou && (
+                                                    <Badge variant="outline" className="border-green/40 text-green text-xs">Near You</Badge>
                                                 )}
                                             </h3>
                                             <p className="text-text-secondary text-sm mt-1 line-clamp-2">
@@ -271,15 +274,43 @@ export const Opportunities = () => {
                                         </p>
                                     )}
 
+                                    {expandedId === opp.id && (
+                                        <div className="mb-4 rounded-lg border border-dark-gray bg-black/30 p-4 text-sm text-text-secondary">
+                                            <p className="leading-relaxed">{opp.description}</p>
+                                            {opp.equipmentNeeded?.length ? (
+                                                <div className="mt-4">
+                                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Equipment Needed</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {opp.equipmentNeeded.map((item) => (
+                                                            <Badge key={item} variant="outline" className="text-xs">
+                                                                {item}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    )}
+
                                     {/* CTA Buttons */}
                                     <div className="flex gap-3 justify-between items-center">
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => {/* View details */ }}
+                                            onClick={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
                                             className="flex-1"
                                         >
-                                            View Details
+                                            {expandedId === opp.id ? (
+                                                <>
+                                                    <ChevronUp className="mr-2 h-4 w-4" />
+                                                    Close
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ChevronDown className="mr-2 h-4 w-4" />
+                                                    View Details
+                                                </>
+                                            )}
                                         </Button>
                                         <Button
                                             onClick={() => handleApply(opp)}
@@ -293,11 +324,11 @@ export const Opportunities = () => {
                                                 }`}
                                         >
                                             {opp.userHasApplied ? (
-                                                '✓ Applied'
+                                                'Contact Requested'
                                             ) : applying === opp.id ? (
                                                 'Submitting...'
                                             ) : (
-                                                'Apply Now'
+                                                'Contact Organizer'
                                             )}
                                         </Button>
                                     </div>

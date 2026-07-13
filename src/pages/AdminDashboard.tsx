@@ -47,7 +47,7 @@ import {
   useRejectDjVerification, useRequestDjInfo,
   useUpdateCampaignStatus,
   useToggleMixFeature, useUpdateBookingStatus,
-  useUpdateUserRole, useRecalculateRankings,
+  useUpdateUserRole, useUpdateUserStatus, useRecalculateRankings,
   useSendNotification, useDeleteMix, useUpdateRanking,
   useAdminProSubscriptionRequests,
   useApproveProSubscriptionRequest,
@@ -894,6 +894,7 @@ function UsersSection() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const { data, isLoading, error } = useAdminUsers({ limit: 50 });
   const updateRoleMutation = useUpdateUserRole();
+  const updateStatusMutation = useUpdateUserStatus();
   const queryClient = useQueryClient();
 
   const users = data?.data || [];
@@ -906,6 +907,10 @@ function UsersSection() {
 
   const handleChangeRole = (id: string, role: string) => {
     updateRoleMutation.mutate({ id, role }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }) });
+  };
+
+  const handleChangeStatus = (id: string, status: string) => {
+    updateStatusMutation.mutate({ id, status }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }) });
   };
 
   return (
@@ -965,7 +970,7 @@ function UsersSection() {
                   <td className="p-4 text-text-primary">{u.djProfile?.stageName || u.username || '--'}</td>
                   <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
                   <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
-                  <td className="p-4"><StatusBadge status="active" /></td>
+                  <td className="p-4"><StatusBadge status={u.status?.toLowerCase() || 'active'} /></td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
                       <select
@@ -973,10 +978,21 @@ function UsersSection() {
                         className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
                       >
                         <option value="">Change Role</option>
-                        <option value="user">User</option>
-                        <option value="dj">DJ</option>
-                        <option value="admin">Admin</option>
-                        <option value="moderator">Moderator</option>
+                        <option value="USER">User</option>
+                        <option value="DJ">DJ</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="MODERATOR">Moderator</option>
+                        <option value="FINANCE_ADMIN">Finance Admin</option>
+                        <option value="VERIFICATION_ADMIN">Verification Admin</option>
+                      </select>
+                      <select
+                        onChange={(e) => handleChangeStatus(u.id, e.target.value)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
+                      >
+                        <option value="">Change Status</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="SUSPENDED">Suspended</option>
+                        <option value="BANNED">Banned</option>
                       </select>
                       <button
                         onClick={() => u.djProfile?.id ? navigate(`/dj/${u.djProfile.id}`) : alert('No DJ profile for this user')}
@@ -1547,17 +1563,17 @@ function PlatformsSection() {
     </div>
   );
 
-  const platformCards = [
+  const platformCards = useMemo(() => [
     { name: 'Database', icon: HardDrive, status: system?.dbStatus === 'connected' ? 'connected' : 'disconnected', latency: '< 50ms', records: `${Object.values(counts).reduce((a: number, b: any) => a + (b || 0), 0).toLocaleString()} rows` },
     { name: 'Server', icon: Server, status: 'connected', uptime, memory },
-    { name: 'YouTube API', icon: MonitorPlay, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'YouTube')?.djs || 0 },
-    { name: 'Audiomack API', icon: AudioLines, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Audiomack')?.djs || 0 },
-    { name: 'Mixcloud API', icon: Radio, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.djs || 0 },
-    { name: 'HearThis API', icon: Volume2, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'HearThis')?.djs || 0 },
-    { name: 'SoundCloud API', icon: Music, status: 'connected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.djs || 0 },
+    { name: 'YouTube', icon: MonitorPlay, status: (platforms || []).find((p: any) => p.name === 'YouTube') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'YouTube')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'YouTube')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'YouTube')?.streams || 0 },
+    { name: 'Audiomack', icon: AudioLines, status: (platforms || []).find((p: any) => p.name === 'Audiomack') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Audiomack')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'Audiomack')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'Audiomack')?.streams || 0 },
+    { name: 'Mixcloud', icon: Radio, status: (platforms || []).find((p: any) => p.name === 'Mixcloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.streams || 0 },
+    { name: 'HearThis', icon: Volume2, status: (platforms || []).find((p: any) => p.name === 'HearThis') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'HearThis')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'HearThis')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'HearThis')?.streams || 0 },
+    { name: 'SoundCloud', icon: Music, status: (platforms || []).find((p: any) => p.name === 'SoundCloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.streams || 0 },
     { name: 'Cloudinary', icon: HardDrive, status: 'connected', storage: 'Active' },
     { name: 'AWS S3', icon: Package, status: 'connected', storage: 'Active' },
-  ];
+  ], [system, platforms, uptime, memory, counts]);
 
   return (
     <div className="space-y-6">
@@ -1595,6 +1611,8 @@ function PlatformsSection() {
               {'memory' in card && <div className="flex justify-between"><span>Memory</span><span className="font-mono text-text-secondary">{card.memory}</span></div>}
               {'lastSync' in card && <div className="flex justify-between"><span>Last Sync</span><span className="font-mono text-text-secondary">{card.lastSync}</span></div>}
               {'djs' in card && <div className="flex justify-between"><span>Connected DJs</span><span className="font-mono text-text-secondary">{card.djs}</span></div>}
+              {'followers' in card && card.followers != null && card.followers > 0 && <div className="flex justify-between"><span>Followers</span><span className="font-mono text-text-secondary">{(card.followers as number).toLocaleString()}</span></div>}
+              {'streams' in card && card.streams != null && card.streams > 0 && <div className="flex justify-between"><span>Streams</span><span className="font-mono text-text-secondary">{(card.streams as number).toLocaleString()}</span></div>}
               {'storage' in card && <div className="flex justify-between"><span>Storage</span><span className="font-mono text-text-secondary">{card.storage}</span></div>}
             </div>
 
@@ -1784,7 +1802,15 @@ function NotificationsSection() {
   const handleSend = () => {
     if (!title.trim() || !message.trim()) return;
     sendMutation.mutate({ type: notifType, target, title, message, scheduled: schedule || undefined }, {
-      onSuccess: () => { setTitle(''); setMessage(''); setSchedule(''); }
+      onSuccess: () => {
+        setTitle('');
+        setMessage('');
+        setSchedule('');
+        toast.success('Notification sent successfully');
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || 'Failed to send notification');
+      },
     });
   };
 
@@ -2756,10 +2782,7 @@ export default function AdminDashboard() {
             </button>
             <ThemeToggle />
             <div className="relative">
-              <button onClick={() => setBellOpen((o) => !o)} className="p-2 rounded-lg text-text-muted hover:bg-white/5 relative">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#D4A24A]" />
-              </button>
+              <AdminBellButton bellOpen={bellOpen} setBellOpen={setBellOpen} />
               {bellOpen && (
                 <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border theme-border-card shadow-xl overflow-hidden z-50 theme-bg-elevated">
                   <div className="p-3 border-b theme-border-card flex items-center justify-between">
@@ -2791,6 +2814,22 @@ export default function AdminDashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+function AdminBellButton({ bellOpen, setBellOpen }: { bellOpen: boolean; setBellOpen: (v: boolean) => void }) {
+  const { data: notifications } = useAdminNotifications({ limit: 10 });
+  const unreadCount = notifications?.filter((n) => !n.read).length || 0;
+
+  return (
+    <button onClick={() => setBellOpen(!bellOpen)} className="p-2 rounded-lg text-text-muted hover:bg-white/5 relative">
+      <Bell className="w-4 h-4" />
+      {unreadCount > 0 && (
+        <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#D4A24A] text-[9px] font-bold text-black flex items-center justify-center">
+          {unreadCount > 9 ? '9+' : unreadCount}
+        </span>
+      )}
+    </button>
   );
 }
 

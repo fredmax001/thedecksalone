@@ -41,7 +41,7 @@ export default function BottomNav() {
 
   return (
     <>
-      <nav className="lg:hidden fixed bottom-3 left-4 right-4 z-50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-black/90">
+      <nav className="md:hidden fixed bottom-3 left-4 right-4 z-50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-black/90">
         <div className="flex items-center justify-around h-14 px-2">
           {mainItems.map((item) => {
             const isActive = isMainActive(item.path);
@@ -74,7 +74,7 @@ export default function BottomNav() {
             );
           })}
 
-          {isAuthenticated && user && (
+          {isAuthenticated && user ? (
             <Sheet>
               <SheetTrigger asChild>
                 <button className="relative flex h-full w-full flex-col items-center justify-center space-y-1">
@@ -120,6 +120,14 @@ export default function BottomNav() {
                 </div>
               </SheetContent>
             </Sheet>
+          ) : (
+            <Link
+              to="/register"
+              className="relative flex h-full w-full flex-col items-center justify-center space-y-1"
+            >
+              <User className="w-5 h-5 text-text-muted" />
+              <span className="text-[10px] font-medium text-text-muted">Sign Up</span>
+            </Link>
           )}
         </div>
       </nav>

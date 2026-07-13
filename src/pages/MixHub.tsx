@@ -13,7 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { type MixTrack } from '@/components/MixPlayer';
-import { useMixes, useTrendingMixes, useLikeMix, useMixGenres } from '@/hooks/useMixes';
+import { useMixes, useTrendingMixes, useLikeMix, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
@@ -414,17 +414,18 @@ export default function MixHub() {
                   >
                     All Genres
                   </button>
-                  {genres.map((g: string) => (
+                  {genres.map((g: GenreWithCount) => (
                     <button
-                      key={g}
-                      onClick={() => { setActiveGenre(g); setPage(1); }}
+                      key={g.name}
+                      onClick={() => { setActiveGenre(g.name); setPage(1); }}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-200 ${
-                        activeGenre === g
+                        activeGenre === g.name
                           ? 'bg-gold/10 text-gold border border-gold/50'
                           : 'text-text-muted border border-dark-gray hover:text-text-primary hover:border-medium-gray'
                       }`}
                     >
-                      {g}
+                      {g.name}
+                      <span className="ml-1 text-[10px] opacity-60">({g.count})</span>
                     </button>
                   ))}
                 </>

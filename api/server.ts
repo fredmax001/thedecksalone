@@ -1,5 +1,9 @@
-require('dotenv').config({ path: '../.env' });
-require('dotenv').config({ path: '.env' });
+const path = require('path');
+const dotenv = require('dotenv');
+const isCompiledServer = __dirname.endsWith('/dist') || __dirname.endsWith('\\dist');
+const projectRoot = path.join(__dirname, isCompiledServer ? '../..' : '..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
+dotenv.config({ path: path.join(projectRoot, 'api', '.env'), override: true });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -31,7 +35,10 @@ const photoRoutes = require('./routes/photos');
 const opportunityRoutes = require('./routes/opportunities');
 const setRoutes = require('./routes/sets');
 
+const notificationRoutes = require('./routes/notifications');
+
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean);
@@ -47,7 +54,7 @@ app.use(helmet({
 }));
 
 function isAllowedOrigin(origin) {
-  if (!origin) return true;
+  if (!origin) return process.env.NODE_ENV !== 'production';
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   return process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 }
@@ -83,6 +90,7 @@ app.get('/health', (req, res) => {
 app.use('/api', generalLimiter);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/djs', djRoutes);
 app.use('/api/mixes', mixRoutes);
 app.use('/api/rankings', rankingRoutes);
@@ -101,12 +109,12 @@ app.use('/api/gigs', gigRoutes);
 app.use('/api/opportunities', authMiddleware, opportunityRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/sets', setRoutes);
+app.use('/api/notifications', authMiddleware, notificationRoutes);
 
 // OG Meta routes for social media sharing (own file)
 app.use('/og', ogRoutes);
 
 // Serve built frontend static files (production build) with cache-busting
-const path = require('path');
 // Handle both ts-node (runs from api/) and compiled dist (runs from api/dist/)
 const isCompiled = __dirname.endsWith('/dist') || __dirname.endsWith('\\dist');
 const distDir = path.join(__dirname, isCompiled ? '../../dist' : '../dist');
@@ -144,9 +152,11 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(err.status || 500).json({
+  const status = err.status || 500;
+  const message = status >= 500 ? 'Internal server error' : (err.message || 'Internal server error');
+  res.status(status).json({
     success: false,
-    error: err.message || 'Internal server error',
+    error: message,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });

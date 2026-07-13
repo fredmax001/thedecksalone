@@ -3,6 +3,8 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 
+const { createNotification } = require('../utils/notifications');
+
 const router = express.Router();
 
 const messageSchema = z.object({
@@ -180,6 +182,31 @@ router.post('/', authMiddleware, async (req, res) => {
         content,
         bookingId: bookingId || null,
       },
+    });
+
+    // Notify receiver about new message
+    const sender = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: {
+        username: true,
+        email: true,
+        djProfile: { select: { stageName: true, avatar: true } },
+      },
+    });
+
+    const senderName = sender?.djProfile?.stageName || sender?.username || sender?.email || 'Someone';
+
+    await createNotification({
+      userId: receiverId,
+      type: 'NEW_MESSAGE',
+      title: `New message from ${senderName}`,
+      body: content.slice(0, 120),
+      actionUrl: bookingId ? `/user/messages` : `/user/messages`,
+      entityId: message.id,
+      entityType: 'message',
+      metadata: { senderId, senderName, bookingId },
+      sendEmail: true,
+      emailSubject: `New Message from ${senderName} - Deck Salone`,
     });
 
     return res.status(201).json({ success: true, data: message });

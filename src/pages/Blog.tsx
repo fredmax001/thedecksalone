@@ -55,16 +55,16 @@ export default function Blog() {
         </div>
       </section>
 
-      {/* ═══════════════ COMING SOON BANNER ═══════════════ */}
+      {/* ═══════════════ BLOG WELCOME ═══════════════ */}
       <section className="py-8">
         <div className="container-main">
           <FadeIn>
             <div className="max-w-3xl mx-auto p-6 sm:p-8 bg-gold/5 border border-gold/20 rounded-2xl flex items-center gap-4">
               <Sparkles className="w-6 h-6 text-gold flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-text-primary">Coming Soon</p>
+                <p className="text-sm font-semibold text-text-primary">Welcome to the Deck Salone Blog</p>
                 <p className="text-sm text-text-secondary">
-                  Our editorial team is working on exclusive content. Check back for weekly updates on DJ culture, tutorials, and platform news.
+                  We're curating the best DJ culture content from Sierra Leone and beyond. Check back for updates!
                 </p>
               </div>
             </div>

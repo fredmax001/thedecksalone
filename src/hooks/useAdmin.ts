@@ -150,7 +150,8 @@ export interface User {
   email: string;
   username?: string;
   role: string;
-  verified: boolean;
+  status: string;
+  verified?: boolean;
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
@@ -333,6 +334,8 @@ export function useAdminStats() {
       const res = await api.get('/admin/stats');
       return res.data.data;
     },
+    staleTime: 0,
+    refetchInterval: 15000,
   });
 }
 
@@ -401,6 +404,8 @@ export function useAdminBookings(
 ) {
   return useQuery<PaginatedResponse<Booking>>({
     queryKey: ['adminBookings', filters],
+    staleTime: 0,
+    refetchInterval: 30000,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.status) params.set('status', filters.status);
@@ -436,6 +441,8 @@ export function useAdminUsers(
 ) {
   return useQuery<PaginatedResponse<User>>({
     queryKey: ['adminUsers', filters],
+    staleTime: 0,
+    refetchInterval: 30000,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.role) params.set('role', filters.role);
@@ -456,6 +463,8 @@ export function useAdminPendingDjs() {
       const res = await api.get('/admin/djs/pending');
       return res.data.data;
     },
+    staleTime: 0,
+    refetchInterval: 15000,
   });
 }
 
@@ -480,6 +489,8 @@ export function useAdminMessages() {
       const res = await api.get('/admin/messages');
       return res.data.data;
     },
+    staleTime: 0,
+    refetchInterval: 10000,
   });
 }
 
@@ -523,6 +534,8 @@ export function useAdminNotifications(filters?: { limit?: number }) {
       const res = await api.get(`/admin/notifications${query ? `?${query}` : ''}`);
       return res.data.data;
     },
+    staleTime: 0,
+    refetchInterval: 10000,
   });
 }
 
@@ -552,6 +565,8 @@ export function useAdminSubscriptions() {
 export function useAdminProSubscriptionRequests(status?: string) {
   return useQuery<ProSubscriptionRequest[]>({
     queryKey: ['adminProSubscriptionRequests', status || 'all'],
+    staleTime: 0,
+    refetchInterval: 15000,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (status && status !== 'all') params.set('status', status);
@@ -621,6 +636,8 @@ export function useAdminVerificationRequests() {
       const res = await api.get('/admin/djs/verification-requests');
       return res.data.data;
     },
+    staleTime: 0,
+    refetchInterval: 15000,
   });
 }
 
@@ -756,6 +773,20 @@ export function useUpdateUserRole() {
   });
 }
 
+export function useUpdateUserStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await api.put(`/admin/users/${id}/status`, { status });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
 export function useSendNotification() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -779,7 +810,7 @@ export function useAdminBattles(filters?: { status?: string; page?: number; limi
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
-      const res = await api.get(`/battles${query ? `?${query}` : ''}`);
+      const res = await api.get(`/admin/battles${query ? `?${query}` : ''}`);
       return res.data || { data: [], meta: {} };
     },
   });
@@ -789,7 +820,7 @@ export function useCreateBattle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { title: string; weekStart: string; weekEnd: string; theme?: string; metricType?: string }) => {
-      const res = await api.post('/battles', payload);
+      const res = await api.post('/admin/battles', payload);
       return res.data.data;
     },
     onSuccess: () => {
@@ -803,7 +834,7 @@ export function useCloseBattle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/battles/${id}/close`);
+      const res = await api.post(`/admin/battles/${id}/close`);
       return res.data.data;
     },
     onSuccess: () => {

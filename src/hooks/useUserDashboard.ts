@@ -101,7 +101,7 @@ export function useUserActivity() {
   });
 }
 
-/* ─── Notifications ─── */
+/* ─── Notifications (delegated to dedicated notification API) ─── */
 export interface NotificationItem {
   id: string;
   type: 'BOOKING_UPDATE' | 'COUNTER_OFFER' | 'DJ_MESSAGE' | 'NEW_MIX' | 'EVENT_REMINDER' | 'SYSTEM';
@@ -116,7 +116,7 @@ export function useUserNotifications() {
   return useQuery({
     queryKey: ['user-notifications'],
     queryFn: async () => {
-      const res = await api.get('/users/notifications');
+      const res = await api.get('/notifications');
       return (res.data.data || []) as NotificationItem[];
     },
   });
@@ -126,11 +126,13 @@ export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.patch(`/users/notifications/${id}/read`);
+      const res = await api.patch(`/notifications/${id}/read`);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
     },
   });
 }
@@ -139,11 +141,13 @@ export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await api.patch('/users/notifications/read-all');
+      const res = await api.patch('/notifications/read-all');
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
     },
   });
 }

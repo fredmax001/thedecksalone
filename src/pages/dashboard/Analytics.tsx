@@ -211,13 +211,42 @@ export default function Analytics() {
           </Link>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <BarChart3 className="w-12 h-12 text-text-muted mx-auto mb-3" />
-            <p className="text-text-secondary mb-2">Detailed mix analytics coming soon</p>
-            <p className="text-sm text-text-muted">
-              Per-mix play tracking, listener retention, and geographic data will be available here.
-            </p>
-          </div>
+          {stats?.topMixes && stats.topMixes.length > 0 ? (
+            <div className="space-y-3">
+              {stats.topMixes.map((mix: any, index: number) => (
+                <div
+                  key={mix.id}
+                  className="flex items-center gap-4 p-3 rounded-xl bg-black-elevated border border-dark-gray hover:border-gold/20 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-gold">{index + 1}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-text-primary truncate">{mix.title}</p>
+                    <p className="text-xs text-text-muted">{mix.genre}</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-text-muted">
+                    <span className="flex items-center gap-1">
+                      <Headphones className="w-3 h-3 text-gold" />
+                      {mix.plays?.toLocaleString() || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 text-gold" />
+                      {mix.likes?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <BarChart3 className="w-12 h-12 text-text-muted mx-auto mb-3" />
+              <p className="text-text-secondary mb-2">No analytics data yet</p>
+              <p className="text-sm text-text-muted">
+                Start uploading mixes and engaging with fans to see your stats grow!
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
       </FeatureLock>

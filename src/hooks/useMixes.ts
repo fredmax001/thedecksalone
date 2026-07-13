@@ -72,12 +72,17 @@ export function useMixCategories() {
   });
 }
 
+export interface GenreWithCount {
+  name: string;
+  count: number;
+}
+
 export function useMixGenres() {
   return useQuery({
     queryKey: ['mixGenres'],
     queryFn: async () => {
       const res = await api.get('/mixes/genres');
-      return res.data.data || [];
+      return (res.data.data || []) as GenreWithCount[];
     },
     staleTime: 1000 * 60 * 5, // Genres change when new mixes are uploaded
   });
