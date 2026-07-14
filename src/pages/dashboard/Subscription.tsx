@@ -68,7 +68,7 @@ const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   currency: 'SLE',
   plans: [
     { id: 'pro', name: 'Pro', price: 250 },
-    { id: 'legend', name: 'Legend', price: 750 },
+    { id: 'legend', name: 'Pro+', price: 750 },
   ],
 };
 
@@ -111,7 +111,7 @@ const PLANS: Plan[] = [
   },
   {
     id: 'legend',
-    name: 'Legend',
+    name: 'Pro+',
     price: 750,
     period: 'month',
     description: 'For top-tier DJs who demand the full platform experience.',
@@ -127,7 +127,7 @@ const PLANS: Plan[] = [
       'API access',
     ],
     highlighted: false,
-    cta: 'Upgrade to Legend',
+    cta: 'Upgrade to Pro+',
   },
 ];
 

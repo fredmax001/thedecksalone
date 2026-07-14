@@ -26,6 +26,7 @@ model User {
   favoriteGenres          String[]     @default([])
   lastLoginAt             DateTime?
   location                String?
+  gender                  Gender?
   name                    String?
   passwordResetExpiry     DateTime?
   passwordResetToken      String?
@@ -747,6 +748,14 @@ enum NotificationType {
   SUBSCRIPTION_STATUS
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  NON_BINARY
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -785,4 +794,32 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("system_config")
+}
+
+model SiteVisit {
+  id        String   @id @default(cuid())
+  path      String?
+  userId    String?
+  ipHash    String?
+  city      String?
+  country   String?
+  userAgent String?
+  referrer  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([country, createdAt])
+  @@index([city, createdAt])
+  @@map("site_visits")
 }

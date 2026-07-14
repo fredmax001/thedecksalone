@@ -74,6 +74,7 @@ export default function UserProfile() {
     name: '',
     bio: '',
     location: '',
+    gender: '',
     avatar: '',
     favoriteGenres: [] as string[],
     social: {
@@ -95,6 +96,7 @@ export default function UserProfile() {
           name: data.name || '',
           bio: data.bio || '',
           location: data.location || '',
+          gender: data.gender || '',
           avatar: data.avatar || '',
           favoriteGenres: data.favoriteGenres || [],
           social: {
@@ -280,25 +282,46 @@ export default function UserProfile() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-text-secondary flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" /> Location
-            </Label>
-            <Select
-              value={form.location}
-              onValueChange={(v) => setForm((prev) => ({ ...prev, location: v }))}
-            >
-              <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
-                <SelectValue placeholder="Select your city" />
-              </SelectTrigger>
-              <SelectContent className="bg-black-surface border-dark-gray">
-                {CITIES.map((city) => (
-                  <SelectItem key={city} value={city}>
-                    {city}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-text-secondary flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> Location
+              </Label>
+              <Select
+                value={form.location}
+                onValueChange={(v) => setForm((prev) => ({ ...prev, location: v }))}
+              >
+                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
+                  <SelectValue placeholder="Select your city" />
+                </SelectTrigger>
+                <SelectContent className="bg-black-surface border-dark-gray">
+                  {CITIES.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-text-secondary">Gender</Label>
+              <Select
+                value={form.gender}
+                onValueChange={(v) => setForm((prev) => ({ ...prev, gender: v }))}
+              >
+                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
+                  <SelectValue placeholder="Select your gender" />
+                </SelectTrigger>
+                <SelectContent className="bg-black-surface border-dark-gray">
+                  <SelectItem value="">Prefer not to say</SelectItem>
+                  <SelectItem value="MALE">Male</SelectItem>
+                  <SelectItem value="FEMALE">Female</SelectItem>
+                  <SelectItem value="NON_BINARY">Non-binary</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                  <SelectItem value="PREFER_NOT_TO_SAY">Prefer not to say</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>

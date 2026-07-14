@@ -82,6 +82,7 @@ export default function UserSettings() {
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
+  const [gender, setGender] = useState(user?.gender || '');
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -120,6 +121,7 @@ export default function UserSettings() {
     if (user) {
       setUsername(user.username || '');
       setEmail(user.email || '');
+      setGender(user.gender || '');
     }
   }, [user]);
 
@@ -129,7 +131,7 @@ export default function UserSettings() {
     setIsSavingProfile(true);
 
     try {
-      const res = await api.put('/users/profile', { username, email });
+      const res = await api.put('/users/profile', { username, email, gender });
       if (res.data?.success) {
         setSaved(true);
         toast.success('Profile updated successfully');
@@ -269,6 +271,21 @@ export default function UserSettings() {
               onChange={(e) => setEmail(e.target.value)}
               className="bg-black-surface border-dark-gray text-text-primary"
             />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-text-secondary">Gender</Label>
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              className="w-full h-10 px-3 rounded-md bg-black-surface border border-dark-gray text-text-primary text-sm outline-none focus:border-gold"
+            >
+              <option value="">Prefer not to say</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+              <option value="NON_BINARY">Non-binary</option>
+              <option value="OTHER">Other</option>
+              <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+            </select>
           </div>
 
           {saveError && (

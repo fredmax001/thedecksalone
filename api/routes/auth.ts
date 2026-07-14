@@ -53,6 +53,8 @@ async function generateUsername(email) {
   throw new Error('Unable to generate unique username after retries');
 }
 
+const GENDER_VALUES = ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'] as const;
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
@@ -61,6 +63,7 @@ const registerSchema = z.object({
   username: z.string().optional(),
   phone: z.string().optional(),
   role: z.enum(['USER', 'DJ']).optional(),
+  gender: z.enum(GENDER_VALUES).optional(),
 });
 
 const loginSchema = z.object({
@@ -105,7 +108,7 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { email, password, phone, role } = parsed.data;
+    const { email, password, phone, role, gender } = parsed.data;
     let { username } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -136,8 +139,8 @@ router.post('/register', authLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userRole = role === 'DJ' ? 'DJ' : 'USER';
     const user = await prisma.user.create({
-      data: { email, username, password: hashedPassword, phone: phone || null, role: userRole },
-      select: { id: true, email: true, username: true, role: true, createdAt: true },
+      data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined },
+      select: { id: true, email: true, username: true, role: true, gender: true, createdAt: true },
     });
 
     // Send welcome email and in-app notification asynchronously — don't block the response
@@ -541,6 +544,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         role: true,
         phone: true,
         phoneVerified: true,
+        gender: true,
         createdAt: true,
         notificationPreferences: true,
         privacyPreferences: true,
@@ -559,6 +563,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 const updateProfileSchema = z.object({
   username: z.string().min(3).max(30).optional(),
   email: z.string().email().optional(),
+  gender: z.enum(GENDER_VALUES).optional().or(z.literal('')),
 });
 
 const changePasswordSchema = z.object({
@@ -576,8 +581,12 @@ router.put('/me', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { username, email } = parsed.data;
+    const { username, email, gender } = parsed.data;
     const updateData: any = {};
+
+    if (gender !== undefined) {
+      updateData.gender = gender === '' ? null : gender;
+    }
 
     if (username !== undefined) {
       const normalized = username.toLowerCase();
@@ -603,7 +612,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: updateData,
-      select: { id: true, email: true, username: true, role: true, phone: true, phoneVerified: true, createdAt: true, djProfile: true },
+      select: { id: true, email: true, username: true, role: true, phone: true, phoneVerified: true, gender: true, createdAt: true, djProfile: true },
     });
 
     return res.json({ success: true, data: user });

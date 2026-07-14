@@ -174,7 +174,7 @@ export const canAccessPremiumOpportunities = (
         requiredTier: SubscriptionTier.LEGEND,
         message: hasTier
             ? 'Access exclusive opportunities'
-            : 'Upgrade to Legend for exclusive opportunities',
+            : 'Upgrade to Pro+ for exclusive opportunities',
     };
 };
 
@@ -184,7 +184,7 @@ export const isLegendFeatured = (tier: string | SubscriptionTier): FeatureAccess
         hasAccess: hasTier,
         tier: tier as SubscriptionTier,
         requiredTier: SubscriptionTier.LEGEND,
-        message: hasTier ? 'Featured on homepage' : 'Legend tier only',
+        message: hasTier ? 'Featured on homepage' : 'Pro+ tier only',
     };
 };
 
@@ -194,7 +194,7 @@ export const hasApiAccess = (tier: string | SubscriptionTier): FeatureAccess => 
         hasAccess: hasTier,
         tier: tier as SubscriptionTier,
         requiredTier: SubscriptionTier.LEGEND,
-        message: hasTier ? 'API access enabled' : 'Legend tier only',
+        message: hasTier ? 'API access enabled' : 'Pro+ tier only',
     };
 };
 

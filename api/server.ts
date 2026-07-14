@@ -36,6 +36,7 @@ const opportunityRoutes = require('./routes/opportunities');
 const setRoutes = require('./routes/sets');
 
 const notificationRoutes = require('./routes/notifications');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -100,8 +101,58 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/battles', battleRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
+// Public user profile lookup (must come before the authenticated /api/users mount)
+app.get('/api/users/public/:username', async (req, res) => {
+  try {
+    const username = (req.params.username || '').toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        bio: true,
+        location: true,
+        avatar: true,
+        favoriteGenres: true,
+        role: true,
+        createdAt: true,
+        djProfile: {
+          select: {
+            id: true,
+            stageName: true,
+            bio: true,
+            avatar: true,
+            city: true,
+            country: true,
+            isPublic: true,
+            subscriptionTier: true,
+            verified: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/discover', discoverRoutes);
 app.use('/api/campaigns', campaignRoutes);

@@ -1,6 +1,7 @@
 import { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
@@ -16,6 +17,8 @@ const Rankings = lazy(() => import('./pages/Rankings'));
 const DjProfile = lazy(() => import('./pages/DjProfile'));
 const Booking = lazy(() => import('./pages/Booking'));
 const MixHub = lazy(() => import('./pages/MixHub'));
+const MixDetail = lazy(() => import('./pages/MixDetail'));
+const UserPublicProfile = lazy(() => import('./pages/UserPublicProfile'));
 const Events = lazy(() => import('./pages/Events'));
 const EventDetail = lazy(() => import('./pages/EventDetail'));
 const HallOfFame = lazy(() => import('./pages/HallOfFame'));
@@ -68,11 +71,26 @@ function AuthInitializer() {
   return null;
 }
 
+function VisitTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const payload = {
+      path: location.pathname + location.search,
+      referrer: document.referrer,
+    };
+    api.post('/analytics/visit', payload).catch(() => {});
+  }, [location]);
+
+  return null;
+}
+
 /* ──────────────────────── Router ──────────────────────── */
 export default function App() {
   return (
     <BrowserRouter>
       <AuthInitializer />
+      <VisitTracker />
       <Suspense fallback={<div className="flex h-screen w-full items-center justify-center text-deck-accent"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent"></div></div>}>
         <Routes>
           {/* Auth callback (Google OAuth) */}
@@ -132,6 +150,8 @@ export default function App() {
             <Route path="dj/:identifier" element={<DjProfile />} />
             <Route path="booking" element={<Booking />} />
             <Route path="mixes" element={<MixHub />} />
+            <Route path="mix/:id" element={<MixDetail />} />
+            <Route path="user/:username" element={<UserPublicProfile />} />
             <Route path="events" element={<Events />} />
             <Route path="events/:id" element={<EventDetail />} />
             <Route path="hall-of-fame" element={<HallOfFame />} />

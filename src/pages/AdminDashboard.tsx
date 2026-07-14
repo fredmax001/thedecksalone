@@ -12,7 +12,7 @@ import {
   Menu, Crown, LogOut, Volume2,
   BarChart2, MonitorPlay, AudioLines,
   BadgeCheck, Ban,
-  Loader2, Search, Eye, Trash2, Star,
+  Loader2, Search, Save, Eye, Trash2, Star,
   Settings, Bell, AlertTriangle,
   Music, DollarSign, Calendar,
   Check, X as XIcon,
@@ -40,6 +40,7 @@ import {
   useAdminPayments, useAdminStaff,
   useAdminSystem, useAdminNotifications,
   useAdminSecurityLogs, useAdminSubscriptions,
+  useAdminGeography,
   useAdminAds, useAdminPlatforms,
   useAdminBattles, useCreateBattle, useCloseBattle,
   useVerifyDj, useToggleDjSuspend, useDeleteDj,
@@ -52,6 +53,8 @@ import {
   useAdminProSubscriptionRequests,
   useApproveProSubscriptionRequest,
   useRejectProSubscriptionRequest,
+  useAdminSubscriptionConfig,
+  useUpdateSubscriptionConfig,
   useAdminOpportunities,
 } from '@/hooks/useAdmin';
 import { useQueryClient } from '@tanstack/react-query';
@@ -69,31 +72,34 @@ interface SidebarItem {
   id: AdminSection;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  group: 'Control' | 'Marketplace' | 'Growth' | 'Operations' | 'System';
 }
 
 /* ─────────────────────── Sidebar Navigation ─────────────────────── */
 
 const sidebarItems: SidebarItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'djs', label: 'DJs', icon: Mic },
-  { id: 'rankings', label: 'Rankings', icon: Star },
-  { id: 'mixes', label: 'Mixes', icon: Music },
-  { id: 'bookings', label: 'Bookings', icon: CalendarCheck },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'events', label: 'Events', icon: Calendar },
-  { id: 'battles', label: 'DJ Battles', icon: Trophy },
-  { id: 'revenue', label: 'Revenue', icon: DollarSign },
-  { id: 'analytics', label: 'Analytics', icon: BarChart2 },
-  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { id: 'opportunities', label: 'Opportunities', icon: Plus },
-  { id: 'platforms', label: 'API & Integrations', icon: Server },
-  { id: 'verification', label: 'Verification', icon: BadgeCheck },
-  { id: 'notifications', label: 'Notifications', icon: BellRing },
-  { id: 'security', label: 'Security Logs', icon: Shield },
-  { id: 'ads', label: 'Ads Manager', icon: Megaphone },
-  { id: 'roles', label: 'Roles & Permissions', icon: Crown },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Control' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart2, group: 'Control' },
+  { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Control' },
+  { id: 'djs', label: 'DJs', icon: Mic, group: 'Marketplace' },
+  { id: 'users', label: 'Users', icon: Users, group: 'Marketplace' },
+  { id: 'verification', label: 'Verification', icon: BadgeCheck, group: 'Marketplace' },
+  { id: 'rankings', label: 'Rankings', icon: Star, group: 'Marketplace' },
+  { id: 'mixes', label: 'Mixes', icon: Music, group: 'Marketplace' },
+  { id: 'bookings', label: 'Bookings', icon: CalendarCheck, group: 'Operations' },
+  { id: 'events', label: 'Events', icon: Calendar, group: 'Operations' },
+  { id: 'battles', label: 'DJ Battles', icon: Trophy, group: 'Operations' },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, group: 'Operations' },
+  { id: 'opportunities', label: 'Opportunities', icon: Plus, group: 'Growth' },
+  { id: 'ads', label: 'Ads Manager', icon: Megaphone, group: 'Growth' },
+  { id: 'notifications', label: 'Notifications', icon: BellRing, group: 'Growth' },
+  { id: 'platforms', label: 'API & Integrations', icon: Server, group: 'System' },
+  { id: 'security', label: 'Security Logs', icon: Shield, group: 'System' },
+  { id: 'roles', label: 'Roles & Permissions', icon: Crown, group: 'System' },
+  { id: 'settings', label: 'Settings', icon: Settings, group: 'System' },
 ];
+
+const sidebarGroups = ['Control', 'Marketplace', 'Operations', 'Growth', 'System'] as const;
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -125,7 +131,7 @@ function StatusBadge({ status }: { status: string }) {
     info_requested: { label: 'Info Requested', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
     approved: { label: 'Approved', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
     pro: { label: 'Pro', color: '#D4A24A', bg: 'rgba(212,162,74,0.1)' },
-    legend: { label: 'Legend', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
+    legend: { label: 'Pro+', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
   };
   const s = map[status.toLowerCase()] ?? { label: status, color: '#6B6B6B', bg: 'rgba(107,107,107,0.1)' };
   return (
@@ -159,22 +165,38 @@ function EmptyState({ message }: { message: string }) {
   return <p className="text-sm text-text-muted text-center py-8">{message}</p>;
 }
 
+function formatCompact(value: number) {
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function formatCurrency(value: number) {
+  return `SLE ${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0)}`;
+}
+
 /* ─────────────────────── Section 1: Dashboard ─────────────────────── */
 
 function DashboardSection() {
   const { data: stats, isLoading, error } = useAdminStats();
   const { data: analytics } = useAdminAnalytics();
   const { data: djsData } = useAdminDjs({ limit: 100 });
+  const { data: geography } = useAdminGeography();
 
-  const kpiData = [
-    { label: 'Total DJs', value: stats?.totalDjs || 0, icon: Mic, color: '#D4A24A', trend: 'Active growth' },
-    { label: 'Pending Verifications', value: stats?.pendingVerifications || 0, icon: BadgeCheck, color: '#F97316', trend: 'Needs review' },
-    { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: '#3B82F6', trend: '+4.8% this week' },
-    { label: 'Total Mixes', value: stats?.totalMixes || 0, icon: Music, color: '#8B5CF6', trend: 'Mix stream active' },
-    { label: 'Total Streams', value: stats?.totalStreams || 0, icon: Play, color: '#F97316', trend: 'Plays tracker live' },
-    { label: 'Total Bookings', value: stats?.totalBookings || 0, icon: CalendarCheck, color: '#22C55E', trend: 'Confirmations live' },
-    { label: 'Revenue This Month', value: `SLE ${(stats?.estimatedRevenue || 0).toLocaleString()}`, icon: DollarSign, color: '#D4A24A', trend: 'Subscriptions & fees' },
-    { label: 'Active Events', value: stats?.totalEvents || 0, icon: Calendar, color: '#06B6D4', trend: 'Salone venues active' },
+  const priorityData = [
+    { label: 'Pending Verifications', value: stats?.pendingVerifications || 0, icon: BadgeCheck, color: '#F97316', detail: 'DJ profiles waiting for review' },
+    { label: 'Pending Bookings', value: stats?.pendingBookings || 0, icon: CalendarCheck, color: '#3B82F6', detail: 'Booking requests needing attention' },
+    { label: 'Monthly Revenue', value: formatCurrency(stats?.estimatedRevenue || 0), icon: DollarSign, color: '#22C55E', detail: 'Payments and subscriptions' },
+    { label: 'Visits Today', value: formatCompact(stats?.totalVisitsToday || 0), icon: Globe, color: '#EC4899', detail: `${formatCompact(stats?.uniqueVisitorsToday || 0)} unique visitors` },
+  ];
+
+  const healthData = [
+    { label: 'DJs', value: formatCompact(stats?.totalDjs || 0), icon: Mic, color: '#D4A24A' },
+    { label: 'Users', value: formatCompact(stats?.totalUsers || 0), icon: Users, color: '#3B82F6' },
+    { label: 'Mixes', value: formatCompact(stats?.totalMixes || 0), icon: Music, color: '#8B5CF6' },
+    { label: 'Streams', value: formatCompact(stats?.totalStreams || 0), icon: Play, color: '#F97316' },
+    { label: 'Bookings', value: formatCompact(stats?.totalBookings || 0), icon: CalendarCheck, color: '#22C55E' },
+    { label: 'Events', value: formatCompact(stats?.totalEvents || 0), icon: Calendar, color: '#06B6D4' },
+    { label: 'Monthly Visits', value: formatCompact(stats?.totalVisitsMonth || 0), icon: Globe, color: '#EC4899' },
+    { label: 'Battles', value: formatCompact(stats?.activeBattles || 0), icon: Trophy, color: '#D4A24A' },
   ];
 
   const mixesData = useMemo(() => {
@@ -197,12 +219,10 @@ function DashboardSection() {
     return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
   }, [analytics]);
 
-  const topCities = useMemo(() => {
-    if (!djsData?.data) return [];
-    const counts: Record<string, number> = {};
-    djsData.data.forEach((dj: any) => { counts[dj.city || 'Unknown'] = (counts[dj.city || 'Unknown'] || 0) + 1; });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [djsData]);
+  const visitsData = useMemo(() => {
+    if (!analytics || analytics.length === 0) return [];
+    return analytics.map((a: any) => ({ month: a.month, visits: a.visits || 0 }));
+  }, [analytics]);
 
   const topGenres = useMemo(() => {
     if (!djsData?.data) return [];
@@ -223,27 +243,51 @@ function DashboardSection() {
   );
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
-        {kpiData.map((kpi, i) => (
+    <div className="space-y-7">
+      <div className="rounded-2xl border border-white/10 bg-[#101010] p-5 md:p-6 overflow-hidden relative">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D4A24A]/60 to-transparent" />
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_1.9fr] xl:items-end">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#D4A24A]">Admin command center</p>
+            <h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-tight text-text-primary">Deck Salone operations</h2>
+            <p className="mt-2 max-w-2xl text-sm text-text-muted">
+              Live health, revenue, verification, bookings, content and growth signals in one place.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {priorityData.map((kpi) => (
+              <div key={kpi.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">{kpi.label}</p>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${kpi.color}1A` }}>
+                    <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
+                  </div>
+                </div>
+                <p className="mt-3 font-mono text-2xl font-bold text-text-primary">{kpi.value}</p>
+                <p className="mt-1 text-xs text-text-muted">{kpi.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        {healthData.map((kpi, i) => (
           <motion.div
             key={kpi.label}
-            className="rounded-2xl p-4 border border-white/5 hover:border-gold/20 hover:shadow-[0_0_15px_rgba(212,162,74,0.04)] transition-all duration-300"
+            className="rounded-xl p-4 border border-white/10 hover:border-gold/30 transition-all duration-300"
             style={{ background: 'var(--bg-card)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, duration: 0.4 }}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-wider text-text-muted font-bold truncate">{kpi.label}</p>
-                <p className="font-mono text-xl font-bold text-text-primary mt-1.5 truncate">{kpi.value}</p>
-                <p className="text-[9px] text-[#D4A24A]/80 font-medium mt-1 truncate">{kpi.trend}</p>
-              </div>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${kpi.color}1A` }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${kpi.color}1A` }}>
                 <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
               </div>
+              <p className="font-mono text-xl font-bold text-text-primary truncate">{kpi.value}</p>
             </div>
+            <p className="mt-3 text-[10px] uppercase tracking-wider text-text-muted font-bold truncate">{kpi.label}</p>
           </motion.div>
         ))}
       </div>
@@ -322,18 +366,36 @@ function DashboardSection() {
             <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
           )}
         </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.475 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Site Visits</p>
+          {visitsData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={visitsData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="visits" stroke="#EC4899" fill="rgba(236,72,153,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Visitor Countries</p>
           <div className="space-y-3">
-            {topCities.length > 0 ? topCities.map(([city, count]) => (
-              <div key={city} className="flex items-center justify-between text-sm">
-                <span className="text-text-primary">{city}</span>
-                <span className="font-mono text-text-muted">{count} DJs</span>
+            {geography?.countries && geography.countries.length > 0 ? geography.countries.map((c) => (
+              <div key={c.name || 'Unknown'} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{c.name || 'Unknown'}</span>
+                <span className="font-mono text-text-muted">{c.visits} visits</span>
               </div>
-            )) : <EmptyState message="No city data available." />}
+            )) : <EmptyState message="No visitor geography data available." />}
           </div>
         </motion.div>
 
@@ -357,18 +419,21 @@ function DashboardSection() {
 
 function DJsSection() {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [verificationFilter, setVerificationFilter] = useState<string>('all');
   const navigate = useNavigate();
-  const { data, isLoading, error } = useAdminDjs({ limit: 50 });
+  const { data, isLoading, error } = useAdminDjs({
+    search,
+    status: statusFilter !== 'all' ? statusFilter.toUpperCase() : undefined,
+    verified: verificationFilter !== 'all' ? verificationFilter === 'verified' : undefined,
+    limit: 50,
+  });
   const verifyMutation = useVerifyDj();
   const suspendMutation = useToggleDjSuspend();
   const deleteMutation = useDeleteDj();
   const queryClient = useQueryClient();
 
   const djs = data?.data || [];
-  const filtered = useMemo(() => {
-    if (!search) return djs;
-    return djs.filter((d: any) => d.stageName?.toLowerCase().includes(search.toLowerCase()));
-  }, [djs, search]);
 
   const handleVerify = (id: string) => {
     verifyMutation.mutate({ id }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminDjs'] }) });
@@ -388,7 +453,7 @@ function DJsSection() {
     <div className="space-y-6">
       <SectionHeader title="DJ Management" subtitle="Manage DJs, verifications, and suspensions" />
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
@@ -399,6 +464,24 @@ function DJsSection() {
             className="w-full pl-10 pr-4 py-2 bg-[#111111] border border-white/5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
           />
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 text-xs rounded-lg bg-[#111111] text-text-primary border border-white/5 focus:outline-none"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+        </select>
+        <select
+          value={verificationFilter}
+          onChange={(e) => setVerificationFilter(e.target.value)}
+          className="px-3 py-2 text-xs rounded-lg bg-[#111111] text-text-primary border border-white/5 focus:outline-none"
+        >
+          <option value="all">All Verification</option>
+          <option value="verified">Verified</option>
+          <option value="pending">Pending</option>
+        </select>
       </div>
 
       {isLoading && <LoadingCenter />}
@@ -429,7 +512,7 @@ function DJsSection() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((dj: any) => (
+              {djs.map((dj: any) => (
                 <tr key={dj.id} className="border-b border-white/5 text-sm">
                   <td className="p-4">
                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
@@ -444,7 +527,7 @@ function DJsSection() {
                   <td className="p-4 font-mono text-text-primary">{(dj.totalFollowers || 0).toLocaleString()}</td>
                   <td className="p-4 font-mono text-text-primary">{dj.totalMixes || 0}</td>
                   <td className="p-4 font-mono text-text-primary">{dj.totalBookings || 0}</td>
-                  <td className="p-4"><StatusBadge status={!dj.isPublic ? 'suspended' : 'active'} /></td>
+                  <td className="p-4"><StatusBadge status={dj.status?.toLowerCase() || 'active'} /></td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => navigate(`/dj/${dj.id}`)} className="p-2 rounded-lg bg-white/5 text-text-muted hover:bg-white/10" title="View"><Eye className="w-3.5 h-3.5" /></button>
@@ -459,7 +542,7 @@ function DJsSection() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && <EmptyState message="No DJs found." />}
+          {djs.length === 0 && <EmptyState message="No DJs found." />}
         </div>
       )}
     </div>
@@ -892,25 +975,75 @@ function UsersSection() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const { data, isLoading, error } = useAdminUsers({ limit: 50 });
+  const { data, isLoading, error } = useAdminUsers({
+    role: roleFilter !== 'all' ? roleFilter : undefined,
+    limit: 50,
+  });
   const updateRoleMutation = useUpdateUserRole();
   const updateStatusMutation = useUpdateUserStatus();
   const queryClient = useQueryClient();
 
   const users = data?.data || [];
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, string>>({});
+  const [statusDrafts, setStatusDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setRoleDrafts((prev) => {
+      const next = { ...prev };
+      users.forEach((u: any) => {
+        if (!(u.id in next)) next[u.id] = u.role;
+      });
+      return next;
+    });
+    setStatusDrafts((prev) => {
+      const next = { ...prev };
+      users.forEach((u: any) => {
+        if (!(u.id in next)) next[u.id] = u.status;
+      });
+      return next;
+    });
+  }, [users]);
+
   const filtered = useMemo(() => {
     let result = users;
     if (search) result = result.filter((u: any) => u.email?.toLowerCase().includes(search.toLowerCase()) || u.djProfile?.stageName?.toLowerCase().includes(search.toLowerCase()));
-    if (roleFilter !== 'all') result = result.filter((u: any) => u.role?.toLowerCase() === roleFilter.toLowerCase());
     return result;
-  }, [users, search, roleFilter]);
+  }, [users, search]);
 
-  const handleChangeRole = (id: string, role: string) => {
-    updateRoleMutation.mutate({ id, role }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }) });
+  const handleSaveRole = (id: string) => {
+    const role = roleDrafts[id];
+    const current = users.find((u: any) => u.id === id)?.role;
+    if (!role || role === current) return;
+    updateRoleMutation.mutate(
+      { id, role },
+      {
+        onSuccess: () => {
+          toast.success('Role saved');
+          queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.error || 'Failed to save role');
+        },
+      }
+    );
   };
 
-  const handleChangeStatus = (id: string, status: string) => {
-    updateStatusMutation.mutate({ id, status }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }) });
+  const handleSaveStatus = (id: string) => {
+    const status = statusDrafts[id];
+    const current = users.find((u: any) => u.id === id)?.status;
+    if (!status || status === current) return;
+    updateStatusMutation.mutate(
+      { id, status },
+      {
+        onSuccess: () => {
+          toast.success('Status saved');
+          queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.error || 'Failed to save status');
+        },
+      }
+    );
   };
 
   return (
@@ -972,28 +1105,52 @@ function UsersSection() {
                   <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
                   <td className="p-4"><StatusBadge status={u.status?.toLowerCase() || 'active'} /></td>
                   <td className="p-4">
-                    <div className="flex items-center justify-end gap-1">
-                      <select
-                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
-                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
-                      >
-                        <option value="">Change Role</option>
-                        <option value="USER">User</option>
-                        <option value="DJ">DJ</option>
-                        <option value="ADMIN">Admin</option>
-                        <option value="MODERATOR">Moderator</option>
-                        <option value="FINANCE_ADMIN">Finance Admin</option>
-                        <option value="VERIFICATION_ADMIN">Verification Admin</option>
-                      </select>
-                      <select
-                        onChange={(e) => handleChangeStatus(u.id, e.target.value)}
-                        className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
-                      >
-                        <option value="">Change Status</option>
-                        <option value="ACTIVE">Active</option>
-                        <option value="SUSPENDED">Suspended</option>
-                        <option value="BANNED">Banned</option>
-                      </select>
+                    <div className="flex items-center justify-end gap-1 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={roleDrafts[u.id] ?? u.role}
+                          onChange={(e) => setRoleDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
+                        >
+                          <option value="USER">User</option>
+                          <option value="DJ">DJ</option>
+                          <option value="ADMIN">Admin</option>
+                          <option value="MODERATOR">Moderator</option>
+                          <option value="FINANCE_ADMIN">Finance Admin</option>
+                          <option value="VERIFICATION_ADMIN">Verification Admin</option>
+                        </select>
+                        {roleDrafts[u.id] && roleDrafts[u.id] !== u.role && (
+                          <button
+                            onClick={() => handleSaveRole(u.id)}
+                            disabled={updateRoleMutation.isPending}
+                            className="px-2 py-1.5 text-xs rounded-lg bg-[#D4A24A] text-black font-semibold hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+                            title="Save role"
+                          >
+                            <Save className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={statusDrafts[u.id] ?? u.status}
+                          onChange={(e) => setStatusDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary border border-white/5 focus:outline-none"
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="SUSPENDED">Suspended</option>
+                          <option value="BANNED">Banned</option>
+                        </select>
+                        {statusDrafts[u.id] && statusDrafts[u.id] !== u.status && (
+                          <button
+                            onClick={() => handleSaveStatus(u.id)}
+                            disabled={updateStatusMutation.isPending}
+                            className="px-2 py-1.5 text-xs rounded-lg bg-[#D4A24A] text-black font-semibold hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+                            title="Save status"
+                          >
+                            <Save className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                       <button
                         onClick={() => u.djProfile?.id ? navigate(`/dj/${u.djProfile.id}`) : alert('No DJ profile for this user')}
                         className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1"
@@ -1366,15 +1523,16 @@ function AnalyticsSection() {
   const { data: rankingsData } = useAdminRankings();
   const { data: djsData } = useAdminDjs({ limit: 100 });
   const { data: platformsData } = useAdminPlatforms();
+  const { data: geography } = useAdminGeography();
 
   const streamData = useMemo(() => {
     if (!analytics || analytics.length === 0) return [];
     return analytics.map((a: any) => ({ month: a.month, revenue: a.revenue || 0 }));
   }, [analytics]);
 
-  const mauData = useMemo(() => {
+  const visitsData = useMemo(() => {
     if (!analytics || analytics.length === 0) return [];
-    return analytics.map((a: any) => ({ month: a.month, users: a.djs || 0 }));
+    return analytics.map((a: any) => ({ month: a.month, visits: a.visits || 0 }));
   }, [analytics]);
 
   const topDjsByStreams = useMemo(() => {
@@ -1393,13 +1551,6 @@ function AnalyticsSection() {
     djsData.data.forEach((dj: any) => {
       (dj.genres || []).forEach((g: string) => { counts[g] = (counts[g] || 0) + 1; });
     });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [djsData]);
-
-  const countryCounts = useMemo(() => {
-    if (!djsData?.data) return [];
-    const counts: Record<string, number> = {};
-    djsData.data.forEach((dj: any) => { counts[dj.city || 'Unknown'] = (counts[dj.city || 'Unknown'] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [djsData]);
 
@@ -1446,16 +1597,16 @@ function AnalyticsSection() {
         </motion.div>
 
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">New DJs per Month</p>
-          {mauData.length > 0 ? (
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Monthly Site Visits</p>
+          {visitsData.length > 0 ? (
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mauData}>
+                <AreaChart data={visitsData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                  <Bar dataKey="users" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Area type="monotone" dataKey="visits" stroke="#EC4899" fill="rgba(236,72,153,0.1)" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
@@ -1504,14 +1655,14 @@ function AnalyticsSection() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Cities</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Top Visitor Cities</p>
           <div className="space-y-3">
-            {countryCounts.length > 0 ? countryCounts.map(([city, count]) => (
-              <div key={city} className="flex items-center justify-between text-sm">
-                <span className="text-text-primary">{city}</span>
-                <span className="font-mono text-text-muted">{count} DJs</span>
+            {geography?.cities && geography.cities.length > 0 ? geography.cities.map((c) => (
+              <div key={c.name || 'Unknown'} className="flex items-center justify-between text-sm">
+                <span className="text-text-primary">{c.name || 'Unknown'}</span>
+                <span className="font-mono text-text-muted">{c.visits} visits</span>
               </div>
-            )) : <EmptyState message="No city data available." />}
+            )) : <EmptyState message="No visitor geography data available." />}
           </div>
         </motion.div>
 
@@ -1991,7 +2142,7 @@ function SubscriptionsSection() {
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">{subs?.plans?.[1]?.users || 0}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
-          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Legend DJs</p>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pro+ DJs</p>
           <p className="font-mono text-2xl font-bold text-text-primary mt-2">{subs?.plans?.[2]?.users || 0}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
@@ -2545,6 +2696,152 @@ function RolesSection() {
   );
 }
 
+/* ─────────────────────── Section 16.5: Subscription Payment Settings ─────────────────────── */
+
+function SubscriptionPaymentSettings() {
+  const { data: config, isLoading } = useAdminSubscriptionConfig();
+  const updateConfig = useUpdateSubscriptionConfig();
+
+  const [paymentNumber, setPaymentNumber] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [proPrice, setProPrice] = useState('');
+  const [legendPrice, setLegendPrice] = useState('');
+  const [currency, setCurrency] = useState('');
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setPaymentNumber(config.paymentNumber || '');
+      setWhatsappNumber(config.whatsappNumber || config.paymentNumber || '');
+      setProPrice(String(config.proPrice ?? ''));
+      setLegendPrice(String(config.legendPrice ?? ''));
+      setCurrency(config.currency || '');
+      setDirty(false);
+    }
+  }, [config]);
+
+  const handleSave = async () => {
+    const pro = Number(proPrice);
+    const legend = Number(legendPrice);
+    if (!paymentNumber.trim() || !currency.trim() || !Number.isFinite(pro) || !Number.isFinite(legend)) {
+      toast.error('Please fill in valid payment settings.');
+      return;
+    }
+    try {
+      await updateConfig.mutateAsync({
+        paymentNumber: paymentNumber.trim(),
+        whatsappNumber: whatsappNumber.trim() || paymentNumber.trim(),
+        proPrice: pro,
+        legendPrice: legend,
+        currency: currency.trim(),
+      });
+      toast.success('Payment settings saved.');
+      setDirty(false);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Failed to save payment settings.');
+    }
+  };
+
+  if (isLoading || !config) {
+    return (
+      <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Subscription Payment Settings</p>
+        <div className="flex items-center gap-2 text-text-muted text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading configuration...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Subscription Payment Settings</p>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Payment Number</label>
+          <input
+            type="text"
+            value={paymentNumber}
+            onChange={(e) => { setPaymentNumber(e.target.value); setDirty(true); }}
+            className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+          />
+          <p className="text-[10px] text-text-muted mt-1">Manual payment number shown to DJs subscribing to Pro / Pro+.</p>
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">WhatsApp Number</label>
+          <input
+            type="text"
+            value={whatsappNumber}
+            onChange={(e) => { setWhatsappNumber(e.target.value); setDirty(true); }}
+            className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+          />
+          <p className="text-[10px] text-text-muted mt-1">Used for the &ldquo;Confirm via WhatsApp&rdquo; link.</p>
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Currency</label>
+          <input
+            type="text"
+            value={currency}
+            onChange={(e) => { setCurrency(e.target.value); setDirty(true); }}
+            className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Pro Price</label>
+          <input
+            type="number"
+            min={0}
+            value={proPrice}
+            onChange={(e) => { setProPrice(e.target.value); setDirty(true); }}
+            className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Pro+ Price</label>
+          <input
+            type="number"
+            min={0}
+            value={legendPrice}
+            onChange={(e) => { setLegendPrice(e.target.value); setDirty(true); }}
+            className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+          />
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-3">
+        {dirty && (
+          <button
+            type="button"
+            onClick={() => {
+              if (config) {
+                setPaymentNumber(config.paymentNumber || '');
+                setWhatsappNumber(config.whatsappNumber || config.paymentNumber || '');
+                setProPrice(String(config.proPrice ?? ''));
+                setLegendPrice(String(config.legendPrice ?? ''));
+                setCurrency(config.currency || '');
+                setDirty(false);
+              }
+            }}
+            disabled={updateConfig.isPending}
+            className="px-4 py-2 rounded-lg text-sm border border-white/10 text-text-muted hover:text-text-primary disabled:opacity-50"
+          >
+            Reset
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || updateConfig.isPending}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-black bg-[#D4A24A] hover:bg-[#c79545] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {updateConfig.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save Changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────── Section 17: Settings ─────────────────────── */
 
 function SettingsSection() {
@@ -2593,23 +2890,7 @@ function SettingsSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Payment Settings</p>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-text-muted mb-1">Currency</label>
-              <input type="text" disabled value="SLE" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
-            </div>
-            <div>
-              <label className="block text-xs text-text-muted mb-1">Booking Commission %</label>
-              <input type="text" disabled value="15%" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50" />
-            </div>
-            <div>
-              <label className="block text-xs text-text-muted mb-1">Platform Fee</label>
-              <input type="text" disabled placeholder="0" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary disabled:opacity-50 placeholder:text-text-muted" />
-            </div>
-          </div>
-        </div>
+        <SubscriptionPaymentSettings />
 
         <div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Ranking Weights</p>
@@ -2662,13 +2943,21 @@ function SettingsSection() {
 export default function AdminDashboard() {
   const [section, setSection] = useState<AdminSection>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' ? true : window.innerWidth >= 1024);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [bellOpen, setBellOpen] = useState(false);
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const sectionComponents: Record<AdminSection, React.ReactNode> = {
@@ -2694,63 +2983,77 @@ export default function AdminDashboard() {
   };
 
   const currentLabel = sidebarItems.find((i) => i.id === section)?.label || 'Dashboard';
+  const currentSection = sidebarItems.find((i) => i.id === section);
+  const adminName = user?.username || user?.email?.split('@')[0] || 'Admin';
 
   return (
-    <div className="min-h-screen flex theme-bg" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen flex bg-[#080808] text-text-primary" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* ──────────────── SIDEBAR ──────────────── */}
       <motion.aside
-        className="fixed top-0 left-0 h-screen z-50 flex flex-col border-r theme-border-card transition-all duration-300 theme-bg-elevated"
-        style={{ width: sidebarCollapsed ? 72 : 260 }}
-        animate={{ width: sidebarCollapsed ? 72 : 260 }}
+        className="fixed top-0 left-0 h-screen z-50 hidden lg:flex flex-col border-r border-white/10 bg-[#0C0C0C]"
+        style={{ width: sidebarCollapsed ? 80 : 288 }}
+        animate={{ width: sidebarCollapsed ? 80 : 288 }}
       >
         {/* Logo */}
-        <div className="px-4 py-5 border-b theme-border-card flex-shrink-0">
+        <div className="px-4 py-5 border-b border-white/10 flex-shrink-0">
           {!sidebarCollapsed ? (
-            <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain" />
-              <div>
-                <p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide">Sound It</p>
-                <p className="text-[9px] text-text-muted uppercase tracking-widest">Admin Console</p>
+            <a href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+              <div className="h-10 w-10 rounded-xl border border-[#D4A24A]/25 bg-[#D4A24A]/10 flex items-center justify-center overflow-hidden">
+                <img src="/logo.png" alt="Deck Salone" className="h-8 w-auto object-contain" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide truncate">Deck Salone</p>
+                <p className="text-[10px] text-text-muted uppercase tracking-[0.22em]">Admin Console</p>
               </div>
             </a>
           ) : (
-            <a href="/" className="hover:opacity-80 transition-opacity block">
-              <img src="/logo.png" alt="Sound It" className="h-8 w-auto object-contain mx-auto" />
+            <a href="/" className="hover:opacity-80 transition-opacity flex justify-center">
+              <img src="/logo.png" alt="Deck Salone" className="h-8 w-auto object-contain" />
             </a>
           )}
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {sidebarItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSection(item.id)}
-              title={sidebarCollapsed ? item.label : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-left transition-all ${section === item.id
-                  ? 'bg-[rgba(212,162,74,0.1)] text-[#D4A24A] border border-[rgba(212,162,74,0.2)]'
-                  : 'text-text-muted hover:bg-white/5 border border-transparent'
-                }`}
-            >
-              <item.icon className={`w-4 h-4 flex-shrink-0 ${section === item.id ? 'text-[#D4A24A]' : ''}`} />
-              {!sidebarCollapsed && <span className="text-xs font-semibold truncate">{item.label}</span>}
-            </button>
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+          {sidebarGroups.map((group) => (
+            <div key={group}>
+              {!sidebarCollapsed && (
+                <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-text-muted">{group}</p>
+              )}
+              <div className="space-y-1">
+                {sidebarItems.filter((item) => item.group === group).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setSection(item.id)}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${section === item.id
+                        ? 'bg-[#D4A24A] text-black shadow-[0_12px_28px_rgba(212,162,74,0.16)]'
+                        : 'text-text-muted hover:text-text-primary hover:bg-white/[0.06]'
+                      }`}
+                  >
+                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    {!sidebarCollapsed && <span className="text-sm font-semibold truncate">{item.label}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
         {/* Bottom */}
-        <div className="border-t theme-border-card p-3 flex-shrink-0">
+        <div className="border-t border-white/10 p-4 flex-shrink-0">
           {sidebarCollapsed ? (
             <button onClick={() => setSidebarCollapsed(false)} className="w-full flex justify-center p-2 rounded-lg text-text-muted hover:bg-white/5">
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[rgba(212,162,74,0.2)] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-[rgba(212,162,74,0.14)] border border-[#D4A24A]/20 flex items-center justify-center">
                 <Crown className="w-4 h-4 text-[#D4A24A]" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-text-primary truncate">Super Admin</p>
+                <p className="text-sm font-semibold text-text-primary truncate">{adminName}</p>
+                <p className="text-[10px] text-text-muted uppercase tracking-wider">Super Admin</p>
               </div>
               <button onClick={logout} className="p-1.5 text-text-muted hover:text-red-400 transition-colors" title="Logout">
                 <LogOut className="w-3.5 h-3.5" />
@@ -2763,21 +3066,38 @@ export default function AdminDashboard() {
       {/* ──────────────── MAIN CONTENT ──────────────── */}
       <main
         className="flex-1 flex flex-col min-h-screen overflow-hidden"
-        style={{ marginLeft: sidebarCollapsed ? 72 : 260, transition: 'margin-left 0.25s' }}
+        style={{ marginLeft: isDesktop ? (sidebarCollapsed ? 80 : 288) : 0, transition: 'margin-left 0.25s' }}
       >
         {/* Header */}
-        <header className="sticky top-0 z-40 border-b theme-border-card px-6 py-3 flex items-center justify-between glass-nav">
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#080808]/90 backdrop-blur-xl px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarCollapsed((c) => !c)} className="p-2 rounded-lg text-text-muted hover:bg-white/5">
+            <button onClick={() => setSidebarCollapsed((c) => !c)} className="hidden lg:flex p-2 rounded-lg text-text-muted hover:bg-white/5">
               <Menu className="w-4 h-4" />
             </button>
+            <select
+              value={section}
+              onChange={(event) => setSection(event.target.value as AdminSection)}
+              className="lg:hidden max-w-[150px] rounded-lg border border-white/10 bg-[#111111] px-3 py-2 text-xs font-semibold text-text-primary focus:outline-none focus:border-[#D4A24A]/50"
+              aria-label="Admin section"
+            >
+              {sidebarItems.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </select>
+            {currentSection && (
+              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
+                <currentSection.icon className="w-5 h-5 text-[#D4A24A]" />
+              </div>
+            )}
             <div>
-              <h1 className="font-display text-base font-bold uppercase tracking-wide text-text-primary">{currentLabel}</h1>
-              <p className="text-[10px] text-text-muted font-mono">{currentTime.toLocaleDateString('en-GB')}</p>
+              <h1 className="font-display text-lg font-bold uppercase tracking-wide text-text-primary">{currentLabel}</h1>
+              <p className="text-xs text-text-muted">
+                {currentTime.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 rounded-lg text-text-muted hover:bg-white/5">
+            <button className="hidden sm:flex p-2 rounded-lg text-text-muted hover:bg-white/5">
               <Search className="w-4 h-4" />
             </button>
             <ThemeToggle />
@@ -2799,10 +3119,11 @@ export default function AdminDashboard() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 xl:px-8 py-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={section}
+              className="mx-auto w-full max-w-[1600px]"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
@@ -2953,4 +3274,3 @@ function OpportunitiesSection() {
     </div>
   );
 }
-

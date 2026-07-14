@@ -38,6 +38,15 @@ const GENRES = [
   'Salone Mix', 'Club Mix', 'Throwback', 'Reggae', 'R&B',
 ] as const;
 
+const GENDER_OPTIONS = [
+  { value: '', label: 'Select gender' },
+  { value: 'MALE', label: 'Male' },
+  { value: 'FEMALE', label: 'Female' },
+  { value: 'NON_BINARY', label: 'Non-binary' },
+  { value: 'OTHER', label: 'Other' },
+  { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say' },
+] as const;
+
 const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const googleLoginUrl = `${API_URL.replace('/api', '')}/api/v1/auth/google`;
@@ -58,6 +67,7 @@ const djStep1Schema = z.object({
   stageName: z.string().min(2, 'Stage name must be at least 2 characters'),
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   phone: z.string().optional(),
+  gender: z.string().optional(),
   terms: z.literal(true),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords don't match",
@@ -83,6 +93,7 @@ const userSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
   phone: z.string().optional(),
+  gender: z.string().optional(),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
@@ -179,7 +190,7 @@ export default function Register() {
       setError(null);
       const step1 = watchDj1();
 
-      const result = await register(step1.email, step1.password, 'DJ', step1.phone);
+      const result = await register(step1.email, step1.password, 'DJ', step1.phone, step1.gender);
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -216,7 +227,7 @@ export default function Register() {
       setIsSubmitting(true);
       setError(null);
 
-      const result = await register(data.email, data.password, 'USER', data.phone);
+      const result = await register(data.email, data.password, 'USER', data.phone, data.gender);
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -476,6 +487,24 @@ export default function Register() {
               </div>
             </motion.div>
 
+            {/* Gender */}
+            <motion.div variants={fadeUpItem} initial="hidden" animate="show">
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Gender <span className="text-text-muted font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <Users className={iconCls} />
+                <select
+                  {...regUser('gender')}
+                  className="w-full h-[48px] bg-black-surface border border-medium-gray rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,162,74,0.1)] appearance-none"
+                >
+                  {GENDER_OPTIONS.map((g) => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+            </motion.div>
+
             {/* Password */}
             <motion.div variants={fadeUpItem} initial="hidden" animate="show">
               <label className="block text-sm font-medium text-text-primary mb-1.5">Password</label>
@@ -711,6 +740,24 @@ export default function Register() {
                     {...regDj1('phone')}
                     className="w-full h-[48px] bg-black-surface border border-medium-gray rounded-lg pl-11 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,162,74,0.1)]"
                   />
+                </div>
+              </motion.div>
+
+              {/* Gender */}
+              <motion.div variants={fadeUpItem} initial="hidden" animate="show">
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Gender <span className="text-text-muted font-normal">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Users className={iconCls} />
+                  <select
+                    {...regDj1('gender')}
+                    className="w-full h-[48px] bg-black-surface border border-medium-gray rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(212,162,74,0.1)] appearance-none"
+                  >
+                    {GENDER_OPTIONS.map((g) => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
                 </div>
               </motion.div>
 

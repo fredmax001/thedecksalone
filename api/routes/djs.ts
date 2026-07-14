@@ -508,6 +508,7 @@ router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
         userId: req.user.id,
         avatar: avatarUrl,
         coverBanner: coverUrl,
+        isPublic: true,
       },
     });
 

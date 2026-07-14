@@ -19,6 +19,7 @@ import {
 import FadeIn from '@/components/FadeIn';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { imageFallback } from '@/lib/utils';
+import ShareButton from '@/components/ShareButton';
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -179,9 +180,11 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
         </div>
 
         {/* Name */}
-        <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5">
-          {dj.stageName}
-        </h3>
+        <Link to={`/dj/${dj.username || dj.id}`}>
+          <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5 hover:text-gold transition-colors">
+            {dj.stageName}
+          </h3>
+        </Link>
 
         {/* City */}
         <div className="flex items-center gap-1 mt-1 mb-3">
@@ -221,13 +224,19 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
           <span className="font-mono text-xs font-semibold text-gold">{formatPrice(dj)}</span>
         </div>
 
-        {/* View Profile */}
-        <Link
-          to={`/dj/${dj.username || dj.id}`}
-          className="block mt-3 text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
-        >
-          View Profile
-        </Link>
+        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
+          <Link
+            to={`/dj/${dj.username || dj.id}`}
+            className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
+          >
+            View Profile
+          </Link>
+          <ShareButton
+            url={`${window.location.origin}/dj/${dj.username || dj.id}`}
+            title={`Check out ${dj.stageName} on The Deck Salone`}
+            size="sm"
+          />
+        </div>
       </div>
     </motion.div>
   );
@@ -718,7 +727,7 @@ export default function Discover() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
               >
                 <AnimatePresence>
                   {displayedDjs.map((dj, i) => (

@@ -86,6 +86,7 @@ export default function SettingsPage() {
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
+  const [gender, setGender] = useState(user?.gender || '');
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -124,6 +125,7 @@ export default function SettingsPage() {
     if (user) {
       setUsername(user.username || '');
       setEmail(user.email || '');
+      setGender(user.gender || '');
     }
   }, [user]);
 
@@ -133,7 +135,7 @@ export default function SettingsPage() {
     setIsSavingProfile(true);
 
     try {
-      const res = await api.put('/auth/me', { username, email });
+      const res = await api.put('/auth/me', { username, email, gender });
       if (res.data.success) {
         setSaved(true);
         fetchMe();
@@ -308,6 +310,21 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+              </div>
+              <div>
+                <Label className="text-text-secondary mb-2 block">Gender</Label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md bg-black-elevated border border-dark-gray text-text-primary text-sm outline-none focus:border-gold"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="NON_BINARY">Non-binary</option>
+                  <option value="OTHER">Other</option>
+                  <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+                </select>
               </div>
               {saveError && (
                 <p className="text-xs text-red">{saveError}</p>

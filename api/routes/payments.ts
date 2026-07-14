@@ -4,19 +4,9 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadDocument } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { getSubscriptionConfig } = require('../utils/subscriptionConfig');
 
 const router = express.Router();
-
-const PLATFORM_PAYMENT_NUMBER = process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156';
-const PLATFORM_WHATSAPP_NUMBER = process.env.PLATFORM_WHATSAPP_NUMBER || PLATFORM_PAYMENT_NUMBER;
-const configuredProPrice = Number(process.env.PRO_SUBSCRIPTION_PRICE);
-const PRO_SUBSCRIPTION_PRICE = Number.isFinite(configuredProPrice) && configuredProPrice > 0 ? configuredProPrice : 250;
-const configuredLegendPrice = Number(process.env.LEGEND_SUBSCRIPTION_PRICE);
-const LEGEND_SUBSCRIPTION_PRICE = Number.isFinite(configuredLegendPrice) && configuredLegendPrice > 0 ? configuredLegendPrice : 750;
-const SUBSCRIPTION_PLANS = {
-  pro: { id: 'pro', name: 'Pro', price: PRO_SUBSCRIPTION_PRICE },
-  legend: { id: 'legend', name: 'Legend', price: LEGEND_SUBSCRIPTION_PRICE },
-};
 
 const paymentSchema = z.object({
   bookingId: z.string(),
@@ -49,18 +39,12 @@ function extFromMime(mimetype: string, fallbackName = '') {
 
 // GET /api/payments/pro-subscription/config - Manual Orange Money instructions
 router.get('/pro-subscription/config', authMiddleware, async (_req, res) => {
-  return res.json({
-    success: true,
-    data: {
-      paymentMethod: 'Orange Money',
-      paymentNumber: PLATFORM_PAYMENT_NUMBER,
-      whatsappNumber: PLATFORM_WHATSAPP_NUMBER,
-      proPrice: PRO_SUBSCRIPTION_PRICE,
-      legendPrice: LEGEND_SUBSCRIPTION_PRICE,
-      currency: 'SLE',
-      plans: Object.values(SUBSCRIPTION_PLANS),
-    },
-  });
+  try {
+    const config = await getSubscriptionConfig();
+    return res.json({ success: true, data: config });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // GET /api/payments/pro-subscription/current - Current DJ pro status and latest request
@@ -122,9 +106,11 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     const requestedPlan = parsed.data.plan;
     const activePlan = dj.subscriptionTier || (dj.isPro ? 'pro' : 'free');
+    const config = await getSubscriptionConfig();
+    const plan = config.plans.find((p: any) => p.id === requestedPlan);
 
     if (activePlan === requestedPlan) {
-      return res.status(400).json({ success: false, error: `Your ${SUBSCRIPTION_PLANS[requestedPlan].name} subscription is already active` });
+      return res.status(400).json({ success: false, error: `Your ${plan?.name || requestedPlan} subscription is already active` });
     }
 
     const proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
@@ -139,10 +125,10 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     const data = {
       plan: requestedPlan,
-      amount: SUBSCRIPTION_PLANS[requestedPlan].price,
-      currency: 'SLE',
-      paymentMethod: 'Orange Money',
-      paymentNumber: PLATFORM_PAYMENT_NUMBER,
+      amount: plan?.price || (requestedPlan === 'legend' ? 750 : 250),
+      currency: config.currency,
+      paymentMethod: config.paymentMethod,
+      paymentNumber: config.paymentNumber,
       proofUrl,
       note: parsed.data.note || null,
       status: 'pending',

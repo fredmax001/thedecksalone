@@ -6,13 +6,9 @@ const { recalculateAllRankings } = require('../utils/ranking');
 const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
 const { sendEmail } = require('../utils/email');
 const { withCache, clearCache } = require('../utils/cache');
+const { getSubscriptionConfig, setSubscriptionConfig } = require('../utils/subscriptionConfig');
 
 const router = express.Router();
-
-const configuredProPrice = Number(process.env.PRO_SUBSCRIPTION_PRICE);
-const PRO_SUBSCRIPTION_PRICE = Number.isFinite(configuredProPrice) && configuredProPrice > 0 ? configuredProPrice : 250;
-const configuredLegendPrice = Number(process.env.LEGEND_SUBSCRIPTION_PRICE);
-const LEGEND_SUBSCRIPTION_PRICE = Number.isFinite(configuredLegendPrice) && configuredLegendPrice > 0 ? configuredLegendPrice : 750;
 
 // ─── AuditLog helper ──────────────────────────────────────────────
 
@@ -152,6 +148,20 @@ router.get('/stats', async (req, res) => {
 
       const activeBattles = await prisma.battle.count({ where: { status: 'ACTIVE' } });
 
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [totalVisitsToday, totalVisitsMonth, uniqueVisitorsToday] = await Promise.all([
+        prisma.siteVisit.count({ where: { createdAt: { gte: startOfDay } } }),
+        prisma.siteVisit.count({ where: { createdAt: { gte: startOfMonth } } }),
+        prisma.siteVisit.groupBy({
+          by: ['ipHash'],
+          where: { createdAt: { gte: startOfDay }, ipHash: { not: null } },
+          _count: { ipHash: true },
+        }).then((rows) => rows.length),
+      ]);
+
       return {
         totalUsers,
         totalDjs,
@@ -166,6 +176,9 @@ router.get('/stats', async (req, res) => {
         estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
         totalPayments: totalPayments._sum.amount || 0,
         activeBattles,
+        totalVisitsToday,
+        totalVisitsMonth,
+        uniqueVisitorsToday,
       };
     });
 
@@ -189,7 +202,7 @@ router.get('/users', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
-    if (role) where.role = role;
+    if (role) where.role = role.toUpperCase();
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
@@ -238,10 +251,57 @@ router.put('/users/:id/role', async (req, res) => {
     const { role } = parsed.data;
     const targetId = req.params.id;
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, email: true, username: true, name: true, role: true },
+    });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
     const user = await prisma.user.update({
       where: { id: targetId },
       data: { role },
-      select: { id: true, email: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        name: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        djProfile: { select: { id: true, stageName: true, verified: true, isPublic: true } },
+      },
+    });
+
+    if (role === 'DJ' && !user.djProfile) {
+      await prisma.djProfile.create({
+        data: {
+          userId: targetId,
+          stageName: targetUser.username || targetUser.email.split('@')[0],
+          fullName: targetUser.name || targetUser.username || '',
+          isPublic: true,
+        },
+      });
+    } else if (role !== 'DJ' && user.djProfile?.isPublic) {
+      await prisma.djProfile.update({
+        where: { userId: targetId },
+        data: { isPublic: false },
+      });
+    }
+
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        name: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        djProfile: { select: { id: true, stageName: true, verified: true, isPublic: true } },
+      },
     });
 
     await createAuditLog({
@@ -250,11 +310,11 @@ router.put('/users/:id/role', async (req, res) => {
       action: 'USER_ROLE_CHANGE',
       entity: 'USER',
       entityId: targetId,
-      metadata: { newRole: role, previousRole: req.body.previousRole || null },
+      metadata: { newRole: role, previousRole: targetUser.role },
       req,
     });
 
-    return res.json({ success: true, data: user });
+    return res.json({ success: true, data: updatedUser });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -271,11 +331,17 @@ router.put('/users/:id/status', async (req, res) => {
     const { status } = parsed.data;
     const targetId = req.params.id;
 
-    const user = await prisma.user.update({
-      where: { id: targetId },
-      data: { status },
-      select: { id: true, email: true, status: true },
-    });
+    const [user] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetId },
+        data: { status },
+        select: { id: true, email: true, status: true },
+      }),
+      prisma.djProfile.updateMany({
+        where: { userId: targetId },
+        data: { isPublic: status === 'ACTIVE' },
+      }),
+    ]);
 
     await createAuditLog({
       actorId: req.user.id,
@@ -636,7 +702,7 @@ router.get('/analytics', async (req, res) => {
         const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
         const label = start.toLocaleString('en-US', { month: 'short' });
-        const [users, djs, mixes, bookings, revenue] = await Promise.all([
+        const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
           prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
           prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
@@ -645,6 +711,7 @@ router.get('/analytics', async (req, res) => {
             where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
             _sum: { finalPrice: true },
           }),
+          prisma.siteVisit.count({ where: { createdAt: { gte: start, lt: end } } }),
         ]);
         months.push({
           month: label,
@@ -653,11 +720,44 @@ router.get('/analytics', async (req, res) => {
           mixes,
           bookings,
           revenue: Math.round(revenue._sum.finalPrice || 0),
+          visits,
         });
       }
       return months;
     });
     return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/admin/geography - Top visitor countries & cities
+router.get('/geography', async (req, res) => {
+  try {
+    const [topCountries, topCities] = await Promise.all([
+      prisma.siteVisit.groupBy({
+        by: ['country'],
+        where: { country: { not: null } },
+        _count: { country: true },
+        orderBy: { _count: { country: 'desc' } },
+        take: 10,
+      }),
+      prisma.siteVisit.groupBy({
+        by: ['city'],
+        where: { city: { not: null } },
+        _count: { city: true },
+        orderBy: { _count: { city: 'desc' } },
+        take: 10,
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        countries: topCountries.map((r) => ({ name: r.country, visits: r._count.country })),
+        cities: topCities.map((r) => ({ name: r.city, visits: r._count.city })),
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -953,13 +1053,14 @@ router.get('/system', async (req, res) => {
 // GET /api/admin/djs - All DJs with full stats
 router.get('/djs', async (req, res) => {
   try {
-    const { search, verified, page, limit } = req.query;
+    const { search, verified, status, page, limit } = req.query;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
     if (verified !== undefined) where.verified = verified === 'true';
+    if (status) where.user = { status: status.toUpperCase() };
     if (search) {
       where.OR = [
         { stageName: { contains: search, mode: 'insensitive' } },
@@ -974,7 +1075,7 @@ router.get('/djs', async (req, res) => {
         skip,
         take: limitNum,
         include: {
-          user: { select: { id: true, email: true, createdAt: true } },
+          user: { select: { id: true, email: true, status: true, createdAt: true } },
           mixes: { select: { id: true } },
           bookingsAsDj: { select: { id: true, status: true } },
           streamingPlatforms: true,
@@ -988,6 +1089,7 @@ router.get('/djs', async (req, res) => {
       id: dj.id,
       userId: dj.userId,
       email: dj.user.email,
+      status: dj.user.status,
       stageName: dj.stageName,
       city: dj.city,
       verified: dj.verified,
@@ -1022,10 +1124,19 @@ router.put('/djs/:id/suspend', async (req, res) => {
     const dj = await prisma.djProfile.findUnique({ where: { id: targetId } });
     if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
 
-    const updated = await prisma.djProfile.update({
-      where: { id: targetId },
-      data: { isPublic: !dj.isPublic },
-    });
+    const newIsPublic = !dj.isPublic;
+    const newUserStatus = newIsPublic ? 'ACTIVE' : 'SUSPENDED';
+
+    const [updated] = await prisma.$transaction([
+      prisma.djProfile.update({
+        where: { id: targetId },
+        data: { isPublic: newIsPublic },
+      }),
+      prisma.user.update({
+        where: { id: dj.userId },
+        data: { status: newUserStatus },
+      }),
+    ]);
 
     await createAuditLog({
       actorId: req.user.id,
@@ -1033,7 +1144,7 @@ router.put('/djs/:id/suspend', async (req, res) => {
       action: updated.isPublic ? 'DJ_REINSTATE' : 'DJ_SUSPEND',
       entity: 'DJ_PROFILE',
       entityId: targetId,
-      metadata: { stageName: dj.stageName, isPublic: updated.isPublic },
+      metadata: { stageName: dj.stageName, isPublic: updated.isPublic, userStatus: newUserStatus },
       req,
     });
 
@@ -1407,7 +1518,8 @@ router.get('/security-logs', async (req, res) => {
 // GET /api/admin/subscriptions - Subscription overview (derived from DJ tiers)
 router.get('/subscriptions', async (req, res) => {
   try {
-    const [djCount, proDjCount, legendDjCount, pendingRequests, approvedRevenue, activeBookings] = await Promise.all([
+    const [config, djCount, proDjCount, legendDjCount, pendingRequests, approvedRevenue, activeBookings] = await Promise.all([
+      getSubscriptionConfig(),
       prisma.djProfile.count(),
       prisma.djProfile.count({ where: { subscriptionTier: 'pro' } }),
       prisma.djProfile.count({ where: { subscriptionTier: 'legend' } }),
@@ -1418,8 +1530,8 @@ router.get('/subscriptions', async (req, res) => {
 
     const plans = [
       { id: 'free', name: 'Free Tier', price: 0, users: djCount - proDjCount - legendDjCount, features: ['Basic profile', 'Limited uploads'] },
-      { id: 'pro', name: 'Pro DJ', price: PRO_SUBSCRIPTION_PRICE, users: proDjCount, features: ['Unlimited uploads', 'Priority discovery', 'Advanced analytics'] },
-      { id: 'legend', name: 'Legend DJ', price: LEGEND_SUBSCRIPTION_PRICE, users: legendDjCount, features: ['Everything in Pro', 'Featured placement', 'Dedicated support'] },
+      { id: 'pro', name: 'Pro DJ', price: config.proPrice, users: proDjCount, features: ['Unlimited uploads', 'Priority discovery', 'Advanced analytics'] },
+      { id: 'legend', name: 'Pro+ DJ', price: config.legendPrice, users: legendDjCount, features: ['Everything in Pro', 'Featured placement', 'Dedicated support'] },
     ];
 
     return res.json({
@@ -1429,10 +1541,52 @@ router.get('/subscriptions', async (req, res) => {
         totalRevenue: Math.round(approvedRevenue._sum.amount || 0),
         activeBookings,
         pendingRequests,
-        mrr: Math.round((proDjCount * PRO_SUBSCRIPTION_PRICE) + (legendDjCount * LEGEND_SUBSCRIPTION_PRICE)),
-        arr: Math.round(((proDjCount * PRO_SUBSCRIPTION_PRICE) + (legendDjCount * LEGEND_SUBSCRIPTION_PRICE)) * 12),
+        mrr: Math.round((proDjCount * config.proPrice) + (legendDjCount * config.legendPrice)),
+        arr: Math.round(((proDjCount * config.proPrice) + (legendDjCount * config.legendPrice)) * 12),
       },
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/admin/subscription-config - Current manual-payment config
+router.get('/subscription-config', async (req, res) => {
+  try {
+    const config = await getSubscriptionConfig();
+    return res.json({ success: true, data: config });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+const subscriptionConfigSchema = z.object({
+  paymentNumber: z.string().min(1),
+  whatsappNumber: z.string().min(1).optional(),
+  proPrice: z.number().min(0),
+  legendPrice: z.number().min(0),
+  currency: z.string().min(1).optional(),
+});
+
+// PUT /api/admin/subscription-config - Update manual-payment config
+router.put('/subscription-config', async (req, res) => {
+  try {
+    const parsed = subscriptionConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const config = await setSubscriptionConfig(parsed.data, req.user.id);
+
+    await createAuditLog({
+      actorId: req.user.id,
+      action: 'SUBSCRIPTION_CONFIG_UPDATE',
+      entity: 'SYSTEM_CONFIG',
+      metadata: parsed.data,
+      req,
+    });
+
+    return res.json({ success: true, data: config });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

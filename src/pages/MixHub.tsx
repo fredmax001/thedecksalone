@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import ShareButton from '@/components/ShareButton';
 import { motion } from 'framer-motion';
 import {
   Play,
@@ -203,9 +204,11 @@ function MixListItem({
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h4 className="truncate font-display text-sm font-semibold uppercase text-text-primary sm:text-base">
-            {mix.title}
-          </h4>
+          <Link to={`/mix/${mix.id}`} className="min-w-0">
+            <h4 className="truncate font-display text-sm font-semibold uppercase text-text-primary hover:text-gold transition-colors sm:text-base">
+              {mix.title}
+            </h4>
+          </Link>
           {isNew && (
             <span className="shrink-0 rounded-full bg-red px-2 py-0.5 text-[9px] font-bold uppercase text-white">
               New
@@ -219,12 +222,21 @@ function MixListItem({
             <Clock size={10} />
             {formatDuration(mix.duration)}
           </span>
-          <span className="rounded-full border border-gold/30 px-2 py-0.5 text-gold">{mix.genre}</span>
+          <Link to={`/mix/${mix.id}`}>
+            <span className="rounded-full border border-gold/30 px-2 py-0.5 text-gold hover:bg-gold/10 transition-colors">{mix.genre}</span>
+          </Link>
         </div>
       </div>
-      <button onClick={handleLike} className="shrink-0 rounded-full p-2 hover:bg-white/5">
-        <Heart size={16} className={liked ? 'fill-red text-red' : 'text-text-muted'} />
-      </button>
+      <div className="flex items-center gap-1">
+        <ShareButton
+          url={`${window.location.origin}/mix/${mix.id}`}
+          title={`${mix.title} by ${mix.dj}`}
+          size="sm"
+        />
+        <button onClick={handleLike} className="shrink-0 rounded-full p-2 hover:bg-white/5">
+          <Heart size={16} className={liked ? 'fill-red text-red' : 'text-text-muted'} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -257,18 +269,25 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
           </div>
         </div>
       </div>
-      <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">{mix.title}</h4>
+      <Link to={`/mix/${mix.id}`}>
+        <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate hover:text-gold transition-colors">{mix.title}</h4>
+      </Link>
       <p className="text-xs text-gold mt-0.5 flex items-center gap-1">
         {mix.djTier === 'legend' && <Flame size={12} className="text-yellow-400 fill-yellow-400" />}
         {mix.dj}
       </p>
-      <div className="flex items-center gap-2 mt-1">
+      <div className="mt-1 flex items-center gap-2">
         <span className="text-[10px] text-text-muted font-mono">{formatCompact(mix.plays || 0)} plays</span>
         <span className="text-text-muted">|</span>
         <span className="text-[10px] text-text-muted font-mono flex items-center gap-0.5">
           <Clock size={10} />
           {formatDuration(mix.duration)}
         </span>
+        <ShareButton
+          url={`${window.location.origin}/mix/${mix.id}`}
+          title={`${mix.title} by ${mix.dj}`}
+          size="sm"
+        />
       </div>
     </motion.div>
   );

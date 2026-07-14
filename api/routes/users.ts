@@ -348,18 +348,56 @@ router.get('/notifications', authMiddleware, async (req, res) => {
 
 /* ─────────────────── Profile Endpoints ─────────────────── */
 
+const GENDER_VALUES = ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'] as const;
+
 const updateProfileSchema = z.object({
   username: z.string().min(3).max(30).optional(),
   email: z.string().email().optional(),
   name: z.string().max(100).optional().or(z.literal('')),
   bio: z.string().max(500).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
+  gender: z.enum(GENDER_VALUES).optional().or(z.literal('')),
   favoriteGenres: z.array(z.string()).optional(),
   social: z.object({
     instagram: z.string().optional().or(z.literal('')),
     twitter: z.string().optional().or(z.literal('')),
     facebook: z.string().optional().or(z.literal('')),
   }).optional(),
+});
+
+// GET /api/users/:username - Public user profile
+router.get('/:username', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username: req.params.username.toLowerCase() },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        bio: true,
+        location: true,
+        avatar: true,
+        favoriteGenres: true,
+        socialLinks: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        social: user.socialLinks || {},
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // GET /api/users/profile - Current user's extended profile
@@ -374,6 +412,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
         name: true,
         bio: true,
         location: true,
+        gender: true,
         avatar: true,
         favoriteGenres: true,
         socialLinks: true,
@@ -397,6 +436,55 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/users/:username - Public user profile
+router.get('/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        bio: true,
+        location: true,
+        avatar: true,
+        favoriteGenres: true,
+        role: true,
+        createdAt: true,
+        djProfile: {
+          select: {
+            id: true,
+            stageName: true,
+            bio: true,
+            avatar: true,
+            city: true,
+            country: true,
+            isPublic: true,
+            subscriptionTier: true,
+            verified: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Only expose DJ profile if public
+    const publicUser = {
+      ...user,
+      djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
+    };
+
+    return res.json({ success: true, data: publicUser });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // PUT /api/users/profile - Update current user's profile
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
@@ -405,8 +493,12 @@ router.put('/profile', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { username, email, name, bio, location, favoriteGenres, social } = parsed.data;
+    const { username, email, name, bio, location, gender, favoriteGenres, social } = parsed.data;
     const updateData: any = {};
+
+    if (gender !== undefined) {
+      updateData.gender = gender === '' ? null : gender;
+    }
 
     if (username !== undefined) {
       const normalized = username.toLowerCase();
@@ -442,6 +534,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
         name: true,
         bio: true,
         location: true,
+        gender: true,
         avatar: true,
         favoriteGenres: true,
         socialLinks: true,

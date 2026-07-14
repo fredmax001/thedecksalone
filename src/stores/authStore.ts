@@ -13,6 +13,7 @@ export interface User {
   role: UserRole;
   phone?: string;
   phoneVerified?: boolean;
+  gender?: string | null;
   djProfile?: {
     id: string;
     stageName: string;
@@ -30,7 +31,7 @@ interface AuthState {
   isLoading: boolean;
   setAuth: (user: User, token: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, role: UserRole, phone?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, role: UserRole, phone?: string, gender?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   fetchMe: () => Promise<void>;
   init: () => void;
@@ -64,9 +65,9 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email, password, role, phone) => {
+      register: async (email, password, role, phone, gender) => {
         try {
-          const res = await api.post('/auth/register', { email, password, role, phone });
+          const res = await api.post('/auth/register', { email, password, role, phone, gender });
           if (res.data.success) {
             const { user, token } = res.data.data;
             set({ user, token, isAuthenticated: true });

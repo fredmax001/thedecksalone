@@ -16,6 +16,9 @@ export interface AdminStats {
   estimatedRevenue: number;
   totalPayments: number;
   activeBattles: number;
+  totalVisitsToday: number;
+  totalVisitsMonth: number;
+  uniqueVisitorsToday: number;
 }
 
 export interface AdminAnalytics {
@@ -25,12 +28,24 @@ export interface AdminAnalytics {
   mixes: number;
   bookings: number;
   revenue: number;
+  visits: number;
+}
+
+export interface GeographyPoint {
+  name: string | null;
+  visits: number;
+}
+
+export interface AdminGeography {
+  countries: GeographyPoint[];
+  cities: GeographyPoint[];
 }
 
 export interface AdminDj {
   id: string;
   userId: string;
   email: string;
+  status: string;
   stageName: string;
   city: string;
   verified: boolean;
@@ -248,6 +263,24 @@ export interface SubscriptionOverview {
   pendingRequests?: number;
 }
 
+export interface SubscriptionConfig {
+  paymentMethod: string;
+  paymentNumber: string;
+  whatsappNumber: string;
+  proPrice: number;
+  legendPrice: number;
+  currency: string;
+  plans: Array<{ id: string; name: string; price: number }>;
+}
+
+export interface UpdateSubscriptionConfigInput {
+  paymentNumber?: string;
+  whatsappNumber?: string;
+  proPrice?: number;
+  legendPrice?: number;
+  currency?: string;
+}
+
 export interface ProSubscriptionRequest {
   id: string;
   djId: string;
@@ -349,8 +382,18 @@ export function useAdminAnalytics() {
   });
 }
 
+export function useAdminGeography() {
+  return useQuery<AdminGeography>({
+    queryKey: ['adminGeography'],
+    queryFn: async () => {
+      const res = await api.get('/admin/geography');
+      return res.data.data;
+    },
+  });
+}
+
 export function useAdminDjs(
-  filters?: { search?: string; verified?: boolean | string; page?: number; limit?: number }
+  filters?: { search?: string; verified?: boolean | string; status?: string; page?: number; limit?: number }
 ) {
   return useQuery<PaginatedResponse<AdminDj>>({
     queryKey: ['adminDjs', filters],
@@ -360,6 +403,7 @@ export function useAdminDjs(
       if (filters?.verified !== undefined && filters.verified !== '') {
         params.set('verified', String(filters.verified));
       }
+      if (filters?.status) params.set('status', filters.status);
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
@@ -562,6 +606,31 @@ export function useAdminSubscriptions() {
   });
 }
 
+export function useAdminSubscriptionConfig() {
+  return useQuery<SubscriptionConfig>({
+    queryKey: ['adminSubscriptionConfig'],
+    queryFn: async () => {
+      const res = await api.get('/admin/subscription-config');
+      return res.data.data;
+    },
+    staleTime: 0,
+  });
+}
+
+export function useUpdateSubscriptionConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: UpdateSubscriptionConfigInput) => {
+      const res = await api.put('/admin/subscription-config', payload);
+      return res.data.data as SubscriptionConfig;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptionConfig'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+    },
+  });
+}
+
 export function useAdminProSubscriptionRequests(status?: string) {
   return useQuery<ProSubscriptionRequest[]>({
     queryKey: ['adminProSubscriptionRequests', status || 'all'],
@@ -711,6 +780,7 @@ export function useToggleDjSuspend() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
     },
   });
@@ -765,10 +835,15 @@ export function useUpdateUserRole() {
       const res = await api.put(`/admin/users/${id}/role`, { role });
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
       queryClient.invalidateQueries({ queryKey: ['adminStaff'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+      if (variables.role === 'DJ') {
+        queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+        queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
+        queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      }
     },
   });
 }
@@ -782,6 +857,7 @@ export function useUpdateUserStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
     },
   });

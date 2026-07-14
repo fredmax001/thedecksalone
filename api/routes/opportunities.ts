@@ -199,7 +199,7 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
         if (opp.requiredTier === 'legend' && user.djProfile.subscriptionTier !== 'legend') {
             return res.status(403).json({
                 success: false,
-                error: 'This is an exclusive opportunity for Legend members',
+                error: 'This is an exclusive opportunity for Pro+ members',
                 requiredTier: 'legend',
             });
         }

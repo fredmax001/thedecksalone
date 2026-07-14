@@ -385,7 +385,17 @@ router.get('/:id', async (req, res) => {
     const mix = await prisma.mix.findUnique({
       where: { id: req.params.id },
       include: {
-        dj: { select: { id: true, stageName: true, avatar: true, city: true, country: true } },
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            city: true,
+            country: true,
+            subscriptionTier: true,
+            user: { select: { username: true } },
+          },
+        },
       },
     });
 

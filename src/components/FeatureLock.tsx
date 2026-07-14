@@ -98,7 +98,7 @@ export const FeatureLock: React.FC<FeatureLockProps> = ({
                         {tier.toUpperCase()} FEATURE
                     </h4>
                     <p className="text-sm text-white/60 mb-6 leading-relaxed">
-                        {message || `Upgrade to ${tier === 'pro' ? 'Pro' : 'Legend'} to unlock this feature and elevate your DJ career.`}
+                        {message || `Upgrade to ${tier === 'pro' ? 'Pro' : 'Pro+'} to unlock this feature and elevate your DJ career.`}
                     </p>
 
                     <Button
@@ -170,7 +170,7 @@ export const FullPageLock: React.FC<{
                 </h2>
 
                 <p className="text-white/60 mb-8 leading-relaxed">
-                    {description || `This section is exclusive to ${tier === 'pro' ? 'Pro' : 'Legend'} members. Upgrade your subscription to unlock this and many other premium tools.`}
+                    {description || `This section is exclusive to ${tier === 'pro' ? 'Pro' : 'Pro+'} members. Upgrade your subscription to unlock this and many other premium tools.`}
                 </p>
 
                 <Button
