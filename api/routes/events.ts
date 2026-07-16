@@ -33,9 +33,15 @@ const createEventSchema = z.object({
   requirements: z.string().optional(),
   status: z.string().optional(),
   ticketUrl: z.string().url().optional().or(z.literal('')),
-  // Sound It Salone integration
   soundItSaloneEventId: z.string().optional(),
   soundItSaloneUrl: z.string().url().optional().or(z.literal('')),
+  // Pro+ Ticketing
+  isTicketed: z.boolean().optional(),
+  ticketPrice: z.number().min(0).optional(),
+  ticketCurrency: z.string().optional(),
+  mobileMoneyNumber: z.string().optional(),
+  mobileMoneyProvider: z.string().optional(),
+  totalTickets: z.number().int().min(1).optional(),
 });
 
 const updateEventSchema = z.object({
@@ -56,6 +62,13 @@ const updateEventSchema = z.object({
   soundItSaloneEventId: z.string().optional(),
   soundItSaloneUrl: z.string().url().optional().or(z.literal('')),
   isSyncedToSalone: z.boolean().optional(),
+  // Pro+ Ticketing
+  isTicketed: z.boolean().optional(),
+  ticketPrice: z.number().min(0).optional(),
+  ticketCurrency: z.string().optional(),
+  mobileMoneyNumber: z.string().optional(),
+  mobileMoneyProvider: z.string().optional(),
+  totalTickets: z.number().int().min(1).optional(),
 });
 
 const applySchema = z.object({
@@ -134,12 +147,16 @@ router.get('/types', async (req, res) => {
 });
 
 // GET /api/events/:id - Get single event
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: any, res: any) => {
   try {
+    const userId = req.user?.id || null;
     const event = await prisma.event.findUnique({
       where: { id: req.params.id },
       include: {
-        dj: { select: { id: true, stageName: true, avatar: true } },
+        dj: { select: { id: true, stageName: true, avatar: true, subscriptionTier: true } },
+        gallery: { orderBy: { sortOrder: 'asc' } },
+        rsvps: { select: { userId: true } },
+        _count: { select: { rsvps: true, eventTickets: true } },
       },
     });
 
@@ -147,8 +164,21 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
-    return res.json({ success: true, data: event });
-  } catch (error) {
+    // If user is logged in, check their RSVP status and ticket
+    let userRsvp = null;
+    let userTicket = null;
+    if (userId) {
+      [userRsvp, userTicket] = await Promise.all([
+        prisma.eventRSVP.findUnique({ where: { eventId_userId: { eventId: req.params.id, userId } } }),
+        prisma.eventTicket.findFirst({
+          where: { eventId: req.params.id, userId, status: { not: 'declined' } },
+          select: { id: true, status: true, qrCode: true, paymentScreenshot: true, amount: true, currency: true, createdAt: true },
+        }),
+      ]);
+    }
+
+    return res.json({ success: true, data: { ...event, userRsvp: !!userRsvp, userTicket } });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -165,6 +195,9 @@ router.post('/', authMiddleware, uploadEventImage.single('image'), async (req, r
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Only DJs or admins can create events' });
+    }
+    if (!isAdmin && dj?.subscriptionTier === 'free') {
+      return res.status(403).json({ success: false, error: 'Event creation requires a Pro subscription' });
     }
     const djId = isAdmin ? req.body.djId || null : dj.id;
 
@@ -375,7 +408,7 @@ router.get('/:id/applications', authMiddleware, async (req, res) => {
 });
 
 // PATCH /api/events/:id/applications/:appId - Update application status (admin/organizer only)
-router.patch('/:id/applications/:appId', authMiddleware, async (req, res) => {
+router.patch('/:id/applications/:appId', authMiddleware, async (req: any, res: any) => {
   try {
     const parsed = updateApplicationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -415,7 +448,82 @@ router.patch('/:id/applications/:appId', authMiddleware, async (req, res) => {
     }
 
     return res.json({ success: true, data: updated });
-  } catch (error) {
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── POST /api/events/:id/rsvp ───────────────────────────────────────────────
+router.post('/:id/rsvp', authMiddleware, async (req: any, res: any) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
+    if (new Date(event.date) < new Date()) return res.status(400).json({ success: false, error: 'Cannot RSVP to a past event' });
+
+    const existing = await prisma.eventRSVP.findUnique({
+      where: { eventId_userId: { eventId: req.params.id, userId: req.user.id } },
+    });
+
+    if (existing) {
+      // Toggle off (un-RSVP)
+      await prisma.eventRSVP.delete({ where: { eventId_userId: { eventId: req.params.id, userId: req.user.id } } });
+      return res.json({ success: true, data: { rsvped: false } });
+    }
+
+    await prisma.eventRSVP.create({ data: { eventId: req.params.id, userId: req.user.id } });
+    return res.json({ success: true, data: { rsvped: true } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── POST /api/events/:id/gallery ────────────────────────────────────────────
+// DJ uploads gallery photos for a past event
+const multerGallery = require('multer');
+const uploadGallery = multerGallery({ storage: multerGallery.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+router.post('/:id/gallery', authMiddleware, uploadGallery.array('photos', 20), async (req: any, res: any) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
+
+    const isAdmin = req.user.role === 'ADMIN';
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    const isOwner = dj && event.djId && event.djId === dj.id;
+    if (!isOwner && !isAdmin) return res.status(403).json({ success: false, error: 'Forbidden' });
+
+    if (!req.files || req.files.length === 0) return res.status(400).json({ success: false, error: 'No photos uploaded' });
+
+    const { uploadBuffer } = require('../utils/storage');
+    const existing = await prisma.eventPhoto.count({ where: { eventId: req.params.id } });
+
+    const photos = await Promise.all(
+      req.files.map(async (file: any, i: number) => {
+        const ext = file.mimetype === 'image/png' ? 'png' : 'jpg';
+        const url = await uploadBuffer(file.buffer, 'events/gallery', { contentType: file.mimetype, ext });
+        return prisma.eventPhoto.create({
+          data: { eventId: req.params.id, url, caption: req.body.captions?.[i] || null, sortOrder: existing + i },
+        });
+      })
+    );
+
+    return res.status(201).json({ success: true, data: photos });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── DELETE /api/events/:id/gallery/:photoId ─────────────────────────────────
+router.delete('/:id/gallery/:photoId', authMiddleware, async (req: any, res: any) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
+    const isAdmin = req.user.role === 'ADMIN';
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!isAdmin && (!dj || event.djId !== dj.id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+    await prisma.eventPhoto.delete({ where: { id: req.params.photoId } });
+    return res.json({ success: true });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });

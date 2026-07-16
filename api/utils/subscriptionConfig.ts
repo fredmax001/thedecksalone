@@ -23,8 +23,8 @@ const DEFAULTS: SubscriptionConfig = {
   paymentMethod: process.env.SUBSCRIPTION_PAYMENT_METHOD || 'Orange Money',
   paymentNumber: process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156',
   whatsappNumber: process.env.PLATFORM_WHATSAPP_NUMBER || process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156',
-  proPrice: Number(process.env.PRO_SUBSCRIPTION_PRICE) || 250,
-  legendPrice: Number(process.env.LEGEND_SUBSCRIPTION_PRICE) || 750,
+  proPrice: Number(process.env.PRO_SUBSCRIPTION_PRICE) || 200,
+  legendPrice: Number(process.env.LEGEND_SUBSCRIPTION_PRICE) || 350,
   currency: process.env.SUBSCRIPTION_CURRENCY || 'SLE',
   plans: [],
 };

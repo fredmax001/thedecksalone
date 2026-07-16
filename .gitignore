@@ -3,3 +3,5 @@ dist
 .DS_Store
 .env
 api/uploads/
+.env.bak
+.env.bak2

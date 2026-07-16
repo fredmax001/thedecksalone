@@ -37,6 +37,7 @@ const setRoutes = require('./routes/sets');
 
 const notificationRoutes = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
+const ticketRoutes = require('./routes/tickets');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -97,6 +98,7 @@ app.use('/api/mixes', mixRoutes);
 app.use('/api/rankings', rankingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/events/:id/tickets', ticketRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/battles', battleRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
@@ -127,6 +129,7 @@ app.get('/api/users/public/:username', async (req, res) => {
             bio: true,
             avatar: true,
             city: true,
+            community: true,
             country: true,
             isPublic: true,
             subscriptionTier: true,

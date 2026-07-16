@@ -64,7 +64,7 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
           transition={{ duration: 0.5, delay: 0.5 }}
           className="relative z-10 flex items-center gap-2 text-xs text-text-muted mt-4"
         >
-          <span>&copy; 2025 Deck Salone by Sound It Entertainment</span>
+          <span>&copy; 2026 Deck Salone by Sound It Entertainment</span>
           <span className="text-medium-gray">|</span>
           <a href="#" className="hover:text-gold transition-colors">Terms</a>
           <span className="text-medium-gray">|</span>

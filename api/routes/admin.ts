@@ -2,13 +2,15 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { requireRole } = require('../middleware/auth');
-const { recalculateAllRankings } = require('../utils/ranking');
+const { recalculateAllRankings, calculateBattleBaseScore } = require('../utils/ranking');
 const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
 const { sendEmail } = require('../utils/email');
 const { withCache, clearCache } = require('../utils/cache');
 const { getSubscriptionConfig, setSubscriptionConfig } = require('../utils/subscriptionConfig');
 
 const router = express.Router();
+
+const BATTLE_METRIC_TYPES = ['COMPOSITE', 'PLAYS', 'STREAMS', 'FOLLOWERS', 'LIKES'];
 
 // ─── AuditLog helper ──────────────────────────────────────────────
 
@@ -381,7 +383,7 @@ router.get('/djs/pending', async (req, res) => {
 router.get('/djs/verification-requests', async (req, res) => {
   try {
     const djs = await prisma.djProfile.findMany({
-      where: { verificationStatus: { in: ['pending', 'info_requested', 'rejected'] } },
+      where: { verificationStatus: { in: ['pending', 'info_requested', 'rejected', 'approved'] } },
       orderBy: { updatedAt: 'desc' },
       include: {
         user: { select: { id: true, email: true, createdAt: true } },
@@ -1380,6 +1382,9 @@ router.post('/battles', async (req, res) => {
     if (!title || !weekStart || !weekEnd) {
       return res.status(400).json({ success: false, error: 'title, weekStart, and weekEnd are required' });
     }
+    if (metricType && !BATTLE_METRIC_TYPES.includes(metricType)) {
+      return res.status(400).json({ success: false, error: `metricType must be one of ${BATTLE_METRIC_TYPES.join(', ')}` });
+    }
 
     const battle = await prisma.battle.create({
       data: {
@@ -1472,6 +1477,154 @@ router.post('/battles/:id/close', async (req, res) => {
         })),
       },
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/battles/:id - Update battle details
+router.put('/battles/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, weekStart, weekEnd, theme, metricType } = req.body;
+
+    const existing = await prisma.battle.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Battle not found' });
+    }
+
+    if (metricType && !BATTLE_METRIC_TYPES.includes(metricType)) {
+      return res.status(400).json({ success: false, error: `metricType must be one of ${BATTLE_METRIC_TYPES.join(', ')}` });
+    }
+
+    const data: any = {};
+    if (title !== undefined) data.title = title;
+    if (weekStart !== undefined) data.weekStart = new Date(weekStart);
+    if (weekEnd !== undefined) data.weekEnd = new Date(weekEnd);
+    if (theme !== undefined) data.theme = theme || null;
+    if (metricType !== undefined) data.metricType = metricType;
+
+    const updated = await prisma.battle.update({
+      where: { id },
+      data,
+      include: {
+        entries: {
+          include: {
+            dj: { select: { id: true, stageName: true, avatar: true } },
+            votesCast: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: null,
+      action: 'BATTLE_UPDATE',
+      entity: 'BATTLE',
+      entityId: id,
+      metadata: { title: updated.title, theme: updated.theme, metricType: updated.metricType },
+      req,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/battles/:id/entries - Add a DJ to a battle
+router.post('/battles/:id/entries', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { djId, mixId } = req.body;
+    if (!djId) {
+      return res.status(400).json({ success: false, error: 'djId is required' });
+    }
+
+    const battle = await prisma.battle.findUnique({ where: { id } });
+    if (!battle) {
+      return res.status(404).json({ success: false, error: 'Battle not found' });
+    }
+    if (battle.status !== 'ACTIVE') {
+      return res.status(400).json({ success: false, error: 'Can only add DJs to active battles' });
+    }
+
+    const dj = await prisma.djProfile.findUnique({ where: { id: djId } });
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+
+    const existingEntry = await prisma.battleEntry.findFirst({
+      where: { battleId: id, djId },
+    });
+    if (existingEntry) {
+      return res.status(409).json({ success: false, error: 'DJ is already in this battle' });
+    }
+
+    const baseScore = await calculateBattleBaseScore(dj.id, battle.metricType);
+
+    const entry = await prisma.battleEntry.create({
+      data: {
+        battleId: id,
+        djId,
+        mixId: mixId || null,
+        baseScore,
+        finalScore: baseScore,
+      },
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true } },
+        votesCast: { select: { id: true } },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: djId,
+      action: 'BATTLE_ADD_ENTRY',
+      entity: 'BATTLE_ENTRY',
+      entityId: entry.id,
+      metadata: { battleId: id, battleTitle: battle.title, djName: dj.stageName },
+      req,
+    });
+
+    return res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/admin/battles/:id/entries/:entryId - Remove a DJ from a battle
+router.delete('/battles/:id/entries/:entryId', async (req, res) => {
+  try {
+    const { id, entryId } = req.params;
+
+    const battle = await prisma.battle.findUnique({ where: { id } });
+    if (!battle) {
+      return res.status(404).json({ success: false, error: 'Battle not found' });
+    }
+
+    const entry = await prisma.battleEntry.findUnique({
+      where: { id: entryId },
+      include: { dj: { select: { id: true, stageName: true } } },
+    });
+    if (!entry || entry.battleId !== id) {
+      return res.status(404).json({ success: false, error: 'Entry not found' });
+    }
+
+    await prisma.battleEntry.delete({ where: { id: entryId } });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: entry.djId,
+      action: 'BATTLE_REMOVE_ENTRY',
+      entity: 'BATTLE_ENTRY',
+      entityId: entryId,
+      metadata: { battleId: id, battleTitle: battle.title, djName: entry.dj.stageName },
+      req,
+    });
+
+    return res.json({ success: true, data: { message: 'Entry removed' } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

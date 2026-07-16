@@ -112,7 +112,7 @@ const timelineEvents = [
       'COVID-19 forces innovation. DJs master livestreaming, reaching diaspora communities worldwide through digital platforms.',
   },
   {
-    year: '2025',
+    year: '2026',
     title: 'Deck Salone Platform Launches',
     description:
       'The first official digital ecosystem for Sierra Leonean DJs is born, backed by Sound It Entertainment.',
@@ -576,52 +576,115 @@ export default function HallOfFame() {
               </p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {(pioneers as HallOfFameDj[]).map((pioneer, index) => (
-                <FadeIn key={pioneer.id} delay={0.15 * index}>
-                  <motion.div
-                    className="bg-black rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all duration-400"
-                    whileHover={{ y: -4 }}
-                  >
-                    <div className="aspect-square overflow-hidden">
-                      <img
-                        src={pioneer.avatar || '/placeholder.jpg'}
-                        alt={pioneer.stageName}
-                        className="w-full h-full object-cover sepia group-hover:sepia-0 transition-all duration-400"
-                      />
-                    </div>
-                    <div className="p-6">
-                      <span className="inline-block px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gold text-black rounded-full">
-                        Pioneer
-                      </span>
-                      <h3 className="font-display text-xl font-semibold text-text-primary mt-3 uppercase">
-                        {pioneer.stageName}
-                      </h3>
-                      <p className="font-mono text-sm text-gold mt-1">
-                        {pioneer.startYear
-                          ? `Active Since '${pioneer.startYear.toString().slice(-2)}'`
-                          : 'Verified Pioneer'}
-                      </p>
-                      <p className="text-sm text-text-secondary mt-3 leading-relaxed">
-                        {pioneer.bio || 'A pioneer of Sierra Leone\'s DJ culture.'}
-                      </p>
-                      <p className="text-xs text-text-muted mt-2">
-                        Known for: {pioneer.awards?.[0] || 'Contributing to Sierra Leone\'s music scene'}
-                      </p>
-                      <div className="mt-4 flex items-center gap-3 text-xs text-gold/70">
-                        <span className="flex items-center gap-1">
-                          <Headphones className="w-3 h-3" />
-                          {pioneer.totalStreams.toLocaleString()} streams
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Star className="w-3 h-3" />
-                          {pioneer.totalFollowers.toLocaleString()} followers
-                        </span>
+            <div className="space-y-16">
+              {(pioneers as HallOfFameDj[]).map((pioneer, index) => {
+                const isEven = index % 2 === 0;
+                return (
+                  <FadeIn key={pioneer.id} delay={0.1}>
+                    <motion.div
+                      className={`flex flex-col gap-8 md:gap-12 items-center ${
+                        isEven ? 'md:flex-row' : 'md:flex-row-reverse'
+                      }`}
+                    >
+                      {/* Image Side */}
+                      <div className="w-full md:w-5/12 relative group">
+                        <div className="aspect-[4/5] rounded-2xl overflow-hidden border-2 border-white/5 group-hover:border-gold/30 transition-all duration-700 relative">
+                          <img
+                            src={pioneer.avatar || '/placeholder.jpg'}
+                            alt={pioneer.stageName}
+                            className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80" />
+                          <div className="absolute bottom-6 left-6 right-6">
+                            <span className="inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-wider bg-gold text-black rounded-full mb-3">
+                              Pioneer
+                            </span>
+                            <h3 className="font-display text-3xl font-bold text-white uppercase tracking-tight">
+                              {pioneer.stageName}
+                            </h3>
+                            <p className="font-mono text-sm text-gold mt-1">
+                              {pioneer.startYear
+                                ? `Active Since '${pioneer.startYear.toString().slice(-2)}'`
+                                : 'Verified Pioneer'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                </FadeIn>
-              ))}
+
+                      {/* Story Side */}
+                      <div className="w-full md:w-7/12 flex flex-col justify-center">
+                        <div className="relative">
+                          <span className="absolute -top-8 -left-4 text-6xl text-gold/10 font-display font-bold select-none">
+                            &ldquo;
+                          </span>
+                          <h4 className="text-xl font-semibold text-text-primary mb-4 relative z-10">
+                            The Legend of {pioneer.stageName}
+                          </h4>
+                          <div className="prose prose-invert max-w-none text-text-secondary leading-loose text-base">
+                            <p>
+                              {pioneer.bio || `A true architect of Sierra Leone's DJ culture, ${pioneer.stageName} laid the foundations for the vibrant scene we celebrate today. Their contributions echo through generations of turntablists and performers.`}
+                            </p>
+                          </div>
+                          
+                          {pioneer.awards && pioneer.awards.length > 0 && (
+                            <div className="mt-8 border-l-2 border-gold/30 pl-4">
+                              <p className="text-xs font-bold uppercase tracking-widest text-gold mb-2">
+                                Legacy & Honors
+                              </p>
+                              <p className="text-sm text-text-muted italic">
+                                {pioneer.awards[0]}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="mt-8 pt-6 border-t border-white/5 flex items-center gap-6 text-sm text-text-muted font-mono">
+                            {pioneer.totalStreams > 0 && (
+                              <span className="flex items-center gap-2">
+                                <Headphones className="w-4 h-4 text-gold/70" />
+                                {pioneer.totalStreams.toLocaleString()} streams
+                              </span>
+                            )}
+                            {pioneer.totalFollowers > 0 && (
+                              <span className="flex items-center gap-2">
+                                <Star className="w-4 h-4 text-gold/70" />
+                                {pioneer.totalFollowers.toLocaleString()} followers
+                              </span>
+                            )}
+                            {pioneer.totalStreams === 0 && pioneer.totalFollowers === 0 && (
+                              <span className="flex items-center gap-2">
+                                <Award className="w-4 h-4 text-gold/70" />
+                                Honorary Inductee
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </FadeIn>
+                );
+              })}
+
+              {/* Honorary CTA Section */}
+              <FadeIn delay={0.3}>
+                <div className="mt-16 bg-black-elevated border border-white/10 rounded-2xl p-8 sm:p-12 text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold/5 via-transparent to-gold/5" />
+                  <div className="relative z-10">
+                    <Award className="w-10 h-10 text-gold mx-auto mb-4" />
+                    <h3 className="font-display text-2xl font-bold uppercase text-text-primary">
+                      Honor a Legend
+                    </h3>
+                    <p className="text-text-secondary mt-3 max-w-2xl mx-auto leading-relaxed">
+                      Many pioneers who built our culture might not be on the platform, or have passed away. Their stories deserve to be told. Help us document history by nominating a legendary DJ.
+                    </p>
+                    <a
+                      href="#nominate"
+                      className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-gold text-black text-sm font-bold uppercase rounded-full hover:bg-gold/90 transition-colors"
+                    >
+                      Submit a Story
+                    </a>
+                  </div>
+                </div>
+              </FadeIn>
             </div>
           )}
         </div>
@@ -947,8 +1010,8 @@ export default function HallOfFame() {
                   </div>
                   <p className="mt-2 text-sm text-text-muted">
                     Contact us at{' '}
-                    <a href="mailto:halloffame@decksalone.com" className="text-gold hover:underline">
-                      halloffame@decksalone.com
+                    <a href="mailto:support@decksalone.com" className="text-gold hover:underline">
+                      support@decksalone.com
                     </a>
                   </p>
                 </div>

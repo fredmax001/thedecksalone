@@ -56,6 +56,8 @@ import {
   useAdminSubscriptionConfig,
   useUpdateSubscriptionConfig,
   useAdminOpportunities,
+  useToggleDjHallOfFame,
+  useToggleMixHallOfFame,
 } from '@/hooks/useAdmin';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -66,7 +68,8 @@ type AdminSection =
   | 'dashboard' | 'djs' | 'rankings' | 'mixes' | 'bookings'
   | 'users' | 'events' | 'revenue' | 'analytics' | 'platforms'
   | 'verification' | 'notifications' | 'subscriptions' | 'security'
-  | 'ads' | 'roles' | 'settings' | 'battles' | 'opportunities';
+  | 'ads' | 'roles' | 'settings' | 'battles' | 'opportunities'
+  | 'halloffame';
 
 interface SidebarItem {
   id: AdminSection;
@@ -84,6 +87,7 @@ const sidebarItems: SidebarItem[] = [
   { id: 'djs', label: 'DJs', icon: Mic, group: 'Marketplace' },
   { id: 'users', label: 'Users', icon: Users, group: 'Marketplace' },
   { id: 'verification', label: 'Verification', icon: BadgeCheck, group: 'Marketplace' },
+  { id: 'halloffame', label: 'Hall of Fame', icon: Trophy, group: 'Marketplace' },
   { id: 'rankings', label: 'Rankings', icon: Star, group: 'Marketplace' },
   { id: 'mixes', label: 'Mixes', icon: Music, group: 'Marketplace' },
   { id: 'bookings', label: 'Bookings', icon: CalendarCheck, group: 'Operations' },
@@ -163,6 +167,30 @@ function LoadingCenter() {
 
 function EmptyState({ message }: { message: string }) {
   return <p className="text-sm text-text-muted text-center py-8">{message}</p>;
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: number | string;
+  icon: React.ElementType;
+  color: string;
+}) {
+  return (
+    <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${color}15` }}>
+          <Icon className="w-5 h-5" style={{ color }} />
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-text-primary">{value}</p>
+      <p className="text-xs text-text-muted mt-1 uppercase tracking-wider">{label}</p>
+    </div>
+  );
 }
 
 function formatCompact(value: number) {
@@ -1238,7 +1266,7 @@ function BattlesSection() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'CLOSED'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'PLAYS' });
+  const [createForm, setCreateForm] = useState({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'COMPOSITE' });
   const { data, isLoading, error } = useAdminBattles({ limit: 50 });
   const createBattleMutation = useCreateBattle();
   const closeBattleMutation = useCloseBattle();
@@ -1252,14 +1280,14 @@ function BattlesSection() {
 
   const activeCount = battles.filter((b: any) => b.status === 'ACTIVE').length;
   const totalEntries = battles.reduce((sum: number, b: any) => sum + (b.entries?.length || 0), 0);
-  const totalVotes = battles.reduce((sum: number, b: any) => sum + (b.entries?.reduce((s: number, e: any) => s + (e.votes?.length || 0), 0) || 0), 0);
+  const totalVotes = battles.reduce((sum: number, b: any) => sum + (b.entries?.reduce((s: number, e: any) => s + (e.voteCount || e.votes || 0), 0) || 0), 0);
 
   const handleCreate = () => {
     if (!createForm.title || !createForm.weekStart || !createForm.weekEnd) return;
     createBattleMutation.mutate(createForm, {
       onSuccess: () => {
         setShowCreateModal(false);
-        setCreateForm({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'PLAYS' });
+        setCreateForm({ title: '', weekStart: '', weekEnd: '', theme: '', metricType: 'COMPOSITE' });
         queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
       },
     });
@@ -1884,15 +1912,21 @@ function VerificationSection() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setSelected(v); setAction('approve'); setNote(''); }} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" /> Approve
-                  </button>
-                  <button onClick={() => { setSelected(v); setAction('reject'); setNote(''); }} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
-                    <XIcon className="w-3.5 h-3.5" /> Reject
-                  </button>
-                  <button onClick={() => { setSelected(v); setAction('request'); setNote(''); }} className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1">
-                    Request Info
-                  </button>
+                  {v.verificationStatus !== 'verified' && v.verificationStatus !== 'approved' && (
+                    <button onClick={() => { setSelected(v); setAction('approve'); setNote(''); }} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Approve
+                    </button>
+                  )}
+                  {v.verificationStatus !== 'rejected' && (
+                    <button onClick={() => { setSelected(v); setAction('reject'); setNote(''); }} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
+                      <XIcon className="w-3.5 h-3.5" /> Reject
+                    </button>
+                  )}
+                  {v.verificationStatus !== 'verified' && v.verificationStatus !== 'approved' && (
+                    <button onClick={() => { setSelected(v); setAction('request'); setNote(''); }} className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1">
+                      Request Info
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -2938,6 +2972,241 @@ function SettingsSection() {
   );
 }
 
+/* ─────────────────────── Section 18: Hall of Fame ─────────────────────── */
+
+function HallOfFameSection() {
+  const [adminTab, setAdminTab] = useState<'djs' | 'mixes'>('djs');
+  const [djSearch, setDjSearch] = useState('');
+  const [mixSearch, setMixSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const { data: adminDjsData, isLoading: adminDjsLoading } = useAdminDjs({
+    search: djSearch,
+    page: 1,
+    limit: 100,
+  });
+  const { data: adminMixesData, isLoading: adminMixesLoading } = useAdminMixes({
+    search: mixSearch,
+    page: 1,
+    limit: 100,
+  });
+  const toggleDjHof = useToggleDjHallOfFame();
+  const toggleMixHof = useToggleMixHallOfFame();
+
+  const adminDjs = adminDjsData?.data || [];
+  const adminMixes = adminMixesData?.data || [];
+
+  const handleToggleDj = (id: string) => {
+    toggleDjHof.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['admin-djs'] });
+        queryClient.invalidateQueries({ queryKey: ['hall-of-fame-djs'] });
+        toast.success('DJ Hall of Fame status updated');
+      },
+      onError: () => toast.error('Failed to update DJ status'),
+    });
+  };
+
+  const handleToggleMix = (id: string) => {
+    toggleMixHof.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['admin-mixes'] });
+        queryClient.invalidateQueries({ queryKey: ['hall-of-fame-mixes'] });
+        toast.success('Mix Hall of Fame status updated');
+      },
+      onError: () => toast.error('Failed to update mix status'),
+    });
+  };
+
+  return (
+    <div className="space-y-8">
+      <SectionHeader
+        title="Hall of Fame"
+        subtitle="Manage pioneers and legendary mixes in the Hall of Fame"
+      />
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Pioneer DJs"
+          value={adminDjs.filter((d) => d.hallOfFame).length}
+          icon={Star}
+          color="#D4A24A"
+        />
+        <StatCard
+          label="Legendary Mixes"
+          value={adminMixes.filter((m) => m.hallOfFame).length}
+          icon={Music}
+          color="#D4A24A"
+        />
+        <StatCard
+          label="Total DJs"
+          value={adminDjs.length}
+          icon={Users}
+          color="#3B82F6"
+        />
+        <StatCard
+          label="Total Mixes"
+          value={adminMixes.length}
+          icon={Play}
+          color="#22C55E"
+        />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setAdminTab('djs')}
+          className={`px-5 py-2 rounded-full text-xs font-semibold uppercase transition-colors ${
+            adminTab === 'djs'
+              ? 'bg-[#D4A24A] text-black'
+              : 'bg-white/10 text-text-secondary hover:bg-white/20'
+          }`}
+        >
+          Pioneer DJs ({adminDjs.filter((d) => d.hallOfFame).length})
+        </button>
+        <button
+          onClick={() => setAdminTab('mixes')}
+          className={`px-5 py-2 rounded-full text-xs font-semibold uppercase transition-colors ${
+            adminTab === 'mixes'
+              ? 'bg-[#D4A24A] text-black'
+              : 'bg-white/10 text-text-secondary hover:bg-white/20'
+          }`}
+        >
+          Legendary Mixes ({adminMixes.filter((m) => m.hallOfFame).length})
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="rounded-2xl border border-white/5" style={{ background: 'var(--bg-card)' }}>
+        {adminTab === 'djs' ? (
+          <div className="p-6">
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Search DJs..."
+                value={djSearch}
+                onChange={(e) => setDjSearch(e.target.value)}
+                className="w-full bg-black-surface border border-dark-gray rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-[#D4A24A] outline-none"
+              />
+            </div>
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {adminDjsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-[#D4A24A] animate-spin" />
+                </div>
+              ) : adminDjs.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-8">No DJs found</p>
+              ) : (
+                adminDjs.map((dj) => (
+                  <div
+                    key={dj.id}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={dj.avatar || '/placeholder.jpg'}
+                        alt={dj.stageName}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">{dj.stageName}</p>
+                        <p className="text-xs text-text-muted">
+                          {dj.city || 'Sierra Leone'} • {dj.verified ? 'Verified' : 'Unverified'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleDj(dj.id)}
+                      disabled={toggleDjHof.isPending}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                        dj.hallOfFame
+                          ? 'bg-[#D4A24A] text-black'
+                          : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                      }`}
+                    >
+                      {dj.hallOfFame ? (
+                        <>
+                          <Check className="w-3 h-3" /> In Hall of Fame
+                        </>
+                      ) : (
+                        <>
+                          <Star className="w-3 h-3" /> Add
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-6">
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Search mixes..."
+                value={mixSearch}
+                onChange={(e) => setMixSearch(e.target.value)}
+                className="w-full bg-black-surface border border-dark-gray rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-[#D4A24A] outline-none"
+              />
+            </div>
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {adminMixesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-[#D4A24A] animate-spin" />
+                </div>
+              ) : adminMixes.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-8">No mixes found</p>
+              ) : (
+                adminMixes.map((mix) => (
+                  <div
+                    key={mix.id}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-black-elevated flex items-center justify-center">
+                        <Music className="w-5 h-5 text-[#D4A24A]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">{mix.title}</p>
+                        <p className="text-xs text-text-muted">
+                          {mix.dj?.stageName || 'Unknown DJ'} • {mix.plays} plays
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleMix(mix.id)}
+                      disabled={toggleMixHof.isPending}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                        mix.hallOfFame
+                          ? 'bg-[#D4A24A] text-black'
+                          : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                      }`}
+                    >
+                      {mix.hallOfFame ? (
+                        <>
+                          <Check className="w-3 h-3" /> In Hall of Fame
+                        </>
+                      ) : (
+                        <>
+                          <Star className="w-3 h-3" /> Add
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────── Main Component ─────────────────────── */
 
 export default function AdminDashboard() {
@@ -2978,6 +3247,7 @@ export default function AdminDashboard() {
     security: <SecurityLogsSection />,
     ads: <AdsManagerSection />,
     roles: <RolesSection />,
+    halloffame: <HallOfFameSection />,
     settings: <SettingsSection />,
     opportunities: <OpportunitiesSection />,
   };

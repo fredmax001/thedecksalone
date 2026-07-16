@@ -7,6 +7,8 @@ import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
 import UserDashboardLayout from './components/UserDashboardLayout';
 import MixPlayer from './components/MixPlayer';
+import TermsAcceptanceModal from './components/TermsAcceptanceModal';
+import LocationPrompt from './components/LocationPrompt';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -47,6 +49,7 @@ const DashboardProfile = lazy(() => import('./pages/dashboard/Profile'));
 const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
+const TicketScanner = lazy(() => import('./pages/dashboard/TicketScanner'));
 const DashboardOpportunities = lazy(() =>
   import('./pages/Opportunities').then((m) => ({ default: m.Opportunities }))
 );
@@ -120,6 +123,8 @@ export default function App() {
               <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
               <Route path="dashboard/settings" element={<DashboardSettings />} />
             </Route>
+            {/* Ticket scanner: full-screen, no dashboard sidebar */}
+            <Route path="dashboard/events/:eventId/scan" element={<TicketScanner />} />
           </Route>
 
           {/* User Dashboard — protected, custom layout (no public navbar/footer) */}
@@ -165,6 +170,8 @@ export default function App() {
           </Route>
         </Routes>
         <MixPlayer />
+        <TermsAcceptanceModal />
+        <LocationPrompt />
       </Suspense>
     </BrowserRouter>
   );

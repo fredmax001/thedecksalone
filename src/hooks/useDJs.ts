@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 export interface DJFilters {
   search?: string;
   city?: string;
+  community?: string;
   genre?: string;
   sortBy?: string;
   minFee?: number;
@@ -13,7 +14,7 @@ export interface DJFilters {
 }
 
 export function useDJs(filters: DJFilters = {}) {
-  const { search, city, genre, sortBy, minFee, maxFee, page = 1, limit = 12 } = filters;
+  const { search, city, community, genre, sortBy, minFee, maxFee, page = 1, limit = 12 } = filters;
 
   return useQuery({
     queryKey: ['djs', filters],
@@ -23,6 +24,7 @@ export function useDJs(filters: DJFilters = {}) {
       params.set('limit', String(limit));
       if (search) params.set('search', search);
       if (city) params.set('city', city);
+      if (community) params.set('community', community);
       if (genre) params.set('genre', genre);
       if (sortBy) params.set('sortBy', sortBy);
       if (minFee) params.set('minFee', String(minFee));

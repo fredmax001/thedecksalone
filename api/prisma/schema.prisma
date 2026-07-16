@@ -47,6 +47,8 @@ model User {
   mixLikes                MixLike[]
   payments                Payment[]    @relation("ClientPayments")
   reviews                 Review[]
+  eventTickets            EventTicket[]
+  eventRsvps              EventRSVP[]
 
   @@index([email])
   @@index([username])
@@ -108,6 +110,7 @@ model DjProfile {
   coverBanner             String?
   country                 String                   @default("Sierra Leone")
   city                    String?
+  community               String?
   genres                  String[]
   awards                  String[]
   equipment               String[]
@@ -188,6 +191,7 @@ model DjProfile {
 
   @@index([userId])
   @@index([city])
+  @@index([community])
   @@index([verified])
   @@index([verificationStatus])
   @@index([rankingScore])
@@ -527,8 +531,18 @@ model Event {
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   ticketUrl            String?
+  // Pro+ Ticketing Fields
+  isTicketed           Boolean    @default(false)
+  ticketPrice          Float?
+  ticketCurrency       String     @default("SLE")
+  mobileMoneyNumber    String?
+  mobileMoneyProvider  String?    // e.g. "Orange Money", "Africell Money"
+  totalTickets         Int?
   dj                   DjProfile? @relation(fields: [djId], references: [id])
   applications         EventApplication[]
+  eventTickets         EventTicket[]
+  rsvps                EventRSVP[]
+  gallery              EventPhoto[]
 
   @@index([djId])
   @@index([city])
@@ -536,6 +550,57 @@ model Event {
   @@index([soundItSaloneEventId])
   @@index([isSyncedToSalone])
   @@map("events")
+}
+
+model EventTicket {
+  id                String    @id @default(cuid())
+  eventId           String
+  userId            String
+  qrCode            String?   @unique  // unique token generated on approval
+  status            String    @default("pending") // pending, approved, declined, scanned
+  paymentScreenshot String
+  amount            Float
+  currency          String    @default("SLE")
+  approvedAt        DateTime?
+  scannedAt         DateTime?
+  declineReason     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([status])
+  @@index([qrCode])
+  @@map("event_tickets")
+}
+
+model EventRSVP {
+  id        String    @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime  @default(now())
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("event_rsvps")
+}
+
+model EventPhoto {
+  id        String   @id @default(cuid())
+  eventId   String
+  url       String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_photos")
 }
 
 model EventApplication {
@@ -746,6 +811,9 @@ enum NotificationType {
   REVIEW_RECEIVED
   VERIFICATION_STATUS
   SUBSCRIPTION_STATUS
+  TICKET_PURCHASED
+  TICKET_APPROVED
+  TICKET_DECLINED
 }
 
 enum Gender {

@@ -1,0 +1,152 @@
+const SIERRA_LEONE_LOCATIONS = [
+  {
+    city: 'Freetown',
+    communities: [
+      'Aberdeen',
+      'Allen Town',
+      'Ascension Town',
+      'Bambay Kamara',
+      'Brookfields',
+      'Calaba Town',
+      'Central Freetown',
+      'Cline Town',
+      'Congo Cross',
+      'Congo Town',
+      'Dwarzark',
+      'Eastern Freetown',
+      'Fourah Bay',
+      'Goderich',
+      'Hill Station',
+      'Juba',
+      'Kissy',
+      'Kissy Brook',
+      'Kissy Dockyard',
+      'Kissy Mess Mess',
+      'Kroo Bay',
+      'Kroo Town Road',
+      'Leicester',
+      'Lumley',
+      'Magazine Cut',
+      'Malama',
+      'Mountain Cut',
+      'Murray Town',
+      'New England',
+      'PZ',
+      'Pademba Road',
+      'Rawdon Street',
+      'Regent',
+      'Shell',
+      'Up Gun',
+      'Wellington',
+      'Western Freetown',
+      'Wilberforce',
+    ],
+  },
+  {
+    city: 'Bo',
+    communities: [
+      'Bo Government Reservation',
+      'Kulanda Town',
+      'New London',
+      'Reservation',
+      'Segegba',
+      'Torkpoi Town',
+      'Wonde Town',
+    ],
+  },
+  {
+    city: 'Kenema',
+    communities: [
+      'Dama Road',
+      'Hangha Road',
+      'Kpomo',
+      'Kykuyama',
+      'Lalehun',
+      'Nongowa',
+      'Reservation',
+    ],
+  },
+  {
+    city: 'Makeni',
+    communities: [
+      'Bombali Shebora',
+      'Mabanta Road',
+      'Magburaka Road',
+      'Makorie',
+      'Mena Hills',
+      'Mission',
+      'Wusum',
+    ],
+  },
+  {
+    city: 'Koidu Town',
+    communities: [
+      'Gbense',
+      'Kainkordu',
+      'Koardu',
+      'New Sembehun',
+      'Reservation',
+      'Tankoro',
+    ],
+  },
+  {
+    city: 'Port Loko',
+    communities: [
+      'Bai Bureh Road',
+      'Lunsar Road',
+      'New London',
+      'Port Loko Central',
+      'Rokel',
+    ],
+  },
+  {
+    city: 'Waterloo',
+    communities: [
+      'Allen Town',
+      'Bendugu',
+      'Kossoh Town',
+      'Masiaka Road',
+      'Waterloo Central',
+    ],
+  },
+  {
+    city: 'Lunsar',
+    communities: [
+      'Kamakwie Road',
+      'Maforki',
+      'Mabontor',
+      'Pepel Road',
+      'Rotifunk Junction',
+    ],
+  },
+  {
+    city: 'Kabala',
+    communities: [
+      'Gbawuria',
+      'Kabala Town',
+      'Mabang',
+      'Mongo Bendugu',
+      'Wara Wara',
+    ],
+  },
+  {
+    city: 'Magburaka',
+    communities: [
+      'Mabonto',
+      'Magburaka Central',
+      'Rogbaneh',
+      'Yele Road',
+    ],
+  },
+];
+
+const SIERRA_LEONE_CITIES = SIERRA_LEONE_LOCATIONS.map((entry) => entry.city);
+const CITY_TO_COMMUNITIES = Object.fromEntries(
+  SIERRA_LEONE_LOCATIONS.map((entry) => [entry.city, entry.communities])
+);
+
+module.exports = {
+  SIERRA_LEONE_LOCATIONS,
+  SIERRA_LEONE_CITIES,
+  CITY_TO_COMMUNITIES,
+};

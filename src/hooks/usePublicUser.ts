@@ -17,6 +17,7 @@ export interface PublicUserProfile {
     bio: string | null;
     avatar: string | null;
     city: string | null;
+    community: string | null;
     country: string | null;
     isPublic: boolean;
     subscriptionTier: string | null;

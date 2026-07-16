@@ -459,6 +459,7 @@ router.get('/:username', async (req, res) => {
             bio: true,
             avatar: true,
             city: true,
+            community: true,
             country: true,
             isPublic: true,
             subscriptionTier: true,

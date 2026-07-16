@@ -105,6 +105,18 @@ router.patch('/read-all', authMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/notifications/clear-all - Delete all notifications for the current user
+router.delete('/clear-all', authMiddleware, async (req, res) => {
+  try {
+    const result = await prisma.notification.deleteMany({
+      where: { userId: req.user.id }
+    });
+    return res.json({ success: true, data: { deleted: result.count } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // DELETE /api/notifications/:id - Delete a notification
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {

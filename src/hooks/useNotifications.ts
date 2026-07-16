@@ -84,6 +84,21 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
+/* ─── Clear all notifications ─── */
+export function useClearAllNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.delete('/notifications/clear-all');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+    },
+  });
+}
+
 /* ─── Delete notification ─── */
 export function useDeleteNotification() {
   const queryClient = useQueryClient();

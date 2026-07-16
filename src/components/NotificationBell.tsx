@@ -15,6 +15,7 @@ import {
   useUnreadNotificationCount,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
+  useClearAllNotifications,
   type NotificationItem,
 } from '@/hooks/useNotifications';
 
@@ -98,6 +99,7 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
   const { data: notificationsData, isLoading } = useNotifications({ limit: 8 });
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const markAllRead = useMarkAllNotificationsRead();
+  const clearAll = useClearAllNotifications();
 
   const notifications = notificationsData?.items || [];
 
@@ -133,25 +135,45 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
               </Badge>
             )}
           </div>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-text-muted hover:text-text-primary"
-              onClick={(e) => {
-                e.stopPropagation();
-                markAllRead.mutate();
-              }}
-              disabled={markAllRead.isPending}
-            >
-              {markAllRead.isPending ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <CheckCheck className="w-3 h-3 mr-1" />
-              )}
-              Mark all read
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-text-muted hover:text-text-primary px-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  markAllRead.mutate();
+                }}
+                disabled={markAllRead.isPending}
+              >
+                {markAllRead.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCheck className="w-3 h-3 mr-1" />
+                )}
+                Mark read
+              </Button>
+            )}
+            {notifications.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-red hover:text-red/80 px-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearAll.mutate();
+                }}
+                disabled={clearAll.isPending}
+              >
+                {clearAll.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <span className="text-xs">Clear all</span>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Notification List */}

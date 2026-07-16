@@ -11,6 +11,7 @@ import {
   Smartphone,
   MessageCircle,
   FileText,
+  Calendar,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -23,8 +24,10 @@ import { useAuthStore } from '@/stores/authStore';
 
 interface Plan {
   id: string;
+  annualId: string;
   name: string;
-  price: number;
+  monthlyPrice: number;
+  annualPrice: number;
   period: string;
   description: string;
   icon: ElementType;
@@ -39,7 +42,7 @@ interface ProSubscriptionStatus {
   subscriptionActivatedAt?: string | null;
   latestRequest: {
     id: string;
-    plan: 'pro' | 'legend';
+    plan: 'pro' | 'legend' | 'pro_annual' | 'legend_annual';
     status: 'pending' | 'approved' | 'rejected';
     proofUrl: string;
     amount: number;
@@ -63,20 +66,28 @@ const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   paymentMethod: 'Orange Money',
   paymentNumber: '+23272011156',
   whatsappNumber: '+23272011156',
-  proPrice: 250,
-  legendPrice: 750,
+  proPrice: 200,
+  legendPrice: 350,
   currency: 'SLE',
   plans: [
-    { id: 'pro', name: 'Pro', price: 250 },
-    { id: 'legend', name: 'Pro+', price: 750 },
+    { id: 'pro', name: 'Pro', price: 200 },
+    { id: 'legend', name: 'Pro+', price: 350 },
   ],
+};
+
+// Annual prices
+const ANNUAL_PRICES: Record<string, number> = {
+  pro: 2000,
+  legend: 4000,
 };
 
 const PLANS: Plan[] = [
   {
     id: 'free',
+    annualId: 'free',
     name: 'Free',
-    price: 0,
+    monthlyPrice: 0,
+    annualPrice: 0,
     period: 'forever',
     description: 'Perfect for getting started and building your presence.',
     icon: Music,
@@ -92,8 +103,10 @@ const PLANS: Plan[] = [
   },
   {
     id: 'pro',
+    annualId: 'pro_annual',
     name: 'Pro',
-    price: 250,
+    monthlyPrice: 200,
+    annualPrice: 2000,
     period: 'month',
     description: 'For working DJs who want to grow their brand and bookings.',
     icon: Zap,
@@ -111,13 +124,18 @@ const PLANS: Plan[] = [
   },
   {
     id: 'legend',
+    annualId: 'legend_annual',
     name: 'Pro+',
-    price: 750,
+    monthlyPrice: 350,
+    annualPrice: 4000,
     period: 'month',
     description: 'For top-tier DJs who demand the full platform experience.',
     icon: Crown,
     features: [
       'Everything in Pro',
+      'Ticketed Events with QR codes',
+      'Event RSVP & countdown',
+      'Event gallery uploads',
       'Featured on homepage',
       'Custom profile themes',
       'Dedicated account manager',
@@ -140,9 +158,25 @@ export default function Subscription() {
   const [selectedProof, setSelectedProof] = useState<File | null>(null);
   const [note, setNote] = useState('');
   const [requestSent, setRequestSent] = useState(false);
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('monthly');
   const { fetchMe } = useAuthStore();
   const currentPlan = status?.activePlan || (status?.isPro ? 'pro' : 'free');
   const latestRequest = status?.latestRequest;
+
+  // Derive the actual plan ID to submit based on billing period
+  const getSubmitPlanId = (basePlanId: string) => {
+    if (basePlanId === 'free') return 'free';
+    if (billingPeriod === 'annual') {
+      return PLANS.find(p => p.id === basePlanId)?.annualId || basePlanId;
+    }
+    return basePlanId;
+  };
+
+  // Get price for selected plan based on billing period
+  const getPlanPrice = (plan: Plan) => {
+    if (plan.monthlyPrice === 0) return 0;
+    return billingPeriod === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -237,14 +271,20 @@ export default function Subscription() {
       return;
     }
 
+    const submitPlanId = getSubmitPlanId(selectedPlanId);
+    const selectedPlanDef = PLANS.find(p => p.id === selectedPlanId);
+    const amount = selectedPlanDef ? getPlanPrice(selectedPlanDef) : 0;
+
     setLoading('pro-proof');
     try {
       const formData = new FormData();
-      formData.append('plan', selectedPlanId);
+      formData.append('plan', submitPlanId);
       formData.append('proof', selectedProof);
       if (note.trim()) formData.append('note', note.trim());
+      formData.append('amount', String(amount));
+      formData.append('billingPeriod', billingPeriod);
 
-      console.log('Submitting proof for plan:', selectedPlanId, 'File:', selectedProof.name);
+      console.log('Submitting proof for plan:', submitPlanId, 'File:', selectedProof.name);
 
       const res = await api.post('/payments/pro-subscription', formData, {
         headers: {
@@ -330,14 +370,58 @@ export default function Subscription() {
             Subscription
           </h1>
         </div>
-        <Badge
-          variant="outline"
-          className="border-gold/30 text-gold bg-gold/5 px-3 py-1 text-sm"
-        >
-          <Star className="w-3.5 h-3.5 mr-1.5" />
-          Current: {PLANS.find((p) => p.id === currentPlan)?.name || 'Free'}
-        </Badge>
+        <div className="flex items-center gap-3">
+          {/* Billing Period Toggle */}
+          <div className="flex items-center bg-black-elevated border border-dark-gray rounded-xl p-1">
+            <button
+              onClick={() => setBillingPeriod('monthly')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                billingPeriod === 'monthly'
+                  ? 'bg-gold text-black shadow'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingPeriod('annual')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                billingPeriod === 'annual'
+                  ? 'bg-gold text-black shadow'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Annual
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                billingPeriod === 'annual' ? 'bg-black/20' : 'bg-gold/20 text-gold'
+              }`}>SAVE</span>
+            </button>
+          </div>
+          <Badge
+            variant="outline"
+            className="border-gold/30 text-gold bg-gold/5 px-3 py-1 text-sm"
+          >
+            <Star className="w-3.5 h-3.5 mr-1.5" />
+            Current: {PLANS.find((p) => p.id === currentPlan)?.name || 'Free'}
+          </Badge>
+        </div>
       </div>
+
+      {/* Annual savings banner */}
+      {billingPeriod === 'annual' && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl bg-gold/10 border border-gold/30 p-3 flex items-center gap-3"
+        >
+          <Calendar className="w-5 h-5 text-gold flex-shrink-0" />
+          <p className="text-sm text-gold">
+            <span className="font-bold">Annual billing active.</span>{' '}
+            Save with 1 year upfront — Pro: <strong>SLE 2,000/yr</strong> &nbsp;·&nbsp; Pro+: <strong>SLE 4,000/yr</strong>
+          </p>
+        </motion.div>
+      )}
 
       {shouldShowPaymentPanel && (
         <Card id="pro-payment-proof" className="bg-black-surface border-gold/30">
@@ -497,8 +581,10 @@ export default function Subscription() {
           const Icon = plan.icon;
           const isCurrent = plan.id === currentPlan;
           const isPendingPlan = latestRequest?.plan === plan.id && hasPendingRequest && plan.id !== currentPlan;
-          const configuredPlan = paymentConfig.plans.find((p) => p.id === plan.id);
-          const displayPrice = configuredPlan?.price ?? plan.price;
+          const displayPrice = getPlanPrice(plan);
+          const savings = plan.monthlyPrice > 0 && billingPeriod === 'annual'
+            ? plan.monthlyPrice * 12 - plan.annualPrice
+            : 0;
 
           return (
             <motion.div
@@ -525,7 +611,14 @@ export default function Subscription() {
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-text-primary">{plan.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-text-primary">{plan.name}</h3>
+                        {savings > 0 && billingPeriod === 'annual' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green/15 text-green font-bold">
+                            SAVE SLE {savings.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-text-muted">{plan.description}</p>
                     </div>
                   </div>
@@ -533,10 +626,15 @@ export default function Subscription() {
                   {/* Price */}
                   <div className="mb-6">
                     <span className="text-4xl font-bold text-text-primary">
-                      {displayPrice === 0 ? 'Free' : `SLE ${displayPrice}`}
+                      {displayPrice === 0 ? 'Free' : `SLE ${displayPrice.toLocaleString()}`}
                     </span>
                     {displayPrice > 0 && (
-                      <span className="text-sm text-text-muted"> / {plan.period}</span>
+                      <span className="text-sm text-text-muted"> / {billingPeriod === 'annual' ? 'year' : plan.period}</span>
+                    )}
+                    {displayPrice > 0 && billingPeriod === 'monthly' && (
+                      <p className="text-xs text-text-muted mt-1">
+                        Or <span className="text-gold font-semibold">SLE {plan.annualPrice.toLocaleString()}/yr</span> annually
+                      </p>
                     )}
                   </div>
 
@@ -565,6 +663,9 @@ export default function Subscription() {
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     ) : null}
                     {isCurrent ? 'Current Plan' : isPendingPlan ? 'Pending Review' : plan.cta}
+                    {!isCurrent && displayPrice > 0 && billingPeriod === 'annual' && (
+                      <span className="ml-1 text-xs opacity-70">(Annual)</span>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

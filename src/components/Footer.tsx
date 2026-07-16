@@ -127,7 +127,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t theme-border-card flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-xs">
-            &copy; 2025 Deck Salone. A Sound It Entertainment platform.
+            &copy; 2026 Deck Salone. A Sound It Entertainment platform.
           </p>
           <p className="text-text-muted text-xs">
             All rights reserved.
@@ -158,7 +158,7 @@ export default function Footer() {
             ))}
           </div>
           <p className="text-center text-text-muted text-xs">
-            &copy; 2025 Deck Salone. A Sound It Entertainment platform.
+            &copy; 2026 Deck Salone. A Sound It Entertainment platform.
           </p>
         </div>
       </div>

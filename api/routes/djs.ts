@@ -7,11 +7,13 @@ const { uploadAvatar, uploadDjProfileImages, uploadDocument } = require('../util
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
+const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
 
 const router = express.Router();
 
 const djFilterSchema = z.object({
   city: z.string().optional(),
+  community: z.string().optional(),
   genre: z.string().optional(),
   verified: z.string().optional(),
   minFee: z.string().optional(),
@@ -30,6 +32,7 @@ const createDjSchema = z.object({
   startYear: z.number().int().min(1980).max(2099).optional(),
   country: z.string().max(100).optional(),
   city: z.string().max(100).optional(),
+  community: z.string().max(100).nullable().optional(),
   genres: z.array(z.string()).max(5).optional(),
   eventTypes: z.array(z.string()).optional(),
   awards: z.array(z.string()).optional(),
@@ -107,6 +110,9 @@ function parseFormFields(body) {
       delete parsed[key];
     }
   });
+  if (parsed.community === '') {
+    parsed.community = null;
+  }
 
   // Coerce number fields from FormData strings
   const numberFields = ['startYear', 'bookingFeeMin', 'bookingFeeMax', 'hourlyRate', 'fullDayRate', 'depositPercent', 'maxTravelDistanceKm'];
@@ -155,6 +161,26 @@ async function updateDjProfile(req, res, id) {
 
   const updateData = { ...parsed.data };
 
+  if (updateData.city === undefined && updateData.community !== undefined) {
+    return res.status(400).json({ success: false, error: 'City is required when setting a community' });
+  }
+
+  const nextCity = updateData.city ?? dj.city;
+  const nextCommunity = updateData.community;
+  if (nextCommunity !== undefined && nextCommunity !== null) {
+    const validCommunities = CITY_TO_COMMUNITIES[nextCity] || [];
+    if (validCommunities.length && !validCommunities.includes(nextCommunity)) {
+      return res.status(400).json({ success: false, error: 'Selected community does not belong to the selected city' });
+    }
+  }
+
+  if (updateData.city && updateData.community === undefined && dj.community) {
+    const validCommunities = CITY_TO_COMMUNITIES[updateData.city] || [];
+    if (!validCommunities.includes(dj.community)) {
+      updateData.community = null;
+    }
+  }
+
   if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
     const file = req.files['avatar'][0];
     const { buffer, contentType } = await processAvatar(file.buffer);
@@ -195,7 +221,7 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
     }
 
-    const { city, genre, verified, minFee, maxFee, search, sortBy, order, page, limit } = parsed.data;
+    const { city, community, genre, verified, minFee, maxFee, search, sortBy, order, page, limit } = parsed.data;
 
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
@@ -204,6 +230,7 @@ router.get('/', async (req, res) => {
     const where: any = { isPublic: true };
 
     if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (community) where.community = { contains: community, mode: 'insensitive' };
     if (genre) where.genres = { has: genre };
     if (verified === 'true') where.verified = true;
     if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
@@ -213,6 +240,7 @@ router.get('/', async (req, res) => {
         { stageName: { contains: search, mode: 'insensitive' } },
         { fullName: { contains: search, mode: 'insensitive' } },
         { city: { contains: search, mode: 'insensitive' } },
+        { community: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -368,6 +396,9 @@ router.post('/verification-request', authMiddleware, uploadDocument.single('docu
     if (!dj) {
       return res.status(404).json({ success: false, error: 'DJ profile not found' });
     }
+    if (dj.subscriptionTier === 'free') {
+      return res.status(403).json({ success: false, error: 'Verification requests require a Pro subscription' });
+    }
 
     const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = req.body;
 
@@ -481,6 +512,16 @@ router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
     }
 
     const data = parsed.data;
+
+    if (data.community) {
+      if (!data.city) {
+        return res.status(400).json({ success: false, error: 'City is required when setting a community' });
+      }
+      const validCommunities = CITY_TO_COMMUNITIES[data.city] || [];
+      if (validCommunities.length && !validCommunities.includes(data.community)) {
+        return res.status(400).json({ success: false, error: 'Selected community does not belong to the selected city' });
+      }
+    }
 
     // Enforce genre limit
     if (data.genres && data.genres.length > 5) {

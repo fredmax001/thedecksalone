@@ -61,7 +61,7 @@ export default function Terms() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
             >
-              Last updated: January 2025. Please read these terms carefully before using Deck Salone.
+              Last updated: July 2026. Please read these terms carefully before using Deck Salone.
             </motion.p>
           </div>
         </div>
@@ -106,8 +106,8 @@ export default function Terms() {
               <div className="mt-10 p-6 bg-gold/5 border border-gold/20 rounded-xl text-center">
                 <p className="text-sm text-text-secondary">
                   Questions about these terms? Contact us at{' '}
-                  <a href="mailto:legal@decksalone.com" className="text-gold hover:underline">
-                    legal@decksalone.com
+                  <a href="mailto:support@decksalone.com" className="text-gold hover:underline">
+                    support@decksalone.com
                   </a>
                 </p>
               </div>

@@ -87,10 +87,12 @@ export default function UserPublicProfile() {
               <p className="text-text-muted mt-1">@{profile.username}</p>
 
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mt-4 text-sm text-text-muted">
-                {profile.location && (
+                {(profile.djProfile?.city || profile.location) && (
                   <span className="inline-flex items-center gap-1.5">
                     <MapPin size={14} className="text-gold" />
-                    {profile.location}
+                    {[profile.djProfile?.community, profile.djProfile?.city, profile.location]
+                      .filter(Boolean)
+                      .join(', ')}
                   </span>
                 )}
                 {profile.createdAt && (

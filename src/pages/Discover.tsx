@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -15,11 +15,14 @@ import {
   ChevronRight,
   TrendingUp,
   Loader2,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import FadeIn from '@/components/FadeIn';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { imageFallback } from '@/lib/utils';
 import ShareButton from '@/components/ShareButton';
+import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -29,6 +32,7 @@ interface DJ {
   stageName: string;
   avatar: string;
   city: string;
+  community?: string;
   country: string;
   genres: string[];
   verified: boolean;
@@ -57,23 +61,7 @@ type DJsResponse = {
 
 const EQUIPMENT = ['Pioneer DJ', 'Serato', 'Traktor', 'Rekordbox'];
 
-const CITIES = [
-  'Freetown',
-  'Bo',
-  'Kenema',
-  'Makeni',
-  'Koidu Town',
-  'Port Loko',
-  'Lunsar',
-  'Waterloo',
-  'Kabala',
-  'Magburaka',
-  'Kailahun',
-  'Moyamba',
-  'Pujehun',
-  'Bonthe',
-  'Kambia',
-];
+const CITIES = [...SIERRA_LEONE_CITIES];
 
 const SORT_OPTIONS = [
   { label: 'Rank (Default)', value: 'ranking' },
@@ -189,7 +177,9 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
         {/* City */}
         <div className="flex items-center gap-1 mt-1 mb-3">
           <MapPin className="w-3.5 h-3.5 text-text-muted" />
-          <span className="text-xs text-text-muted">{dj.city}</span>
+          <span className="text-xs text-text-muted">
+            {[dj.community, dj.city].filter(Boolean).join(', ')}
+          </span>
         </div>
 
         {/* Stats */}
@@ -237,6 +227,96 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
             size="sm"
           />
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─────────────────── DJ List Row ─────────────────── */
+
+function DJListRow({ dj, index }: { dj: DJ; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ duration: 0.4, delay: index * 0.04, ease: easeSmooth }}
+      className="group flex items-center gap-4 p-4 bg-black-elevated rounded-xl border border-white/5 hover:border-gold/30 transition-all duration-300"
+    >
+      {/* Rank */}
+      <div className="w-8 h-8 rounded-full bg-gold-gradient flex items-center justify-center border border-gold shrink-0">
+        <span className="font-mono text-xs font-bold text-black">{dj.rankingPosition}</span>
+      </div>
+
+      {/* Avatar */}
+      <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
+        <img
+          src={dj.avatar || '/default-avatar.jpg'}
+          alt={dj.stageName}
+          onError={imageFallback}
+          className="w-full h-full object-cover"
+        />
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Link to={`/dj/${dj.username || dj.id}`}>
+            <h3 className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary hover:text-gold transition-colors truncate">
+              {dj.stageName}
+            </h3>
+          </Link>
+          {dj.verified && <CheckCircle2 className="w-4 h-4 text-green shrink-0" />}
+        </div>
+        <div className="flex items-center gap-1 mt-0.5">
+          <MapPin className="w-3 h-3 text-text-muted" />
+          <span className="text-xs text-text-muted truncate">
+            {[dj.community, dj.city].filter(Boolean).join(', ')}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {dj.genres.slice(0, 3).map((g) => (
+            <span
+              key={g}
+              className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-secondary"
+            >
+              {g}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="hidden sm:flex items-center gap-4 text-xs text-text-secondary shrink-0">
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1 text-text-muted">
+            <Users className="w-3 h-3" />
+          </div>
+          <span className="font-mono font-semibold text-text-primary">{formatFollowers(dj.totalFollowers)}</span>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1 text-text-muted">
+            <Music2 className="w-3 h-3" />
+          </div>
+          <span className="font-mono font-semibold text-text-primary">{dj.totalMixes}</span>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1 text-text-muted">
+            <Star className="w-3 h-3" />
+          </div>
+          <span className="font-mono font-semibold text-text-primary">{dj.averageRating.toFixed(1)}</span>
+        </div>
+      </div>
+
+      {/* Price & CTA */}
+      <div className="hidden md:flex flex-col items-end gap-2 shrink-0">
+        <span className="font-mono text-xs font-semibold text-gold">{formatPrice(dj)}</span>
+        <Link
+          to={`/dj/${dj.username || dj.id}`}
+          className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors"
+        >
+          Book
+        </Link>
       </div>
     </motion.div>
   );
@@ -296,17 +376,20 @@ export default function Discover() {
   const [activeGenre, setActiveGenre] = useState('All');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedCity, setSelectedCity] = useState('');
+  const [selectedCommunity, setSelectedCommunity] = useState('');
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
   const [ratingMin, setRatingMin] = useState(0);
   const [sortBy, setSortBy] = useState<SortValue>('ranking');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOpen, setSortOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const ITEMS_PER_PAGE = 12;
 
   /* ── Data ── */
   const djsQuery = useDJs({
     search: searchQuery || undefined,
     city: selectedCity || undefined,
+    community: selectedCommunity || undefined,
     genre: activeGenre !== 'All' ? activeGenre : undefined,
     sortBy,
     page: currentPage,
@@ -354,6 +437,7 @@ export default function Discover() {
 
   const totalPages = djsData?.meta?.totalPages ?? 0;
   const serverTotal = djsData?.meta?.total ?? 0;
+  const communityOptions = selectedCity ? CITY_TO_COMMUNITIES[selectedCity] ?? [] : [];
 
   /* ── Active Filters ── */
   const activeFilters = useMemo(() => {
@@ -366,7 +450,15 @@ export default function Discover() {
     if (selectedCity)
       filters.push({
         label: selectedCity,
-        remove: () => setSelectedCity(''),
+        remove: () => {
+          setSelectedCity('');
+          setSelectedCommunity('');
+        },
+      });
+    if (selectedCommunity)
+      filters.push({
+        label: selectedCommunity,
+        remove: () => setSelectedCommunity(''),
       });
     selectedEquipment.forEach((eq) =>
       filters.push({
@@ -381,11 +473,12 @@ export default function Discover() {
         remove: () => setRatingMin(1),
       });
     return filters;
-  }, [activeGenre, selectedCity, selectedEquipment, ratingMin]);
+  }, [activeGenre, selectedCity, selectedCommunity, selectedEquipment, ratingMin]);
 
   const clearAllFilters = () => {
     setActiveGenre('All');
     setSelectedCity('');
+    setSelectedCommunity('');
     setSelectedEquipment([]);
     setRatingMin(1);
     setSearchQuery('');
@@ -393,7 +486,16 @@ export default function Discover() {
   };
 
   const toggleCity = (city: string) => {
-    setSelectedCity((prev) => (prev === city ? '' : city));
+    setSelectedCity((prev) => {
+      const nextCity = prev === city ? '' : city;
+      setSelectedCommunity('');
+      return nextCity;
+    });
+    setCurrentPage(1);
+  };
+
+  const toggleCommunity = (community: string) => {
+    setSelectedCommunity((prev) => (prev === community ? '' : community));
     setCurrentPage(1);
   };
 
@@ -422,6 +524,20 @@ export default function Discover() {
 
   const sortLabel = SORT_OPTIONS.find((opt) => opt.value === sortBy)?.label ?? sortBy;
 
+  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
+  const genreDropdownRef = useRef<HTMLDivElement>(null);
+
+  /* Close genre dropdown on outside click */
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (genreDropdownRef.current && !genreDropdownRef.current.contains(event.target as Node)) {
+        setGenreDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <div className="min-h-[100dvh] bg-black">
       {/* ════════ Section 1: Hero ════════ */}
@@ -442,7 +558,7 @@ export default function Discover() {
                 <Search className="absolute left-4 w-5 h-5 text-gold pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search by DJ name, genre, or city..."
+                  placeholder="Search by DJ name, city, or community..."
                   value={searchQuery}
                   onChange={handleSearch}
                   className="w-full pl-12 pr-28 py-3.5 bg-black-surface border border-dark-gray rounded-full text-text-primary placeholder:text-text-muted text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
@@ -454,9 +570,9 @@ export default function Discover() {
             </div>
           </FadeIn>
 
-          {/* Genre Filter Pills */}
+          {/* Genre Filter Pills — Desktop */}
           <FadeIn delay={0.5}>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="hidden md:flex flex-wrap justify-center gap-2 mt-5">
               {genreOptions.map((genre, i) => (
                 <motion.button
                   key={genre}
@@ -473,6 +589,53 @@ export default function Discover() {
                   {genre}
                 </motion.button>
               ))}
+            </div>
+          </FadeIn>
+
+          {/* Genre Filter Dropdown — Mobile */}
+          <FadeIn delay={0.5}>
+            <div className="md:hidden mt-5" ref={genreDropdownRef}>
+              <button
+                onClick={() => setGenreDropdownOpen(!genreDropdownOpen)}
+                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold uppercase tracking-wide rounded-full border transition-all duration-200 ${
+                  activeGenre !== 'All'
+                    ? 'bg-gold-gradient text-black border-gold'
+                    : 'bg-transparent border-white/20 text-text-secondary'
+                }`}
+              >
+                <span>Genre: {activeGenre}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${genreDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {genreDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -5, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 bg-black-surface border border-dark-gray rounded-xl py-2 max-h-64 overflow-y-auto">
+                      {genreOptions.map((genre) => (
+                        <button
+                          key={genre}
+                          onClick={() => {
+                            handleGenreClick(genre);
+                            setGenreDropdownOpen(false);
+                          }}
+                          className={`block w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                            activeGenre === genre
+                              ? 'text-gold bg-gold/10'
+                              : 'text-text-secondary hover:text-text-primary hover:bg-black-elevated'
+                          }`}
+                        >
+                          {genre}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </FadeIn>
 
@@ -503,7 +666,7 @@ export default function Discover() {
                 className="overflow-hidden"
               >
                 <div className="max-w-4xl mx-auto mt-6 bg-black-surface rounded-xl border border-dark-gray p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* City */}
                     <div>
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
@@ -532,6 +695,38 @@ export default function Discover() {
                             </span>
                           </label>
                         ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+                        Community
+                      </h4>
+                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                        {selectedCity ? communityOptions.map((community) => (
+                          <label
+                            key={community}
+                            className="flex items-center gap-2.5 cursor-pointer group"
+                            onClick={() => toggleCommunity(community)}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                selectedCommunity === community
+                                  ? 'bg-gold border-gold'
+                                  : 'border-dark-gray group-hover:border-text-muted'
+                              }`}
+                            >
+                              {selectedCommunity === community && (
+                                <CheckCircle2 className="w-3 h-3 text-black" />
+                              )}
+                            </div>
+                            <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
+                              {community}
+                            </span>
+                          </label>
+                        )) : (
+                          <p className="text-sm text-text-muted">Select a city first.</p>
+                        )}
                       </div>
                     </div>
 
@@ -644,6 +839,24 @@ export default function Discover() {
             Showing {displayedDjs.length} of {serverTotal} DJs
           </span>
 
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-black-surface border border-dark-gray rounded-full p-0.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              title="List view"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {/* Sort Dropdown */}
           <div className="relative">
             <button
@@ -721,6 +934,20 @@ export default function Discover() {
               </motion.div>
             ) : displayedDjs.length === 0 ? (
               <EmptyState key="empty" onClear={clearAllFilters} />
+            ) : viewMode === 'list' ? (
+              <motion.div
+                key="list"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-3"
+              >
+                <AnimatePresence>
+                  {displayedDjs.map((dj, i) => (
+                    <DJListRow key={dj.id} dj={dj} index={i} />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
             ) : (
               <motion.div
                 key="grid"

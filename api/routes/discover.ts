@@ -31,6 +31,7 @@ const discoverMixesSchema = z.object({
 
 const discoverDjsSchema = z.object({
   city: z.string().optional(),
+  community: z.string().optional(),
   genre: z.string().optional(),
   search: z.string().optional(),
   page: z.string().optional(),
@@ -109,13 +110,14 @@ router.get('/djs', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
     }
 
-    const { city, genre, search, page, limit, sortBy, minFee, maxFee } = parsed.data;
+    const { city, community, genre, search, page, limit, sortBy, minFee, maxFee } = parsed.data;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = { isPublic: true };
     if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (community) where.community = { contains: community, mode: 'insensitive' };
     if (genre) where.genres = { has: genre };
     if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
     if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
@@ -123,6 +125,7 @@ router.get('/djs', async (req, res) => {
       where.OR = [
         { stageName: { contains: search, mode: 'insensitive' } },
         { city: { contains: search, mode: 'insensitive' } },
+        { community: { contains: search, mode: 'insensitive' } },
         { bio: { contains: search, mode: 'insensitive' } },
       ];
     }

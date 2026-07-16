@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
+import { FeatureLock } from '@/components/FeatureLock';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
 
 const GENRES = [
   'Amapiano',
@@ -49,23 +51,7 @@ const GENRES = [
   'Open Format',
 ];
 
-const CITIES = [
-  'Freetown',
-  'Bo',
-  'Kenema',
-  'Makeni',
-  'Koidu Town',
-  'Port Loko',
-  'Lunsar',
-  'Waterloo',
-  'Kabala',
-  'Magburaka',
-  'Kailahun',
-  'Moyamba',
-  'Pujehun',
-  'Bonthe',
-  'Kambia',
-];
+const CITIES = [...SIERRA_LEONE_CITIES];
 
 const COUNTRIES = [
   'Sierra Leone',
@@ -151,6 +137,7 @@ export default function Profile() {
     startYear: '',
     country: '',
     city: '',
+    community: '',
     genres: [] as string[],
     eventTypes: [] as string[],
     awards: [] as string[],
@@ -205,6 +192,7 @@ export default function Profile() {
             startYear: String(dj.startYear || ''),
             country: dj.country || '',
             city: dj.city || '',
+            community: dj.community || '',
             genres: dj.genres || [],
             eventTypes: dj.eventTypes || [],
             awards: dj.awards || [],
@@ -272,6 +260,7 @@ export default function Profile() {
     if (form.startYear) formData.append('startYear', form.startYear);
     if (form.country) formData.append('country', form.country);
     if (form.city) formData.append('city', form.city);
+    formData.append('community', form.community);
     appendArray('genres', form.genres);
     appendArray('eventTypes', form.eventTypes);
     appendArray('awards', form.awards);
@@ -414,6 +403,7 @@ export default function Profile() {
   const verificationStatus = djData?.verificationStatus || 'unverified';
   const verificationPending = verificationStatus === 'pending' || verificationStatus === 'info_requested';
   const verificationRejected = verificationStatus === 'rejected';
+  const communityOptions = form.city ? CITY_TO_COMMUNITIES[form.city] ?? [] : [];
 
   if (loading) {
     return (
@@ -597,13 +587,33 @@ export default function Profile() {
 
                 <div>
                   <Label className="text-text-secondary mb-2 block">City</Label>
-                  <Select value={form.city} onValueChange={(v) => setForm({ ...form, city: v })}>
+                  <Select
+                    value={form.city}
+                    onValueChange={(v) => setForm({ ...form, city: v, community: '' })}
+                  >
                     <SelectTrigger className="bg-black-elevated border-dark-gray text-text-primary">
                       <SelectValue placeholder="Select city" />
                     </SelectTrigger>
                     <SelectContent className="bg-black-surface border-dark-gray">
                       {CITIES.map((c) => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Community</Label>
+                  <Select
+                    value={form.community}
+                    onValueChange={(v) => setForm({ ...form, community: v })}
+                    disabled={!form.city || communityOptions.length === 0}
+                  >
+                    <SelectTrigger className="bg-black-elevated border-dark-gray text-text-primary">
+                      <SelectValue placeholder={form.city ? 'Select community' : 'Select city first'} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-black-surface border-dark-gray">
+                      {communityOptions.map((community) => (
+                        <SelectItem key={community} value={community}>{community}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1106,6 +1116,11 @@ export default function Profile() {
               </div>
 
               {!djData?.verified && !verificationPending && (
+                <FeatureLock
+                  isLocked={djData?.subscriptionTier === 'free'}
+                  feature="Verification"
+                  requiredTier="pro"
+                >
                 <form className="space-y-4" onSubmit={handleVerificationSubmit}>
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
@@ -1219,6 +1234,7 @@ export default function Profile() {
                     {verificationSubmitting ? 'Submitting...' : 'Submit Verification Request'}
                   </Button>
                 </form>
+                </FeatureLock>
               )}
 
               {djData?.verified && (

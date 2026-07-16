@@ -920,6 +920,50 @@ export function useCloseBattle() {
   });
 }
 
+export function useUpdateBattle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { id: string; title?: string; weekStart?: string; weekEnd?: string; theme?: string; metricType?: string }) => {
+      const { id, ...data } = payload;
+      const res = await api.put(`/admin/battles/${id}`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useAddBattleEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { battleId: string; djId: string; mixId?: string }) => {
+      const { battleId, ...data } = payload;
+      const res = await api.post(`/admin/battles/${battleId}/entries`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
+export function useRemoveBattleEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { battleId: string; entryId: string }) => {
+      const res = await api.delete(`/admin/battles/${payload.battleId}/entries/${payload.entryId}`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBattles'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+    },
+  });
+}
+
 export function useDeleteMix() {
   const queryClient = useQueryClient();
   return useMutation({

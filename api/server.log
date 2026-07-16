@@ -1,4 +1,4 @@
 ◇ injected env (7) from ../.env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (6) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (6) from .env // tip: ⌘ override existing { override: true }
 Deck Salone API running on port 5002
-Health check: http://localhost:5002/health
+Health check: http://localhost:5002/healtShutting down...
