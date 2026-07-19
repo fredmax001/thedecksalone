@@ -20,7 +20,6 @@ import {
   Globe,
   Phone,
   ThumbsUp,
-  Check,
   X,
   TrendingUp,
   Loader2,
@@ -29,6 +28,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn, imageFallback } from "@/lib/utils";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
 import { useReviews } from "@/hooks/useReviews";
@@ -1794,9 +1794,11 @@ export default function DjProfile() {
               />
             </div>
             {dj.verified && (
-              <div className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-green flex items-center justify-center border-2 border-black z-20">
-                <Check size={14} className="text-white" strokeWidth={3} />
-              </div>
+              <VerifiedBadge 
+                dj={dj} 
+                size={32} 
+                className="absolute bottom-0 right-0 z-20 rounded-full border-2 border-black bg-black" 
+              />
             )}
           </motion.div>
 

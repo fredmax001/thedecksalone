@@ -6,7 +6,6 @@ import {
   Save,
   Check,
   Shield,
-  ShieldCheck,
   CheckCircle,
   Upload,
   Globe,
@@ -23,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import {
   Tabs,
   TabsContent,
@@ -1086,9 +1086,11 @@ export default function Profile() {
               {/* Verification Status */}
               <div className="flex items-center gap-4 p-4 rounded-xl bg-black-elevated border border-dark-gray">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  djData?.verified ? 'bg-green/20 text-green' : verificationPending ? 'bg-yellow-500/20 text-yellow-500' : verificationRejected ? 'bg-red/20 text-red' : 'bg-yellow-500/20 text-yellow-500'
+                  djData?.verified ? 'bg-white/10' : verificationPending ? 'bg-yellow-500/20 text-yellow-500' : verificationRejected ? 'bg-red/20 text-red' : 'bg-yellow-500/20 text-yellow-500'
                 }`}>
-                  {djData?.verified ? <ShieldCheck className="w-6 h-6" /> : <Shield className="w-6 h-6" />}
+                  {djData?.verified 
+                    ? <VerifiedBadge dj={djData} size={36} />
+                    : <Shield className="w-6 h-6" />}
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-text-primary">
@@ -1105,7 +1107,15 @@ export default function Profile() {
                   </p>
                 </div>
                 {djData?.verified && (
-                  <Badge className="bg-green/10 text-green border-0 ml-auto">Verified</Badge>
+                  <Badge 
+                    className={`border-0 ml-auto ${
+                      djData?.verificationBadgeType === 'gold' || djData?.isPro
+                        ? 'bg-yellow-400/10 text-yellow-400'
+                        : 'bg-gray-400/10 text-gray-400'
+                    }`}
+                  >
+                    {djData?.verificationBadgeType === 'gold' || djData?.isPro ? '🥇 Gold Verified' : '✓ Verified'}
+                  </Badge>
                 )}
                 {verificationPending && (
                   <Badge className="bg-yellow-500/10 text-yellow-500 border-0 ml-auto">Pending</Badge>

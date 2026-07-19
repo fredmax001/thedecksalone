@@ -166,6 +166,7 @@ model DjProfile {
   verificationNotes       String?
   verificationReason      String?
   verificationStatus      String                   @default("unverified")
+  verificationBadgeType   String?
   verifiedAt              DateTime?
   willTravel              Boolean                  @default(false)
   monthlyListeners        Int                      @default(0)

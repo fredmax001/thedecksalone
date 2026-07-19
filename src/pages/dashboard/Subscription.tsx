@@ -75,12 +75,6 @@ const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   ],
 };
 
-// Annual prices
-const ANNUAL_PRICES: Record<string, number> = {
-  pro: 2000,
-  legend: 4000,
-};
-
 const PLANS: Plan[] = [
   {
     id: 'free',
@@ -115,7 +109,6 @@ const PLANS: Plan[] = [
       'Unlimited mix uploads',
       'Advanced analytics & insights',
       'Priority in search results',
-      'Verified badge',
       'Direct booking payments',
       'Email support',
     ],
@@ -319,7 +312,7 @@ export default function Subscription() {
   };
 
   const selectedPlan = PLANS.find((plan) => plan.id === selectedPlanId);
-  const selectedPaidPlan = paymentConfig.plans.find((plan) => plan.id === selectedPlanId);
+
   const hasPendingRequest = latestRequest?.status === 'pending';
   const isSelectedCurrentPaidPlan = !!selectedPlanId && selectedPlanId !== 'free' && selectedPlanId === currentPlan;
   const shouldShowPaymentPanel = (!!selectedPlanId && selectedPlanId !== 'free') || !!latestRequest || (status?.isPro && currentPlan !== 'free');
@@ -454,7 +447,7 @@ export default function Subscription() {
                         </p>
                         <p className="font-mono text-2xl text-text-primary mt-1">{paymentConfig.paymentNumber}</p>
                         <p className="text-xs text-text-muted mt-2">
-                          Amount: {paymentConfig.currency} {(selectedPaidPlan?.price || selectedPlan?.price || paymentConfig.proPrice).toLocaleString()}
+                          Amount: {paymentConfig.currency} {(billingPeriod === 'annual' ? selectedPlan?.annualPrice : selectedPlan?.monthlyPrice) || paymentConfig.proPrice}
                         </p>
                       </div>
                       <p className="text-sm font-medium text-text-primary">Next Step:</p>

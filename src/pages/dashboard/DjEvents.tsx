@@ -16,10 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   Crown,
-  Users,
   Images,
-  Upload,
-  Toggle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
@@ -108,7 +105,6 @@ export default function DjEvents() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Ticket management state
   const [ticketEventId, setTicketEventId] = useState<string | null>(null);
@@ -117,7 +113,6 @@ export default function DjEvents() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Gallery upload state
-  const [galleryEventId, setGalleryEventId] = useState<string | null>(null);
   const [galleryUploading, setGalleryUploading] = useState(false);
 
   const isDj = user?.role === 'DJ';
@@ -293,7 +288,6 @@ export default function DjEvents() {
       Array.from(files).forEach(f => fd.append('photos', f));
       await api.post(`/events/${eventId}/gallery`, fd);
       toast.success(`${files.length} photo(s) uploaded to gallery`);
-      setGalleryEventId(null);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Failed to upload photos');
     } finally {

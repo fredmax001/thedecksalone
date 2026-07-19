@@ -8,6 +8,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const passport = require('passport');
+const cookieParser = require('cookie-parser');
 const { prisma } = require('./utils/prisma');
 const { authMiddleware } = require('./middleware/auth');
 const { generalLimiter } = require('./utils/rateLimiter');
@@ -77,7 +78,11 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// Cookie parser — required for Google OAuth state cookie validation
+app.use(cookieParser());
+
 // Passport initialization
+app.use(passport.initialize());
 app.use(passport.initialize());
 
 // Serve uploaded files statically

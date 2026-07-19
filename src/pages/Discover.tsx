@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import FadeIn from '@/components/FadeIn';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { imageFallback } from '@/lib/utils';
@@ -128,7 +129,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
         {/* Verified Badge */}
         {dj.verified && (
           <div className="absolute top-3 right-3">
-            <CheckCircle2 className="w-5 h-5 text-green" />
+            <VerifiedBadge dj={dj} size={20} />
           </div>
         )}
 
@@ -266,7 +267,7 @@ function DJListRow({ dj, index }: { dj: DJ; index: number }) {
               {dj.stageName}
             </h3>
           </Link>
-          {dj.verified && <CheckCircle2 className="w-4 h-4 text-green shrink-0" />}
+          {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
         </div>
         <div className="flex items-center gap-1 mt-0.5">
           <MapPin className="w-3 h-3 text-text-muted" />

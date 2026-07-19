@@ -90,6 +90,7 @@ const campaignStatusSchema = z.object({
 
 const verifyDjSchema = z.object({
   notes: z.string().optional(),
+  badgeType: z.enum(['grey', 'gold']).nullable().optional(),
 });
 
 const subscriptionReviewSchema = z.object({
@@ -383,7 +384,12 @@ router.get('/djs/pending', async (req, res) => {
 router.get('/djs/verification-requests', async (req, res) => {
   try {
     const djs = await prisma.djProfile.findMany({
-      where: { verificationStatus: { in: ['pending', 'info_requested', 'rejected', 'approved'] } },
+      where: {
+        OR: [
+          { verificationStatus: { in: ['pending', 'info_requested', 'rejected', 'approved'] } },
+          { verified: true },
+        ],
+      },
       orderBy: { updatedAt: 'desc' },
       include: {
         user: { select: { id: true, email: true, createdAt: true } },
@@ -402,6 +408,7 @@ router.put('/djs/:id/verify', async (req, res) => {
   try {
     const parsed = verifyDjSchema.safeParse(req.body);
     const notes = parsed.success ? parsed.data.notes : undefined;
+    const badgeType = parsed.success && parsed.data.badgeType ? parsed.data.badgeType : 'grey';
     const targetId = req.params.id;
 
     const dj = await prisma.djProfile.update({
@@ -409,6 +416,7 @@ router.put('/djs/:id/verify', async (req, res) => {
       data: {
         verified: true,
         verificationStatus: 'approved',
+        verificationBadgeType: badgeType,
         isPublic: true,
         verifiedAt: new Date(),
         badges: { push: 'Verified DJ' },
@@ -423,6 +431,39 @@ router.put('/djs/:id/verify', async (req, res) => {
       entity: 'DJ_PROFILE',
       entityId: targetId,
       metadata: { notes: notes || null, stageName: dj.stageName },
+      req,
+    });
+
+    return res.json({ success: true, data: dj });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/djs/:id/badge-type - Update DJ verification badge type
+router.put('/djs/:id/badge-type', async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const { badgeType } = req.body;
+    
+    if (badgeType !== 'grey' && badgeType !== 'gold' && badgeType !== null) {
+      return res.status(400).json({ success: false, error: 'Invalid badge type' });
+    }
+
+    const dj = await prisma.djProfile.update({
+      where: { id: targetId },
+      data: {
+        verificationBadgeType: badgeType,
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: dj.userId,
+      action: 'DJ_BADGE_UPDATE',
+      entity: 'DJ_PROFILE',
+      entityId: targetId,
+      metadata: { badgeType, stageName: dj.stageName },
       req,
     });
 
@@ -1305,6 +1346,24 @@ router.get('/rankings/history', async (req, res) => {
 router.get('/notifications', async (req, res) => {
   try {
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const userId = req.user?.id;
+
+    // Load admin notification preferences from user record
+    let readAt: Date | null = null;
+    let clearedIds: string[] = [];
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationPreferences: true },
+      });
+      const prefs = user?.notificationPreferences as Record<string, any> | null;
+      if (prefs?.adminNotificationReadAt) {
+        readAt = new Date(prefs.adminNotificationReadAt);
+      }
+      if (Array.isArray(prefs?.clearedAdminNotificationIds)) {
+        clearedIds = prefs.clearedAdminNotificationIds;
+      }
+    }
 
     const [latestUsers, pendingDjs, latestBookings, latestMixes, latestEvents] = await Promise.all([
       prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, email: true, role: true, createdAt: true } }),
@@ -1314,15 +1373,104 @@ router.get('/notifications', async (req, res) => {
       prisma.event.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, title: true, createdAt: true } }),
     ]);
 
-    const notifications = [
-      ...latestUsers.map((u) => ({ id: `user-${u.id}`, type: 'user', title: 'New User Registration', message: `${u.email} joined as ${u.role.toLowerCase()}`, createdAt: u.createdAt, read: false })),
-      ...pendingDjs.map((d) => ({ id: `verify-${d.id}`, type: 'verification', title: 'DJ Verification Request', message: `${d.stageName} is awaiting verification`, createdAt: d.createdAt, read: false })),
-      ...latestBookings.map((b) => ({ id: `booking-${b.id}`, type: 'booking', title: `New Booking — ${b.status}`, message: `${b.client?.email || 'A client'} booked ${b.dj?.stageName || 'a DJ'}`, createdAt: b.createdAt, read: false })),
-      ...latestMixes.map((m) => ({ id: `mix-${m.id}`, type: 'mix', title: 'New Mix Uploaded', message: `${m.title} by ${m.dj?.stageName || 'Unknown'}`, createdAt: m.createdAt, read: false })),
-      ...latestEvents.map((e) => ({ id: `event-${e.id}`, type: 'event', title: 'New Event Created', message: e.title, createdAt: e.createdAt, read: false })),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, limit);
+    let notifications = [
+      ...latestUsers.map((u) => ({ id: `user-${u.id}`, type: 'user', title: 'New User Registration', message: `${u.email} joined as ${u.role.toLowerCase()}`, createdAt: u.createdAt })),
+      ...pendingDjs.map((d) => ({ id: `verify-${d.id}`, type: 'verification', title: 'DJ Verification Request', message: `${d.stageName} is awaiting verification`, createdAt: d.createdAt })),
+      ...latestBookings.map((b) => ({ id: `booking-${b.id}`, type: 'booking', title: `New Booking — ${b.status}`, message: `${b.client?.email || 'A client'} booked ${b.dj?.stageName || 'a DJ'}`, createdAt: b.createdAt })),
+      ...latestMixes.map((m) => ({ id: `mix-${m.id}`, type: 'mix', title: 'New Mix Uploaded', message: `${m.title} by ${m.dj?.stageName || 'Unknown'}`, createdAt: m.createdAt })),
+      ...latestEvents.map((e) => ({ id: `event-${e.id}`, type: 'event', title: 'New Event Created', message: e.title, createdAt: e.createdAt })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Filter out cleared notifications
+    notifications = notifications.filter((n) => !clearedIds.includes(n.id));
+
+    // Compute read status based on adminNotificationReadAt timestamp
+    notifications = notifications.slice(0, limit).map((n) => ({
+      ...n,
+      read: readAt ? new Date(n.createdAt).getTime() <= readAt.getTime() : false,
+    }));
 
     return res.json({ success: true, data: notifications });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/notifications/mark-read - Mark all admin notifications as read
+router.post('/notifications/mark-read', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true },
+    });
+
+    const prefs = (user?.notificationPreferences as Record<string, any> | null) || {};
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        notificationPreferences: {
+          ...prefs,
+          adminNotificationReadAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/admin/notifications/clear - Clear all current admin notifications
+router.post('/notifications/clear', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+
+    // Rebuild the same synthetic list to capture current IDs
+    const [latestUsers, pendingDjs, latestBookings, latestMixes, latestEvents] = await Promise.all([
+      prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true } }),
+      prisma.djProfile.findMany({ where: { verified: false }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true } }),
+      prisma.booking.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true } }),
+      prisma.mix.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true } }),
+      prisma.event.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true } }),
+    ]);
+
+    const currentIds = [
+      ...latestUsers.map((u) => `user-${u.id}`),
+      ...pendingDjs.map((d) => `verify-${d.id}`),
+      ...latestBookings.map((b) => `booking-${b.id}`),
+      ...latestMixes.map((m) => `mix-${m.id}`),
+      ...latestEvents.map((e) => `event-${e.id}`),
+    ].sort((a, b) => b.localeCompare(a)).slice(0, limit);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true },
+    });
+
+    const prefs = (user?.notificationPreferences as Record<string, any> | null) || {};
+    const existingCleared = Array.isArray(prefs?.clearedAdminNotificationIds) ? prefs.clearedAdminNotificationIds : [];
+    const merged = Array.from(new Set([...existingCleared, ...currentIds]));
+    // Cap at 200 to prevent unbounded growth
+    const capped = merged.slice(-200);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        notificationPreferences: {
+          ...prefs,
+          clearedAdminNotificationIds: capped,
+        },
+      },
+    });
+
+    return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

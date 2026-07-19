@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/browser';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -92,7 +92,7 @@ export default function TicketScanner() {
           if (result) {
             processQrCode(result.getText());
           }
-          if (error && !(error instanceof NotFoundException)) {
+          if (error && error.name !== 'NotFoundException') {
             console.warn('Scan error:', error);
           }
         }

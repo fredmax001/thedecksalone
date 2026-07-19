@@ -4,22 +4,19 @@ import {
   ArrowLeft,
   MapPin,
   Calendar,
-  Clock,
-  Ticket,
-  Music,
-  Loader2,
-  Users,
   CheckCircle2,
+  Ticket,
+  Loader2,
   Upload,
-  QrCode,
+  Smartphone,
+  X,
+  Users,
   Images,
   Bell,
-  X,
-  Smartphone,
 } from 'lucide-react';
 import { useEvent } from '@/hooks/useEvents';
 import { imageFallback } from '@/lib/utils';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { QRCodeSVG } from 'qrcode.react';

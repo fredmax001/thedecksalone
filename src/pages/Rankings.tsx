@@ -7,7 +7,6 @@ import {
   Star,
   TrendingDown,
   TrendingUp,
-  CheckCircle2,
   Flame,
   Award,
   RefreshCw,
@@ -17,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import FadeIn from '@/components/FadeIn';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useRankings } from '@/hooks/useRankings';
 
 
@@ -112,7 +112,7 @@ function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
           <span className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary truncate">
             {dj.stageName}
           </span>
-          {dj.verified && <CheckCircle2 className="w-4 h-4 text-green shrink-0" />}
+          {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
           {trend > 3 && <Flame className="w-4 h-4 text-orange shrink-0" />}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-1">

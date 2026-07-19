@@ -583,6 +583,32 @@ export function useAdminNotifications(filters?: { limit?: number }) {
   });
 }
 
+export function useMarkAdminNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/notifications/mark-read');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminNotifications'] });
+    },
+  });
+}
+
+export function useClearAdminNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/notifications/clear');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminNotifications'] });
+    },
+  });
+}
+
 export function useAdminSecurityLogs(filters?: { limit?: number }) {
   return useQuery<SecurityLog[]>({
     queryKey: ['adminSecurityLogs', filters],
@@ -731,8 +757,8 @@ export function useUpdateCampaignStatus() {
 export function useVerifyDj() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
-      const res = await api.put(`/admin/djs/${id}/verify`, { notes });
+    mutationFn: async ({ id, notes, badgeType }: { id: string; notes?: string; badgeType?: 'grey' | 'gold' }) => {
+      const res = await api.put(`/admin/djs/${id}/verify`, { notes, badgeType });
       return res.data.data;
     },
     onSuccess: () => {

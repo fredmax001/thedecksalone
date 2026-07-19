@@ -33,6 +33,7 @@ import { useDJs, useDJ, useDJCities, useDJGenres } from "@/hooks/useDJs";
 import { useEventTypes } from "@/hooks/useEvents";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 const EVENT_TYPES = [
   'Wedding',
@@ -1108,9 +1109,7 @@ export default function Booking() {
                             {dj.name}
                           </h4>
                           {dj.verified && (
-                            <div className="w-4 h-4 rounded-full bg-green flex items-center justify-center shrink-0">
-                              <Check size={10} className="text-white" strokeWidth={3} />
-                            </div>
+                            <VerifiedBadge dj={dj} size={16} className="shrink-0" />
                           )}
                         </div>
                         <div className="flex items-center gap-1">

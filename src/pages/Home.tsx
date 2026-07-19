@@ -12,27 +12,9 @@ import {
 } from 'lucide-react';
 import { useHomeData } from '@/hooks/useHomeData';
 import { useTrendingMixes } from '@/hooks/useMixes';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 
-export function VerifiedBadge({ className = '' }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-    >
-      <circle cx="8" cy="8" r="8" fill="#22C55E" />
-      <path
-        d="M5 8L7 10L11 6"
-        stroke="white"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+
 
 const quickFilters = ['All', 'Afrobeats', 'Amapiano', 'Dancehall', 'Hip Hop', 'Gospel', 'Salone Mix'];
 
@@ -265,7 +247,7 @@ function DjRail({ djs }: { djs: any[] }) {
               <div className="p-4">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate text-base font-bold text-text-primary">{dj.stageName}</h3>
-                  {dj.verified && <VerifiedBadge className="shrink-0" />}
+                  {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
                   <MapPin className="h-3 w-3" />
