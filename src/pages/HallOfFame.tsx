@@ -25,6 +25,7 @@ import {
 } from '../hooks/useAdmin';
 import { useAuthStore } from '../stores/authStore';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import ShareButton from '../components/ShareButton';
 
 /* ──────────────────────────── types ──────────────────────────── */
 
@@ -802,25 +803,40 @@ export default function HallOfFame() {
                             </div>
                           )}
 
-                          <div className="mt-8 pt-6 border-t border-white/5 flex items-center gap-6 text-sm text-text-muted font-mono">
-                            {pioneer.totalStreams > 0 && (
-                              <span className="flex items-center gap-2">
-                                <Headphones className="w-4 h-4 text-gold/70" />
-                                {pioneer.totalStreams.toLocaleString()} streams
-                              </span>
-                            )}
-                            {pioneer.totalFollowers > 0 && (
-                              <span className="flex items-center gap-2">
-                                <Star className="w-4 h-4 text-gold/70" />
-                                {pioneer.totalFollowers.toLocaleString()} followers
-                              </span>
-                            )}
-                            {pioneer.totalStreams === 0 && pioneer.totalFollowers === 0 && (
-                              <span className="flex items-center gap-2">
-                                <Award className="w-4 h-4 text-gold/70" />
-                                Honorary Inductee
-                              </span>
-                            )}
+                          <div className="mt-8 pt-6 border-t border-white/5 flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex items-center gap-6 text-sm text-text-muted font-mono">
+                              {pioneer.totalStreams > 0 && (
+                                <span className="flex items-center gap-2">
+                                  <Headphones className="w-4 h-4 text-gold/70" />
+                                  {pioneer.totalStreams.toLocaleString()} streams
+                                </span>
+                              )}
+                              {pioneer.totalFollowers > 0 && (
+                                <span className="flex items-center gap-2">
+                                  <Star className="w-4 h-4 text-gold/70" />
+                                  {pioneer.totalFollowers.toLocaleString()} followers
+                                </span>
+                              )}
+                              {pioneer.totalStreams === 0 && pioneer.totalFollowers === 0 && (
+                                <span className="flex items-center gap-2">
+                                  <Award className="w-4 h-4 text-gold/70" />
+                                  Honorary Inductee
+                                </span>
+                              )}
+                            </div>
+                            <ShareButton
+                              url={`${window.location.origin}/dj/${pioneer.username || pioneer.id}`}
+                              title={`${pioneer.stageName} — Hall of Fame Legend`}
+                              description={`Celebrate ${pioneer.stageName}, legendary Sierra Leonean DJ in the Deck Salone Hall of Fame.`}
+                              preview={{
+                                type: "hall_of_fame",
+                                stageName: pioneer.stageName,
+                                title: pioneer.awards?.[0] || "Hall of Fame Legend",
+                                year: pioneer.startYear ? String(pioneer.startYear) : "Pioneer",
+                                avatar: pioneer.avatar || undefined,
+                              }}
+                              size="sm"
+                            />
                           </div>
                         </div>
                       </div>

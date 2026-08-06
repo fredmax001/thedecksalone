@@ -108,11 +108,29 @@ function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary truncate">
             {dj.stageName}
           </span>
           {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
+          {dj.rankingPosition === 1 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-gold/20 text-gold border border-gold/40 shadow-[0_0_12px_rgba(212,162,74,0.3)] shrink-0">
+              <Trophy className="w-3 h-3 text-gold" />
+              #1 DJ OF THE WEEK
+            </span>
+          )}
+          {dj.rankingPosition === 2 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-slate-300/20 text-slate-300 border border-slate-300/40 shrink-0">
+              <Trophy className="w-3 h-3 text-slate-300" />
+              #2 DJ OF THE WEEK
+            </span>
+          )}
+          {dj.rankingPosition === 3 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-amber-700/20 text-amber-500 border border-amber-700/40 shrink-0">
+              <Trophy className="w-3 h-3 text-amber-500" />
+              #3 DJ OF THE WEEK
+            </span>
+          )}
           {trend > 3 && <Flame className="w-4 h-4 text-orange shrink-0" />}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -441,41 +459,6 @@ export default function Rankings() {
             <div className="flex items-center justify-center gap-2 mt-4 text-text-muted">
               <RefreshCw className="w-3.5 h-3.5" />
               <span className="font-mono text-xs">Last updated: {new Date().toLocaleDateString()}</span>
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.5}>
-            <div className="max-w-4xl mx-auto mt-8 bg-black-elevated rounded-2xl border border-gold/15 p-6">
-              <p className="section-label text-center mb-6">HOW SCORES ARE CALCULATED</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-gold">~45%</span>
-                  <p className="text-sm font-semibold text-text-primary mt-1">Digital Score</p>
-                  <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
-                    <li>Streams & Followers</li>
-                    <li>Mix Uploads & Plays</li>
-                    <li>Platform Engagement</li>
-                  </ul>
-                </div>
-                <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-purple">~35%</span>
-                  <p className="text-sm font-semibold text-text-primary mt-1">Industry Score</p>
-                  <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
-                    <li>Booking Count</li>
-                    <li>Events Played</li>
-                    <li>Battle Performance</li>
-                  </ul>
-                </div>
-                <div className="text-center">
-                  <span className="font-mono text-3xl font-bold text-green">~20%</span>
-                  <p className="text-sm font-semibold text-text-primary mt-1">Community Score</p>
-                  <ul className="space-y-1.5 text-xs text-text-secondary mt-3">
-                    <li>User Ratings</li>
-                    <li>Reviews & Feedback</li>
-                    <li>Verified Reviews</li>
-                  </ul>
-                </div>
-              </div>
             </div>
           </FadeIn>
         </div>

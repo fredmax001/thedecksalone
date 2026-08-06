@@ -5,15 +5,17 @@ const fs = require('fs');
 const MB = 1024 * 1024;
 const MAX_IMAGE_UPLOAD_MB = Number(process.env.MAX_IMAGE_UPLOAD_MB || 10);
 const MAX_DOCUMENT_UPLOAD_MB = Number(process.env.MAX_DOCUMENT_UPLOAD_MB || 10);
-const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 100);
+const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 300);
+
+const getUploadsDir = () => process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
 
 // Ensure upload directories exist (used for local fallback)
 const uploadDirs = {
-  avatars: path.join(process.cwd(), 'uploads', 'avatars'),
-  covers: path.join(process.cwd(), 'uploads', 'covers'),
-  mixes: path.join(process.cwd(), 'uploads', 'mixes'),
-  events: path.join(process.cwd(), 'uploads', 'events'),
-  documents: path.join(process.cwd(), 'uploads', 'documents'),
+  avatars: path.join(getUploadsDir(), 'avatars'),
+  covers: path.join(getUploadsDir(), 'covers'),
+  mixes: path.join(getUploadsDir(), 'mixes'),
+  events: path.join(getUploadsDir(), 'events'),
+  documents: path.join(getUploadsDir(), 'documents'),
 };
 
 Object.values(uploadDirs).forEach((dir) => {
@@ -25,7 +27,7 @@ Object.values(uploadDirs).forEach((dir) => {
 // Use memory storage so files can be processed (resize, validate, upload to S3) before persisting
 const memoryStorage = multer.memoryStorage();
 
-// File filter
+// File filter for general files
 function fileFilter(allowedMimes) {
   return (req, file, cb) => {
     if (allowedMimes.includes(file.mimetype)) {
@@ -36,16 +38,36 @@ function fileFilter(allowedMimes) {
   };
 }
 
+// Strict image file filter for uploaded images.
+// SVG is rejected because it can contain executable scripts.
+// Downstream image processors should still validate file magic bytes.
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
+function imageFileFilter(req, file, cb) {
+  if (file.mimetype && ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Invalid image format. Allowed: ${ALLOWED_IMAGE_MIMES.map((m) => m.replace('image/', '')).join(', ')}`), false);
+  }
+}
+
 // Upload configs
 const uploadAvatar = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  fileFilter: imageFileFilter,
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadCover = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  fileFilter: imageFileFilter,
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
@@ -57,31 +79,32 @@ const uploadMixAudio = multer({
 
 const uploadMixCover = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  fileFilter: imageFileFilter,
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadEventImage = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  fileFilter: imageFileFilter,
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
 const uploadDocument = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter([
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'application/pdf',
-  ]),
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid document format. Allowed: PDF or Images'), false);
+    }
+  },
   limits: { fileSize: MAX_DOCUMENT_UPLOAD_MB * MB },
 });
 
 // Combined upload for DJ profile update (avatar + cover)
 const uploadDjProfileImages = multer({
   storage: memoryStorage,
-  fileFilter: fileFilter(['image/jpeg', 'image/png', 'image/webp']),
+  fileFilter: imageFileFilter,
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 }).fields([
   { name: 'avatar', maxCount: 1 },
@@ -108,7 +131,7 @@ const uploadMix = multer({
 
 // Serve uploads statically (local fallback)
 function serveUploads(app) {
-  app.use('/uploads', require('express').static(path.join(process.cwd(), 'uploads')));
+  app.use('/uploads', require('express').static(getUploadsDir()));
 }
 
 module.exports = {

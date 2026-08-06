@@ -164,12 +164,15 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Verify booking if provided
     if (bookingId) {
-      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { dj: { select: { userId: true } } },
+      });
       if (!booking) {
         return res.status(404).json({ success: false, error: 'Booking not found' });
       }
-      const isParticipant = booking.clientId === senderId || booking.djId === senderId ||
-        booking.clientId === receiverId || booking.djId === receiverId;
+      const isParticipant = booking.clientId === senderId || booking.dj?.userId === senderId ||
+        booking.clientId === receiverId || booking.dj?.userId === receiverId;
       if (!isParticipant) {
         return res.status(403).json({ success: false, error: 'Not a participant in this booking' });
       }

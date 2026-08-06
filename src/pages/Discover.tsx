@@ -14,12 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  Loader2,
   LayoutGrid,
   List,
 } from 'lucide-react';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import FadeIn from '@/components/FadeIn';
+import SEOHead from '@/components/SEOHead';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { imageFallback } from '@/lib/utils';
 import ShareButton from '@/components/ShareButton';
@@ -541,6 +541,10 @@ export default function Discover() {
 
   return (
     <div className="min-h-[100dvh] bg-black">
+      <SEOHead
+        title="Discover DJs — Deck Salone"
+        description="Browse and discover top Sierra Leonean DJs by genre, city, and performance rating."
+      />
       {/* ════════ Section 1: Hero ════════ */}
       <section className="bg-black-elevated pt-24 pb-12">
         <div className="container-main">
@@ -905,9 +909,22 @@ export default function Discover() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center justify-center py-20"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
               >
-                <Loader2 className="w-8 h-8 text-gold animate-spin" />
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
+                    <div className="w-full h-48 bg-white/5" />
+                    <div className="p-5">
+                      <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
+                      <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
+                      <div className="flex gap-2 mb-4">
+                        <div className="h-6 w-16 bg-white/5 rounded-full" />
+                        <div className="h-6 w-16 bg-white/5 rounded-full" />
+                      </div>
+                      <div className="h-10 bg-white/5 rounded-lg w-full" />
+                    </div>
+                  </div>
+                ))}
               </motion.div>
             ) : djsQuery.error ? (
               <motion.div

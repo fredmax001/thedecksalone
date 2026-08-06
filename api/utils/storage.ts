@@ -25,8 +25,12 @@ if (isS3Enabled) {
   });
 }
 
+function getUploadsDir() {
+  return process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
+}
+
 function localPath(key) {
-  return path.join(process.cwd(), 'uploads', key);
+  return path.join(getUploadsDir(), key);
 }
 
 function ensureLocalDir(key) {

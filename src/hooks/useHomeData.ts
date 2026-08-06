@@ -42,12 +42,32 @@ export function useHomeData() {
     },
   });
 
+  const homeAdBoard = useQuery({
+    queryKey: ['homeAdBoard'],
+    queryFn: async () => {
+      const res = await api.get('/campaigns/home-board');
+      return res.data.data || { paidAds: [], events: [], djRankings: [], mixes: [] };
+    },
+    staleTime: 60_000, // refresh every minute
+  });
+
+  const platformStats = useQuery({
+    queryKey: ['platformStats'],
+    queryFn: async () => {
+      const res = await api.get('/campaigns/stats');
+      return res.data.data || { totalDjs: 0, verifiedDjs: 0, totalMixes: 0, totalEvents: 0, citiesCount: 0 };
+    },
+    staleTime: 60_000,
+  });
+
   return {
     featuredDJs,
     rankings,
     mixCategories,
     events,
     currentBattle,
+    homeAdBoard,
+    platformStats,
     isLoading:
       featuredDJs.isLoading ||
       rankings.isLoading ||

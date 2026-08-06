@@ -23,6 +23,10 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import FadeIn from '@/components/FadeIn';
+import ReferralCard from '@/components/ReferralCard';
+import { ProfileCompletionCard } from '@/components/ProfileCompletionCard';
+
+
 
 interface DashboardData {
   overview: {
@@ -164,13 +168,25 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Profile Completion 5-step checklist */}
+          <ProfileCompletionCard />
+
           {error && (
             <div className="mb-8 p-4 rounded-lg bg-red/10 border border-red/30 text-red text-sm">
               {error}
             </div>
           )}
 
+
+
+          {/* Referral Promo Card */}
+          <div className="mb-8">
+            <ReferralCard />
+          </div>
+
           {/* Stats Grid */}
+
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             <StatCard
               icon={Play}

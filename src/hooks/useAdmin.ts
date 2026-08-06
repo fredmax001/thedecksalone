@@ -308,6 +308,7 @@ export interface ProSubscriptionRequest {
 export interface AdCampaign {
   id: string;
   name: string;
+  description?: string | null;
   status: 'pending_payment' | 'active' | 'paused' | 'rejected' | 'completed' | 'draft';
   targetType: 'profile' | 'mix' | 'battle';
   targetId?: string | null;
@@ -334,6 +335,9 @@ export interface AdsOverview {
 
 export interface CreateAdInput {
   name: string;
+  description?: string;
+  creativeImageUrl?: string;
+  ctaUrl?: string;
   status?: 'active' | 'paused' | 'draft';
   budget?: number;
   startDate?: string;
@@ -424,7 +428,7 @@ export function useAdminRankings() {
 }
 
 export function useAdminMixes(
-  filters?: { featured?: boolean | string; search?: string; page?: number; limit?: number }
+  filters?: { featured?: boolean | string; isPublic?: boolean | string; hallOfFame?: boolean | string; search?: string; page?: number; limit?: number }
 ) {
   return useQuery<PaginatedResponse<Mix>>({
     queryKey: ['adminMixes', filters],
@@ -432,6 +436,12 @@ export function useAdminMixes(
       const params = new URLSearchParams();
       if (filters?.featured !== undefined && filters.featured !== '') {
         params.set('featured', String(filters.featured));
+      }
+      if (filters?.isPublic !== undefined && filters.isPublic !== '') {
+        params.set('isPublic', String(filters.isPublic));
+      }
+      if (filters?.hallOfFame !== undefined && filters.hallOfFame !== '') {
+        params.set('hallOfFame', String(filters.hallOfFame));
       }
       if (filters?.search) params.set('search', filters.search);
       if (filters?.page) params.set('page', String(filters.page));
@@ -463,7 +473,7 @@ export function useAdminBookings(
 }
 
 export function useAdminEvents(
-  filters?: { status?: string; city?: string; page?: number; limit?: number }
+  filters?: { status?: string; city?: string; publishStatus?: string; search?: string; page?: number; limit?: number }
 ) {
   return useQuery<PaginatedResponse<Event>>({
     queryKey: ['adminEvents', filters],
@@ -471,11 +481,89 @@ export function useAdminEvents(
       const params = new URLSearchParams();
       if (filters?.status) params.set('status', filters.status);
       if (filters?.city) params.set('city', filters.city);
+      if (filters?.publishStatus) params.set('publishStatus', filters.publishStatus);
+      if (filters?.search) params.set('search', filters.search);
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
       const res = await api.get(`/admin/events${query ? `?${query}` : ''}`);
       return res.data;
+    },
+  });
+}
+
+export function useAdminEventTicketingStats() {
+  return useQuery<{ success: boolean; data: Record<string, number> }>({
+    queryKey: ['adminEventTicketingStats'],
+    queryFn: async () => {
+      const res = await api.get('/admin/events/ticketing/stats');
+      return res.data;
+    },
+  });
+}
+
+export function useAdminEventTickets(
+  eventId: string | undefined,
+  filters?: { status?: string; search?: string; page?: number; limit?: number }
+) {
+  return useQuery<PaginatedResponse<any>>({
+    queryKey: ['adminEventTickets', eventId, filters],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.set('status', filters.status);
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.page) params.set('page', String(filters.page));
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      const query = params.toString();
+      const res = await api.get(`/admin/events/${eventId}/tickets${query ? `?${query}` : ''}`);
+      return res.data;
+    },
+  });
+}
+
+export function useAdminEventScanLogs(
+  eventId: string | undefined,
+  filters?: { page?: number; limit?: number }
+) {
+  return useQuery<PaginatedResponse<any>>({
+    queryKey: ['adminEventScanLogs', eventId, filters],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.page) params.set('page', String(filters.page));
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      const query = params.toString();
+      const res = await api.get(`/admin/events/${eventId}/scan-logs${query ? `?${query}` : ''}`);
+      return res.data;
+    },
+  });
+}
+
+export function useSuspendEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const res = await api.post(`/admin/events/${id}/suspend`, { reason });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminEvents'] });
+      queryClient.invalidateQueries({ queryKey: ['adminEventTicketingStats'] });
+    },
+  });
+}
+
+export function useRestoreEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/admin/events/${id}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminEvents'] });
+      queryClient.invalidateQueries({ queryKey: ['adminEventTicketingStats'] });
     },
   });
 }
@@ -724,6 +812,19 @@ export function useCreateAd() {
   });
 }
 
+export function useUpdateAd() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: CreateAdInput & { id: string }) => {
+      const res = await api.put(`/admin/ads/${id}`, payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAds'] });
+    },
+  });
+}
+
 export function useAdminVerificationRequests() {
   return useQuery<DjProfile[]>({
     queryKey: ['adminVerificationRequests'],
@@ -840,6 +941,20 @@ export function useToggleMixFeature() {
   });
 }
 
+export function useToggleMixVisibility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isPublic }: { id: string; isPublic?: boolean }) => {
+      const res = await api.put(`/admin/mixes/${id}/visibility`, { isPublic });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['mixes'] });
+    },
+  });
+}
+
 export function useUpdateBookingStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -892,7 +1007,15 @@ export function useUpdateUserStatus() {
 export function useSendNotification() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { type: string; target: string; title: string; message: string; scheduled?: string }) => {
+    mutationFn: async (payload: {
+      type: string;
+      target: string;
+      title: string;
+      message: string;
+      scheduled?: string;
+      mediaUrl?: string;
+      mediaType?: 'image' | 'video';
+    }) => {
       const res = await api.post('/admin/notifications', payload);
       return res.data.data;
     },
@@ -901,6 +1024,116 @@ export function useSendNotification() {
     },
   });
 }
+
+export function useUploadNotifMedia() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('media', file);
+      const res = await api.post('/admin/upload-media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data as { success: boolean; url: string; type: 'image' | 'video'; mime: string };
+    },
+  });
+}
+
+export function useTestEmail() {
+  return useMutation({
+    mutationFn: async (to: string) => {
+      const res = await api.post('/admin/test-email', { to });
+      return res.data;
+    },
+  });
+}
+
+export function useAdminPromo(filters?: { eligible?: boolean }) {
+  return useQuery({
+    queryKey: ['adminPromo', filters],
+    queryFn: async () => {
+      const res = await api.get(`/admin/promo${filters?.eligible ? '?eligible=true' : ''}`);
+      return res.data;
+    },
+  });
+}
+
+export function useActivatePromo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ djId, months, reason }: { djId: string; months?: number; reason?: string }) => {
+      const res = await api.post(`/admin/promo/${djId}/activate`, { months, reason });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminPromo'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+    },
+  });
+}
+
+export function useGrantPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ djId, plan, months, reason }: { djId: string; plan: 'pro' | 'legend'; months?: number; reason?: string }) => {
+      const res = await api.post('/admin/grant-plan', { djId, plan, months, reason });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminPromo'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
+    },
+  });
+}
+
+export function useDJReferral() {
+  return useQuery({
+    queryKey: ['djReferral'],
+    queryFn: async () => {
+      const res = await api.get('/djs/my/referral');
+      return res.data.data;
+    },
+  });
+}
+
+export function useAdminBirthdays() {
+  return useQuery({
+    queryKey: ['adminBirthdays'],
+    queryFn: async () => {
+      const res = await api.get('/admin/birthdays');
+      return res.data.data;
+    },
+  });
+}
+
+export function useSendBirthdayWish() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await api.post('/admin/birthdays/send-wish', { userId });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBirthdays'] });
+    },
+  });
+}
+
+export function useTriggerBirthdayCron() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/birthdays/trigger-cron');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBirthdays'] });
+    },
+  });
+}
+
+
 
 // Battle hooks
 export function useAdminBattles(filters?: { status?: string; page?: number; limit?: number }) {
@@ -1063,6 +1296,15 @@ export function useRecalculateRankings() {
   });
 }
 
+export function useNotifyTop3Rankings() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/rankings/notify-top3');
+      return res.data;
+    },
+  });
+}
+
 export function useAdminOpportunities() {
   return useQuery({
     queryKey: ['admin-opportunities'],
@@ -1072,3 +1314,60 @@ export function useAdminOpportunities() {
     },
   });
 }
+
+export function useAdminSystemErrors(page = 1, level = 'ALL', source = 'ALL') {
+  return useQuery({
+    queryKey: ['adminSystemErrors', page, level, source],
+    queryFn: async () => {
+      const res = await api.get('/admin/system-errors', { params: { page, limit: 30, level, source } });
+      return res.data;
+    },
+    refetchInterval: 15000,
+  });
+}
+
+export function useTriggerBugReportDigest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/system-errors/digest');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminSystemErrors'] });
+    },
+  });
+}
+
+export function useSendCustomEmail() {
+  return useMutation({
+    mutationFn: async (data: { to: string; subject: string; message: string; recipientName?: string }) => {
+      const res = await api.post('/admin/send-custom-email', data);
+      return res.data;
+    },
+  });
+}
+
+export function useIncompleteProfiles() {
+  return useQuery({
+    queryKey: ['incompleteProfiles'],
+    queryFn: async () => {
+      const res = await api.get('/admin/incomplete-profiles');
+      return res.data;
+    },
+  });
+}
+
+export function useSendProfileNudge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { userId?: string; allIncomplete?: boolean }) => {
+      const res = await api.post('/admin/profiles/nudge', data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incompleteProfiles'] });
+    },
+  });
+}
+

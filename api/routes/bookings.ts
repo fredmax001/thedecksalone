@@ -29,7 +29,10 @@ const createBookingSchema = z.object({
   equipmentNeeded: z.array(z.string()).optional(),
   budgetMin: z.number().min(0).optional(),
   budgetMax: z.number().min(0).optional(),
-  services: z.any().optional(),
+  services: z.array(z.object({
+    name: z.string().min(1).max(200),
+    price: z.number().min(0).optional(),
+  })).optional(),
   travelNotes: z.string().optional(),
   guestName: z.string().optional(),
   guestEmail: z.string().email().optional(),
@@ -90,7 +93,8 @@ router.get('/my-requests', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -160,7 +164,8 @@ router.put('/:id/counter', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -213,7 +218,8 @@ router.get('/', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -244,7 +250,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: booking });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -322,7 +329,8 @@ router.post('/', softAuthMiddleware, bookingLimiter, async (req, res) => {
 
     return res.status(201).json({ success: true, data: booking });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -432,7 +440,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -476,7 +485,8 @@ router.post('/:id/review', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

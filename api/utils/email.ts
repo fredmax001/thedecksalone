@@ -1,4 +1,18 @@
 const nodemailer = require('nodemailer');
+const { getFrontendUrl } = require('./url');
+
+/**
+ * Escape HTML special characters to prevent XSS in email templates.
+ */
+function escapeHtml(str: string): string {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 interface SendEmailOptions {
   to: string;
@@ -58,7 +72,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
 }
 
 export async function sendWelcomeEmail(options: { to: string; username: string; role?: string }): Promise<{ success: boolean; error?: string }> {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://decksalone.com';
+  const frontendUrl = getFrontendUrl();
   const logoUrl = `${frontendUrl}/logo-icon.png`;
   const subject = 'Welcome to Deck Salone!';
   const roleLabel = options.role === 'DJ' ? 'DJ' : 'music lover';
@@ -153,10 +167,12 @@ If you have any questions, contact us at support@decksalone.com or WhatsApp +232
 }
 
 export async function sendOtpEmail(options: { to: string; code: string; username?: string }): Promise<{ success: boolean; error?: string }> {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://decksalone.com';
+  const frontendUrl = getFrontendUrl();
   const logoUrl = `${frontendUrl}/logo-icon.png`;
   const subject = 'Your Deck Salone Verification Code';
-  
+  const safeUsername = escapeHtml(options.username || 'there');
+  const safeCode = escapeHtml(options.code);
+
   const text = `Hi ${options.username || 'there'},
 
 Your verification code is: ${options.code}
@@ -187,13 +203,13 @@ If you did not request this code, please ignore this email.
           </tr>
           <tr>
             <td style="padding:40px 30px;text-align:center;">
-              <p style="color:#aaa;margin:0 0 24px;font-size:15px;">Hi ${options.username || 'there'},</p>
+              <p style="color:#aaa;margin:0 0 24px;font-size:15px;">Hi ${safeUsername},</p>
               <p style="color:#aaa;margin:0 0 32px;font-size:15px;">Your verification code is:</p>
-              
+
               <div style="background-color:#1a1a1a;border-radius:12px;padding:24px 32px;display:inline-block;border:1px solid #d4af37;margin-bottom:32px;">
-                <span style="color:#d4af37;font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace;">${options.code}</span>
+                <span style="color:#d4af37;font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace;">${safeCode}</span>
               </div>
-              
+
               <p style="color:#666;margin:0;font-size:13px;">This code will expire in 10 minutes.</p>
               <p style="color:#666;margin:16px 0 0;font-size:13px;">If you did not request this code, please ignore this email.</p>
             </td>
@@ -213,11 +229,79 @@ If you did not request this code, please ignore this email.
   return sendEmail({ to: options.to, subject, text, html });
 }
 
+export async function sendPasswordResetEmail(options: { to: string; username: string; resetUrl: string }): Promise<{ success: boolean; error?: string }> {
+  const frontendUrl = getFrontendUrl();
+  const logoUrl = `${frontendUrl}/logo-icon.png`;
+  const subject = 'Reset your Deck Salone password';
+  const safeUsername = escapeHtml(options.username);
+  const safeUrl = escapeHtml(options.resetUrl);
+
+  const text = `Hi ${options.username},
+
+We received a request to reset your Deck Salone password. Click the link below to set a new password:
+
+${options.resetUrl}
+
+This link will expire in 15 minutes. If you did not request a password reset, please ignore this email.
+
+— The Deck Salone Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset your Deck Salone password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#111;border-radius:16px;overflow:hidden;border:1px solid #333;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:1px solid #333;">
+              <img src="${logoUrl}" alt="Deck Salone" width="80" height="80" style="border-radius:50%;border:2px solid #d4af37;display:block;margin:0 auto 20px;" />
+              <h1 style="color:#d4af37;margin:0;font-size:24px;font-weight:700;">Password Reset</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 30px;text-align:center;">
+              <p style="color:#aaa;margin:0 0 24px;font-size:15px;">Hi ${safeUsername},</p>
+              <p style="color:#aaa;margin:0 0 32px;font-size:15px;">We received a request to reset your Deck Salone password. Click the button below to set a new password:</p>
+
+              <div style="text-align:center;margin:32px 0;">
+                <a href="${safeUrl}" style="display:inline-block;padding:14px 32px;background:#d4af37;color:#000;text-decoration:none;border-radius:50px;font-weight:700;font-size:15px;letter-spacing:0.5px;">Reset Password</a>
+              </div>
+
+              <p style="color:#666;margin:0;font-size:13px;">Or copy and paste this link into your browser:</p>
+              <p style="color:#888;margin:8px 0 0;font-size:13px;word-break:break-all;">${safeUrl}</p>
+              <p style="color:#666;margin:24px 0 0;font-size:13px;">This link will expire in 15 minutes.</p>
+              <p style="color:#666;margin:16px 0 0;font-size:13px;">If you did not request a password reset, please ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#0a0a0a;padding:24px 30px;text-align:center;border-top:1px solid #333;">
+              <p style="color:#555;margin:0;font-size:12px;">&copy; ${new Date().getFullYear()} Deck Salone. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return sendEmail({ to: options.to, subject, text, html });
+}
+
 export async function sendAdminEmail(options: { to: string; subject: string; message: string; fromName?: string }): Promise<{ success: boolean; error?: string }> {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://decksalone.com';
+  const frontendUrl = getFrontendUrl();
   const logoUrl = `${frontendUrl}/logo-icon.png`;
   const fromName = options.fromName || 'Deck Salone Admin';
-  
+  const safeSubject = escapeHtml(options.subject);
+  const safeMessage = escapeHtml(options.message).replace(/\n/g, '<br>');
+  const safeFromName = escapeHtml(fromName);
+
   const text = `${options.message}
 
 — ${fromName}
@@ -229,7 +313,7 @@ support@decksalone.com | +232 72 011 156`;
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${options.subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
@@ -244,13 +328,13 @@ support@decksalone.com | +232 72 011 156`;
           </tr>
           <tr>
             <td style="padding:32px 30px;">
-              <h2 style="color:#fff;margin:0 0 16px;font-size:18px;font-weight:600;">${options.subject}</h2>
-              <div style="color:#aaa;font-size:14px;line-height:1.7;">${options.message.replace(/\n/g, '<br>')}</div>
+              <h2 style="color:#fff;margin:0 0 16px;font-size:18px;font-weight:600;">${safeSubject}</h2>
+              <div style="color:#aaa;font-size:14px;line-height:1.7;">${safeMessage}</div>
             </td>
           </tr>
           <tr>
             <td style="background-color:#0a0a0a;padding:20px 30px;text-align:center;border-top:1px solid #333;">
-              <p style="color:#555;margin:0;font-size:12px;">— ${fromName}<br>Deck Salone Team</p>
+              <p style="color:#555;margin:0;font-size:12px;">— ${safeFromName}<br>Deck Salone Team</p>
               <p style="color:#444;margin:8px 0 0;font-size:11px;">support@decksalone.com | +232 72 011 156</p>
             </td>
           </tr>
@@ -271,4 +355,320 @@ export function isEmailConfigured(): boolean {
     process.env.SMTP_PASS &&
     process.env.EMAIL_FROM
   );
+}
+
+
+export async function sendWeeklyTop3RankingEmail(options: {
+  to: string;
+  stageName: string;
+  avatar?: string;
+  position: number;
+  score: number;
+  digitalScore?: number;
+  industryScore?: number;
+  communityScore?: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const frontendUrl = getFrontendUrl();
+  const logoUrl = `${frontendUrl}/logo-web.png?v=4`;
+  const defaultAvatar = `${frontendUrl}/assets/logo.png`;
+  const avatarUrl = options.avatar || defaultAvatar;
+  const safeStageName = escapeHtml(options.stageName);
+  const safeAvatarUrl = escapeHtml(avatarUrl);
+
+  const positionTitles: Record<number, { title: string; badgeColor: string; badgeBorder: string; medalEmoji: string }> = {
+    1: { title: '#1 DJ of the Week', badgeColor: '#D4A24A', badgeBorder: '#D4A24A', medalEmoji: '🥇' },
+    2: { title: '#2 DJ of the Week', badgeColor: '#C0C0C0', badgeBorder: '#C0C0C0', medalEmoji: '🥈' },
+    3: { title: '#3 DJ of the Week', badgeColor: '#CD7F32', badgeBorder: '#CD7F32', medalEmoji: '🥉' },
+  };
+
+  const posInfo = positionTitles[options.position] || {
+    title: `Top 3 DJ of the Week (#${options.position})`,
+    badgeColor: '#D4A24A',
+    badgeBorder: '#D4A24A',
+    medalEmoji: '🏆',
+  };
+
+  const subject = `${posInfo.medalEmoji} Congratulations ${options.stageName}! You are the ${posInfo.title} on Deck Salone!`;
+  const safeSubject = escapeHtml(subject);
+
+  const text = `Congratulations ${options.stageName}!
+
+You have achieved Rank #${options.position} on Deck Salone's Weekly Official DJ Rankings!
+
+Current Ranking Score: ${options.score.toFixed(1)} PTS
+- Digital Score: ${(options.digitalScore || 0).toFixed(1)} PTS
+- Industry Score: ${(options.industryScore || 0).toFixed(1)} PTS
+- Community Score: ${(options.communityScore || 0).toFixed(1)} PTS
+
+Keep rocking the decks!
+View Live Rankings: ${frontendUrl}/rankings
+
+— Deck Salone Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080808;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080808;padding:40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#121212;border-radius:20px;overflow:hidden;border:1px solid #222;box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(180deg, #1f1a0e 0%, #121212 100%);padding:36px 30px 24px;text-align:center;border-bottom:1px solid #222;">
+              <img src="${logoUrl}" alt="Deck Salone" style="height:48px;width:auto;display:block;margin:0 auto 16px;" />
+              <div style="display:inline-block;padding:6px 16px;background-color:rgba(212,162,74,0.15);border:1px solid ${posInfo.badgeBorder};border-radius:30px;color:${posInfo.badgeColor};font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
+                ${posInfo.medalEmoji} ${posInfo.title}
+              </div>
+            </td>
+          </tr>
+
+          <!-- DJ Profile Box -->
+          <tr>
+            <td style="padding:36px 30px;text-align:center;">
+              <div style="position:relative;display:inline-block;margin-bottom:20px;">
+                <img src="${safeAvatarUrl}" alt="${safeStageName}" style="width:110px;height:110px;border-radius:50%;object-fit:cover;border:4px solid ${posInfo.badgeColor};box-shadow:0 0 25px rgba(212,162,74,0.3);display:block;margin:0 auto;" />
+              </div>
+
+              <h1 style="color:#ffffff;margin:0 0 6px;font-size:26px;font-weight:800;letter-spacing:-0.5px;">${safeStageName}</h1>
+              <p style="color:#D4A24A;margin:0 0 24px;font-size:15px;font-weight:600;">
+                Official Rank #${options.position} DJ of the Week
+              </p>
+
+              <!-- Score Card -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#181818;border-radius:14px;border:1px solid #282828;margin-bottom:28px;">
+                <tr>
+                  <td style="padding:20px;text-align:center;border-bottom:1px solid #242424;">
+                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;font-weight:600;display:block;margin-bottom:4px;">OVERALL RANKING SCORE</span>
+                    <span style="font-size:36px;font-weight:800;color:#D4A24A;font-family:monospace;">${options.score.toFixed(1)} <span style="font-size:16px;">PTS</span></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="33%" style="text-align:center;">
+                          <span style="font-size:10px;color:#999;display:block;text-transform:uppercase;margin-bottom:2px;">Digital</span>
+                          <span style="font-size:16px;font-weight:700;color:#D4A24A;font-family:monospace;">${(options.digitalScore || 0).toFixed(1)}</span>
+                        </td>
+                        <td width="34%" style="text-align:center;border-left:1px solid #282828;border-right:1px solid #282828;">
+                          <span style="font-size:10px;color:#999;display:block;text-transform:uppercase;margin-bottom:2px;">Industry</span>
+                          <span style="font-size:16px;font-weight:700;color:#A78BFA;font-family:monospace;">${(options.industryScore || 0).toFixed(1)}</span>
+                        </td>
+                        <td width="33%" style="text-align:center;">
+                          <span style="font-size:10px;color:#999;display:block;text-transform:uppercase;margin-bottom:2px;">Community</span>
+                          <span style="font-size:16px;font-weight:700;color:#34D399;font-family:monospace;">${(options.communityScore || 0).toFixed(1)}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="color:#bbbbbb;font-size:14px;line-height:1.6;margin:0 0 28px;">
+                Congratulations on your outstanding performance! Your mix engagement, stream counts, bookings, and community reviews have placed you in the Top 3 DJs in Sierra Leone this week.
+              </p>
+
+              <!-- CTA Button -->
+              <a href="${frontendUrl}/rankings" style="display:inline-block;background:linear-gradient(135deg,#D4A24A 0%,#F3E0A2 50%,#D4A24A 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 32px;border-radius:30px;text-decoration:none;box-shadow:0 4px 15px rgba(212,162,74,0.4);">
+                View Full Rankings Board &rarr;
+              </a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#0a0a0a;padding:24px 30px;text-align:center;border-top:1px solid #222;">
+              <p style="color:#777777;margin:0 0 6px;font-size:12px;font-weight:600;">Deck Salone — Sierra Leone's #1 DJ Platform</p>
+              <p style="color:#555555;margin:0;font-size:11px;">Freetown, Sierra Leone | support@decksalone.com</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return sendEmail({ to: options.to, subject, text, html });
+}
+
+export async function sendAdminViolationAlertEmail(options: {
+  reportId: string;
+  reason: string;
+  details: string;
+  reporterEmail?: string;
+  targetUserEmail?: string;
+  targetUserName?: string;
+  contentType?: string;
+  contentId?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_FROM || 'support@decksalone.com';
+  const subject = `⚠️ [URGENT VIOLATION ALERT] Terms & Privacy Report #${options.reportId.slice(-6)}`;
+  const frontendUrl = getFrontendUrl();
+  const safeReportId = escapeHtml(options.reportId);
+  const safeReason = escapeHtml(options.reason);
+  const safeDetails = escapeHtml(options.details);
+  const safeReporterEmail = escapeHtml(options.reporterEmail || 'Anonymous / Guest');
+  const safeTargetUserName = escapeHtml(options.targetUserName || 'N/A');
+  const safeTargetUserEmail = escapeHtml(options.targetUserEmail || 'N/A');
+  const safeContentType = escapeHtml(options.contentType || 'General Account / Behavior');
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; background-color: #0f0f0f; color: #ffffff; padding: 24px;">
+      <div style="max-width: 600px; margin: 0 auto; background: #1a1a1a; border: 1px solid #ff4444; border-radius: 12px; padding: 24px;">
+        <h2 style="color: #ff4444; margin-top: 0;">⚠️ Terms & Policy Violation Reported</h2>
+        <p>A new violation report has been submitted on <strong>Deck Salone</strong> and requires administrator review.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; color: #ddd; font-size: 14px;">
+          <tr><td style="padding: 6px; font-weight: bold; width: 140px; border-bottom: 1px solid #333;">Report ID:</td><td style="padding: 6px; border-bottom: 1px solid #333;">${safeReportId}</td></tr>
+          <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #333;">Violation Category:</td><td style="padding: 6px; border-bottom: 1px solid #333; color: #ffbb33; font-weight: bold;">${safeReason.toUpperCase()}</td></tr>
+          <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #333;">Reporter:</td><td style="padding: 6px; border-bottom: 1px solid #333;">${safeReporterEmail}</td></tr>
+          <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #333;">Reported User:</td><td style="padding: 6px; border-bottom: 1px solid #333;">${safeTargetUserName} (${safeTargetUserEmail})</td></tr>
+          <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #333;">Content Type:</td><td style="padding: 6px; border-bottom: 1px solid #333;">${safeContentType}</td></tr>
+        </table>
+
+        <div style="background: #252525; border-left: 4px solid #ff4444; padding: 12px; margin: 16px 0; border-radius: 4px;">
+          <strong>Report Details:</strong>
+          <p style="margin: 6px 0 0; color: #ccc;">${safeDetails}</p>
+        </div>
+
+        <a href="${frontendUrl}/admin" style="display: inline-block; background: #ff4444; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">Review in Admin Dashboard &rarr;</a>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    to: adminEmail,
+    subject,
+    text: `Violation Report #${options.reportId}: ${safeReason} - ${options.details}`,
+    html,
+  });
+}
+
+export async function sendAccountSuspensionEmail(options: {
+  to: string;
+  name?: string;
+  status: 'SUSPENDED' | 'BANNED';
+  reason?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const subject = `[Deck Salone] Notice of Account ${options.status === 'BANNED' ? 'Permanent Banning' : 'Suspension'}`;
+  const actionText = options.status === 'BANNED' ? 'permanently banned' : 'temporarily suspended';
+  const safeName = escapeHtml(options.name || 'User');
+  const safeReason = escapeHtml(options.reason || 'Terms violation');
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; background-color: #0f0f0f; color: #ffffff; padding: 24px;">
+      <div style="max-width: 600px; margin: 0 auto; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 24px;">
+        <h2 style="color: #ff4444; margin-top: 0;">Account ${options.status === 'BANNED' ? 'Banned' : 'Suspended'}</h2>
+        <p>Dear ${safeName},</p>
+        <p>Your Deck Salone account has been <strong>${actionText}</strong> due to a violation of our Terms of Service, Privacy Policy, or applicable laws of Sierra Leone.</p>
+        
+        ${options.reason ? `<div style="background: #2b1d1d; border-left: 4px solid #ff4444; padding: 12px; margin: 16px 0; border-radius: 4px; color: #ffcccc;">
+          <strong>Reason for Action:</strong>
+          <p style="margin: 6px 0 0;">${escapeHtml(options.reason)}</p>
+        </div>` : ''}
+
+        <p style="color: #aaa; font-size: 14px;">Under the Terms of Service and Sierra Leone Cyber Security & Crimes Act 2021, accounts engaging in prohibited conduct, copyright infringement, fraud, or harassment are subject to administrative suspension or permanent termination.</p>
+
+        <p style="color: #aaa; font-size: 14px; margin-top: 20px;">If you believe this action was taken in error, you may file an appeal by contacting our compliance team at <a href="mailto:support@decksalone.com" style="color: #D4A24A;">support@decksalone.com</a>.</p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    to: options.to,
+    subject,
+    text: `Your Deck Salone account has been ${actionText}. Reason: ${safeReason}`,
+    html,
+  });
+}
+
+export async function sendBirthdayEmail(options: {
+  to: string;
+  name: string;
+  isDj?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  const frontendUrl = getFrontendUrl();
+  const logoUrl = `${frontendUrl}/logo-web.png`;
+  const subject = `🎂 Happy Birthday ${options.name}! Best Wishes from Deck Salone 🎉`;
+  const safeName = escapeHtml(options.name);
+  const safeSubject = escapeHtml(subject);
+  
+  const text = `Happy Birthday ${options.name}!
+
+Wishing you an incredible day filled with music, joy, and celebration! 
+
+Thank you for being a valued part of the Deck Salone family — Sierra Leone's #1 DJ Platform.
+
+Keep shining and dropping the best vibes!
+
+— The Deck Salone Team
+${frontendUrl}`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${safeSubject}</title></head>
+<body style="margin:0;padding:0;background:#080808;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#080808;padding:40px 10px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#121212;border-radius:20px;overflow:hidden;border:1px solid #282828;box-shadow:0 12px 50px rgba(0,0,0,0.85);">
+        
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(180deg, #2a1f0a 0%, #121212 100%);padding:40px 30px 24px;text-align:center;border-bottom:1px solid #222;">
+            <img src="${logoUrl}" alt="Deck Salone" style="height:48px;width:auto;display:block;margin:0 auto 16px;" />
+            <div style="display:inline-block;padding:6px 18px;background:rgba(212,162,74,0.15);border:1px solid #D4A24A;border-radius:30px;color:#D4A24A;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">
+              🎂 Birthday Celebration
+            </div>
+          </td>
+        </tr>
+
+        <!-- Main Body -->
+        <tr>
+          <td style="padding:40px 32px;text-align:center;">
+            <div style="font-size:64px;line-height:1;margin-bottom:20px;">🎉</div>
+            <h1 style="color:#ffffff;margin:0 0 10px;font-size:28px;font-weight:800;letter-spacing:-0.5px;">Happy Birthday, ${safeName}!</h1>
+            <p style="color:#D4A24A;margin:0 0 24px;font-size:16px;font-weight:600;">
+              Wishing you an incredible day filled with music, joy, and celebration! 🎵
+            </p>
+
+            <div style="background-color:#181818;border-radius:14px;border:1px solid #282828;padding:24px;margin-bottom:28px;text-align:left;">
+              <p style="color:#cccccc;font-size:14px;line-height:1.7;margin:0;">
+                Today we celebrate <strong>YOU</strong>! Thank you for bringing your energy, talent, and passion to <strong>Deck Salone</strong>. Whether on the decks or on the dancefloor, you help make Sierra Leone's music community vibrant and unstoppable.
+              </p>
+              ${options.isDj ? `
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #282828;color:#D4A24A;font-size:13px;font-weight:700;">
+                🎧 Keep dropping the hottest mixes & climbing the weekly rankings!
+              </div>` : ''}
+            </div>
+
+            <!-- CTA Button -->
+            <a href="${frontendUrl}" style="display:inline-block;background:linear-gradient(135deg,#D4A24A 0%,#F3E0A2 50%,#D4A24A 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 36px;border-radius:30px;text-decoration:none;box-shadow:0 4px 20px rgba(212,162,74,0.4);">
+              Visit Deck Salone &rarr;
+            </a>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color:#0a0a0a;padding:24px 30px;text-align:center;border-top:1px solid #222;">
+            <p style="color:#777777;margin:0 0 6px;font-size:12px;font-weight:600;">Deck Salone — Sierra Leone's #1 DJ Platform</p>
+            <p style="color:#555555;margin:0;font-size:11px;">Freetown, Sierra Leone | support@decksalone.com</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return sendEmail({ to: options.to, subject, text, html });
 }

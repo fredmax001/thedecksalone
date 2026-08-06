@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
-import { FeatureLock } from '@/components/FeatureLock';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -326,8 +325,11 @@ export default function Profile() {
           .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
           .join('; ');
         msg += ` (${fields})`;
+      } else if (details?.formErrors && details.formErrors.length > 0) {
+        msg += ` (${details.formErrors.join(', ')})`;
       }
       setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -336,6 +338,10 @@ export default function Profile() {
   const toggleArray = (field: keyof typeof form, value: string) => {
     setForm((prev) => {
       const current = prev[field] as string[];
+      if (!current.includes(value) && field === 'genres' && current.length >= 5) {
+        toast.error('Maximum 5 genres allowed');
+        return prev;
+      }
       const updated = current.includes(value)
         ? current.filter((v) => v !== value)
         : [...current, value];
@@ -1109,12 +1115,12 @@ export default function Profile() {
                 {djData?.verified && (
                   <Badge 
                     className={`border-0 ml-auto ${
-                      djData?.verificationBadgeType === 'gold' || djData?.isPro
+                      djData?.verificationBadgeType === 'gold'
                         ? 'bg-yellow-400/10 text-yellow-400'
                         : 'bg-gray-400/10 text-gray-400'
                     }`}
                   >
-                    {djData?.verificationBadgeType === 'gold' || djData?.isPro ? '🥇 Gold Verified' : '✓ Verified'}
+                    {djData?.verificationBadgeType === 'gold' ? '🥇 Gold Verified' : '✓ Verified'}
                   </Badge>
                 )}
                 {verificationPending && (
@@ -1126,11 +1132,6 @@ export default function Profile() {
               </div>
 
               {!djData?.verified && !verificationPending && (
-                <FeatureLock
-                  isLocked={djData?.subscriptionTier === 'free'}
-                  feature="Verification"
-                  requiredTier="pro"
-                >
                 <form className="space-y-4" onSubmit={handleVerificationSubmit}>
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-text-primary">
@@ -1244,7 +1245,6 @@ export default function Profile() {
                     {verificationSubmitting ? 'Submitting...' : 'Submit Verification Request'}
                   </Button>
                 </form>
-                </FeatureLock>
               )}
 
               {djData?.verified && (

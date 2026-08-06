@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, User, LogOut, Menu } from 'lucide-react';
+import { Search, LogOut, Menu, Sparkles, Smartphone } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import NotificationBell from '@/components/NotificationBell';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -37,11 +37,17 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
 
+  const isAdmin =
+    user?.role === 'ADMIN' ||
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'MODERATOR' ||
+    user?.role === 'FINANCE_ADMIN' ||
+    user?.role === 'VERIFICATION_ADMIN';
   const isDj = user?.role === 'DJ';
-  const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
-  const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
-  const settingsPath = isDj ? '/dashboard/settings' : '/user/settings';
-  const displayName = user?.djProfile?.stageName || user?.email?.split('@')[0] || 'User';
+  const dashboardPath = isAdmin ? '/admin' : isDj ? '/dashboard' : '/user/dashboard';
+  const profilePath = isAdmin ? '/admin' : isDj ? '/dashboard/profile' : '/user/profile';
+  const settingsPath = isAdmin ? '/admin' : isDj ? '/dashboard/settings' : '/user/settings';
+  const displayName = user?.djProfile?.stageName || user?.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
   const avatarUrl = user?.djProfile?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
 
@@ -65,208 +71,105 @@ export default function Navbar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-16 lg:h-28 overflow-hidden ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'glass-nav border-b border-white/5 dark:border-white/5 shadow-nav'
-          : 'bg-transparent'
+          ? 'glass-nav border-b border-white/10 shadow-nav'
+          : 'bg-black/90 backdrop-blur-md border-b border-white/5'
       }`}
     >
-      <div className="max-w-container mx-auto h-full flex items-center justify-between px-2 sm:px-4 lg:px-8">
-        {/* Logo — kept at current rendered size, pushed slightly left on mobile */}
-        <Link to="/" className="flex items-center shrink-0 -ml-2 sm:-ml-1 lg:ml-0">
-          {/* Mobile icon logo */}
-          <img
-            src="/logo-icon.png"
-            alt="Deck Salone"
-            className="lg:hidden h-9 w-auto object-contain"
-          />
-          {/* Desktop wordmark logo */}
-          <img
-            src="/logo-web.png"
-            alt="Deck Salone"
-            className="hidden lg:block h-10 w-auto object-contain"
-          />
-        </Link>
+      {/* Safe area top padding for native status bar */}
+      <div className="w-full pt-[env(safe-area-inset-top,0px)] bg-black/95">
+        <div className="max-w-container mx-auto h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-4 lg:px-8">
+          {/* Logo */}
+          <Link to={isAdmin ? '/admin' : '/'} className="flex items-center shrink-0">
+            {/* Mobile icon logo */}
+            <img
+              src="/logo-mobile.png?v=3"
+              alt="Deck Salone"
+              className="lg:hidden h-9 w-auto object-contain"
+            />
+            {/* Desktop wordmark logo */}
+            <img
+              src="/logo-web.png?v=3"
+              alt="Deck Salone"
+              className="hidden lg:block h-10 w-auto object-contain"
+            />
+          </Link>
 
-        {/* Desktop Nav Links */}
-        <div className="hidden lg:flex items-center gap-8">
-          {navLinks.map((link) => (
+          {/* ── Join Now pill — mobile only, guests only ── */}
+          {!isAuthenticated && (
             <Link
-              key={link.path}
-              to={link.path}
-              className={`relative text-sm font-medium uppercase tracking-[0.05em] transition-colors duration-300 py-1 ${
-                location.pathname === link.path
-                  ? 'text-gold'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
+              to="/register"
+              className="lg:hidden flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-gradient text-black text-[10px] font-extrabold uppercase tracking-wide shrink-0 ml-1"
+              style={{ boxShadow: '0 0 10px rgba(212,162,74,0.3)' }}
             >
-              {link.label}
+              <Sparkles className="w-3 h-3" />
+              Join
             </Link>
-          ))}
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            className="text-text-secondary hover:text-gold transition-colors p-2"
-            aria-label="Search"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-
-          <ThemeToggle className="hidden sm:flex" />
-
-          {isAuthenticated && user && (
-            <div className="hidden lg:flex">
-              <NotificationBell />
-            </div>
           )}
 
-          {/* Mobile hamburger menu (lg:hidden) */}
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <button
-                className="lg:hidden text-text-secondary hover:text-gold transition-colors p-2"
-                aria-label="Open menu"
+          {/* Desktop Nav Links */}
+          <div className="hidden lg:flex items-center gap-7">
+            {navLinks.map((link) => {
+              const isActive = location.pathname === link.path;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`relative text-xs font-bold uppercase tracking-[0.08em] transition-colors duration-300 py-1 flex flex-col items-center ${
+                    isActive ? 'text-gold' : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  <span>{link.label}</span>
+                  {isActive && (
+                    <span className="absolute -bottom-1 w-full h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent rounded-full shadow-[0_0_8px_rgba(212,162,74,0.8)]" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Right Actions — Desktop & Mobile */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Desktop Inline Quick Search Trigger */}
+            <button
+              onClick={() => navigate('/discover')}
+              className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black-surface/80 border border-white/10 text-text-muted hover:text-gold hover:border-gold/40 transition-all text-xs group shadow-inner"
+            >
+              <Search className="w-3.5 h-3.5 text-gold group-hover:scale-110 transition-transform" />
+              <span className="font-medium">Search mixes, DJs...</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-black border border-white/15 text-[9px] font-mono text-gold font-bold">⌘K</kbd>
+            </button>
+
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-gold/25 transition-all shadow-[0_0_12px_rgba(212,162,74,0.2)]"
               >
-                <Menu className="w-6 h-6" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="right" className="bg-black-surface border-l border-dark-gray w-[280px] sm:w-[320px]">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="text-text-primary text-sm font-semibold uppercase tracking-wider">Menu</SheetTitle>
-              </SheetHeader>
-              <nav className="flex flex-col gap-1">
-                {navLinks.map((link) => (
-                  <SheetClose asChild key={link.path}>
-                    <Link
-                      to={link.path}
-                      className={`rounded-lg px-4 py-3 text-sm font-medium uppercase tracking-wide transition-colors ${
-                        location.pathname === link.path
-                          ? 'bg-white/10 text-gold'
-                          : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
-                      }`}
-                    >
-                      {link.label}
-                    </Link>
-                  </SheetClose>
-                ))}
+                <Sparkles className="w-3.5 h-3.5" />
+                Admin Console
+              </Link>
+            )}
 
-                <div className="my-3 border-t border-dark-gray" />
+            <button
+              onClick={() => navigate('/discover')}
+              className="lg:hidden text-text-secondary hover:text-gold transition-colors p-2 flex items-center justify-center rounded-full"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
 
-                {isAuthenticated && user ? (
-                  <>
-                    <div className="px-4 py-2">
-                      <NotificationBell />
-                    </div>
-                    <SheetClose asChild>
-                      <Link
-                        to={profilePath}
-                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
-                      >
-                        Profile
-                      </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
-                      <Link
-                        to={dashboardPath}
-                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
-                      >
-                        Dashboard
-                      </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
-                      <Link
-                        to={settingsPath}
-                        className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
-                      >
-                        Settings
-                      </Link>
-                    </SheetClose>
-                    <button
-                      onClick={handleLogout}
-                      className="rounded-lg px-4 py-3 text-sm font-medium text-red hover:bg-white/5 transition-colors text-left"
-                    >
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <SheetClose asChild>
-                    <Link
-                      to="/login"
-                      className="rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wide text-black bg-gold-gradient hover:brightness-110 transition-all text-center"
-                    >
-                      Join as DJ
-                    </Link>
-                  </SheetClose>
-                )}
-              </nav>
-            </SheetContent>
-          </Sheet>
+            <ThemeToggle className="hidden sm:flex" />
 
-          {isAuthenticated && user ? (
-            <>
-              {/* Desktop actions */}
-              <div className="hidden lg:flex items-center gap-3">
-                {isDj ? (
-                  <>
-                    <Link
-                      to={dashboardPath}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-primary hover:text-gold transition-colors"
-                    >
-                      <User className="w-4 h-4" />
-                      {displayName}
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="inline-flex items-center px-5 py-2 border border-dark-gray text-text-secondary text-sm font-medium rounded-full hover:bg-medium-gray transition-colors"
-                    >
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-text-primary hover:text-gold transition-colors">
-                        <Avatar className="w-7 h-7 border border-gold/30">
-                          <AvatarImage src={avatarUrl} alt={displayName} />
-                          <AvatarFallback className="bg-gold/20 text-gold text-[10px] font-bold">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="hidden md:inline">{displayName}</span>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray">
-                      <DropdownMenuItem asChild>
-                        <Link to={profilePath} className="cursor-pointer">Profile</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to={dashboardPath} className="cursor-pointer">Dashboard</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to={settingsPath} className="cursor-pointer">Account Settings</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/help" className="cursor-pointer">Support</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-dark-gray" />
-                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
-
-              {/* Mobile profile avatar dropdown */}
-              <div className="lg:hidden flex items-center gap-2">
+            {isAuthenticated && user ? (
+              <>
                 <NotificationBell />
+
+                {/* Profile avatar dropdown (mobile & desktop) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center rounded-full focus:outline-none">
-                      <Avatar className="w-9 h-9 border border-gold/30">
+                    <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
+                      <Avatar className="w-8 h-8 sm:w-9 sm:h-9 border border-gold/40">
                         <AvatarImage src={avatarUrl} alt={displayName} />
                         <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                           {initials}
@@ -274,35 +177,130 @@ export default function Navbar() {
                       </Avatar>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray">
+                  <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-52 shadow-2xl z-50">
+                    <div className="px-3 py-2 border-b border-dark-gray">
+                      <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
+                      <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
+                    </div>
+                    {isAdmin ? (
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin" className="cursor-pointer text-xs font-bold text-gold">Admin Dashboard</Link>
+                      </DropdownMenuItem>
+                    ) : (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to={settingsPath} className="cursor-pointer text-xs">Settings</Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuItem asChild>
-                      <Link to={profilePath} className="cursor-pointer">Profile</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to={dashboardPath} className="cursor-pointer">Dashboard</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to={settingsPath} className="cursor-pointer">Settings</Link>
+                      <Link to="/install" className="cursor-pointer font-semibold text-gold text-xs flex items-center">
+                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-dark-gray" />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
+                      <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="hidden lg:inline-flex items-center px-6 py-2.5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
-              >
-                Join as DJ
-              </Link>
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="hidden lg:inline-flex items-center px-6 py-2.5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
+                >
+                  Join as DJ
+                </Link>
+              </>
+            )}
+
+            {/* Mobile menu sheet for navigation links */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <button
+                  className="lg:hidden text-text-secondary hover:text-gold transition-colors p-2 flex items-center justify-center"
+                  aria-label="Open menu"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="right" className="bg-black-surface border-l border-dark-gray w-[280px] sm:w-[320px] z-50">
+                <SheetHeader className="pb-4">
+                  <SheetTitle className="text-text-primary text-sm font-semibold uppercase tracking-wider">Menu</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1">
+                  {navLinks.map((link) => (
+                    <SheetClose asChild key={link.path}>
+                      <Link
+                        to={link.path}
+                        className={`rounded-lg px-4 py-3 text-sm font-medium uppercase tracking-wide transition-colors ${
+                          location.pathname === link.path
+                            ? 'bg-white/10 text-gold'
+                            : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                        }`}
+                      >
+                        {link.label}
+                      </Link>
+                    </SheetClose>
+                  ))}
+
+                  <div className="my-3 border-t border-dark-gray" />
+
+                  {isAuthenticated && user ? (
+                    <>
+                      <SheetClose asChild>
+                        <Link
+                          to={profilePath}
+                          className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                        >
+                          Profile
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link
+                          to={dashboardPath}
+                          className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                        >
+                          Dashboard
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link
+                          to={settingsPath}
+                          className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                        >
+                          Settings
+                        </Link>
+                      </SheetClose>
+                      <button
+                        onClick={handleLogout}
+                        className="rounded-lg px-4 py-3 text-sm font-medium text-red hover:bg-white/5 transition-colors text-left"
+                      >
+                        Logout
+                      </button>
+                    </>
+                  ) : (
+                    <SheetClose asChild>
+                      <Link
+                        to="/login"
+                        className="rounded-lg px-4 py-3 text-sm font-semibold uppercase tracking-wide text-black bg-gold-gradient hover:brightness-110 transition-all text-center"
+                      >
+                        Join as DJ
+                      </Link>
+                    </SheetClose>
+                  )}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </nav>

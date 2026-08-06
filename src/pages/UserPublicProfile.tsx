@@ -139,7 +139,20 @@ export default function UserPublicProfile() {
                     View DJ Page
                   </Link>
                 )}
-                <ShareButton url={profileUrl} title={title} description={description} size="md" />
+                <ShareButton
+                  url={profileUrl}
+                  title={title}
+                  description={description}
+                  preview={{
+                    type: "user",
+                    avatar: profile.avatar || undefined,
+                    name: profile.name || undefined,
+                    username: profile.username,
+                    location: profile.location || undefined,
+                    bio: profile.bio || undefined,
+                  }}
+                  size="md"
+                />
               </div>
             </div>
           </motion.div>

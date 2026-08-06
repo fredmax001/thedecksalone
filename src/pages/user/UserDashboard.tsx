@@ -12,7 +12,10 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 
+import { ProfileCompletionCard } from '@/components/ProfileCompletionCard';
+
 const quickLinks = [
+
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings', desc: 'View & manage your bookings' },
   { icon: MessageSquare, label: 'Messages', path: '/user/messages', desc: 'Chat with DJs' },
   { icon: Users, label: 'Following', path: '/user/following', desc: 'DJs you follow' },
@@ -42,7 +45,11 @@ export default function UserDashboard() {
         </p>
       </motion.div>
 
+      {/* Profile Completion 5-Step Checklist */}
+      <ProfileCompletionCard />
+
       {/* Quick Stats Row */}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Bookings" value="0" icon={CalendarCheck} />
         <StatCard label="Messages" value="0" icon={MessageSquare} />

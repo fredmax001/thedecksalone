@@ -1,0 +1,25 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /djs
+Allow: /mixes
+Allow: /events
+Allow: /rankings
+Allow: /battles
+Allow: /hall-of-fame
+Allow: /how-it-works
+Allow: /install
+Allow: /terms
+Allow: /privacy
+Allow: /about
+Allow: /help
+
+# Disallow private user & dashboard routes from search indexing
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /user/
+Disallow: /auth/
+Disallow: /api/
+
+# Canonical Sitemap XML link for Google Search Console
+Sitemap: https://decksalone.com/sitemap.xml

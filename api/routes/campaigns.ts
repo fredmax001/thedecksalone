@@ -7,7 +7,116 @@ const { uploadBuffer, deleteFile } = require('../utils/storage');
 
 const router = express.Router();
 
-// All campaign routes require authentication
+// ─── PUBLIC: Home Ad Board — active paid ads + top 3 spotlights ───
+// No auth required, called by HomeAdBoard carousel on the homepage
+router.get('/home-board', async (req: any, res: any) => {
+  try {
+    const now = new Date();
+
+    // Active paid ad campaigns
+    const paidAds = await prisma.adCampaign.findMany({
+      where: {
+        status: 'active',
+        OR: [
+          { endDate: null },
+          { endDate: { gt: now } },
+        ],
+      },
+      include: {
+        advertiser: {
+          select: { id: true, stageName: true, avatar: true },
+        },
+      },
+      orderBy: { budget: 'desc' },
+      take: 5,
+    });
+
+    // Top 3 upcoming published events
+    const events = await prisma.event.findMany({
+      where: {
+        date: { gte: now },
+        publishStatus: 'published',
+      },
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true } },
+      },
+      orderBy: { date: 'asc' },
+      take: 3,
+    });
+
+    // Top 3 ranked DJs (include user for username/slug)
+    const djRankings = await prisma.djProfile.findMany({
+      where: { rankingPosition: { gt: 0 }, isPublic: true },
+      orderBy: { rankingPosition: 'asc' },
+      include: {
+        user: { select: { username: true } },
+      },
+      take: 3,
+    });
+
+    // Top 3 trending mixes by plays
+    const mixes = await prisma.mix.findMany({
+      where: { isPublic: true },
+      orderBy: { plays: 'desc' },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+      take: 3,
+    });
+
+    return res.json({
+      success: true,
+      data: { paidAds, events, djRankings, mixes },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── PUBLIC: Platform real metrics counter ───
+router.get('/stats', async (req: any, res: any) => {
+  try {
+    const [totalDjs, verifiedDjs, totalMixes, totalEvents, djProfiles, eventsList] = await Promise.all([
+      prisma.djProfile.count(),
+      prisma.djProfile.count({ where: { verified: true } }),
+      prisma.mix.count(),
+      prisma.event.count(),
+      prisma.djProfile.findMany({
+        select: { city: true },
+      }),
+      prisma.event.findMany({
+        select: { city: true },
+      }),
+    ]);
+
+    const allCities = new Set([
+      ...djProfiles.map((c: any) => c.city?.trim()).filter(Boolean),
+      ...eventsList.map((c: any) => c.city?.trim()).filter(Boolean),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        totalDjs,
+        verifiedDjs,
+        totalMixes,
+        totalEvents,
+        citiesCount: allCities.size || 1,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// All campaign routes below require authentication
 router.use(authMiddleware);
 
 const campaignStatuses = ['pending_payment', 'active', 'paused', 'rejected', 'completed'];

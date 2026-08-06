@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
         skip,
         take: limitNum,
         include: {
-          user: { select: { id: true, email: true } },
+          user: { select: { id: true, username: true, avatar: true } },
           dj: { select: { id: true, stageName: true, avatar: true } },
         },
       }),
@@ -98,7 +98,7 @@ router.post('/', authMiddleware, async (req, res) => {
         verified: !!hasBooking, // Mark as verified if they have a completed booking
       },
       include: {
-        user: { select: { id: true, email: true } },
+        user: { select: { id: true, username: true, avatar: true } },
         dj: { select: { id: true, stageName: true, avatar: true } },
       },
     });

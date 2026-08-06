@@ -1,5 +1,5 @@
 import { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -35,12 +35,14 @@ const Help = lazy(() => import('./pages/Help'));
 const Blog = lazy(() => import('./pages/Blog'));
 const About = lazy(() => import('./pages/About'));
 const RequestDj = lazy(() => import('./pages/RequestDj'));
+const InstallApp = lazy(() => import('./pages/InstallApp'));
 
 /* ─── DJ Dashboard pages ─── */
 const DashboardOverview = lazy(() => import('./pages/dashboard/Overview'));
 const DashboardBookings = lazy(() => import('./pages/dashboard/Bookings'));
 const DashboardMessages = lazy(() => import('./pages/dashboard/Messages'));
 const DashboardMixes = lazy(() => import('./pages/dashboard/Mixes'));
+const DashboardSets = lazy(() => import('./pages/dashboard/Sets'));
 const DashboardPhotos = lazy(() => import('./pages/dashboard/Photos'));
 const DashboardEvents = lazy(() => import('./pages/dashboard/DjEvents'));
 const DashboardAnalytics = lazy(() => import('./pages/dashboard/Analytics'));
@@ -50,6 +52,10 @@ const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
 const TicketScanner = lazy(() => import('./pages/dashboard/TicketScanner'));
+const ScannerLanding = lazy(() => import('./pages/dashboard/ScannerLanding'));
+const EventDashboard = lazy(() => import('./pages/dashboard/EventDashboard'));
+const EventTicketManagement = lazy(() => import('./pages/dashboard/EventTicketManagement'));
+const EventAnalytics = lazy(() => import('./pages/dashboard/EventAnalytics'));
 const DashboardOpportunities = lazy(() =>
   import('./pages/Opportunities').then((m) => ({ default: m.Opportunities }))
 );
@@ -57,6 +63,7 @@ const DashboardOpportunities = lazy(() =>
 /* ─── User Dashboard pages ─── */
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
 const UserBookings = lazy(() => import('./pages/user/MyBookings'));
+const MyTickets = lazy(() => import('./pages/user/MyTickets'));
 const UserMessages = lazy(() => import('./pages/user/Messages'));
 const UserFollowing = lazy(() => import('./pages/user/Following'));
 const UserActivity = lazy(() => import('./pages/user/Activity'));
@@ -72,6 +79,26 @@ function AuthInitializer() {
   }, [init]);
 
   return null;
+}
+
+function RequireLegendRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, isLoading } = useAuthStore();
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center text-deck-accent">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent" />
+      </div>
+    );
+  }
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  const isLegend = user.djProfile?.subscriptionTier === 'legend';
+  const isAdmin = user.role === 'ADMIN' || user.role === 'MODERATOR';
+  if (!isLegend && !isAdmin) {
+    return <Navigate to="/dashboard/events" replace />;
+  }
+  return <>{children}</>;
 }
 
 function VisitTracker() {
@@ -112,9 +139,12 @@ export default function App() {
               <Route path="dashboard/bookings" element={<DashboardBookings />} />
               <Route path="dashboard/messages" element={<DashboardMessages />} />
               <Route path="dashboard/mixes" element={<DashboardMixes />} />
-              <Route path="dashboard/sets" element={<DashboardMixes />} />
+              <Route path="dashboard/sets" element={<DashboardSets />} />
               <Route path="dashboard/photos" element={<DashboardPhotos />} />
               <Route path="dashboard/events" element={<DashboardEvents />} />
+              <Route path="dashboard/events/:id" element={<EventDashboard />} />
+              <Route path="dashboard/events/:id/tickets" element={<EventTicketManagement />} />
+              <Route path="dashboard/events/:id/analytics" element={<EventAnalytics />} />
               <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
               <Route path="dashboard/earnings" element={<DashboardEarnings />} />
               <Route path="dashboard/profile" element={<DashboardProfile />} />
@@ -122,9 +152,24 @@ export default function App() {
               <Route path="dashboard/opportunities" element={<DashboardOpportunities />} />
               <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
               <Route path="dashboard/settings" element={<DashboardSettings />} />
+              <Route
+                path="dashboard/scanner"
+                element={
+                  <RequireLegendRoute>
+                    <ScannerLanding />
+                  </RequireLegendRoute>
+                }
+              />
             </Route>
-            {/* Ticket scanner: full-screen, no dashboard sidebar */}
-            <Route path="dashboard/events/:eventId/scan" element={<TicketScanner />} />
+            {/* Ticket scanner: full-screen, no dashboard sidebar. Pro+ (legend) only. */}
+            <Route
+              path="dashboard/events/:eventId/scan"
+              element={
+                <RequireLegendRoute>
+                  <TicketScanner />
+                </RequireLegendRoute>
+              }
+            />
           </Route>
 
           {/* User Dashboard — protected, custom layout (no public navbar/footer) */}
@@ -132,6 +177,7 @@ export default function App() {
             <Route element={<UserDashboardLayout />}>
               <Route path="user/dashboard" element={<UserDashboard />} />
               <Route path="user/bookings" element={<UserBookings />} />
+              <Route path="user/tickets" element={<MyTickets />} />
               <Route path="user/messages" element={<UserMessages />} />
               <Route path="user/following" element={<UserFollowing />} />
               <Route path="user/activity" element={<UserActivity />} />
@@ -167,6 +213,7 @@ export default function App() {
             <Route path="blog" element={<Blog />} />
             <Route path="about" element={<About />} />
             <Route path="request-dj" element={<RequestDj />} />
+            <Route path="install" element={<InstallApp />} />
           </Route>
         </Routes>
         <MixPlayer />

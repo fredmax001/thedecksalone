@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
+const { playLimiter, conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthlyListeners');
 const { uploadMix } = require('../utils/upload');
@@ -24,6 +25,17 @@ const mixFilterSchema = z.object({
   limit: z.string().optional(),
 });
 
+const parseBooleanOptional = z.preprocess((val) => {
+  if (val === undefined || val === null || val === '') return undefined;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+  }
+  return val;
+}, z.boolean().optional());
+
 const createMixSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
@@ -31,7 +43,7 @@ const createMixSchema = z.object({
   category: z.string().min(1).max(100),
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
-  isPublic: z.coerce.boolean().optional(),
+  isPublic: parseBooleanOptional,
   audioUrl: z.string().optional(),
 });
 
@@ -42,12 +54,19 @@ const updateMixSchema = z.object({
   category: z.string().min(1).max(100).optional(),
   tags: z.array(z.string()).optional(),
   duration: z.number().int().min(1).optional(),
-  isPublic: z.coerce.boolean().optional(),
+  isPublic: parseBooleanOptional,
   audioUrl: z.string().optional(),
 });
 
+const importHearthisSchema = z.object({
+  urls: z.array(z.string()).min(1).max(50),
+  defaultGenre: z.string().max(100).optional(),
+  defaultCategory: z.string().max(100).optional(),
+  isPublic: parseBooleanOptional,
+});
+
 // GET /api/mixes - List mixes with filtering
-router.get('/', async (req, res) => {
+router.get('/', conditionalSearchLimiter, async (req, res) => {
   try {
     const parsed = mixFilterSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -129,7 +148,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('[Mixes API] Error:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -161,7 +180,8 @@ router.get('/hall-of-fame', async (req, res) => {
 
     return res.json({ success: true, data: mixes });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -185,7 +205,8 @@ router.get('/categories', async (req, res) => {
     });
     return res.json({ success: true, data: categories });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -207,7 +228,8 @@ router.get('/genres', async (req, res) => {
       })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -241,13 +263,19 @@ router.get('/trending', async (req, res) => {
 
     return res.json({ success: true, data: mixes });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/mixes/import-hearthis - Bulk import Hearthis.at track URLs for the authenticated DJ
 router.post('/import-hearthis', authMiddleware, async (req, res) => {
   try {
+    const parsed = importHearthisSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj && req.user.role !== 'ADMIN') {
       return res.status(403).json({ success: false, error: 'Must be a DJ to import mixes' });
@@ -258,21 +286,14 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'DJ ID required' });
     }
 
-    const rawUrls = req.body.urls;
-    if (!rawUrls || (Array.isArray(rawUrls) && rawUrls.length === 0)) {
-      return res.status(400).json({ success: false, error: 'No URLs provided' });
-    }
+    const rawUrls = parsed.data.urls;
+    const urls = rawUrls
+      .map((u) => String(u).trim())
+      .filter(Boolean);
 
-    const urls = Array.isArray(rawUrls)
-      ? rawUrls.map((u) => String(u).trim()).filter(Boolean)
-      : String(rawUrls)
-          .split(/\n/)
-          .map((u) => u.trim())
-          .filter(Boolean);
-
-    const defaultGenre = String(req.body.defaultGenre || 'Open Format').slice(0, 100);
-    const defaultCategory = String(req.body.defaultCategory || 'Salone Mix').slice(0, 100);
-    const isPublic = req.body.isPublic !== false;
+    const defaultGenre = parsed.data.defaultGenre || 'Open Format';
+    const defaultCategory = parsed.data.defaultCategory || 'Salone Mix';
+    const isPublic = parsed.data.isPublic !== false;
 
     const imported = [];
     const errors = [];
@@ -375,12 +396,13 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
       data: { imported, count: imported.length, errors, errorCount: errors.length },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // GET /api/mixes/:id - Get single mix
-router.get('/:id', async (req, res) => {
+router.get('/:id', softAuthMiddleware, async (req, res) => {
   try {
     const mix = await prisma.mix.findUnique({
       where: { id: req.params.id },
@@ -393,7 +415,7 @@ router.get('/:id', async (req, res) => {
             city: true,
             country: true,
             subscriptionTier: true,
-            user: { select: { username: true } },
+            user: { select: { id: true, username: true } },
           },
         },
       },
@@ -403,10 +425,20 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
+    // Private mixes are only visible to the owner or an admin
+    if (!mix.isPublic) {
+      const isOwner = req.user?.id && mix.dj?.user?.id === req.user.id;
+      const isAdmin = req.user?.role === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        return res.status(404).json({ success: false, error: 'Mix not found' });
+      }
+    }
+
     // Play tracking is handled by POST /:id/play to support dedup and analytics
     return res.json({ success: true, data: mix });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -493,7 +525,8 @@ router.post('/', authMiddleware, uploadMix, async (req, res) => {
 
     return res.status(201).json({ success: true, data: mix });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -561,7 +594,8 @@ router.put('/:id', authMiddleware, uploadMix, async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -588,7 +622,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Mix deleted' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -625,12 +660,13 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
     ]);
     return res.json({ success: true, data: { liked: true, message: 'Mix liked' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/mixes/:id/play - Track a play (call from the player, not on GET)
-router.post('/:id/play', softAuthMiddleware, async (req, res) => {
+router.post('/:id/play', softAuthMiddleware, playLimiter, async (req, res) => {
   try {
     const mix = await prisma.mix.findUnique({
       where: { id: req.params.id },
@@ -656,7 +692,8 @@ router.post('/:id/play', softAuthMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { plays: updated.plays } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -705,7 +742,8 @@ router.post('/:id/reup', authMiddleware, requirePro, async (req, res) => {
 
     return res.status(201).json({ success: true, data: reup });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -729,7 +767,8 @@ router.delete('/:id/reup', authMiddleware, requirePro, async (req, res) => {
 
     return res.json({ success: true, data: { reupped: false } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -765,7 +804,8 @@ router.get('/:id/reup-status', softAuthMiddleware, async (req, res) => {
       data: { reupped: !!reup, count },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

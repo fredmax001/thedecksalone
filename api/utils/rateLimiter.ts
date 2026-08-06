@@ -1,67 +1,141 @@
 const rateLimit = require('express-rate-limit');
 
-// General API rate limiter. Keep this high enough for normal app navigation,
-// while still limiting automated scraping/abuse.
+// General API rate limiter
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300,
-  skip: (req) => {
-    // Only skip rate limit for local/internal IPs during development
+  skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
     const ip = req.ip || req.connection.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
     success: false,
-    error: 'Too many requests from this IP. Please try again in 15 minutes.',
+    error: 'Too many requests. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Strict auth rate limiter: 10 attempts per 15 minutes per IP
+// Dedicated login rate limiter: Max 10 requests per IP per 1 minute
+const loginRateLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 10, // Max 10 login attempts per IP per minute
+  skip: (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  message: {
+    success: false,
+    error: 'Incorrect email or password', // Generic error message
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General auth rate limiter (signup, otp, password reset)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // strict: 10 auth attempts per window
-  skip: (req) => {
-    // Only skip rate limit for local/internal IPs during development
+  max: 15,
+  skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
     const ip = req.ip || req.connection.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
     success: false,
-    error: 'Too many authentication attempts. Please try again in 15 minutes.',
+    error: 'Too many authentication attempts. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true, // Don't count successful logins
 });
 
-// Booking creation limiter: 20 bookings per hour per user (relaxed for dev)
+// Booking creation limiter
 const bookingLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 20,
   message: {
     success: false,
     error: 'Too many booking requests. Please try again in an hour.',
   },
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req: any) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Vote limiter: 100 votes per hour per user
+// Vote limiter
 const voteLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 100,
   message: {
     success: false,
     error: 'Too many votes. Please try again in an hour.',
   },
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req: any) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-module.exports = { generalLimiter, authLimiter, bookingLimiter, voteLimiter };
+// Mix play limiter — cap play-count inflation per mix per IP/user
+const playLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  skip: (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  keyGenerator: (req: any) => `${req.ip || 'unknown'}:${req.params.id || req.params.id}`,
+  message: {
+    success: false,
+    error: 'Too many plays. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Ticket purchase limiter — prevent spam pending orders
+const purchaseLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  skip: (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  keyGenerator: (req: any) => req.user?.id || req.ip || 'unknown',
+  message: {
+    success: false,
+    error: 'Too many ticket purchase attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Search / discovery limiter — cap expensive text-search queries
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  skip: (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  keyGenerator: (req: any) => req.ip || 'unknown',
+  message: {
+    success: false,
+    error: 'Too many search requests. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+function conditionalSearchLimiter(req: any, res: any, next: any) {
+  if (req.query.search || req.query.q) {
+    return searchLimiter(req, res, next);
+  }
+  next();
+}
+
+module.exports = { generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter };

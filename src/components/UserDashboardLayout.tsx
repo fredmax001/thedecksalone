@@ -2,17 +2,19 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  CalendarCheck,
-  MessageSquare,
-  Users,
-  Activity,
   Bell,
-  User,
-  Settings,
-  LogOut,
-  Search,
   ChevronRight,
   Home,
+  LogOut,
+  Search,
+  Settings,
+  Smartphone,
+  User,
+  Users,
+  MessageSquare,
+  Ticket,
+  CalendarCheck,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -32,6 +34,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings' },
+  { icon: Ticket, label: 'My Tickets', path: '/user/tickets' },
   { icon: MessageSquare, label: 'Messages', path: '/user/messages' },
   { icon: Users, label: 'Following', path: '/user/following' },
   { icon: Activity, label: 'My Activity', path: '/user/activity' },
@@ -115,7 +118,7 @@ export default function UserDashboardLayout() {
         collapsed && 'justify-center px-2'
       )}>
         <img
-          src="/logo.png"
+          src="/logo-web.png?v=4"
           alt="Deck Salone"
           className="h-10 w-auto object-contain flex-shrink-0"
         />
@@ -201,21 +204,22 @@ export default function UserDashboardLayout() {
         className="flex-1 flex flex-col min-h-screen transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
       >
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-dark-gray">
-          <div className="flex items-center justify-between h-16 px-4 lg:px-6">
+        <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-xl border-b border-dark-gray pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 lg:px-6">
             {/* Left: Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm">
-              <Link to="/" className="text-text-muted hover:text-text-primary transition-colors">
-                Home
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+              <Link to="/" className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
+                <img src="/logo-mobile.png?v=4" alt="Home" className="h-6 w-auto lg:hidden object-contain" />
+                <span className="hidden sm:inline">Home</span>
               </Link>
               <ChevronRight className="w-3 h-3 text-text-muted" />
-              <Link to="/user/dashboard" className="text-text-muted hover:text-text-primary transition-colors">
+              <Link to="/user/dashboard" className="text-text-muted hover:text-text-primary transition-colors font-medium">
                 Dashboard
               </Link>
               {location.pathname !== '/user/dashboard' && (
                 <>
                   <ChevronRight className="w-3 h-3 text-text-muted" />
-                  <span className="text-gold capitalize">
+                  <span className="text-gold capitalize truncate max-w-[100px] sm:max-w-none">
                     {location.pathname.replace('/user/', '').replace(/-/g, ' ')}
                   </span>
                 </>
@@ -230,43 +234,41 @@ export default function UserDashboardLayout() {
                   placeholder="Search bookings, DJs, events..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted focus:border-gold/50 focus:ring-gold/20"
+                  className="w-full pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted focus:border-gold/50 focus:ring-gold/20 h-9 text-xs"
                 />
               </div>
             </div>
 
             {/* Right: Notifications + Profile */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-black-elevated">
+                  <Button variant="ghost" className="flex items-center gap-2 h-8 sm:h-9 px-1.5 sm:px-2 hover:bg-black-elevated">
                     <Avatar className="w-7 h-7 border border-gold/30">
                       <AvatarImage src={avatarUrl} />
                       <AvatarFallback className="bg-gold/20 text-gold text-[10px] font-bold">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden md:inline text-sm text-text-primary">{displayName}</span>
+                    <span className="hidden md:inline text-xs font-semibold text-text-primary">{displayName}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray">
+                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-48 shadow-2xl z-50">
                   <DropdownMenuItem asChild>
-                    <Link to="/user/profile" className="cursor-pointer">Profile</Link>
+                    <Link to="/user/profile" className="cursor-pointer text-xs">Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/user/dashboard" className="cursor-pointer">Dashboard</Link>
+                    <Link to="/user/settings" className="cursor-pointer text-xs">Settings</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/user/settings" className="cursor-pointer">Account Settings</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem asChild>
-                    <Link to="/help" className="cursor-pointer">Support</Link>
+                    <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
+                      <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
                     Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>

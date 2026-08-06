@@ -2,16 +2,29 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
-const { requirePro } = require('../middleware/permissions');
+const { uploadCover } = require('../utils/upload');
+const { uploadBuffer } = require('../utils/storage');
+const { requireTrialOrSubscription } = require('../utils/trial');
 
 const router = express.Router();
+
+const parseBooleanOptional = z.preprocess((val) => {
+  if (val === undefined || val === null || val === '') return undefined;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+  }
+  return val;
+}, z.boolean().optional());
 
 const createSetSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   genre: z.string().max(100).optional(),
   coverImage: z.string().optional(),
-  isPublic: z.coerce.boolean().optional(),
+  isPublic: parseBooleanOptional,
 });
 
 const updateSetSchema = createSetSchema.partial();
@@ -21,8 +34,99 @@ const setItemSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 });
 
-// GET /api/sets/:id - Get a single set (public if set is public)
-router.get('/:id', async (req, res) => {
+// Helper middleware: Ensure user is a DJ and attach djProfile
+async function requireDjProfile(req: any, res: any, next: any) {
+  if (!req.user || req.user.role !== 'DJ') {
+    return res.status(403).json({ success: false, error: 'Only DJ accounts can perform this action' });
+  }
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return res.status(404).json({ success: false, error: 'DJ Profile not found' });
+  }
+  req.djProfile = dj;
+  next();
+}
+
+// GET /api/sets/mine - Get all sets for the currently logged-in DJ
+router.get('/mine', authMiddleware, requireDjProfile, async (req: any, res: any) => {
+  try {
+    const djId = req.djProfile.id;
+    const sets = await prisma.djSet.findMany({
+      where: { djId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            mix: {
+              select: {
+                id: true,
+                title: true,
+                genre: true,
+                coverImage: true,
+                audioUrl: true,
+                duration: true,
+                plays: true,
+                likes: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const formatted = sets.map((s: any) => ({
+      ...s,
+      mixCount: s.items.length,
+    }));
+
+    return res.json({ success: true, data: formatted });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/sets/dj/:djId - Get public sets for a DJ profile
+router.get('/dj/:djId', async (req: any, res: any) => {
+  try {
+    const sets = await prisma.djSet.findMany({
+      where: { djId: req.params.djId, isPublic: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            mix: {
+              select: {
+                id: true,
+                title: true,
+                genre: true,
+                coverImage: true,
+                audioUrl: true,
+                duration: true,
+                plays: true,
+                likes: true,
+                dj: { select: { id: true, stageName: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const formatted = sets.map((s: any) => ({
+      ...s,
+      mixCount: s.items.length,
+    }));
+
+    return res.json({ success: true, data: formatted });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/sets/:id - Get a single set
+router.get('/:id', async (req: any, res: any) => {
   try {
     const set = await prisma.djSet.findUnique({
       where: { id: req.params.id },
@@ -45,10 +149,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Set not found' });
     }
 
-    if (!set.isPublic) {
-      return res.status(403).json({ success: false, error: 'This set is private' });
-    }
-
     return res.json({
       success: true,
       data: {
@@ -56,17 +156,31 @@ router.get('/:id', async (req, res) => {
         mixCount: set.items.length,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// POST /api/sets - Create a new set (Pro+ only)
-router.post('/', authMiddleware, requirePro, async (req, res) => {
+// POST /api/sets - Create a new set (supports coverImage URL or coverImageFile upload)
+router.post('/', authMiddleware, requireTrialOrSubscription, requireDjProfile, uploadCover.single('coverImageFile'), async (req: any, res: any) => {
   try {
-    const parsed = createSetSchema.safeParse(req.body);
+    let coverImage = req.body.coverImage;
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
+    }
+
+    const payload = {
+      title: req.body.title,
+      description: req.body.description || undefined,
+      genre: req.body.genre || undefined,
+      coverImage: coverImage || undefined,
+      isPublic: req.body.isPublic === 'true' || req.body.isPublic === true,
+    };
+
+    const parsed = createSetSchema.safeParse(payload);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
     }
 
     const djId = req.djProfile.id;
@@ -75,19 +189,14 @@ router.post('/', authMiddleware, requirePro, async (req, res) => {
     });
 
     return res.status(201).json({ success: true, data: set });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// PUT /api/sets/:id - Update set metadata (owner/admin only)
-router.put('/:id', authMiddleware, requirePro, async (req, res) => {
+// PUT /api/sets/:id - Update set metadata (supports file upload)
+router.put('/:id', authMiddleware, requireDjProfile, uploadCover.single('coverImageFile'), async (req: any, res: any) => {
   try {
-    const parsed = updateSetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
       return res.status(404).json({ success: false, error: 'Set not found' });
@@ -95,6 +204,25 @@ router.put('/:id', authMiddleware, requirePro, async (req, res) => {
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
       return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    let coverImage = req.body.coverImage;
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
+    }
+
+    const payload = {
+      title: req.body.title,
+      description: req.body.description,
+      genre: req.body.genre,
+      coverImage: coverImage || set.coverImage,
+      isPublic: req.body.isPublic === 'true' || req.body.isPublic === true,
+    };
+
+    const parsed = updateSetSchema.safeParse(payload);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
     }
 
     const updated = await prisma.djSet.update({
@@ -103,13 +231,13 @@ router.put('/:id', authMiddleware, requirePro, async (req, res) => {
     });
 
     return res.json({ success: true, data: updated });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// DELETE /api/sets/:id - Delete a set (owner/admin only)
-router.delete('/:id', authMiddleware, requirePro, async (req, res) => {
+// DELETE /api/sets/:id - Delete a set
+router.delete('/:id', authMiddleware, requireDjProfile, async (req: any, res: any) => {
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
@@ -120,19 +248,21 @@ router.delete('/:id', authMiddleware, requirePro, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
+    await prisma.djSetItem.deleteMany({ where: { setId: req.params.id } });
     await prisma.djSet.delete({ where: { id: req.params.id } });
+
     return res.json({ success: true, data: { message: 'Set deleted' } });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // POST /api/sets/:id/mixes - Add a mix to a set
-router.post('/:id/mixes', authMiddleware, requirePro, async (req, res) => {
+router.post('/:id/mixes', authMiddleware, requireDjProfile, async (req: any, res: any) => {
   try {
     const parsed = setItemSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
     }
 
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
@@ -144,25 +274,14 @@ router.post('/:id/mixes', authMiddleware, requirePro, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const djId = req.djProfile.id;
     const { mixId, sortOrder = 0 } = parsed.data;
 
-    const mix = await prisma.mix.findUnique({ where: { id: mixId } });
-    if (!mix) {
-      return res.status(404).json({ success: false, error: 'Mix not found' });
-    }
-
-    if (!mix.isPublic) {
-      return res.status(400).json({ success: false, error: 'Cannot add a private mix to a set' });
-    }
-
-    // DJs can only add their own mixes or mixes they have re-upped
-    const canAdd = mix.djId === djId || !!(await prisma.mixReup.findUnique({
-      where: { djId_mixId: { djId, mixId } },
-    }));
-
-    if (!canAdd) {
-      return res.status(403).json({ success: false, error: 'You can only add your own mixes or mixes you have re-upped' });
+    // Prevent duplicates
+    const existingItem = await prisma.djSetItem.findFirst({
+      where: { setId: req.params.id, mixId },
+    });
+    if (existingItem) {
+      return res.status(409).json({ success: false, error: 'Mix is already in this set' });
     }
 
     const item = await prisma.djSetItem.create({
@@ -177,13 +296,13 @@ router.post('/:id/mixes', authMiddleware, requirePro, async (req, res) => {
     });
 
     return res.status(201).json({ success: true, data: item });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // DELETE /api/sets/:id/mixes/:mixId - Remove a mix from a set
-router.delete('/:id/mixes/:mixId', authMiddleware, requirePro, async (req, res) => {
+router.delete('/:id/mixes/:mixId', authMiddleware, requireDjProfile, async (req: any, res: any) => {
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
@@ -194,68 +313,12 @@ router.delete('/:id/mixes/:mixId', authMiddleware, requirePro, async (req, res) 
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const item = await prisma.djSetItem.findUnique({
-      where: { setId_mixId: { setId: req.params.id, mixId: req.params.mixId } },
-    });
-
-    if (!item) {
-      return res.status(404).json({ success: false, error: 'Mix not found in this set' });
-    }
-
-    await prisma.djSetItem.delete({
-      where: { setId_mixId: { setId: req.params.id, mixId: req.params.mixId } },
+    await prisma.djSetItem.deleteMany({
+      where: { setId: req.params.id, mixId: req.params.mixId },
     });
 
     return res.json({ success: true, data: { removed: true } });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// PUT /api/sets/:id/reorder - Reorder items in a set
-router.put('/:id/reorder', authMiddleware, requirePro, async (req, res) => {
-  try {
-    const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
-    if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
-    }
-
-    if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    const items = req.body.items;
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, error: 'items array is required' });
-    }
-
-    await prisma.$transaction(
-      items.map((item: any) =>
-        prisma.djSetItem.updateMany({
-          where: { setId: req.params.id, mixId: item.mixId },
-          data: { sortOrder: Number(item.sortOrder) || 0 },
-        })
-      )
-    );
-
-    const updated = await prisma.djSet.findUnique({
-      where: { id: req.params.id },
-      include: {
-        items: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
-            mix: {
-              include: {
-                dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });

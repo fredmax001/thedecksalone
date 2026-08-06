@@ -16,7 +16,6 @@ import {
   Instagram,
   Twitter,
   Facebook,
-  Mail,
   Globe,
   Phone,
   ThumbsUp,
@@ -30,6 +29,7 @@ import {
 import { cn, imageFallback } from "@/lib/utils";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuthStore } from "@/stores/authStore";
+import { usePlayerStore } from "@/stores/playerStore";
 import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
 import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
@@ -599,7 +599,7 @@ function BookingModal({
 }
 
 /* ───── Tab Components ───── */
-function OverviewTab({ dj }: { dj: DJ }) {
+function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) {
   const hasSocialLinks =
     dj.socialLinks &&
     Object.values(dj.socialLinks).some((v) => v && v.trim());
@@ -693,10 +693,7 @@ function OverviewTab({ dj }: { dj: DJ }) {
             <p className="mt-1 text-xs text-text-muted">per event</p>
           </div>
           <div className="mt-4 flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green" />
-            </span>
+            <span className="w-2.5 h-2.5 rounded-full bg-gold shadow-[0_0_6px_rgba(212,162,74,0.7)]" />
             <span className="text-sm text-text-secondary">Available for bookings</span>
           </div>
           <p className="mt-2 text-xs text-text-muted">Typically responds within 24 hours</p>
@@ -826,12 +823,8 @@ function OverviewTab({ dj }: { dj: DJ }) {
 
         {/* Contact */}
         <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6">
-          <span className="section-label">Contact</span>
+          <span className="section-label">Contact & Socials</span>
           <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-3 text-sm text-text-secondary">
-              <Mail size={16} className="text-gold" />
-              <span>{dj.user.email}</span>
-            </div>
             {dj.website && (
               <a
                 href={dj.website}
@@ -853,6 +846,22 @@ function OverviewTab({ dj }: { dj: DJ }) {
                 <Phone size={16} className="text-gold" />
                 <span>{dj.whatsappNumber}</span>
               </a>
+            )}
+            {(!dj.whatsappNumber && !dj.website) && (
+              <div className="bg-[#181818] border border-gold/20 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-gold text-xs font-bold uppercase">
+                  <Crown size={14} /> Direct Contacts Reserved for Pro
+                </div>
+                <p className="text-[11px] text-text-muted leading-relaxed">
+                  Direct WhatsApp & social media links are unlocked for Pro & Pro+ DJs. Use our official booking system to hire this DJ safely!
+                </p>
+                <button
+                  onClick={() => onBookClick?.()}
+                  className="w-full mt-1 bg-gold-gradient text-black font-bold uppercase text-[10px] py-2 rounded-full"
+                >
+                  Book DJ via Deck Salone
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1666,6 +1675,80 @@ function DjFollowButton({ djId, djUserId }: { djId: string; djUserId?: string })
   );
 }
 
+function SetsTab({ djId }: { djId: string }) {
+  const [sets, setSets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { play, setQueue } = usePlayerStore();
+
+  useEffect(() => {
+    import("@/lib/api").then(({ api }) => {
+      api.get(`/sets/dj/${djId}`).then((res) => {
+        if (res.data.success) {
+          setSets(res.data.data || []);
+        }
+      }).catch(() => {}).finally(() => setLoading(false));
+    });
+  }, [djId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 size={24} className="animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  if (sets.length === 0) {
+    return (
+      <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-12 text-center text-text-muted">
+        <Music size={32} className="mx-auto mb-3 text-gold" />
+        <p className="text-sm font-semibold uppercase text-text-primary">No Public Sets Yet</p>
+        <p className="text-xs text-text-muted mt-1">This DJ has not created any public mix playlists yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {sets.map((set) => (
+        <div key={set.id} className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-4 flex flex-col justify-between hover:border-gold/30 transition-all">
+          <div>
+            <div className="relative aspect-[16/9] rounded-xl overflow-hidden mb-3 bg-black">
+              <img src={set.coverImage || set.items?.[0]?.mix?.coverImage || '/cover-placeholder.jpg'} alt={set.title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3 justify-between">
+                <span className="text-[10px] uppercase font-bold text-gold px-2 py-0.5 rounded bg-black/60 border border-gold/30">{set.genre || 'Playlist'}</span>
+                <span className="text-[10px] text-white px-2 py-0.5 rounded bg-black/60">{set.mixCount || 0} Mixes</span>
+              </div>
+            </div>
+            <h4 className="font-display font-bold text-base text-text-primary uppercase truncate">{set.title}</h4>
+            {set.description && <p className="text-xs text-text-muted mt-1 line-clamp-2">{set.description}</p>}
+          </div>
+          <button
+            onClick={() => {
+              if (set.items && set.items.length > 0) {
+                const tracks = set.items.map((i: any) => ({
+                  id: i.mix.id,
+                  title: i.mix.title,
+                  dj: i.mix.dj?.stageName || 'DJ',
+                  duration: 0,
+                  cover: i.mix.coverImage || set.coverImage || '/cover-placeholder.jpg',
+                  genre: i.mix.genre || set.genre || 'Afrobeats',
+                  audioUrl: i.mix.audioUrl,
+                }));
+                setQueue(tracks as any);
+                play(tracks[0] as any);
+              }
+            }}
+            className="mt-4 w-full bg-gold-gradient text-black font-bold uppercase text-xs py-2 rounded-full flex items-center justify-center gap-1.5"
+          >
+            <Play size={14} className="fill-black" /> Play Set
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ───── Main DJ Profile Page ───── */
 export default function DjProfile() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -1701,6 +1784,7 @@ export default function DjProfile() {
     () => [
       { key: "overview", label: "Overview" },
       { key: "mixes", label: "Mixes", count: dj?.totalMixes },
+      { key: "sets", label: "Sets & Playlists" },
       { key: "photos", label: "Photos", count: dj?.photos?.length },
       { key: "stats", label: "Stats" },
       { key: "reviews", label: "Reviews", count: dj?.reviews?.length },
@@ -1919,6 +2003,15 @@ export default function DjProfile() {
                 title={`Check out ${dj.stageName} on The Deck Salone`}
                 description={dj.bio?.slice(0, 160) || ''}
                 size="md"
+                preview={{
+                  type: "dj",
+                  avatar: dj.avatar,
+                  stageName: dj.stageName,
+                  city: formatDjLocation(dj.city, dj.community),
+                  genres: dj.genres,
+                  followers: dj.totalFollowers,
+                  rankingPosition: dj.rankingPosition,
+                }}
               />
             </div>
           </motion.div>
@@ -2007,8 +2100,9 @@ export default function DjProfile() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === "overview" && <OverviewTab dj={dj} />}
+            {activeTab === "overview" && <OverviewTab dj={dj} onBookClick={() => setIsBookingOpen(true)} />}
             {activeTab === "mixes" && <MixesTab dj={dj} />}
+            {activeTab === "sets" && <SetsTab djId={dj.id} />}
             {activeTab === "photos" && <PhotosTab dj={dj} />}
             {activeTab === "stats" && <StatsTab dj={dj} />}
             {activeTab === "reviews" && <ReviewsTab dj={dj} />}

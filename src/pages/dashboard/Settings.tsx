@@ -87,6 +87,9 @@ export default function SettingsPage() {
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [gender, setGender] = useState(user?.gender || '');
+  const [dateOfBirth, setDateOfBirth] = useState(
+    user?.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''
+  );
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -126,6 +129,7 @@ export default function SettingsPage() {
       setUsername(user.username || '');
       setEmail(user.email || '');
       setGender(user.gender || '');
+      setDateOfBirth(user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '');
     }
   }, [user]);
 
@@ -135,9 +139,12 @@ export default function SettingsPage() {
     setIsSavingProfile(true);
 
     try {
-      const res = await api.put('/auth/me', { username, email, gender });
+      const res = await api.put('/auth/me', { username, email, gender, dateOfBirth });
       if (res.data.success) {
         setSaved(true);
+        fetchMe();
+        toast.success('Profile updated successfully');
+
         fetchMe();
         toast.success('Profile updated successfully');
         setTimeout(() => setSaved(false), 3000);
@@ -310,22 +317,37 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block flex items-center justify-between">
+                    <span>Date of Birth 🎂</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400">16+ Only</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="bg-black-elevated border-dark-gray text-text-primary"
+                  />
+                  <p className="text-[11px] text-text-muted mt-1">Must be at least 16 years old. You'll receive a special birthday wish email from Deck Salone on your birthday!</p>
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">Gender</Label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md bg-black-elevated border border-dark-gray text-text-primary text-sm outline-none focus:border-gold"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="NON_BINARY">Non-binary</option>
+                    <option value="OTHER">Other</option>
+                    <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <Label className="text-text-secondary mb-2 block">Gender</Label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md bg-black-elevated border border-dark-gray text-text-primary text-sm outline-none focus:border-gold"
-                >
-                  <option value="">Prefer not to say</option>
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="NON_BINARY">Non-binary</option>
-                  <option value="OTHER">Other</option>
-                  <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
-                </select>
-              </div>
+
+
               {saveError && (
                 <p className="text-xs text-red">{saveError}</p>
               )}

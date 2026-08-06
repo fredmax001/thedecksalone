@@ -29,7 +29,7 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         {/* Logo at top */}
         <Link to="/" className="relative z-10 hover:opacity-80 transition-opacity">
           <img
-            src="/logo.png"
+            src="/logo.png?v=2"
             alt="Deck Salone"
             className="h-20 w-auto object-contain"
           />

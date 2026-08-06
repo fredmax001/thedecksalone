@@ -1,64 +1,48 @@
 const sharp = require('sharp');
 
-const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const ALLOWED_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp']);
-
-let fileTypeModulePromise = null;
-const importModule = new Function('specifier', 'return import(specifier)');
-
-async function detectFileTypeFromBuffer(buffer) {
-  if (!fileTypeModulePromise) {
-    fileTypeModulePromise = importModule('file-type');
-  }
-  const fileType = await fileTypeModulePromise;
-  const detector = fileType.fileTypeFromBuffer || fileType.fromBuffer;
-  if (typeof detector !== 'function') {
-    throw new Error('Image validation is not available on this server');
-  }
-  return detector(buffer);
-}
-
-async function validateImage(buffer, options = {}) {
-  const type = await detectFileTypeFromBuffer(buffer);
-  if (!type || !ALLOWED_IMAGE_TYPES.has(type.mime)) {
-    throw new Error('Invalid image format. Allowed: JPG, PNG, WebP');
-  }
-  if (!ALLOWED_IMAGE_EXTS.has(type.ext)) {
-    throw new Error('Invalid image extension');
+async function validateImage(buffer: Buffer) {
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('Image file is empty or corrupted');
   }
 
-  const metadata = await sharp(buffer).metadata();
-  if (metadata.width && metadata.height) {
-    // reject obviously malformed images
-    if (metadata.width < 10 || metadata.height < 10) {
-      throw new Error('Image dimensions too small');
+  try {
+    const metadata = await sharp(buffer).rotate().metadata();
+    if (!metadata || !metadata.format) {
+      throw new Error('Invalid image file');
     }
+    if (metadata.width && metadata.height && (metadata.width < 10 || metadata.height < 10)) {
+      throw new Error('Image dimensions too small (minimum 10x10px)');
+    }
+    return { mime: `image/${metadata.format}`, ext: metadata.format };
+  } catch (err: any) {
+    throw new Error('Invalid or unsupported image format. Allowed: JPG, PNG, WebP, HEIC, GIF, AVIF');
   }
-
-  return { mime: type.mime, ext: type.ext };
 }
 
-async function processAvatar(buffer) {
-  const info = await validateImage(buffer);
+async function processAvatar(buffer: Buffer) {
+  await validateImage(buffer);
   const processed = await sharp(buffer)
+    .rotate()
     .resize(400, 400, { fit: 'cover', position: 'centre' })
     .webp({ quality: 80 })
     .toBuffer();
   return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
 }
 
-async function processCover(buffer) {
-  const info = await validateImage(buffer);
+async function processCover(buffer: Buffer) {
+  await validateImage(buffer);
   const processed = await sharp(buffer)
+    .rotate()
     .resize(1920, 1080, { fit: 'cover', position: 'centre' })
     .webp({ quality: 85 })
     .toBuffer();
   return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
 }
 
-async function processEventImage(buffer) {
-  const info = await validateImage(buffer);
+async function processEventImage(buffer: Buffer) {
+  await validateImage(buffer);
   const processed = await sharp(buffer)
+    .rotate()
     .resize(1200, 800, { fit: 'cover', position: 'centre' })
     .webp({ quality: 85 })
     .toBuffer();

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -12,7 +12,7 @@ import {
   Menu, Crown, LogOut, Volume2,
   BarChart2, MonitorPlay, AudioLines,
   BadgeCheck, Ban,
-  Loader2, Search, Save, Eye, Trash2, Star,
+  Loader2, Search, Save, Eye, Trash2, Star, Lock, ChevronLeft,
   Settings, Bell, AlertTriangle,
   Music, DollarSign, Calendar,
   Check, X as XIcon,
@@ -29,6 +29,16 @@ import {
   Plus,
   FileText,
   Globe,
+  Ticket,
+  QrCode,
+  Wallet,
+  RefreshCcw,
+  Mail,
+  ShieldAlert,
+  Upload,
+  Gift,
+  Share2,
+  Copy,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useAuthStore } from '@/stores/authStore';
@@ -37,6 +47,8 @@ import {
   useAdminStats, useAdminAnalytics, useAdminDjs,
   useAdminRankings, useAdminMixes, useAdminBookings,
   useAdminEvents, useAdminUsers,
+  useAdminEventTicketingStats, useAdminEventTickets,
+  useAdminEventScanLogs, useSuspendEvent, useRestoreEvent,
   useAdminPayments, useAdminStaff,
   useAdminSystem, useAdminNotifications,
   useMarkAdminNotificationsRead, useClearAdminNotifications,
@@ -45,17 +57,25 @@ import {
   useAdminAds, useAdminPlatforms,
   useAdminBattles, useCreateBattle, useCloseBattle,
   useVerifyDj, useToggleDjSuspend, useDeleteDj,
-  useCreateAd, useAdminVerificationRequests,
+  useCreateAd, useUpdateAd, useAdminVerificationRequests,
   useRejectDjVerification, useRequestDjInfo,
   useUpdateCampaignStatus,
-  useToggleMixFeature, useUpdateBookingStatus,
+  useToggleMixFeature, useToggleMixVisibility, useUpdateBookingStatus,
   useUpdateUserRole, useUpdateUserStatus, useRecalculateRankings,
   useSendNotification, useDeleteMix, useUpdateRanking,
+  useNotifyTop3Rankings, useUploadNotifMedia,
+  useTestEmail, useAdminPromo, useActivatePromo, useGrantPlan,
+  useAdminBirthdays, useSendBirthdayWish, useTriggerBirthdayCron,
+  useAdminSystemErrors, useTriggerBugReportDigest, useSendCustomEmail,
+  useIncompleteProfiles, useSendProfileNudge,
+
+
   useAdminProSubscriptionRequests,
   useApproveProSubscriptionRequest,
   useRejectProSubscriptionRequest,
   useAdminSubscriptionConfig,
   useUpdateSubscriptionConfig,
+
   useAdminOpportunities,
   useToggleDjHallOfFame,
   useToggleMixHallOfFame,
@@ -71,7 +91,7 @@ type AdminSection =
   | 'users' | 'events' | 'revenue' | 'analytics' | 'platforms'
   | 'verification' | 'notifications' | 'subscriptions' | 'security'
   | 'ads' | 'roles' | 'settings' | 'battles' | 'opportunities'
-  | 'halloffame';
+  | 'halloffame' | 'violations' | 'promo';
 
 interface SidebarItem {
   id: AdminSection;
@@ -94,9 +114,11 @@ const sidebarItems: SidebarItem[] = [
   { id: 'mixes', label: 'Mixes', icon: Music, group: 'Marketplace' },
   { id: 'bookings', label: 'Bookings', icon: CalendarCheck, group: 'Operations' },
   { id: 'events', label: 'Events', icon: Calendar, group: 'Operations' },
+  { id: 'violations', label: 'Violations & Alerts', icon: ShieldAlert, group: 'Operations' },
   { id: 'battles', label: 'DJ Battles', icon: Trophy, group: 'Operations' },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, group: 'Operations' },
   { id: 'opportunities', label: 'Opportunities', icon: Plus, group: 'Growth' },
+  { id: 'promo', label: 'Promo & Referrals', icon: Gift, group: 'Growth' },
   { id: 'ads', label: 'Ads Manager', icon: Megaphone, group: 'Growth' },
   { id: 'notifications', label: 'Notifications', icon: BellRing, group: 'Growth' },
   { id: 'platforms', label: 'API & Integrations', icon: Server, group: 'System' },
@@ -585,6 +607,7 @@ function RankingsSection() {
   const navigate = useNavigate();
   const { data, isLoading, error } = useAdminRankings();
   const recalcMutation = useRecalculateRankings();
+  const notifyTop3Mutation = useNotifyTop3Rankings();
   const updateRankingMutation = useUpdateRanking();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -639,14 +662,29 @@ function RankingsSection() {
         title="DJ Rankings"
         subtitle="Top 100 DJs by overall score"
         action={
-          <button
-            onClick={() => recalcMutation.mutate(undefined, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminRankings'] }) })}
-            disabled={recalcMutation.isPending}
-            className="px-4 py-2 bg-[#D4A24A]/10 text-[#D4A24A] rounded-xl text-xs font-bold hover:bg-[#D4A24A]/20 flex items-center gap-2"
-          >
-            {recalcMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Recalculate Rankings
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                notifyTop3Mutation.mutate(undefined, {
+                  onSuccess: () => toast.success('Weekly Top 3 notification emails sent successfully!'),
+                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send notifications'),
+                });
+              }}
+              disabled={notifyTop3Mutation.isPending}
+              className="px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-xl text-xs font-bold hover:bg-purple-500/20 flex items-center gap-2 transition-colors"
+            >
+              {notifyTop3Mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              Send Top 3 Emails
+            </button>
+            <button
+              onClick={() => recalcMutation.mutate(undefined, { onSuccess: () => { toast.success('Rankings recalculated & synced!'); queryClient.invalidateQueries({ queryKey: ['adminRankings'] }); } })}
+              disabled={recalcMutation.isPending}
+              className="px-4 py-2 bg-[#D4A24A]/10 text-[#D4A24A] rounded-xl text-xs font-bold hover:bg-[#D4A24A]/20 flex items-center gap-2 transition-colors"
+            >
+              {recalcMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Recalculate Rankings
+            </button>
+          </div>
         }
       />
 
@@ -725,23 +763,54 @@ function RankingsSection() {
 
 function MixesSection() {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'featured' | 'pending'>('all');
-  const { data, isLoading, error } = useAdminMixes({ limit: 50 });
+  const [filter, setFilter] = useState<'all' | 'public' | 'private' | 'featured' | 'hallOfFame'>('all');
+  const [page, setPage] = useState(1);
+
+  const queryParams = useMemo(() => {
+    const p: any = { page, limit: 50 };
+    if (search.trim()) p.search = search.trim();
+    if (filter === 'public') p.isPublic = 'true';
+    if (filter === 'private') p.isPublic = 'false';
+    if (filter === 'featured') p.featured = 'true';
+    if (filter === 'hallOfFame') p.hallOfFame = 'true';
+    return p;
+  }, [search, filter, page]);
+
+  const { data, isLoading, error } = useAdminMixes(queryParams);
   const toggleFeatureMutation = useToggleMixFeature();
+  const toggleVisibilityMutation = useToggleMixVisibility();
+  const toggleHallOfFameMutation = useToggleMixHallOfFame();
   const deleteMixMutation = useDeleteMix();
   const queryClient = useQueryClient();
 
   const mixes = data?.data || [];
-  const filtered = useMemo(() => {
-    let result = mixes;
-    if (search) result = result.filter((m: any) => m.title?.toLowerCase().includes(search.toLowerCase()));
-    if (filter === 'featured') result = result.filter((m: any) => m.featured);
-    if (filter === 'pending') result = result.filter((m: any) => !m.approved);
-    return result;
-  }, [mixes, search, filter]);
+  const meta = data?.meta || { total: 0, page: 1, totalPages: 1 };
 
   const handleToggleFeature = (id: string, featured: boolean) => {
-    toggleFeatureMutation.mutate({ id, featured: !featured }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminMixes'] }) });
+    toggleFeatureMutation.mutate({ id, featured: !featured }, {
+      onSuccess: () => {
+        toast.success(featured ? 'Unfeatured mix' : '⭐ Mix featured!');
+        queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      },
+    });
+  };
+
+  const handleToggleVisibility = (id: string, isPublic: boolean) => {
+    toggleVisibilityMutation.mutate({ id, isPublic: !isPublic }, {
+      onSuccess: () => {
+        toast.success(isPublic ? '🔒 Mix set to Private' : '🌐 Mix published Public');
+        queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      },
+    });
+  };
+
+  const handleToggleHallOfFame = (id: string) => {
+    toggleHallOfFameMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success('🏛️ Hall of Fame status updated!');
+        queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+      },
+    });
   };
 
   const handlePlayMix = (mix: any) => {
@@ -760,27 +829,42 @@ function MixesSection() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Mix Management" subtitle="Review and manage uploaded mixes" />
+      <SectionHeader title="Mix Management" subtitle={`Review and manage all ${meta.total.toLocaleString()} mixes on platform`} />
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             type="text"
-            placeholder="Search mixes..."
+            placeholder="Search title, DJ name, genre..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-10 pr-4 py-2 bg-[#111111] border border-white/5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
           />
         </div>
-        <div className="flex gap-2">
-          {(['all', 'featured', 'pending'] as const).map((f) => (
+
+        <div className="flex gap-1.5 flex-wrap">
+          {[
+            { id: 'all', label: 'All Mixes' },
+            { id: 'public', label: '🌐 Public' },
+            { id: 'private', label: '🔒 Private' },
+            { id: 'featured', label: '⭐ Featured' },
+            { id: 'hallOfFame', label: '🏛️ Hall of Fame' },
+          ].map((f) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase ${filter === f ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'}`}
+              key={f.id}
+              onClick={() => {
+                setFilter(f.id as any);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase transition-colors ${
+                filter === f.id ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'
+              }`}
             >
-              {f === 'all' ? 'All' : f === 'featured' ? 'Featured' : 'Pending Review'}
+              {f.label}
             </button>
           ))}
         </div>
@@ -790,66 +874,192 @@ function MixesSection() {
 
       {error && (
         <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
-          <p className="text-red-400 font-medium">Failed to load data</p>
+          <p className="text-red-400 font-medium">Failed to load mixes</p>
           <p className="text-red-400/60 text-sm mt-1">{(error as any)?.response?.data?.error || (error as any)?.message || 'Unknown error'}</p>
         </div>
       )}
 
       {!isLoading && !error && (
         <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
-          <table className="w-full text-left">
-            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
-              <tr>
-                <th className="p-4">Cover</th>
-                <th className="p-4">Title</th>
-                <th className="p-4">DJ Name</th>
-                <th className="p-4">Genre</th>
-                <th className="p-4">Duration</th>
-                <th className="p-4">Plays</th>
-                <th className="p-4">Upload Date</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((mix: any) => (
-                <tr key={mix.id} className="border-b border-white/5 text-sm">
-                  <td className="p-4">
-                    <div
-                      className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden relative group/cover cursor-pointer"
-                      onClick={() => handlePlayMix(mix)}
-                      title="Play Mix"
-                    >
-                      {mix.coverImage ? (
-                        <img src={mix.coverImage} alt="" className="w-full h-full object-cover group-hover/cover:scale-105 transition-transform" />
-                      ) : (
-                        <Music className="w-4 h-4 text-text-muted" />
-                      )}
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
-                        <Play className="w-4 h-4 text-[#D4A24A] fill-[#D4A24A]" />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4 font-bold text-text-primary">{mix.title}</td>
-                  <td className="p-4 text-text-secondary">{mix.dj?.stageName || '--'}</td>
-                  <td className="p-4 text-text-secondary">{mix.genre || '--'}</td>
-                  <td className="p-4 font-mono text-text-secondary">{mix.duration || '--'}</td>
-                  <td className="p-4 font-mono text-text-primary">{(mix.plays || 0).toLocaleString()}</td>
-                  <td className="p-4 text-text-secondary">{mix.createdAt ? new Date(mix.createdAt).toLocaleDateString() : '--'}</td>
-                  <td className="p-4"><StatusBadge status={mix.featured ? 'featured' : 'active'} /></td>
-                  <td className="p-4">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleToggleFeature(mix.id, mix.featured)} className="p-2 rounded-lg bg-[#D4A24A]/10 text-[#D4A24A] hover:bg-[#D4A24A]/20" title="Feature/Unfeature">
-                        <Star className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => { if (confirm('Delete this mix?')) deleteMixMutation.mutate(mix.id, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminMixes'] }) }); }} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                <tr>
+                  <th className="p-4">Cover</th>
+                  <th className="p-4">Title</th>
+                  <th className="p-4">DJ Name</th>
+                  <th className="p-4">Genre</th>
+                  <th className="p-4">Plays</th>
+                  <th className="p-4">Visibility</th>
+                  <th className="p-4">Badges</th>
+                  <th className="p-4">Upload Date</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && <EmptyState message="No mixes found." />}
+              </thead>
+              <tbody>
+                {mixes.map((mix: any) => (
+                  <tr key={mix.id} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
+                    <td className="p-4">
+                      <div
+                        className="w-11 h-11 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden relative group/cover cursor-pointer border border-white/10"
+                        onClick={() => handlePlayMix(mix)}
+                        title="Play Mix"
+                      >
+                        {mix.coverImage ? (
+                          <img src={mix.coverImage} alt="" className="w-full h-full object-cover group-hover/cover:scale-105 transition-transform" />
+                        ) : (
+                          <Music className="w-5 h-5 text-text-muted" />
+                        )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
+                          <Play className="w-5 h-5 text-[#D4A24A] fill-[#D4A24A]" />
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-4 font-bold text-text-primary">
+                      <p className="line-clamp-1">{mix.title}</p>
+                      {mix.description && <p className="text-xs font-normal text-text-muted line-clamp-1 mt-0.5">{mix.description}</p>}
+                    </td>
+
+                    <td className="p-4 text-text-secondary">
+                      <span className="font-semibold text-text-primary">{mix.dj?.stageName || '--'}</span>
+                      {mix.dj?.subscriptionTier && mix.dj.subscriptionTier !== 'free' && (
+                        <span className="ml-1.5 px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-[#D4A24A]/20 text-[#D4A24A]">
+                          {mix.dj.subscriptionTier}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-4 text-text-secondary">
+                      <span className="px-2 py-1 rounded-md bg-white/5 text-xs">{mix.genre || 'Salone Mix'}</span>
+                    </td>
+
+                    <td className="p-4 font-mono font-bold text-[#D4A24A]">
+                      {(mix.plays || 0).toLocaleString()}
+                    </td>
+
+                    <td className="p-4">
+                      <button
+                        onClick={() => handleToggleVisibility(mix.id, mix.isPublic)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                          mix.isPublic
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                            : 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20'
+                        }`}
+                        title="Click to toggle Public / Private"
+                      >
+                        {mix.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        {mix.isPublic ? 'Public' : 'Private'}
+                      </button>
+                    </td>
+
+                    <td className="p-4">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {mix.featured && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-[#D4A24A]/20 text-[#D4A24A] border border-[#D4A24A]/30">
+                            ⭐ Featured
+                          </span>
+                        )}
+                        {mix.hallOfFame && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            🏛️ Hall of Fame
+                          </span>
+                        )}
+                        {!mix.featured && !mix.hallOfFame && (
+                          <span className="text-xs text-text-muted">--</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-4 text-xs text-text-muted">
+                      {mix.createdAt ? new Date(mix.createdAt).toLocaleDateString() : '--'}
+                    </td>
+
+                    <td className="p-4">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleToggleVisibility(mix.id, mix.isPublic)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            mix.isPublic ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                          }`}
+                          title={mix.isPublic ? 'Make Private' : 'Make Public'}
+                        >
+                          {mix.isPublic ? <Lock className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5" />}
+                        </button>
+
+                        <button
+                          onClick={() => handleToggleFeature(mix.id, mix.featured)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            mix.featured ? 'bg-[#D4A24A] text-black font-bold' : 'bg-[#D4A24A]/10 text-[#D4A24A] hover:bg-[#D4A24A]/20'
+                          }`}
+                          title={mix.featured ? 'Unfeature' : 'Feature Mix'}
+                        >
+                          <Star className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleToggleHallOfFame(mix.id)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            mix.hallOfFame ? 'bg-amber-500 text-black font-bold' : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                          }`}
+                          title="Toggle Hall of Fame"
+                        >
+                          <Crown className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete "${mix.title}"? This cannot be undone.`)) {
+                              deleteMixMutation.mutate(mix.id, {
+                                onSuccess: () => {
+                                  toast.success('Mix deleted');
+                                  queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
+                                },
+                              });
+                            }
+                          }}
+                          className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                          title="Delete Mix"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {mixes.length === 0 && <EmptyState message="No mixes found for this query." />}
+
+          {/* Pagination Controls */}
+          {meta.totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t border-white/5 text-xs text-text-muted">
+              <span>
+                Showing {((meta.page - 1) * 50) + 1} – {Math.min(meta.page * 50, meta.total)} of {meta.total} mixes
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 text-text-primary disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                </button>
+                <span className="font-semibold text-text-primary px-2">
+                  Page {meta.page} of {meta.totalPages}
+                </span>
+                <button
+                  disabled={page >= meta.totalPages}
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 text-text-primary disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 flex items-center gap-1"
+                >
+                  Next <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1205,12 +1415,100 @@ function UsersSection() {
 
 function EventsSection() {
   const navigate = useNavigate();
-  const { data, isLoading, error } = useAdminEvents({ limit: 50 });
+  const [search, setSearch] = useState('');
+  const [publishStatus, setPublishStatus] = useState<string>('all');
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [detailTab, setDetailTab] = useState<'tickets' | 'scans'>('tickets');
+
+  const filters = {
+    search: search || undefined,
+    publishStatus: publishStatus === 'all' ? undefined : publishStatus,
+    limit: 50,
+  };
+
+  const { data, isLoading, error } = useAdminEvents(filters);
+  const { data: statsData } = useAdminEventTicketingStats();
   const events = data?.data || [];
+  const stats = statsData?.data || {};
+  const suspendMutation = useSuspendEvent();
+  const restoreMutation = useRestoreEvent();
+
+  const handleSuspend = (id: string) => {
+    const reason = window.prompt('Suspension reason (optional):');
+    if (reason === null) return;
+    suspendMutation.mutate({ id, reason: reason || undefined }, {
+      onSuccess: () => toast.success('Event suspended'),
+      onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to suspend event'),
+    });
+  };
+
+  const handleRestore = (id: string) => {
+    if (!confirm('Restore this event to published?')) return;
+    restoreMutation.mutate(id, {
+      onSuccess: () => toast.success('Event restored'),
+      onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to restore event'),
+    });
+  };
+
+  const formatMoney = (val?: number) =>
+    `SLE ${Math.round(val || 0).toLocaleString()}`;
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Event Management" subtitle="Manage platform events and performances" />
+      <SectionHeader
+        title="Event Monitoring"
+        subtitle="Track ticket sales, flagged events, and organizer activity across the platform"
+      />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Total Events" value={stats.totalEvents || 0} icon={Calendar} color="#3B82F6" />
+        <StatCard label="Tickets Sold" value={stats.totalTickets || 0} icon={Ticket} color="#D4A24A" />
+        <StatCard label="Ticket Revenue" value={formatMoney(stats.totalRevenue)} icon={Wallet} color="#22C55E" />
+        <StatCard label="Checked In" value={stats.checkedInTickets || 0} icon={QrCode} color="#8B5CF6" />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Published Events</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{(stats.publishedEvents || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pending Tickets</p>
+          <p className="font-mono text-2xl font-bold text-[#F97316] mt-2">{(stats.pendingTickets || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pending Payments</p>
+          <p className="font-mono text-2xl font-bold text-[#F97316] mt-2">{(stats.pendingPayments || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Suspended / Flagged</p>
+          <p className="font-mono text-2xl font-bold text-[#EF4444] mt-2">{(stats.suspendedEvents || 0).toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search events, DJs, cities, venues..."
+            className="w-full pl-9 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+          />
+        </div>
+        <select
+          value={publishStatus}
+          onChange={(e) => setPublishStatus(e.target.value)}
+          className="px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+        >
+          <option value="all">All Publish Statuses</option>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+          <option value="suspended">Suspended</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
 
       {isLoading && <LoadingCenter />}
 
@@ -1223,41 +1521,208 @@ function EventsSection() {
 
       {!isLoading && !error && (
         <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
-          <table className="w-full text-left">
-            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
-              <tr>
-                <th className="p-4">Title</th>
-                <th className="p-4">DJ / Organizer</th>
-                <th className="p-4">City</th>
-                <th className="p-4">Venue</th>
-                <th className="p-4">Date</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Slots</th>
-                <th className="p-4">Filled</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e: any) => (
-                <tr key={e.id} className="border-b border-white/5 text-sm">
-                  <td className="p-4 font-bold text-text-primary">{e.title}</td>
-                  <td className="p-4 text-text-primary">{e.dj?.stageName || '--'}</td>
-                  <td className="p-4 text-text-secondary">{e.city}</td>
-                  <td className="p-4 text-text-secondary">{e.venue || '--'}</td>
-                  <td className="p-4 font-mono text-text-secondary">{e.date ? new Date(e.date).toLocaleDateString() : '--'}</td>
-                  <td className="p-4"><StatusBadge status={e.status || 'upcoming'} /></td>
-                  <td className="p-4 font-mono text-text-primary">{e.slots || '--'}</td>
-                  <td className="p-4 font-mono text-text-primary">{e.filledSlots || 0}</td>
-                  <td className="p-4">
-                    <button onClick={() => navigate(`/events/${e.id}`)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1 ml-auto" title="View event"><Eye className="w-3 h-3" /> View</button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[900px]">
+              <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                <tr>
+                  <th className="p-4">Title</th>
+                  <th className="p-4">DJ / Organizer</th>
+                  <th className="p-4">Date</th>
+                  <th className="p-4">Publish</th>
+                  <th className="p-4 text-right">Tickets</th>
+                  <th className="p-4 text-right">Checked In</th>
+                  <th className="p-4 text-right">Pending</th>
+                  <th className="p-4 text-right">Revenue</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {events.map((e: any) => {
+                  const ts = e.ticketStats || {};
+                  return (
+                    <tr key={e.id} className="border-b border-white/5 text-sm">
+                      <td className="p-4 font-bold text-text-primary">{e.title}</td>
+                      <td className="p-4 text-text-primary">{e.dj?.stageName || e.organizerName || '--'}</td>
+                      <td className="p-4 font-mono text-text-secondary">{e.date ? new Date(e.date).toLocaleDateString() : '--'}</td>
+                      <td className="p-4"><StatusBadge status={e.publishStatus || 'draft'} /></td>
+                      <td className="p-4 text-right font-mono text-text-primary">{ts.sold || 0}{ts.totalTickets ? ` / ${ts.totalTickets}` : ''}</td>
+                      <td className="p-4 text-right font-mono text-text-primary">{ts.checkedIn || 0}</td>
+                      <td className="p-4 text-right font-mono text-[#F97316]">{ts.pending || 0}</td>
+                      <td className="p-4 text-right font-mono text-text-primary">{formatMoney(ts.revenue)}</td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => setSelectedEvent(e)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="Monitor event"><Eye className="w-3 h-3" /> Monitor</button>
+                          <button onClick={() => navigate(`/events/${e.id}`)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="View public page"><ExternalLink className="w-3 h-3" /></button>
+                          {e.publishStatus === 'suspended' ? (
+                            <button onClick={() => handleRestore(e.id)} disabled={restoreMutation.isPending} className="px-3 py-1.5 text-xs rounded-lg bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20 flex items-center gap-1 disabled:opacity-50" title="Restore event"><RefreshCcw className="w-3 h-3" /> Restore</button>
+                          ) : (
+                            <button onClick={() => handleSuspend(e.id)} disabled={suspendMutation.isPending} className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center gap-1 disabled:opacity-50" title="Suspend event"><Ban className="w-3 h-3" /> Suspend</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {events.length === 0 && <EmptyState message="No events found." />}
         </div>
       )}
+
+      {selectedEvent && (
+        <EventMonitorModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          activeTab={detailTab}
+          onTabChange={setDetailTab}
+        />
+      )}
+    </div>
+  );
+}
+
+function EventMonitorModal({
+  event,
+  onClose,
+  activeTab,
+  onTabChange,
+}: {
+  event: any;
+  onClose: () => void;
+  activeTab: 'tickets' | 'scans';
+  onTabChange: (tab: 'tickets' | 'scans') => void;
+}) {
+  const [ticketStatus, setTicketStatus] = useState<string>('all');
+  const [ticketSearch, setTicketSearch] = useState('');
+  const { data: ticketsData, isLoading: ticketsLoading } = useAdminEventTickets(event.id, {
+    status: ticketStatus === 'all' ? undefined : ticketStatus,
+    search: ticketSearch || undefined,
+    limit: 50,
+  });
+  const { data: scansData, isLoading: scansLoading } = useAdminEventScanLogs(event.id, { limit: 50 });
+  const tickets = ticketsData?.data || [];
+  const scans = scansData?.data || [];
+  const ts = event.ticketStats || {};
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 flex flex-col" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-white/5 flex items-start justify-between">
+          <div>
+            <h3 className="font-bold text-text-primary text-lg">{event.title}</h3>
+            <p className="text-sm text-text-muted mt-1">{event.dj?.stageName || event.organizerName || '--'} • {event.city} • {event.date ? new Date(event.date).toLocaleString() : '--'}</p>
+            <div className="flex items-center gap-3 mt-3">
+              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Sold: <span className="text-text-primary font-mono font-bold">{ts.sold || 0}</span></div>
+              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Checked In: <span className="text-text-primary font-mono font-bold">{ts.checkedIn || 0}</span></div>
+              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Revenue: <span className="text-[#D4A24A] font-mono font-bold">SLE {Math.round(ts.revenue || 0).toLocaleString()}</span></div>
+              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Pending: <span className="text-[#F97316] font-mono font-bold">{ts.pending || 0}</span></div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex border-b border-white/5">
+          <button onClick={() => onTabChange('tickets')} className={`px-5 py-3 text-xs font-bold uppercase tracking-wider border-b-2 ${activeTab === 'tickets' ? 'border-[#D4A24A] text-[#D4A24A]' : 'border-transparent text-text-muted hover:text-text-primary'}`}>Tickets</button>
+          <button onClick={() => onTabChange('scans')} className={`px-5 py-3 text-xs font-bold uppercase tracking-wider border-b-2 ${activeTab === 'scans' ? 'border-[#D4A24A] text-[#D4A24A]' : 'border-transparent text-text-muted hover:text-text-primary'}`}>Scan Logs</button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+          {activeTab === 'tickets' && (
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input
+                    type="text"
+                    value={ticketSearch}
+                    onChange={(e) => setTicketSearch(e.target.value)}
+                    placeholder="Search buyer, email, phone, ticket number..."
+                    className="w-full pl-9 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                  />
+                </div>
+                <select
+                  value={ticketStatus}
+                  onChange={(e) => setTicketStatus(e.target.value)}
+                  className="px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="checked_in">Checked In</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+              </div>
+
+              {ticketsLoading && <LoadingCenter />}
+              {!ticketsLoading && (
+                <div className="rounded-xl border border-white/5 overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                      <tr>
+                        <th className="p-3">Ticket #</th>
+                        <th className="p-3">Buyer</th>
+                        <th className="p-3">Type</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Amount</th>
+                        <th className="p-3">Purchased</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tickets.map((t: any) => (
+                        <tr key={t.id} className="border-b border-white/5">
+                          <td className="p-3 font-mono text-text-primary">{t.ticketNumber || '--'}</td>
+                          <td className="p-3 text-text-primary">{t.buyerName || t.user?.name || '--'}</td>
+                          <td className="p-3 text-text-secondary">{t.ticketType?.name || '--'}</td>
+                          <td className="p-3"><StatusBadge status={t.status} /></td>
+                          <td className="p-3 text-right font-mono text-text-primary">SLE {Math.round(t.amount || 0).toLocaleString()}</td>
+                          <td className="p-3 text-text-secondary">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '--'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {tickets.length === 0 && <EmptyState message="No tickets found." />}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'scans' && (
+            <div className="space-y-4">
+              {scansLoading && <LoadingCenter />}
+              {!scansLoading && (
+                <div className="rounded-xl border border-white/5 overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+                      <tr>
+                        <th className="p-3">Time</th>
+                        <th className="p-3">Ticket #</th>
+                        <th className="p-3">Scanner</th>
+                        <th className="p-3">Role</th>
+                        <th className="p-3">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scans.map((s: any) => (
+                        <tr key={s.id} className="border-b border-white/5">
+                          <td className="p-3 text-text-secondary">{s.createdAt ? new Date(s.createdAt).toLocaleString() : '--'}</td>
+                          <td className="p-3 font-mono text-text-primary">{s.ticket?.ticketNumber || '--'}</td>
+                          <td className="p-3 text-text-primary">{s.scannedBy?.slice(0, 8) || '--'}</td>
+                          <td className="p-3 text-text-secondary">{s.scannerRole || '--'}</td>
+                          <td className="p-3"><StatusBadge status={s.status} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {scans.length === 0 && <EmptyState message="No scan logs found." />}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1733,7 +2198,8 @@ function PlatformsSection() {
 
   const uptime = system?.uptime ? `${Math.floor(system.uptime / 60)}m` : 'N/A';
   const memory = system?.memory ? `${Math.round((system.memory.heapUsed || 0) / 1024 / 1024)}MB` : 'N/A';
-  const counts = system?.counts || {};
+  const counts = system && typeof system.counts === 'object' && system.counts ? system.counts : {};
+  const platformList = Array.isArray(platforms) ? platforms : [];
 
   if (systemLoading || platformsLoading) return <LoadingCenter />;
 
@@ -1744,17 +2210,22 @@ function PlatformsSection() {
     </div>
   );
 
-  const platformCards = useMemo(() => [
-    { name: 'Database', icon: HardDrive, status: system?.dbStatus === 'connected' ? 'connected' : 'disconnected', latency: '< 50ms', records: `${Object.values(counts).reduce((a: number, b: any) => a + (b || 0), 0).toLocaleString()} rows` },
+  const getPlatform = (name: string) => platformList.find((p: any) => p && (p.name === name || p.platform === name));
+
+  const totalRecords = Object.values(counts).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+
+  const platformCards = [
+    { name: 'Database', icon: HardDrive, status: system?.dbStatus === 'connected' ? 'connected' : 'disconnected', latency: '< 50ms', records: `${totalRecords.toLocaleString()} rows` },
     { name: 'Server', icon: Server, status: 'connected', uptime, memory },
-    { name: 'YouTube', icon: MonitorPlay, status: (platforms || []).find((p: any) => p.name === 'YouTube') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'YouTube')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'YouTube')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'YouTube')?.streams || 0 },
-    { name: 'Audiomack', icon: AudioLines, status: (platforms || []).find((p: any) => p.name === 'Audiomack') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Audiomack')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'Audiomack')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'Audiomack')?.streams || 0 },
-    { name: 'Mixcloud', icon: Radio, status: (platforms || []).find((p: any) => p.name === 'Mixcloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'Mixcloud')?.streams || 0 },
-    { name: 'HearThis', icon: Volume2, status: (platforms || []).find((p: any) => p.name === 'HearThis') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'HearThis')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'HearThis')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'HearThis')?.streams || 0 },
-    { name: 'SoundCloud', icon: Music, status: (platforms || []).find((p: any) => p.name === 'SoundCloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.djs || 0, followers: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.followers || 0, streams: (platforms || []).find((p: any) => p.name === 'SoundCloud')?.streams || 0 },
+    { name: 'YouTube', icon: MonitorPlay, status: getPlatform('YouTube') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: getPlatform('YouTube')?.djs || 0, followers: getPlatform('YouTube')?.followers || 0, streams: getPlatform('YouTube')?.streams || 0 },
+    { name: 'Audiomack', icon: AudioLines, status: getPlatform('Audiomack') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: getPlatform('Audiomack')?.djs || 0, followers: getPlatform('Audiomack')?.followers || 0, streams: getPlatform('Audiomack')?.streams || 0 },
+    { name: 'Mixcloud', icon: Radio, status: getPlatform('Mixcloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: getPlatform('Mixcloud')?.djs || 0, followers: getPlatform('Mixcloud')?.followers || 0, streams: getPlatform('Mixcloud')?.streams || 0 },
+    { name: 'HearThis', icon: Volume2, status: getPlatform('HearThis') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: getPlatform('HearThis')?.djs || 0, followers: getPlatform('HearThis')?.followers || 0, streams: getPlatform('HearThis')?.streams || 0 },
+    { name: 'SoundCloud', icon: Music, status: getPlatform('SoundCloud') ? 'connected' : 'disconnected', lastSync: 'Auto-sync', djs: getPlatform('SoundCloud')?.djs || 0, followers: getPlatform('SoundCloud')?.followers || 0, streams: getPlatform('SoundCloud')?.streams || 0 },
     { name: 'Cloudinary', icon: HardDrive, status: 'connected', storage: 'Active' },
     { name: 'AWS S3', icon: Package, status: 'connected', storage: 'Active' },
-  ], [system, platforms, uptime, memory, counts]);
+  ];
+
 
   return (
     <div className="space-y-6">
@@ -1805,9 +2276,13 @@ function PlatformsSection() {
           </motion.div>
         ))}
       </div>
+
+      {/* System Bug Logs & Error Monitor */}
+      <SystemBugLogsWidget />
     </div>
   );
 }
+
 
 /* ─────────────────────── Section 11: Verification ─────────────────────── */
 
@@ -1821,6 +2296,7 @@ function VerificationSection() {
   const [action, setAction] = useState<'approve' | 'reject' | 'request' | 'badge' | null>(null);
   const [note, setNote] = useState('');
   const [badgeType, setBadgeType] = useState<'grey' | 'gold'>('grey');
+  const [isSavingBadge, setIsSavingBadge] = useState(false);
 
   const requests = requestsData || [];
 
@@ -1838,10 +2314,12 @@ function VerificationSection() {
     if (action === 'approve') {
       verifyMutation.mutate({ id: selected.id, notes: note, badgeType }, { onSettled });
     } else if (action === 'badge') {
+      setIsSavingBadge(true);
       api.put(`/admin/djs/${selected.id}/badge-type`, { badgeType }).then(() => {
         toast.success('Badge type updated!');
         onSettled();
-      }).catch(() => toast.error('Failed to update badge'));
+      }).catch(() => toast.error('Failed to update badge'))
+      .finally(() => setIsSavingBadge(false));
     } else if (action === 'reject') {
       if (!note) return toast.error('Rejection reason is required');
       rejectMutation.mutate({ id: selected.id, reason: note }, { onSettled });
@@ -1920,12 +2398,12 @@ function VerificationSection() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
+                  {!v.verified && v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
                     <button onClick={() => { setSelected(v); setAction('approve'); setNote(''); setBadgeType('grey'); }} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" /> Approve
+                      <Check className="w-4 h-4" /> Approve
                     </button>
                   )}
-                  {(v.verificationStatus?.toLowerCase() === 'verified' || v.verificationStatus?.toLowerCase() === 'approved') && (
+                  {(v.verified || v.verificationStatus?.toLowerCase() === 'verified' || v.verificationStatus?.toLowerCase() === 'approved') && (
                     <button onClick={() => { setSelected(v); setAction('badge'); setBadgeType(v.verificationBadgeType || 'grey'); }} className="px-4 py-2 bg-yellow-500/10 text-yellow-400 rounded-xl text-xs font-bold hover:bg-yellow-500/20 flex items-center gap-1">
                       🏅 Change Badge
                     </button>
@@ -1935,7 +2413,7 @@ function VerificationSection() {
                       <XIcon className="w-3.5 h-3.5" /> Reject
                     </button>
                   )}
-                  {v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
+                  {!v.verified && v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
                     <button onClick={() => { setSelected(v); setAction('request'); setNote(''); }} className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1">
                       Request Info
                     </button>
@@ -2003,11 +2481,11 @@ function VerificationSection() {
             )}
             <button
               onClick={handleAction}
-              disabled={verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending}
+              disabled={verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending || isSavingBadge}
               className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 ${action === 'approve' ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : action === 'reject' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : action === 'badge' ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-[#D4A24A] text-black hover:bg-[#D4A24A]/90'
                 }`}
             >
-              {(verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {(verifyMutation.isPending || rejectMutation.isPending || requestInfoMutation.isPending || isSavingBadge) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {action === 'approve' ? 'Confirm Approval' : action === 'reject' ? 'Confirm Rejection' : action === 'badge' ? 'Save' : 'Send Request'}
             </button>
           </div>
@@ -2022,20 +2500,114 @@ function VerificationSection() {
 function NotificationsSection() {
   const { data: notifications, isLoading, error } = useAdminNotifications({ limit: 20 });
   const sendMutation = useSendNotification();
-  const [notifType, setNotifType] = useState<'Both' | 'Push' | 'Email' | 'SMS'>('Both');
+  const uploadMediaMutation = useUploadNotifMedia();
+  const testEmailMutation = useTestEmail();
+  const clearNotifications = useClearAdminNotifications();
+  const [notifType, setNotifType] = useState<'Both' | 'Push' | 'Email' | 'WhatsApp' | 'SMS'>('Both');
   const [target, setTarget] = useState('All Users');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [schedule, setSchedule] = useState('');
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [testEmailAddr, setTestEmailAddr] = useState('djfredmax221@gmail.com');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleTestEmail = () => {
+    if (!testEmailAddr.trim() || !testEmailAddr.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    testEmailMutation.mutate(testEmailAddr, {
+      onSuccess: () => {
+        toast.success(`✅ Test email sent to ${testEmailAddr}!`);
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || 'Failed to send test email');
+      },
+    });
+  };
+
+
+  const handleMediaSelect = async (file: File) => {
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) {
+      toast.error('Only images (JPG, PNG, WebP, GIF) and videos (MP4, WebM, MOV) are allowed.');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 50 MB.');
+      return;
+    }
+    setMediaFile(file);
+    setMediaPreview({ url: URL.createObjectURL(file), type: isVideo ? 'video' : 'image' });
+    setUploadedMedia(null);
+
+    // Upload immediately
+    uploadMediaMutation.mutate(file, {
+      onSuccess: (data) => {
+        setUploadedMedia({ url: data.url, type: data.type });
+        toast.success(`${data.type === 'video' ? '🎬 Video' : '🖼️ Image'} uploaded!`);
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || 'Media upload failed');
+        setMediaFile(null);
+        setMediaPreview(null);
+      },
+    });
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleMediaSelect(file);
+  };
+
+  const removeMedia = () => {
+    setMediaFile(null);
+    setMediaPreview(null);
+    setUploadedMedia(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSend = () => {
     if (!title.trim() || !message.trim()) return;
-    sendMutation.mutate({ type: notifType, target, title, message, scheduled: schedule || undefined }, {
-      onSuccess: () => {
+    if (mediaFile && !uploadedMedia) {
+      toast.error('Please wait for the media to finish uploading.');
+      return;
+    }
+    sendMutation.mutate({
+      type: notifType,
+      target,
+      title,
+      message,
+      scheduled: schedule || undefined,
+      mediaUrl: uploadedMedia?.url,
+      mediaType: uploadedMedia?.type,
+    }, {
+      onSuccess: (data: any) => {
         setTitle('');
         setMessage('');
         setSchedule('');
-        toast.success('Notification sent successfully');
+        removeMedia();
+        const wantsEmail = notifType === 'Email' || notifType === 'Both';
+        if (wantsEmail && data) {
+          const sent = data.emailsSent ?? 0;
+          const failed = data.emailsFailed ?? 0;
+          if (failed > 0 && sent === 0) {
+            toast.error(`Email delivery failed for all ${failed} recipients. Check SMTP config.`);
+          } else if (failed > 0) {
+            toast.success(`Email sent to ${sent} user${sent !== 1 ? 's' : ''}. ${failed} failed — check server logs.`);
+          } else if (sent > 0) {
+            toast.success(`✅ Email sent to ${sent} user${sent !== 1 ? 's' : ''}!`);
+          } else {
+            toast.success('No matching users found for the selected audience.');
+          }
+        } else {
+          toast.success('Notification sent successfully');
+        }
       },
       onError: (err: any) => {
         toast.error(err?.response?.data?.error || 'Failed to send notification');
@@ -2047,16 +2619,47 @@ function NotificationsSection() {
     <div className="space-y-6">
       <SectionHeader title="Notification Center" subtitle="Send and manage platform notifications" />
 
+      {/* Quick SMTP Test Box */}
+      <div className="rounded-2xl p-4 border border-[#D4A24A]/20 bg-[#D4A24A]/5 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#D4A24A]/10 border border-[#D4A24A]/30 flex items-center justify-center text-[#D4A24A]">
+            <Mail className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-text-primary">Verify SMTP Delivery</p>
+            <p className="text-xs text-text-muted">Send an instant test email to verify hostinger email server connection</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <input
+            type="email"
+            value={testEmailAddr}
+            onChange={(e) => setTestEmailAddr(e.target.value)}
+            placeholder="Recipient email..."
+            className="px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none w-full md:w-64"
+          />
+          <button
+            onClick={handleTestEmail}
+            disabled={testEmailMutation.isPending}
+            className="px-4 py-2 bg-[#D4A24A] hover:bg-[#D4A24A]/90 text-black font-bold rounded-xl text-xs whitespace-nowrap flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {testEmailMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            Send Test
+          </button>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Compose Form */}
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Compose Notification</p>
 
+
           <div className="space-y-4">
             <div>
               <label className="block text-xs text-text-muted mb-1.5">Notification Type</label>
               <div className="flex gap-2">
-                {(['Both', 'Push', 'Email', 'SMS'] as const).map((t) => (
+                {(['Both', 'Push', 'Email', 'WhatsApp', 'SMS'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setNotifType(t)}
@@ -2066,6 +2669,25 @@ function NotificationsSection() {
                   </button>
                 ))}
               </div>
+              {notifType === 'WhatsApp' && (
+                <div className="mt-2.5 p-3 rounded-xl bg-[#25D366]/10 border border-[#25D366]/30 flex items-center justify-between text-xs text-text-primary">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">💬</span>
+                    <div>
+                      <p className="font-bold text-[#25D366]">Official WhatsApp Line (+232 72 011 156)</p>
+                      <p className="text-[11px] text-text-muted">Sends via official Deck Salone WhatsApp number or generates 1-click WhatsApp web links.</p>
+                    </div>
+                  </div>
+                  <a
+                    href={`https://wa.me/23272011156?text=${encodeURIComponent(title ? `${title}\n\n${message}` : 'Hello from Deck Salone Admin')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1 bg-[#25D366] text-black font-bold rounded-lg text-[11px] hover:brightness-110 flex items-center gap-1 shrink-0"
+                  >
+                    Test Line ➔
+                  </a>
+                </div>
+              )}
             </div>
 
             <div>
@@ -2089,6 +2711,59 @@ function NotificationsSection() {
               <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} placeholder="Write your message here..." className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none" />
             </div>
 
+            {/* ── Media Upload Zone ── */}
+            <div>
+              <label className="block text-xs text-text-muted mb-1.5">Attach Media <span className="text-text-muted/60">(image or video, optional)</span></label>
+
+              {!mediaPreview ? (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={(e) => e.preventDefault()}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 bg-white/[0.02] hover:border-[#D4A24A]/40 hover:bg-white/[0.04] cursor-pointer transition-all p-6 text-center"
+                >
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-1">
+                    <Upload className="w-4 h-4 text-text-muted" />
+                  </div>
+                  <p className="text-xs text-text-primary font-medium">Drop image or video here</p>
+                  <p className="text-[10px] text-text-muted">JPG, PNG, WebP, GIF, MP4, WebM, MOV — max 50 MB</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/mp4,video/webm,video/quicktime"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMediaSelect(f); }}
+                  />
+                </div>
+              ) : (
+                <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black">
+                  {mediaPreview.type === 'image' ? (
+                    <img src={mediaPreview.url} alt="Preview" className="w-full max-h-48 object-cover" />
+                  ) : (
+                    <video src={mediaPreview.url} className="w-full max-h-48 object-cover" controls muted />
+                  )}
+                  {/* Upload status overlay */}
+                  {uploadMediaMutation.isPending && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin text-[#D4A24A]" />
+                      <span className="text-xs text-white font-medium">Uploading…</span>
+                    </div>
+                  )}
+                  {uploadedMedia && (
+                    <div className="absolute top-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Uploaded
+                    </div>
+                  )}
+                  <button
+                    onClick={removeMedia}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-red-500/80 rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <XIcon className="w-3.5 h-3.5 text-white" />
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs text-text-muted mb-1.5">Schedule (optional)</label>
               <input type="datetime-local" value={schedule} onChange={(e) => setSchedule(e.target.value)} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none" />
@@ -2096,7 +2771,7 @@ function NotificationsSection() {
 
             <button
               onClick={handleSend}
-              disabled={sendMutation.isPending || !title.trim() || !message.trim()}
+              disabled={sendMutation.isPending || uploadMediaMutation.isPending || !title.trim() || !message.trim()}
               className="w-full px-4 py-2.5 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {sendMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -2105,10 +2780,21 @@ function NotificationsSection() {
           </div>
         </motion.div>
 
+
         {/* Recent Notifications */}
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A] mb-4">Recent Notifications</p>
-
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A]">Recent Notifications</p>
+            {notifications && notifications.length > 0 && (
+              <button 
+                onClick={() => clearNotifications.mutate()}
+                disabled={clearNotifications.isPending}
+                className="text-xs text-text-muted hover:text-white"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
           {isLoading && <LoadingCenter />}
 
           {error && (
@@ -2140,9 +2826,13 @@ function NotificationsSection() {
           )}
         </motion.div>
       </div>
+
+      {/* Direct Custom Email Sender */}
+      <DirectEmailSenderWidget />
     </div>
   );
 }
+
 
 /* ─────────────────────── Section 13: Subscriptions ─────────────────────── */
 
@@ -2408,24 +3098,108 @@ function SecurityLogsSection() {
 function AdsManagerSection() {
   const { data: ads, isLoading, error } = useAdminAds();
   const createMutation = useCreateAd();
+  const editMutation = useUpdateAd();
   const statusMutation = useUpdateCampaignStatus();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<any | null>(null);
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+  const [imageMode, setImageMode] = useState<'upload' | 'url'>('url');
+  const [imagePreview, setImagePreview] = useState<string>('');
   const [form, setForm] = useState({
     name: '',
+    description: '',
+    creativeImageUrl: '',
+    ctaUrl: '',
     status: 'draft' as 'active' | 'paused' | 'draft',
     budget: '',
     startDate: '',
     endDate: '',
   });
+  // Edit form state (separate)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    creativeImageUrl: '',
+    ctaUrl: '',
+    status: 'draft' as 'active' | 'paused' | 'draft',
+    budget: '',
+    startDate: '',
+    endDate: '',
+  });
+  const [editImagePreview, setEditImagePreview] = useState<string>('');
 
   const campaigns = ads?.campaigns || [];
   const totalBudget = ads?.totalBudget || 0;
   const totalSpent = ads?.totalSpent || 0;
 
   const resetForm = () => {
-    setForm({ name: '', status: 'draft', budget: '', startDate: '', endDate: '' });
+    setForm({ name: '', description: '', creativeImageUrl: '', ctaUrl: '', status: 'draft', budget: '', startDate: '', endDate: '' });
+    setImagePreview('');
+    setImageMode('url');
+  };
+
+  const openEdit = (c: any) => {
+    setEditingCampaign(c);
+    setEditForm({
+      name: c.name || '',
+      description: c.description || '',
+      creativeImageUrl: c.creativeImageUrl || '',
+      ctaUrl: c.ctaUrl || '',
+      status: (c.status === 'active' || c.status === 'paused' || c.status === 'draft') ? c.status : 'draft',
+      budget: String(c.budget || ''),
+      startDate: c.startDate ? c.startDate.slice(0, 10) : '',
+      endDate: c.endDate ? c.endDate.slice(0, 10) : '',
+    });
+    setEditImagePreview(c.creativeImageUrl || '');
+  };
+
+  const handleEditImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setEditImagePreview(dataUrl);
+      setEditForm((f) => ({ ...f, creativeImageUrl: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCampaign) return;
+    editMutation.mutate(
+      {
+        id: editingCampaign.id,
+        name: editForm.name.trim(),
+        description: editForm.description.trim() || undefined,
+        creativeImageUrl: editForm.creativeImageUrl.trim() || undefined,
+        ctaUrl: editForm.ctaUrl.trim() || undefined,
+        status: editForm.status,
+        budget: Number(editForm.budget) || 0,
+        startDate: editForm.startDate || undefined,
+        endDate: editForm.endDate || undefined,
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['adminAds'] });
+          setEditingCampaign(null);
+        },
+      }
+    );
+  };
+
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setImagePreview(dataUrl);
+      setForm((f) => ({ ...f, creativeImageUrl: dataUrl }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -2433,6 +3207,9 @@ function AdsManagerSection() {
     createMutation.mutate(
       {
         name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        creativeImageUrl: form.creativeImageUrl.trim() || undefined,
+        ctaUrl: form.ctaUrl.trim() || undefined,
         status: form.status,
         budget: Number(form.budget) || 0,
         startDate: form.startDate || undefined,
@@ -2456,16 +3233,51 @@ function AdsManagerSection() {
     <div className="space-y-6">
       <SectionHeader
         title="Ads Manager"
-        subtitle="Review, approve, and manage DJ promotion campaigns"
+        subtitle="Manage the Home Page Ad Board: paid campaigns, top events, top DJs, and trending mixes"
         action={
           <button
             onClick={() => setIsCreateOpen(true)}
             className="px-4 py-2 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center gap-2"
           >
-            <Plus className="w-3.5 h-3.5" /> Create Campaign
+            <Plus className="w-3.5 h-3.5" /> Create Ad Slot
           </button>
         }
       />
+
+      {/* ─── Home Board Spotlight Panel ─── */}
+      <div className="rounded-2xl border border-[#D4A24A]/20 p-5 space-y-4" style={{ background: 'var(--bg-card)' }}>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-8 h-8 rounded-xl bg-[#D4A24A]/15 flex items-center justify-center">
+            <Megaphone className="w-4 h-4 text-[#D4A24A]" />
+          </div>
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-[#D4A24A]">Home Ad Board</p>
+            <p className="text-[11px] text-text-muted">Live carousel on the homepage — auto-rotates every 5 seconds</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Paid Ad Slots', value: campaigns.filter((c: any) => c.status === 'active').length, color: '#D4A24A', note: 'Active → shown first' },
+            { label: 'Top Events', value: 3, color: '#3B82F6', note: 'Next 3 upcoming events' },
+            { label: 'Top DJs', value: 3, color: '#22C55E', note: 'By ranking position' },
+            { label: 'Top Mixes', value: 3, color: '#8B5CF6', note: 'By play count' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl p-4 border border-white/5 bg-white/3 text-center">
+              <p className="font-mono text-2xl font-black" style={{ color: item.color }}>{item.value}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-1">{item.label}</p>
+              <p className="text-[9px] text-text-muted/70 mt-0.5">{item.note}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl bg-[#D4A24A]/5 border border-[#D4A24A]/15 p-3 flex items-start gap-2">
+          <span className="text-[#D4A24A] text-xs mt-0.5">ℹ</span>
+          <p className="text-[11px] text-text-muted leading-relaxed">
+            <strong className="text-text-primary">Paid ad campaigns</strong> with <strong className="text-[#D4A24A]">Active</strong> status appear first in the carousel (highest budget → first). Top events, DJs, and mixes fill remaining slots automatically. To remove something from the board, set its campaign status to <strong>Paused</strong> or <strong>Completed</strong>.
+          </p>
+        </div>
+      </div>
 
       {isLoading && <LoadingCenter />}
 
@@ -2542,26 +3354,34 @@ function AdsManagerSection() {
                     <td className="p-4 font-mono text-text-primary">{(c.clicks || 0).toLocaleString()}</td>
                     <td className="p-4 font-mono text-text-primary">{c.currency || 'SLE'} {(c.budget || 0).toLocaleString()}</td>
                     <td className="p-4">
-                      <div className="relative">
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setStatusMenuId(statusMenuId === c.id ? null : c.id)}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary hover:bg-white/10"
+                          onClick={() => openEdit(c)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-[#D4A24A]/10 text-[#D4A24A] border border-[#D4A24A]/20 hover:bg-[#D4A24A]/20 font-semibold"
                         >
-                          Change Status
+                          Edit
                         </button>
-                        {statusMenuId === c.id && (
-                          <div className="absolute right-0 top-full mt-1 z-10 w-36 rounded-xl border border-white/10 bg-black-surface shadow-lg overflow-hidden">
-                            {['pending_payment', 'active', 'paused', 'rejected', 'completed'].map((s) => (
-                              <button
-                                key={s}
-                                onClick={() => updateStatus(c.id, s)}
-                                className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-white/5 capitalize"
-                              >
-                                {s.replace('_', ' ')}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        <div className="relative">
+                          <button
+                            onClick={() => setStatusMenuId(statusMenuId === c.id ? null : c.id)}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-primary hover:bg-white/10"
+                          >
+                            Status
+                          </button>
+                          {statusMenuId === c.id && (
+                            <div className="absolute right-0 top-full mt-1 z-10 w-36 rounded-xl border border-white/10 bg-black-surface shadow-lg overflow-hidden">
+                              {['pending_payment', 'active', 'paused', 'rejected', 'completed'].map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => updateStatus(c.id, s)}
+                                  className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:bg-white/5 capitalize"
+                                >
+                                  {s.replace('_', ' ')}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -2574,69 +3394,179 @@ function AdsManagerSection() {
       )}
 
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setIsCreateOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => { setIsCreateOpen(false); resetForm(); }}>
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 p-6 space-y-5 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-text-primary">Create Campaign</h3>
-              <button onClick={() => setIsCreateOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+              <div>
+                <h3 className="font-bold text-text-primary">Create Ad Campaign</h3>
+                <p className="text-[11px] text-text-muted mt-0.5">Appears on the Home Board carousel</p>
+              </div>
+              <button onClick={() => { setIsCreateOpen(false); resetForm(); }} className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Campaign Name */}
               <div>
-                <label className="block text-xs text-text-muted mb-1.5">Campaign Name</label>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">Campaign Name <span className="text-red-400">*</span></label>
                 <input
                   type="text"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. Summer Promo"
-                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40"
                 />
               </div>
 
+              {/* Description */}
               <div>
-                <label className="block text-xs text-text-muted mb-1.5">Status</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value as 'active' | 'paused' | 'draft' })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
-                >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                </select>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Short text shown under the campaign title on the carousel..."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40 resize-none"
+                />
               </div>
 
+              {/* Ad Image Upload */}
               <div>
-                <label className="block text-xs text-text-muted mb-1.5">Budget (SLE)</label>
+                <label className="block text-xs font-semibold text-text-muted mb-2">Ad Image</label>
+                {/* Toggle */}
+                <div className="flex gap-2 mb-3">
+                  <button type="button" onClick={() => setImageMode('upload')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${ imageMode === 'upload' ? 'border-[#D4A24A]/60 bg-[#D4A24A]/10 text-[#D4A24A]' : 'border-white/5 bg-white/5 text-text-muted hover:bg-white/10' }`}>
+                    📁 Upload File
+                  </button>
+                  <button type="button" onClick={() => setImageMode('url')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${ imageMode === 'url' ? 'border-[#D4A24A]/60 bg-[#D4A24A]/10 text-[#D4A24A]' : 'border-white/5 bg-white/5 text-text-muted hover:bg-white/10' }`}>
+                    🔗 Image URL
+                  </button>
+                </div>
+
+                {imageMode === 'upload' ? (
+                  <label className="block cursor-pointer">
+                    <div className="w-full h-28 rounded-xl border-2 border-dashed border-white/10 hover:border-[#D4A24A]/40 flex items-center justify-center transition-all bg-white/3 group">
+                      {imagePreview ? (
+                        <img src={imagePreview} alt="preview" className="h-full w-full object-cover rounded-xl" />
+                      ) : (
+                        <div className="text-center">
+                          <p className="text-[#D4A24A] text-xl mb-1">📸</p>
+                          <p className="text-xs text-text-muted">Click to upload image</p>
+                          <p className="text-[10px] text-text-muted/60 mt-0.5">JPG, PNG, WEBP — max 5 MB</p>
+                        </div>
+                      )}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
+                  </label>
+                ) : (
+                  <input
+                    type="url"
+                    value={form.creativeImageUrl}
+                    onChange={(e) => { setForm({ ...form, creativeImageUrl: e.target.value }); setImagePreview(e.target.value); }}
+                    placeholder="https://example.com/ad-banner.jpg"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40"
+                  />
+                )}
+
+                {/* Preview thumbnail when URL mode has value */}
+                {imageMode === 'url' && imagePreview && (
+                  <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/10">
+                    <img src={imagePreview} alt="preview" className="w-full h-full object-cover" onError={() => setImagePreview('')} />
+                  </div>
+                )}
+              </div>
+
+              {/* CTA URL */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">CTA Target URL</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.budget}
-                  onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/30"
+                  type="text"
+                  value={form.ctaUrl}
+                  onChange={(e) => setForm({ ...form, ctaUrl: e.target.value })}
+                  placeholder="https://... or /events/abc123"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40"
                 />
+              </div>
+
+              {/* CTA Button Preview */}
+              {(form.name || form.ctaUrl) && (
+                <div className="rounded-xl border border-[#D4A24A]/20 bg-[#D4A24A]/5 p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#D4A24A] mb-2">📺 Homepage Preview</p>
+                  <div className="flex items-center gap-3">
+                    {(imagePreview) ? (
+                      <img src={imagePreview} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-white/10" onError={() => {}} />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-[#D4A24A]/10 border border-[#D4A24A]/20 flex items-center justify-center flex-shrink-0">
+                        <Megaphone className="w-6 h-6 text-[#D4A24A]/50" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#D4A24A]">PAID AD</span>
+                      <p className="text-sm font-black text-white leading-tight truncate mt-0.5">{form.name || 'Campaign Title'}</p>
+                      {form.description && <p className="text-[11px] text-white/60 mt-0.5 truncate">{form.description}</p>}
+                      {form.ctaUrl && (
+                        <div className="mt-2">
+                          <a
+                            href={form.ctaUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.preventDefault()}
+                            className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-[#D4A24A] text-black text-[11px] font-extrabold uppercase tracking-wider hover:bg-[#D4A24A]/90 transition-all shadow-[0_0_12px_rgba(212,162,74,0.35)]"
+                          >
+                            Learn More <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Status & Budget */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value as 'active' | 'paused' | 'draft' })}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Budget (SLE)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.budget}
+                    onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-text-muted mb-1.5">Start Date</label>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Start Date</label>
                   <input
                     type="date"
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-text-muted mb-1.5">End Date</label>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">End Date</label>
                   <input
                     type="date"
                     value={form.endDate}
                     onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/30"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40"
                   />
                 </div>
               </div>
@@ -2644,15 +3574,140 @@ function AdsManagerSection() {
               <button
                 type="submit"
                 disabled={createMutation.isPending || !form.name.trim()}
-                className="w-full px-4 py-2.5 bg-[#D4A24A] text-black rounded-xl text-xs font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full px-4 py-3 bg-[#D4A24A] text-black rounded-xl text-sm font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_20px_rgba(212,162,74,0.25)]"
               >
-                {createMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <Plus className="w-3.5 h-3.5" /> Create Campaign
+                {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                <Plus className="w-4 h-4" /> Create Campaign
               </button>
 
               {createMutation.isError && (
                 <p className="text-xs text-red-400 text-center">
                   {(createMutation.error as any)?.response?.data?.error || (createMutation.error as any)?.message || 'Failed to create campaign'}
+                </p>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Edit Campaign Modal ─── */}
+      {editingCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setEditingCampaign(null)}>
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 p-6 space-y-5 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-text-primary">Edit Campaign</h3>
+                <p className="text-[11px] text-text-muted mt-0.5 truncate max-w-xs">{editingCampaign.name}</p>
+              </div>
+              <button onClick={() => setEditingCampaign(null)} className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">Campaign Name <span className="text-red-400">*</span></label>
+                <input type="text" required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="e.g. Summer Promo" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40" />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">Description</label>
+                <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} placeholder="Short text shown on the carousel..." rows={2} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40 resize-none" />
+              </div>
+
+              {/* Image */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-2">Ad Image</label>
+                <input
+                  type="url"
+                  value={editForm.creativeImageUrl}
+                  onChange={(e) => { setEditForm({ ...editForm, creativeImageUrl: e.target.value }); setEditImagePreview(e.target.value); }}
+                  placeholder="https://example.com/ad-banner.jpg"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-xs text-text-muted">
+                    📁 Upload instead
+                    <input type="file" accept="image/*" className="hidden" onChange={handleEditImageFile} />
+                  </label>
+                  {editImagePreview && <span className="text-[10px] text-green-400">✓ Image set</span>}
+                </div>
+                {editImagePreview && (
+                  <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/10">
+                    <img src={editImagePreview} alt="preview" className="w-full h-full object-cover" onError={() => setEditImagePreview('')} />
+                  </div>
+                )}
+              </div>
+
+              {/* CTA URL */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-1.5">CTA Target URL</label>
+                <input type="text" value={editForm.ctaUrl} onChange={(e) => setEditForm({ ...editForm, ctaUrl: e.target.value })} placeholder="https://... or /events/abc123" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40" />
+              </div>
+
+              {/* Live preview */}
+              {(editForm.name || editForm.ctaUrl) && (
+                <div className="rounded-xl border border-[#D4A24A]/20 bg-[#D4A24A]/5 p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#D4A24A] mb-2">📺 Homepage Preview</p>
+                  <div className="flex items-center gap-3">
+                    {editImagePreview ? (
+                      <img src={editImagePreview} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-white/10" onError={() => {}} />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-[#D4A24A]/10 border border-[#D4A24A]/20 flex items-center justify-center flex-shrink-0">
+                        <Megaphone className="w-6 h-6 text-[#D4A24A]/50" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#D4A24A]">PAID AD</span>
+                      <p className="text-sm font-black text-white leading-tight truncate mt-0.5">{editForm.name || 'Campaign Title'}</p>
+                      {editForm.description && <p className="text-[11px] text-white/60 mt-0.5 truncate">{editForm.description}</p>}
+                      {editForm.ctaUrl && (
+                        <div className="mt-2">
+                          <span className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-[#D4A24A] text-black text-[11px] font-extrabold uppercase tracking-wider shadow-[0_0_12px_rgba(212,162,74,0.35)]">
+                            Learn More <ExternalLink className="w-3 h-3" />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Status & Budget */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Status</label>
+                  <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'active' | 'paused' | 'draft' })} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40">
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Budget (SLE)</label>
+                  <input type="number" min="0" step="0.01" value={editForm.budget} onChange={(e) => setEditForm({ ...editForm, budget: e.target.value })} placeholder="0.00" className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#D4A24A]/40" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Start Date</label>
+                  <input type="date" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">End Date</label>
+                  <input type="date" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#D4A24A]/40" />
+                </div>
+              </div>
+
+              <button type="submit" disabled={editMutation.isPending || !editForm.name.trim()} className="w-full px-4 py-3 bg-[#D4A24A] text-black rounded-xl text-sm font-bold hover:bg-[#D4A24A]/90 flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_20px_rgba(212,162,74,0.25)]">
+                {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save Changes
+              </button>
+
+              {editMutation.isError && (
+                <p className="text-xs text-red-400 text-center">
+                  {(editMutation.error as any)?.response?.data?.error || (editMutation.error as any)?.message || 'Failed to update campaign'}
                 </p>
               )}
             </form>
@@ -3143,10 +4198,12 @@ function HallOfFameSection() {
               ) : adminDjs.length === 0 ? (
                 <p className="text-sm text-text-muted text-center py-8">No DJs found</p>
               ) : (
-                adminDjs.map((dj) => (
+                [...adminDjs].sort((a, b) => (b.hallOfFame ? 1 : 0) - (a.hallOfFame ? 1 : 0)).map((dj) => (
                   <div
                     key={dj.id}
-                    className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
+                    className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
+                      dj.hallOfFame ? 'bg-[#D4A24A]/5 border border-[#D4A24A]/20' : 'hover:bg-white/5 border border-transparent'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <img
@@ -3205,10 +4262,12 @@ function HallOfFameSection() {
               ) : adminMixes.length === 0 ? (
                 <p className="text-sm text-text-muted text-center py-8">No mixes found</p>
               ) : (
-                adminMixes.map((mix) => (
+                [...adminMixes].sort((a, b) => (b.hallOfFame ? 1 : 0) - (a.hallOfFame ? 1 : 0)).map((mix) => (
                   <div
                     key={mix.id}
-                    className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
+                    className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
+                      mix.hallOfFame ? 'bg-[#D4A24A]/5 border border-[#D4A24A]/20' : 'hover:bg-white/5 border border-transparent'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-black-elevated flex items-center justify-center">
@@ -3247,6 +4306,1024 @@ function HallOfFameSection() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── Violations & Moderation Section ─────────────────────── */
+
+function ViolationsSection() {
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('ALL');
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/admin/reports?status=${filter}`);
+      setReports(res.data.data || []);
+    } catch (err: any) {
+      toast.error('Failed to load violation reports');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, [filter]);
+
+  const handleUserAction = async (targetUserId: string, status: 'SUSPENDED' | 'BANNED', reportReason: string) => {
+    if (!confirm(`Are you sure you want to set this user's account to ${status}? This action will send an immediate formal notification email to the user.`)) return;
+
+    setProcessingId(targetUserId);
+    try {
+      await api.put(`/admin/users/${targetUserId}/status`, { status, reason: `Violation Report (${reportReason})` });
+      toast.success(`User account has been ${status.toLowerCase()} and notified by email.`);
+      fetchReports();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || `Failed to set user status`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string, actionTaken: string) => {
+    try {
+      await api.patch(`/admin/reports/${reportId}`, { status: 'RESOLVED', actionTaken });
+      toast.success('Report resolved successfully.');
+      fetchReports();
+    } catch (err: any) {
+      toast.error('Failed to resolve report');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#121212] p-6 rounded-2xl border border-white/10">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <ShieldAlert className="text-red-500 w-6 h-6" />
+            Terms & Privacy Violation Moderation
+          </h2>
+          <p className="text-xs text-text-muted mt-1">
+            Real-time compliance monitoring aligned with the Cyber Security & Crimes Act 2021 and Laws of Sierra Leone.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {['ALL', 'PENDING', 'RESOLVED'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
+                filter === s ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:bg-white/10'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-20 text-center text-text-muted flex justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[#D4A24A]" />
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="py-16 text-center bg-[#121212] rounded-2xl border border-white/10">
+          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-60" />
+          <p className="text-sm font-semibold text-white">No Violation Reports Found</p>
+          <p className="text-xs text-text-muted mt-1">All content and accounts are compliant with terms.</p>
+        </div>
+      ) : (
+        <div className="bg-[#121212] rounded-2xl border border-white/10 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-white">
+              <thead className="bg-white/5 uppercase text-text-muted font-bold text-[10px] tracking-wider border-b border-white/10">
+                <tr>
+                  <th className="p-4">Report ID / Date</th>
+                  <th className="p-4">Category</th>
+                  <th className="p-4">Reporter</th>
+                  <th className="p-4">Target Account / Content</th>
+                  <th className="p-4">Details</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Moderation Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {reports.map((r: any) => (
+                  <tr key={r.id} className="hover:bg-white/[0.02]">
+                    <td className="p-4 font-mono">
+                      #{r.id.slice(-6)}
+                      <span className="block text-[10px] text-text-muted mt-0.5">
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 font-bold uppercase text-[10px]">
+                        {r.reason}
+                      </span>
+                    </td>
+                    <td className="p-4 text-text-muted">
+                      {r.reporter ? r.reporter.email : 'Anonymous'}
+                    </td>
+                    <td className="p-4">
+                      {r.targetUser ? (
+                        <div>
+                          <div className="font-bold text-white">{r.targetUser.name || r.targetUser.username}</div>
+                          <div className="text-[10px] text-text-muted">{r.targetUser.email}</div>
+                          <div className="mt-1">
+                            <StatusBadge status={r.targetUser.status.toLowerCase()} />
+                          </div>
+                        </div>
+                      ) : r.mix ? (
+                        <div className="text-[#D4A24A] font-bold">Mix: {r.mix.title}</div>
+                      ) : r.event ? (
+                        <div className="text-blue-400 font-bold">Event: {r.event.title}</div>
+                      ) : (
+                        <span className="text-text-muted">General Platform</span>
+                      )}
+                    </td>
+                    <td className="p-4 max-w-xs text-text-secondary leading-relaxed">
+                      {r.details}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded font-bold text-[10px] uppercase ${
+                        r.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2">
+                      {r.targetUser && r.targetUser.status === 'ACTIVE' && (
+                        <>
+                          <button
+                            onClick={() => handleUserAction(r.targetUser.id, 'SUSPENDED', r.reason)}
+                            disabled={processingId === r.targetUser.id}
+                            className="px-2.5 py-1 rounded bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 text-yellow-300 font-bold text-[10px] uppercase transition-colors"
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            onClick={() => handleUserAction(r.targetUser.id, 'BANNED', r.reason)}
+                            disabled={processingId === r.targetUser.id}
+                            className="px-2.5 py-1 rounded bg-red-600/30 hover:bg-red-600/50 border border-red-500 text-red-300 font-bold text-[10px] uppercase transition-colors"
+                          >
+                            Ban User
+                          </button>
+                        </>
+                      )}
+                      {r.status === 'PENDING' && (
+                        <button
+                          onClick={() => handleResolveReport(r.id, 'DISMISSED')}
+                          className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] uppercase transition-colors"
+                        >
+                          Resolve / Dismiss
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Direct Custom Email Sender Widget ─────────────────────── */
+
+function DirectEmailSenderWidget() {
+  const [to, setTo] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const sendMutation = useSendCustomEmail();
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!to || !to.includes('@')) {
+      toast.error('Valid target email is required');
+      return;
+    }
+    if (!subject.trim()) {
+      toast.error('Subject line is required');
+      return;
+    }
+    if (!message.trim()) {
+      toast.error('Message content is required');
+      return;
+    }
+
+    sendMutation.mutate(
+      { to, subject, message, recipientName },
+      {
+        onSuccess: (res: any) => {
+          toast.success(res?.data?.message || `Email sent successfully to ${to}!`);
+          setTo('');
+          setRecipientName('');
+          setSubject('');
+          setMessage('');
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.error || 'Failed to send custom email');
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 p-6" style={{ background: 'var(--bg-card)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+            📧 Send Direct Custom Email
+          </h3>
+          <p className="text-xs text-text-muted">Dispatch a branded Deck Salone email to any selected user or email address</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSend} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Target Email Address *</label>
+            <input
+              type="email"
+              placeholder="e.g. dj@example.com"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-primary focus:border-[#D4A24A] outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Recipient Name (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. DJ Alimamy"
+              value={recipientName}
+              onChange={(e) => setRecipientName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-primary focus:border-[#D4A24A] outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Email Subject *</label>
+          <input
+            type="text"
+            placeholder="e.g. Welcome to Deck Salone — Important Account Update"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-text-primary focus:border-[#D4A24A] outline-none"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Message Content (Text / Paragraphs) *</label>
+          <textarea
+            rows={5}
+            placeholder="Type your message here. Formatting paragraphs will be converted automatically to HTML."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-text-primary focus:border-[#D4A24A] outline-none resize-y"
+            required
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={sendMutation.isPending}
+            className="px-6 py-2.5 bg-gradient-to-r from-[#D4A24A] to-amber-500 text-black font-bold rounded-xl text-xs flex items-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-md"
+          >
+            {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+            Send Email Now
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ─────────────────────── System Bug & Error Logs Widget ─────────────────────── */
+
+function SystemBugLogsWidget() {
+  const { data: errorRes, isLoading } = useAdminSystemErrors();
+  const triggerDigest = useTriggerBugReportDigest();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const errors = errorRes?.data || [];
+
+
+  return (
+    <div className="rounded-2xl border border-red-500/20 p-6 space-y-4" style={{ background: 'var(--bg-card)' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+            🚨 Captured System Bug & Error Logs
+          </h3>
+          <p className="text-xs text-text-muted">
+            Automated capture of backend 500 errors and uncaught exceptions. Daily digest sent automatically to support@decksalone.com
+          </p>
+        </div>
+
+        <button
+          onClick={() =>
+            triggerDigest.mutate(undefined, {
+              onSuccess: (res: any) => toast.success(res?.data?.message || 'Daily bug report email sent to support@decksalone.com!'),
+              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to dispatch bug report'),
+            })
+          }
+          disabled={triggerDigest.isPending}
+          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md disabled:opacity-50 transition-colors"
+        >
+          {triggerDigest.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+          Dispatch Bug Report to support@decksalone.com
+        </button>
+      </div>
+
+      {isLoading ? (
+        <LoadingCenter />
+      ) : errors.length === 0 ? (
+        <div className="p-8 text-center rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+          <p className="text-emerald-400 font-bold text-sm">✅ Zero System Errors Logged</p>
+          <p className="text-text-muted text-xs mt-1">All API routes and application services are operating cleanly without exceptions.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-white/5 text-text-muted uppercase text-[10px] tracking-wider border-b border-white/10">
+              <tr>
+                <th className="p-3">Level</th>
+                <th className="p-3">Source / Path</th>
+                <th className="p-3">Message</th>
+                <th className="p-3">User</th>
+                <th className="p-3">Time</th>
+                <th className="p-3 text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {errors.map((err: any) => (
+                <React.Fragment key={err.id}>
+                  <tr className="hover:bg-white/[0.02]">
+                    <td className="p-3 font-bold text-red-400">
+                      <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px]">
+                        {err.level}
+                      </span>
+                    </td>
+                    <td className="p-3 font-mono text-text-primary">
+                      {err.method ? <span className="font-bold text-[#D4A24A] mr-1">{err.method}</span> : null}
+                      {err.path || err.source}
+                    </td>
+                    <td className="p-3 text-text-secondary max-w-xs truncate font-mono text-[11px]">
+                      {err.message}
+                    </td>
+                    <td className="p-3 text-text-muted">
+                      {err.userEmail || err.userId || 'Guest'}
+                    </td>
+                    <td className="p-3 text-text-muted">
+                      {new Date(err.createdAt).toLocaleTimeString()}
+                    </td>
+                    <td className="p-3 text-right">
+                      {err.stackTrace && (
+                        <button
+                          onClick={() => setExpandedId(expandedId === err.id ? null : err.id)}
+                          className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-text-muted text-[10px] uppercase font-bold"
+                        >
+                          {expandedId === err.id ? 'Hide Stack' : 'View Stack'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {expandedId === err.id && (
+                    <tr>
+                      <td colSpan={6} className="p-3 bg-black-elevated/80 border-b border-white/10">
+                        <pre className="text-[10px] font-mono text-red-300/90 whitespace-pre-wrap overflow-x-auto max-h-40 p-2 bg-black rounded">
+                          {err.stackTrace}
+                        </pre>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Incomplete Profiles & 5-Step Nudge Widget ─────────────────────── */
+
+function IncompleteProfilesWidget() {
+  const { data: incData, isLoading } = useIncompleteProfiles();
+  const nudgeMutation = useSendProfileNudge();
+
+  const incompleteUsers = incData?.data || [];
+
+  return (
+    <div className="rounded-2xl border border-amber-500/20 p-6 space-y-4" style={{ background: 'var(--bg-card)' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+            📋 Incomplete Profiles & 5-Step Activation Checklist
+          </h3>
+          <p className="text-xs text-text-muted">
+            Track users with incomplete profiles (&lt; 100%). Send automated 5-step checklist nudge emails to activate their accounts.
+          </p>
+        </div>
+
+        {incompleteUsers.length > 0 && (
+          <button
+            onClick={() =>
+              nudgeMutation.mutate(
+                { allIncomplete: true },
+                {
+                  onSuccess: (res: any) => toast.success(res?.data?.message || '5-step profile nudge emails sent!'),
+                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send nudge emails'),
+                }
+              )
+            }
+            disabled={nudgeMutation.isPending}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-[#D4A24A] text-black font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md disabled:opacity-50"
+          >
+            {nudgeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+            Auto-Nudge All Incomplete ({incompleteUsers.length})
+          </button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <LoadingCenter />
+      ) : incompleteUsers.length === 0 ? (
+        <div className="p-8 text-center rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+          <p className="text-emerald-400 font-bold text-sm">🎉 All User Profiles Are 100% Complete!</p>
+          <p className="text-text-muted text-xs mt-1">Every registered user and DJ has completed their profile photo, bio, mix, and email verification.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-white/5 text-text-muted uppercase text-[10px] tracking-wider border-b border-white/10">
+              <tr>
+                <th className="p-3">User / DJ</th>
+                <th className="p-3">Role</th>
+                <th className="p-3">Profile Completion</th>
+                <th className="p-3">Pending Steps</th>
+                <th className="p-3">Last Nudge</th>
+                <th className="p-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {incompleteUsers.map((u: any) => {
+                const completion = u.completion || {};
+                const pendingSteps = (completion.steps || []).filter((s: any) => !s.completed);
+
+                return (
+                  <tr key={u.id} className="hover:bg-white/[0.02]">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={u.avatar || '/default-dj-avatar.jpg'}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-white/10"
+                        />
+                        <div>
+                          <p className="font-bold text-text-primary">{u.stageName || u.name || u.username}</p>
+                          <p className="text-[10px] text-text-muted">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'DJ' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="w-32">
+                        <div className="flex justify-between items-center text-[10px] font-bold mb-1">
+                          <span className="text-amber-400">{completion.percentage}%</span>
+                          <span className="text-text-muted">{completion.completedCount}/5</span>
+                        </div>
+                        <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-amber-500 h-full rounded-full" style={{ width: `${completion.percentage}%` }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {pendingSteps.map((s: any) => (
+                          <span key={s.id} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] text-text-muted">
+                            {s.title.split('.')[1] || s.title}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="p-3 text-text-muted">
+                      {u.lastProfileNudgeSentAt ? new Date(u.lastProfileNudgeSentAt).toLocaleDateString() : 'Never'}
+                    </td>
+                    <td className="p-3 text-right">
+                      <button
+                        onClick={() =>
+                          nudgeMutation.mutate(
+                            { userId: u.id },
+                            {
+                              onSuccess: (res: any) => toast.success(res?.data?.message || `Nudge email sent to ${u.email}!`),
+                              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send nudge email'),
+                            }
+                          )
+                        }
+                        disabled={nudgeMutation.isPending}
+                        className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 rounded-lg font-bold text-[10px] uppercase transition-colors"
+                      >
+                        Send Nudge Email
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Birthday Manager Widget ─────────────────────── */
+
+function BirthdayWidget() {
+  const { data: bdayData, isLoading } = useAdminBirthdays();
+  const sendWish = useSendBirthdayWish();
+  const triggerCron = useTriggerBirthdayCron();
+
+  const todaysCelebrants = bdayData?.todaysCelebrants || [];
+  const upcomingBirthdays = bdayData?.upcomingBirthdays || [];
+
+  return (
+    <div className="rounded-2xl border border-white/5 p-6" style={{ background: 'var(--bg-card)' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+            🎂 Birthday Celebrants & Automated Wishes
+          </h3>
+          <p className="text-xs text-text-muted">Users and DJs celebrating their birthday today and in the next 30 days (16+ only)</p>
+        </div>
+
+        <button
+          onClick={() =>
+            triggerCron.mutate(undefined, {
+              onSuccess: (data: any) => toast.success(data?.data?.message || 'Birthday emails sent!'),
+              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to trigger birthday emails'),
+            })
+          }
+          disabled={triggerCron.isPending}
+          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-[#D4A24A] text-black font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:brightness-110 disabled:opacity-50"
+        >
+          {triggerCron.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+          Dispatch Today's Birthday Emails
+        </button>
+      </div>
+
+      {isLoading ? (
+        <LoadingCenter />
+      ) : (
+        <div className="space-y-6">
+          {/* Today's Celebrants */}
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[#D4A24A] mb-3 flex items-center gap-1.5">
+              🎉 Celebrating Today ({todaysCelebrants.length})
+            </h4>
+
+            {todaysCelebrants.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {todaysCelebrants.map((c: any) => (
+                  <div key={c.id} className="p-4 rounded-xl border border-[#D4A24A]/30 bg-[#D4A24A]/10 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img src={c.avatar || '/logo-icon.png'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover border border-[#D4A24A]" />
+                      <div>
+                        <p className="font-bold text-white text-sm">{c.displayName} <span className="text-xs font-normal text-text-muted">({c.age} yrs)</span></p>
+                        <p className="text-xs text-text-muted">{c.email} • <span className="text-[#D4A24A] font-medium">{c.role}</span></p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        sendWish.mutate(c.id, {
+                          onSuccess: (data: any) => toast.success(data?.message || `Wish sent to ${c.displayName}!`),
+                          onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send wish'),
+                        })
+                      }
+                      disabled={sendWish.isPending}
+                      className="px-3 py-1.5 bg-[#D4A24A] hover:bg-[#D4A24A]/90 text-black text-xs font-bold rounded-lg whitespace-nowrap flex items-center gap-1"
+                    >
+                      {sendWish.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                      Send Wish
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted italic bg-white/5 p-4 rounded-xl">No users or DJs are celebrating a birthday today.</p>
+            )}
+          </div>
+
+          {/* Upcoming Birthdays */}
+          {upcomingBirthdays.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
+                🗓️ Upcoming Birthdays (Next 30 Days)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {upcomingBirthdays.map((u: any) => (
+                  <div key={u.id} className="p-3 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <img src={u.avatar || '/logo-icon.png'} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
+                      <div>
+                        <p className="text-xs font-bold text-white">{u.displayName}</p>
+                        <p className="text-[10px] text-text-muted">In {u.daysUntil} day{u.daysUntil > 1 ? 's' : ''} ({new Date(u.dateOfBirth).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-[#D4A24A] bg-[#D4A24A]/10 px-2 py-0.5 rounded-md">
+                      Age {u.age + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Section 18: Promo & Referrals ─────────────────────── */
+
+function PromoSection() {
+
+  const [filterEligible, setFilterEligible] = useState(false);
+  const { data: promoRes, isLoading, error } = useAdminPromo({ eligible: filterEligible });
+  const { data: djsRes } = useAdminDjs({ limit: 100 });
+  const activatePromo = useActivatePromo();
+  const grantPlan = useGrantPlan();
+
+  // Grant Modal state
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [selectedDjId, setSelectedDjId] = useState('');
+  const [grantPlanType, setGrantPlanType] = useState<'pro' | 'legend'>('legend');
+  const [grantMonths, setGrantMonths] = useState(1);
+  const [grantReason, setGrantReason] = useState('');
+
+  const djsList = djsRes?.data || [];
+  const promoDjs = promoRes?.data || [];
+  const eligibleCount = promoDjs.filter((d: any) => d.isEligible).length;
+
+  const handleGrantSubmit = () => {
+    if (!selectedDjId) {
+      toast.error('Please select a DJ');
+      return;
+    }
+    grantPlan.mutate(
+      { djId: selectedDjId, plan: grantPlanType, months: grantMonths, reason: grantReason || undefined },
+      {
+        onSuccess: (data) => {
+          toast.success(data?.message || 'Subscription granted successfully!');
+          setShowGrantModal(false);
+          setSelectedDjId('');
+          setGrantReason('');
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.error || 'Failed to grant plan');
+        },
+      }
+    );
+  };
+
+  const copyLink = (link: string) => {
+    navigator.clipboard.writeText(link);
+    toast.success('Referral link copied to clipboard!');
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Promo & Referral Manager" subtitle="Manage referral rewards and grant Pro/Pro+ subscriptions to DJs" />
+
+      {/* Header Stat Cards & Grant Plan Action */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5 bg-[#D4A24A]/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#D4A24A]">Active Campaign</span>
+            <Gift className="w-5 h-5 text-[#D4A24A]" />
+          </div>
+          <p className="text-lg font-extrabold text-white">5 DJ Referrals = 1 Mo Pro+</p>
+          <p className="text-xs text-text-muted mt-1">DJs share unique link to earn free Pro+ tier</p>
+        </div>
+
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-green-400">Pending Activations</span>
+            <Trophy className="w-5 h-5 text-green-400" />
+          </div>
+          <p className="text-2xl font-extrabold text-white">{eligibleCount}</p>
+          <p className="text-xs text-text-muted mt-1">DJs reached 5 referrals & waiting activation</p>
+        </div>
+
+        <div className="rounded-2xl p-5 border border-[#D4A24A]/30 bg-[#D4A24A]/10 flex flex-col justify-center items-start">
+          <p className="text-xs font-bold text-[#D4A24A] uppercase tracking-wider mb-1">Direct Grant</p>
+          <p className="text-xs text-text-muted mb-3">Manually give Pro or Pro+ to any DJ account</p>
+          <button
+            onClick={() => setShowGrantModal(true)}
+            className="w-full py-2.5 px-4 bg-[#D4A24A] hover:bg-[#D4A24A]/90 text-black font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all"
+          >
+            <Crown className="w-4 h-4" /> Grant Plan to DJ
+          </button>
+        </div>
+      </div>
+
+      {/* Referral Leaderboard */}
+      <div className="rounded-2xl border border-white/5 p-6" style={{ background: 'var(--bg-card)' }}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div>
+            <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+              <Share2 className="w-5 h-5 text-[#D4A24A]" /> DJ Referral Leaderboard
+            </h3>
+            <p className="text-xs text-text-muted">Track which DJs are sharing their referral links</p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterEligible(false)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                !filterEligible ? 'bg-[#D4A24A] text-black' : 'bg-white/5 text-text-muted hover:text-white'
+              }`}
+            >
+              All DJs ({promoDjs.length})
+            </button>
+            <button
+              onClick={() => setFilterEligible(true)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                filterEligible ? 'bg-green-500 text-black' : 'bg-white/5 text-text-muted hover:text-white'
+              }`}
+            >
+              🎁 Eligible for Pro+ ({eligibleCount})
+            </button>
+          </div>
+        </div>
+
+        {isLoading && <LoadingCenter />}
+
+        {error && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            Failed to load promo data.
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-text-secondary">
+              <thead className="bg-white/5 text-text-muted uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="p-4">DJ Name</th>
+                  <th className="p-4">Current Tier</th>
+                  <th className="p-4">Referrals Made</th>
+                  <th className="p-4">Unique Link</th>
+                  <th className="p-4">Promo Status</th>
+                  <th className="p-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {promoDjs.length > 0 ? (
+                  promoDjs.map((dj: any) => (
+                    <tr key={dj.id} className="hover:bg-white/[0.02]">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={dj.avatar || '/logo-icon.png'}
+                            alt={dj.stageName}
+                            className="w-9 h-9 rounded-full object-cover border border-white/10"
+                          />
+                          <div>
+                            <p className="font-bold text-text-primary">{dj.stageName}</p>
+                            <p className="text-xs text-text-muted">{dj.user?.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            dj.subscriptionTier === 'legend'
+                              ? 'bg-[#D4A24A]/20 text-[#D4A24A] border border-[#D4A24A]/40'
+                              : dj.subscriptionTier === 'pro'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                              : 'bg-white/5 text-text-muted'
+                          }`}
+                        >
+                          {dj.subscriptionTier === 'legend' ? 'Pro+' : dj.subscriptionTier === 'pro' ? 'Pro' : 'Free'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-mono font-bold text-white">
+                        <div className="flex items-center gap-2">
+                          <span>{dj.referralCount || 0} / 5</span>
+                          <div className="w-16 h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full bg-[#D4A24A]"
+                              style={{ width: `${Math.min(100, ((dj.referralCount || 0) / 5) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {dj.referralLink ? (
+                          <button
+                            onClick={() => copyLink(dj.referralLink)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-text-muted font-mono"
+                          >
+                            <Copy className="w-3 h-3 text-[#D4A24A]" />
+                            <span className="truncate max-w-[140px]">{dj.user?.referralCode}</span>
+                          </button>
+                        ) : (
+                          <span className="text-text-muted text-xs">No code</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {dj.isPromoActive ? (
+                          <span className="text-xs font-bold text-green-400 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Pro+ Active (Expires {new Date(dj.promoExpiresAt).toLocaleDateString()})
+                          </span>
+                        ) : dj.isEligible ? (
+                          <span className="text-xs font-bold text-[#D4A24A] animate-pulse">
+                            🎁 Eligible for 1 Mo Free Pro+
+                          </span>
+                        ) : (
+                          <span className="text-xs text-text-muted">
+                            Need {Math.max(0, 5 - (dj.referralCount || 0))} more referral(s)
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right">
+                        {dj.isEligible ? (
+                          <button
+                            onClick={() =>
+                              activatePromo.mutate(
+                                { djId: dj.id },
+                                {
+                                  onSuccess: () => toast.success(`🎉 1 Month Free Pro+ activated for ${dj.stageName}!`),
+                                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to activate promo'),
+                                }
+                              )
+                            }
+                            disabled={activatePromo.isPending}
+                            className="px-3 py-1.5 bg-[#D4A24A] hover:bg-[#D4A24A]/90 text-black font-bold rounded-lg text-xs flex items-center gap-1 ml-auto disabled:opacity-50"
+                          >
+                            {activatePromo.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Gift className="w-3.5 h-3.5" />}
+                            Activate Pro+ Now
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setSelectedDjId(dj.id);
+                              setShowGrantModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg text-xs font-medium ml-auto"
+                          >
+                            Grant Plan
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-text-muted">
+                      No DJs found matching criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 🎂 Birthday Celebrants & Automated Wishes Section */}
+      <BirthdayWidget />
+
+      {/* 📋 Incomplete Profiles & 5-Step Activation Nudges */}
+      <IncompleteProfilesWidget />
+
+
+      {/* Grant Plan Modal */}
+
+      {showGrantModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md bg-[#111] border border-white/10 rounded-2xl p-6 space-y-4 text-left"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-white/10">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Crown className="w-5 h-5 text-[#D4A24A]" /> Grant Plan to DJ
+              </h3>
+              <button onClick={() => setShowGrantModal(false)} className="text-text-muted hover:text-white">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1.5">Select DJ</label>
+                <select
+                  value={selectedDjId}
+                  onChange={(e) => setSelectedDjId(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-text-primary focus:outline-none"
+                >
+                  <option value="">-- Pick a DJ --</option>
+                  {djsList.map((d: any) => (
+                    <option key={d.id} value={d.id}>
+                      {d.stageName} ({d.user?.email || d.subscriptionTier})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1.5">Subscription Plan</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setGrantPlanType('pro')}
+                    className={`p-3 rounded-xl border text-center font-bold text-xs transition-all ${
+                      grantPlanType === 'pro'
+                        ? 'border-purple-500 bg-purple-500/20 text-purple-300'
+                        : 'border-white/10 bg-white/5 text-text-muted'
+                    }`}
+                  >
+                    Pro Plan
+                  </button>
+                  <button
+                    onClick={() => setGrantPlanType('legend')}
+                    className={`p-3 rounded-xl border text-center font-bold text-xs transition-all ${
+                      grantPlanType === 'legend'
+                        ? 'border-[#D4A24A] bg-[#D4A24A]/20 text-[#D4A24A]'
+                        : 'border-white/10 bg-white/5 text-text-muted'
+                    }`}
+                  >
+                    Pro+ (Legend)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1.5">Duration</label>
+                <select
+                  value={grantMonths}
+                  onChange={(e) => setGrantMonths(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-text-primary focus:outline-none"
+                >
+                  <option value={1}>1 Month</option>
+                  <option value={3}>3 Months</option>
+                  <option value={6}>6 Months</option>
+                  <option value={12}>12 Months (1 Year)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1.5">Reason / Note (optional)</label>
+                <input
+                  type="text"
+                  value={grantReason}
+                  onChange={(e) => setGrantReason(e.target.value)}
+                  placeholder="e.g. VIP partner, Event sponsor, Competition winner"
+                  className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-text-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  onClick={() => setShowGrantModal(false)}
+                  className="w-1/2 py-2.5 border border-white/10 text-text-muted hover:text-white rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGrantSubmit}
+                  disabled={grantPlan.isPending}
+                  className="w-1/2 py-2.5 bg-[#D4A24A] hover:bg-[#D4A24A]/90 text-black font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {grantPlan.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                  Activate Now
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3294,7 +5371,10 @@ export default function AdminDashboard() {
     halloffame: <HallOfFameSection />,
     settings: <SettingsSection />,
     opportunities: <OpportunitiesSection />,
+    violations: <ViolationsSection />,
+    promo: <PromoSection />,
   };
+
 
   const currentLabel = sidebarItems.find((i) => i.id === section)?.label || 'Dashboard';
   const currentSection = sidebarItems.find((i) => i.id === section);
@@ -3313,7 +5393,7 @@ export default function AdminDashboard() {
           {!sidebarCollapsed ? (
             <a href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="h-10 w-10 rounded-xl border border-[#D4A24A]/25 bg-[#D4A24A]/10 flex items-center justify-center overflow-hidden">
-                <img src="/logo.png" alt="Deck Salone" className="h-8 w-auto object-contain" />
+                <img src="/logo-web.png?v=4" alt="Deck Salone" className="h-8 w-auto object-contain" />
               </div>
               <div className="min-w-0">
                 <p className="font-display text-sm font-bold text-text-primary uppercase tracking-wide truncate">Deck Salone</p>
@@ -3322,7 +5402,7 @@ export default function AdminDashboard() {
             </a>
           ) : (
             <a href="/" className="hover:opacity-80 transition-opacity flex justify-center">
-              <img src="/logo.png" alt="Deck Salone" className="h-8 w-auto object-contain" />
+              <img src="/logo-mobile.png?v=4" alt="Deck Salone" className="h-8 w-auto object-contain" />
             </a>
           )}
         </div>

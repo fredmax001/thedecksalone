@@ -1,11 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, Heart, Clock, Music, Loader2, ArrowLeft } from 'lucide-react';
+import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag } from 'lucide-react';
 import { useMix, useLikeMix } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
 import ShareButton from '@/components/ShareButton';
+import ReportModal from '@/components/ReportModal';
+import MixComments from '@/components/MixComments';
+import MixRecommendations from '@/components/MixRecommendations';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 function formatDuration(seconds: number): string {
@@ -26,16 +31,17 @@ export default function MixDetail() {
   const { data: mix, isLoading, error } = useMix(id);
   const { isAuthenticated } = useAuthStore();
   const { mutate: likeMix } = useLikeMix();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const mixUrl = `${baseUrl}/mix/${id}`;
 
   const title = useMemo(
-    () => (mix ? `${mix.title} by ${mix.dj?.stageName || 'DJ'} — The Deck Salone` : 'Mix — The Deck Salone'),
+    () => (mix ? `${mix.title} by ${mix.dj?.stageName || 'DJ'} — Deck Salone` : 'Mix — Deck Salone'),
     [mix]
   );
   const description = useMemo(
-    () => mix?.description?.slice(0, 160) || `Listen to this mix on The Deck Salone.`,
+    () => mix?.description?.slice(0, 160) || `Listen to this mix on Deck Salone.`,
     [mix]
   );
   const image = useMemo(() => mix?.coverImage || mix?.dj?.avatar || `${baseUrl}/mix-placeholder.jpg`, [mix, baseUrl]);
@@ -45,19 +51,24 @@ export default function MixDetail() {
   const handlePlay = () => {
     if (!mix) return;
     window.dispatchEvent(
-      new CustomEvent('play-mix', { detail: { track: {
-        id: mix.id,
-        title: mix.title,
-        dj: mix.dj?.stageName || 'DJ',
-        duration: mix.duration || 0,
-        cover: mix.coverImage || '/placeholder.jpg',
-        genre: mix.genre || mix.category || 'Mix',
-        audioUrl: mix.audioUrl,
-        audioSource: mix.audioSource,
-        originalUrl: mix.originalUrl,
-        plays: mix.plays || 0,
-        djTier: mix.dj?.subscriptionTier,
-      }, queue: undefined } })
+      new CustomEvent('play-mix', {
+        detail: {
+          track: {
+            id: mix.id,
+            title: mix.title,
+            dj: mix.dj?.stageName || 'DJ',
+            duration: mix.duration || 0,
+            cover: mix.coverImage || '/mix-placeholder.jpg',
+            genre: mix.genre || mix.category || 'Mix',
+            audioUrl: mix.audioUrl,
+            audioSource: mix.audioSource,
+            originalUrl: mix.originalUrl,
+            plays: mix.plays || 0,
+            djTier: mix.dj?.subscriptionTier,
+          },
+          queue: undefined,
+        },
+      })
     );
   };
 
@@ -80,9 +91,9 @@ export default function MixDetail() {
 
   if (error || !mix) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-text-primary">
+      <div className="min-h-screen bg-black flex items-center justify-center text-text-primary px-4">
         <div className="text-center">
-          <p className="text-xl font-display uppercase">Mix not found</p>
+          <p className="text-xl font-display uppercase font-bold text-gold">Mix not found</p>
           <Link to="/mixes" className="text-gold text-sm mt-4 inline-flex items-center gap-1 hover:underline">
             <ArrowLeft size={14} /> Back to mixes
           </Link>
@@ -91,30 +102,33 @@ export default function MixDetail() {
     );
   }
 
+  const djProfile = mix.dj;
+  const djIdentifier = djProfile?.user?.username || djProfile?.id || '';
+
   return (
-    <div className="min-h-screen bg-black pb-20">
-      {/* Hero */}
-      <section className="relative pt-24 pb-12 overflow-hidden">
+    <div className="min-h-screen bg-black pb-28">
+      {/* Hero Header */}
+      <section className="relative pt-20 sm:pt-24 pb-12 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
             src={mix.coverImage || '/mix-placeholder.jpg'}
             alt={mix.title}
-            className="w-full h-full object-cover opacity-20 blur-xl"
+            className="w-full h-full object-cover opacity-15 blur-2xl scale-110"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/90 to-black" />
         </div>
 
-        <div className="container-main relative z-10">
-          <Link to="/mixes" className="inline-flex items-center gap-1 text-text-muted hover:text-gold text-sm mb-6 transition-colors">
-            <ArrowLeft size={16} /> Back to Mixes
+        <div className="max-w-container mx-auto px-4 sm:px-6 relative z-10">
+          <Link to="/mixes" className="inline-flex items-center gap-1 text-text-muted hover:text-gold text-xs uppercase font-bold mb-6 transition-colors">
+            <ArrowLeft size={14} /> Back to Mix Hub
           </Link>
 
-          <div className="flex flex-col md:flex-row gap-8 items-start">
-            {/* Cover */}
+          <div className="flex flex-col md:flex-row gap-6 lg:gap-10 items-start">
+            {/* Artwork Cover Card */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="relative w-full md:w-80 lg:w-96 shrink-0 aspect-square rounded-2xl overflow-hidden border border-white/10 shadow-card"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative w-full max-w-xs md:w-72 lg:w-80 shrink-0 aspect-square rounded-2xl overflow-hidden border border-white/10 shadow-2xl mx-auto md:mx-0 group"
             >
               <img
                 src={mix.coverImage || '/mix-placeholder.jpg'}
@@ -123,80 +137,140 @@ export default function MixDetail() {
               />
               <button
                 onClick={handlePlay}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity"
+                className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
-                <div className="w-16 h-16 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform">
-                  <Play size={28} className="text-black ml-1" />
+                <div className="w-16 h-16 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-105 transition-transform shadow-gold">
+                  <Play size={28} className="text-black ml-1 fill-black" />
                 </div>
               </button>
             </motion.div>
 
-            {/* Info */}
+            {/* Mix Information */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="flex-1"
+              className="flex-1 space-y-4 w-full"
             >
-              <h1 className="font-display text-2xl md:text-4xl font-semibold uppercase tracking-tight text-text-primary">
-                {mix.title}
-              </h1>
+              <div>
+                <Badge className="bg-gold/15 text-gold border border-gold/40 text-[10px] uppercase font-bold tracking-wider mb-2">
+                  {mix.genre || mix.category || 'MIX'}
+                </Badge>
+                <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold uppercase tracking-tight text-text-primary leading-tight">
+                  {mix.title}
+                </h1>
+              </div>
 
-              <Link
-                to={`/dj/${mix.dj?.user?.username || mix.dj?.id}`}
-                className="inline-flex items-center gap-3 mt-4 group"
-              >
-                <img
-                  src={mix.dj?.avatar || '/default-avatar.jpg'}
-                  alt={mix.dj?.stageName}
-                  className="w-10 h-10 rounded-full object-cover border border-gold/30"
-                />
-                <span className="text-gold group-hover:text-gold-light transition-colors">
-                  {mix.dj?.stageName || 'DJ'}
-                </span>
-              </Link>
-
-              <div className="flex flex-wrap items-center gap-4 mt-6 text-sm text-text-muted">
-                <span className="inline-flex items-center gap-1.5">
+              {/* Stats Bar */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-text-muted border-y border-white/5 py-3">
+                <span className="inline-flex items-center gap-1.5 font-medium text-text-secondary">
                   <Music size={14} className="text-gold" />
-                  {mix.genre || mix.category || 'Mix'}
+                  {mix.genre || 'Afrobeats'}
                 </span>
-                <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5 font-mono">
                   <Clock size={14} className="text-gold" />
                   {formatDuration(mix.duration || 0)}
                 </span>
-                <span>{formatCompact(mix.plays || 0)} plays</span>
-                <span>{formatCompact(mix.likes || 0)} likes</span>
+                <span className="font-mono">{formatCompact(mix.plays || 0)} Plays</span>
+                <span className="font-mono">{formatCompact(mix.likes || 0)} Likes</span>
               </div>
 
               {mix.description && (
-                <p className="mt-6 text-text-secondary leading-relaxed max-w-2xl">{mix.description}</p>
+                <p className="text-xs sm:text-sm text-text-secondary leading-relaxed max-w-2xl bg-black-surface border border-white/5 rounded-xl p-3.5">
+                  {mix.description}
+                </p>
               )}
 
-              <div className="flex flex-wrap items-center gap-3 mt-8">
-                <button
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button
                   onClick={handlePlay}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] transition-transform"
+                  className="bg-gold-gradient text-black font-bold uppercase text-xs tracking-wider px-6 py-3 rounded-full hover:scale-105 transition-transform"
                 >
-                  <Play size={16} />
-                  Play Mix
-                </button>
-                <button
+                  <Play size={16} className="mr-1.5 fill-black" /> Play Mix Now
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={handleLike}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full border border-white/10 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
+                  className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
                 >
-                  <Heart size={16} />
-                  Like
-                </button>
+                  <Heart size={15} className="mr-1.5" /> Like ({mix.likes || 0})
+                </Button>
                 <ShareButton
                   url={mixUrl}
                   title={title}
                   description={description}
                   size="md"
                 />
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReportModal(true)}
+                  className="border-white/10 text-text-muted hover:text-red hover:border-red/40 text-xs font-semibold rounded-full px-4"
+                  title="Report Mix"
+                >
+                  <Flag size={14} className="mr-1.5" /> Report
+                </Button>
               </div>
+
+              <ReportModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                mixId={mix.id}
+                targetUserId={mix.djId}
+                itemTitle={mix.title}
+              />
+
+              {/* ─── Compact DJ / Artist Card ─── */}
+              {djProfile && (
+                <div className="mt-8 pt-4">
+                  <div className="bg-black-surface border border-dark-gray hover:border-gold/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all shadow-lg">
+                    <div className="flex items-center gap-3.5">
+                      <Link to={`/dj/${djIdentifier}`} className="shrink-0 relative">
+                        <img
+                          src={djProfile.avatar || '/default-avatar.jpg'}
+                          alt={djProfile.stageName}
+                          className="w-14 h-14 rounded-full object-cover border-2 border-gold/40"
+                        />
+                        {djProfile.verified && (
+                          <UserCheck className="w-4 h-4 text-green bg-black rounded-full absolute -bottom-0.5 -right-0.5" />
+                        )}
+                      </Link>
+                      <div>
+                        <Link to={`/dj/${djIdentifier}`} className="font-display font-bold text-base text-text-primary hover:text-gold transition-colors flex items-center gap-1.5">
+                          {djProfile.stageName}
+                        </Link>
+                        <p className="text-xs text-text-muted mt-0.5">
+                          {djProfile.genres?.slice(0, 3).join(' • ') || 'Afrobeats • Salone Mix'}
+                        </p>
+                        {djProfile.city && (
+                          <p className="text-[10px] text-gold font-semibold mt-0.5">📍 {djProfile.city}, Sierra Leone</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <Link to={`/dj/${djIdentifier}`}>
+                        <Button variant="outline" size="sm" className="border-dark-gray text-xs font-semibold rounded-full">
+                          View DJ Profile
+                        </Button>
+                      </Link>
+                      <Link to={`/booking?dj=${djIdentifier}`}>
+                        <Button size="sm" className="bg-gold-gradient text-black font-bold text-xs uppercase tracking-wider rounded-full px-4">
+                          <Calendar className="w-3.5 h-3.5 mr-1" /> Book DJ
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
+
+          {/* ─── Comments Section ─── */}
+          <MixComments mixId={mix.id} djUserId={djProfile?.userId} />
+
+          {/* ─── Recommendations Section ─── */}
+          <MixRecommendations mixId={mix.id} djName={djProfile?.stageName} />
         </div>
       </section>
     </div>

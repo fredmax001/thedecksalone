@@ -5,6 +5,7 @@ const { requireRole } = require('../middleware/auth');
 const { recalculateAllRankings, calculateBattleBaseScore } = require('../utils/ranking');
 const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
 const { sendEmail } = require('../utils/email');
+const { getFrontendUrl } = require('../utils/url');
 const { withCache, clearCache } = require('../utils/cache');
 const { getSubscriptionConfig, setSubscriptionConfig } = require('../utils/subscriptionConfig');
 
@@ -187,7 +188,8 @@ router.get('/stats', async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -239,12 +241,13 @@ router.get('/users', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/users/:id/role - Update user role
-router.put('/users/:id/role', async (req, res) => {
+router.put('/users/:id/role', requireRole('ADMIN'), async (req, res) => {
   try {
     const parsed = updateRoleSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -319,12 +322,13 @@ router.put('/users/:id/role', async (req, res) => {
 
     return res.json({ success: true, data: updatedUser });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/users/:id/status - Update user account status
-router.put('/users/:id/status', async (req, res) => {
+router.put('/users/:id/status', requireRole('ADMIN'), async (req, res) => {
   try {
     const parsed = updateUserStatusSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -358,12 +362,13 @@ router.put('/users/:id/status', async (req, res) => {
 
     return res.json({ success: true, data: user });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // GET /api/admin/djs/pending - Get DJs pending verification (legacy flag)
-router.get('/djs/pending', async (req, res) => {
+router.get('/djs/pending', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const djs = await prisma.djProfile.findMany({
       where: { verificationStatus: 'pending' },
@@ -376,12 +381,13 @@ router.get('/djs/pending', async (req, res) => {
 
     return res.json({ success: true, data: djs });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // GET /api/admin/djs/verification-requests - Get passport verification requests
-router.get('/djs/verification-requests', async (req, res) => {
+router.get('/djs/verification-requests', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const djs = await prisma.djProfile.findMany({
       where: {
@@ -399,12 +405,13 @@ router.get('/djs/verification-requests', async (req, res) => {
 
     return res.json({ success: true, data: djs });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/verify - Approve verification
-router.put('/djs/:id/verify', async (req, res) => {
+router.put('/djs/:id/verify', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const parsed = verifyDjSchema.safeParse(req.body);
     const notes = parsed.success ? parsed.data.notes : undefined;
@@ -436,12 +443,13 @@ router.put('/djs/:id/verify', async (req, res) => {
 
     return res.json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/badge-type - Update DJ verification badge type
-router.put('/djs/:id/badge-type', async (req, res) => {
+router.put('/djs/:id/badge-type', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const targetId = req.params.id;
     const { badgeType } = req.body;
@@ -469,12 +477,13 @@ router.put('/djs/:id/badge-type', async (req, res) => {
 
     return res.json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/reject - Reject verification
-router.put('/djs/:id/reject', async (req, res) => {
+router.put('/djs/:id/reject', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const { reason } = req.body;
     if (!reason) {
@@ -502,12 +511,13 @@ router.put('/djs/:id/reject', async (req, res) => {
 
     return res.json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/request-info - Request more information
-router.put('/djs/:id/request-info', async (req, res) => {
+router.put('/djs/:id/request-info', requireRole('ADMIN', 'VERIFICATION_ADMIN'), async (req, res) => {
   try {
     const { notes } = req.body;
     if (!notes) {
@@ -524,7 +534,8 @@ router.put('/djs/:id/request-info', async (req, res) => {
 
     return res.json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -560,7 +571,8 @@ router.get('/bookings', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -596,12 +608,13 @@ router.put('/bookings/:id/status', async (req, res) => {
 
     return res.json({ success: true, data: booking });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/mixes/:id/feature - Feature/unfeature a mix
-router.put('/mixes/:id/feature', async (req, res) => {
+router.put('/mixes/:id/feature', requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
   try {
     const parsed = featureMixSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -627,12 +640,13 @@ router.put('/mixes/:id/feature', async (req, res) => {
 
     return res.json({ success: true, data: mix });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/hall-of-fame - Toggle DJ Hall of Fame status
-router.put('/djs/:id/hall-of-fame', async (req, res) => {
+router.put('/djs/:id/hall-of-fame', requireRole('ADMIN'), async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
     if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
@@ -644,12 +658,13 @@ router.put('/djs/:id/hall-of-fame', async (req, res) => {
 
     return res.json({ success: true, data: { id: updated.id, hallOfFame: updated.hallOfFame, stageName: updated.stageName } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/mixes/:id/hall-of-fame - Toggle Mix Hall of Fame status
-router.put('/mixes/:id/hall-of-fame', async (req, res) => {
+router.put('/mixes/:id/hall-of-fame', requireRole('ADMIN'), async (req, res) => {
   try {
     const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
     if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
@@ -661,12 +676,13 @@ router.put('/mixes/:id/hall-of-fame', async (req, res) => {
 
     return res.json({ success: true, data: { id: updated.id, hallOfFame: updated.hallOfFame, title: updated.title } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // DELETE /api/admin/mixes/:id - Delete a mix
-router.delete('/mixes/:id', async (req, res) => {
+router.delete('/mixes/:id', requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
   try {
     const mixId = req.params.id;
     const mix = await prisma.mix.findUnique({ where: { id: mixId } });
@@ -691,12 +707,13 @@ router.delete('/mixes/:id', async (req, res) => {
 
     return res.json({ success: true, data: { id: mixId, message: 'Mix deleted' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/ranking - Manually update DJ ranking
-router.put('/djs/:id/ranking', async (req, res) => {
+router.put('/djs/:id/ranking', requireRole('ADMIN'), async (req, res) => {
   try {
     const parsed = rankingUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -718,7 +735,8 @@ router.put('/djs/:id/ranking', async (req, res) => {
 
     return res.json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -731,7 +749,8 @@ router.post('/rankings/recalculate', async (req, res) => {
       data: { message: 'Rankings recalculated successfully', totalDjs: ranked.length },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -770,7 +789,8 @@ router.get('/analytics', async (req, res) => {
     });
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -802,7 +822,8 @@ router.get('/geography', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -832,12 +853,13 @@ router.get('/payments', async (req, res) => {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // GET /api/admin/pro-subscription-requests - Manual Orange Money Pro requests
-router.get('/pro-subscription-requests', async (req, res) => {
+router.get('/pro-subscription-requests', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const where = status && status !== 'all' ? { status } : {};
@@ -862,12 +884,13 @@ router.get('/pro-subscription-requests', async (req, res) => {
 
     return res.json({ success: true, data: requests });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/admin/pro-subscription-requests/:id/approve - Activate Pro
-router.post('/pro-subscription-requests/:id/approve', async (req, res) => {
+router.post('/pro-subscription-requests/:id/approve', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
   try {
     const parsed = subscriptionReviewSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -926,12 +949,13 @@ router.post('/pro-subscription-requests/:id/approve', async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/admin/pro-subscription-requests/:id/reject - Reject proof
-router.post('/pro-subscription-requests/:id/reject', async (req, res) => {
+router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
   try {
     const parsed = subscriptionReviewSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -977,7 +1001,8 @@ router.post('/pro-subscription-requests/:id/reject', async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1015,7 +1040,8 @@ router.get('/messages', async (req, res) => {
 
     return res.json({ success: true, data: Array.from(threadMap.values()) });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1037,7 +1063,8 @@ router.get('/staff', async (req, res) => {
     });
     return res.json({ success: true, data: staff });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1060,7 +1087,8 @@ router.get('/platforms', async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1089,7 +1117,8 @@ router.get('/system', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1156,12 +1185,13 @@ router.get('/djs', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // PUT /api/admin/djs/:id/suspend - Toggle DJ visibility (suspend)
-router.put('/djs/:id/suspend', async (req, res) => {
+router.put('/djs/:id/suspend', requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
   try {
     const targetId = req.params.id;
     const dj = await prisma.djProfile.findUnique({ where: { id: targetId } });
@@ -1193,12 +1223,13 @@ router.put('/djs/:id/suspend', async (req, res) => {
 
     return res.json({ success: true, data: { isPublic: updated.isPublic, suspended: !updated.isPublic } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // DELETE /api/admin/djs/:id - Delete DJ and associated data
-router.delete('/djs/:id', async (req, res) => {
+router.delete('/djs/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const targetId = req.params.id;
     const dj = await prisma.djProfile.findUnique({ where: { id: targetId }, select: { userId: true, stageName: true } });
@@ -1216,21 +1247,34 @@ router.delete('/djs/:id', async (req, res) => {
 
     return res.json({ success: true, message: 'DJ deleted' });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-// GET /api/admin/mixes - All mixes with full details
+// GET /api/admin/mixes - All mixes on platform (public & private)
 router.get('/mixes', async (req, res) => {
   try {
-    const { featured, search, page, limit } = req.query;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const { featured, isPublic, hallOfFame, search, page, limit } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit as string) || 50));
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
-    if (featured !== undefined) where.featured = featured === 'true';
-    if (search) where.title = { contains: search, mode: 'insensitive' };
+    if (featured !== undefined && featured !== '') where.featured = featured === 'true';
+    if (isPublic !== undefined && isPublic !== '') where.isPublic = isPublic === 'true';
+    if (hallOfFame !== undefined && hallOfFame !== '') where.hallOfFame = hallOfFame === 'true';
+
+    if (search) {
+      const q = String(search).trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { genre: { contains: q, mode: 'insensitive' } },
+        { category: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { dj: { stageName: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
 
     const [mixes, total] = await Promise.all([
       prisma.mix.findMany({
@@ -1239,7 +1283,7 @@ router.get('/mixes', async (req, res) => {
         skip,
         take: limitNum,
         include: {
-          dj: { select: { id: true, stageName: true } },
+          dj: { select: { id: true, stageName: true, avatar: true, subscriptionTier: true } },
         },
       }),
       prisma.mix.count({ where }),
@@ -1250,7 +1294,26 @@ router.get('/mixes', async (req, res) => {
       data: mixes,
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('[Admin Mixes] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/mixes/:id/visibility - Toggle Mix public/private status
+router.put('/mixes/:id/visibility', requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
+  try {
+    const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    const newVisibility = req.body.isPublic !== undefined ? Boolean(req.body.isPublic) : !mix.isPublic;
+    const updated = await prisma.mix.update({
+      where: { id: req.params.id },
+      data: { isPublic: newVisibility },
+    });
+
+    return res.json({ success: true, data: { id: updated.id, isPublic: updated.isPublic, title: updated.title } });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1286,7 +1349,8 @@ router.get('/events', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1320,7 +1384,8 @@ router.get('/rankings', async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1338,7 +1403,8 @@ router.get('/rankings/history', async (req, res) => {
 
     return res.json({ success: true, data: history });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1392,7 +1458,8 @@ router.get('/notifications', async (req, res) => {
 
     return res.json({ success: true, data: notifications });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1420,7 +1487,8 @@ router.post('/notifications/mark-read', async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1472,7 +1540,8 @@ router.post('/notifications/clear', async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1519,7 +1588,8 @@ router.get('/battles', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1557,7 +1627,8 @@ router.post('/battles', async (req, res) => {
 
     return res.status(201).json({ success: true, data: battle });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1626,7 +1697,8 @@ router.post('/battles/:id/close', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1677,7 +1749,8 @@ router.put('/battles/:id', async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1738,7 +1811,8 @@ router.post('/battles/:id/entries', async (req, res) => {
 
     return res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1774,20 +1848,167 @@ router.delete('/battles/:id/entries/:entryId', async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Entry removed' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/admin/notifications - Send a notification (in-memory only for now)
 router.post('/notifications', async (req, res) => {
   try {
-    const { type, target, title, message, scheduled } = req.body;
+    const { type, target, title, message, scheduled, mediaUrl, mediaType } = req.body;
     if (!type || !title || !message) {
       return res.status(400).json({ success: false, error: 'type, title, and message are required' });
     }
-    return res.json({ success: true, data: { id: `notif-${Date.now()}`, type, target, title, message, scheduled: scheduled || null, sentAt: new Date().toISOString() } });
+
+    const wantsEmail = type === 'Email' || type === 'Both';
+    const wantsWhatsApp = type === 'WhatsApp' || type === 'Both';
+    let emailsSent = 0;
+    let emailsFailed = 0;
+    const emailErrors: string[] = [];
+    let whatsappTargets: any[] = [];
+
+    if (wantsWhatsApp) {
+      const where: any = { status: { not: 'SUSPENDED' } };
+      if (target === 'DJs Only') {
+        where.djProfile = { isNot: null };
+      } else if (target === 'Users Only') {
+        where.djProfile = { is: null };
+      }
+
+      const phoneUsers = await prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          username: true,
+          phone: true,
+          djProfile: { select: { stageName: true, whatsappNumber: true } },
+        },
+      });
+
+      const formattedText = `${title}\n\n${message}`;
+      whatsappTargets = phoneUsers
+        .map((u: any) => {
+          const rawPhone = u.djProfile?.whatsappNumber || u.phone;
+          if (!rawPhone) return null;
+          const cleanPhone = rawPhone.replace(/\D/g, '');
+          if (cleanPhone.length < 7) return null;
+          return {
+            id: u.id,
+            name: u.djProfile?.stageName || u.username,
+            phone: cleanPhone,
+            whatsappUrl: `https://wa.me/${cleanPhone}?text=${encodeURIComponent(formattedText)}`,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    if (wantsEmail) {
+      // Build recipient query based on target audience
+      const where: any = { status: { not: 'SUSPENDED' } };
+      if (target === 'DJs Only') {
+        where.djProfile = { isNot: null };
+      } else if (target === 'Users Only') {
+        where.djProfile = { is: null };
+      } else if (target === 'Admins Only') {
+        where.role = { in: ['ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN'] };
+      }
+      // "All Users" gets no extra filter — all non-suspended users receive the email
+
+      const recipients = await prisma.user.findMany({
+        where,
+        select: { email: true, username: true },
+      });
+
+      if (recipients.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            id: `notif-${Date.now()}`,
+            type, target, title, message,
+            scheduled: scheduled || null,
+            sentAt: new Date().toISOString(),
+            emailsSent: 0,
+            emailsFailed: 0,
+            totalRecipients: 0,
+            whatsappTargets,
+            info: 'No email users match the target criteria',
+          },
+        });
+      }
+
+      const frontendUrl = getFrontendUrl();
+      const mediaHtml = mediaUrl
+        ? mediaType === 'video'
+          ? `<div style="text-align:center;margin:20px 0"><video src="${mediaUrl}" controls style="max-width:100%;border-radius:12px"></video></div>`
+          : `<div style="text-align:center;margin:20px 0"><img src="${mediaUrl}" alt="Notification media" style="max-width:100%;border-radius:12px;object-fit:cover" /></div>`
+        : '';
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#fff">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px">
+  <tr><td align="center">
+    <table width="580" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;padding:36px;border:1px solid #222;max-width:580px">
+      <tr><td style="text-align:center;padding-bottom:24px;border-bottom:1px solid #222">
+        <h1 style="color:#D4A24A;margin:0;font-size:28px;font-weight:700;letter-spacing:-0.5px">DECK SALONE</h1>
+        <p style="color:#666;font-size:12px;margin:4px 0 0">Sierra Leone's Premier DJ Platform</p>
+      </td></tr>
+      <tr><td style="padding:24px 0">
+        <h2 style="color:#fff;margin:0 0 16px;font-size:20px">${String(title).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</h2>
+        ${mediaHtml}
+        <div style="color:#ccc;font-size:15px;line-height:1.75">${String(message).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>')}</div>
+      </td></tr>
+      <tr><td style="text-align:center;padding-top:24px;border-top:1px solid #222">
+        <a href="${frontendUrl}" style="display:inline-block;background:#D4A24A;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px">Visit Deck Salone</a>
+        <p style="color:#444;font-size:11px;margin:16px 0 0">If you no longer wish to receive these emails, contact <a href="mailto:support@decksalone.com" style="color:#D4A24A">support@decksalone.com</a></p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+
+      // Send in batches of 50 to avoid overwhelming SMTP
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const batch = recipients.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map((user) =>
+            sendEmail({ to: user.email, subject: title, text: message, html })
+          )
+        );
+        results.forEach((result, idx) => {
+          if (result.status === 'fulfilled' && result.value?.success) {
+            emailsSent++;
+          } else {
+            emailsFailed++;
+            const errMsg = result.status === 'rejected' ? result.reason?.message : (result.value as any)?.error;
+            emailErrors.push(`${batch[idx].email}: ${errMsg}`);
+          }
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: `notif-${Date.now()}`,
+        type,
+        target,
+        title,
+        message,
+        scheduled: scheduled || null,
+        sentAt: new Date().toISOString(),
+        emailsSent,
+        emailsFailed,
+        totalRecipients: emailsSent + emailsFailed,
+        whatsappCount: whatsappTargets.length,
+        whatsappTargets,
+        errors: emailErrors.slice(0, 5),
+      },
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1812,7 +2033,8 @@ router.get('/security-logs', async (req, res) => {
 
     return res.json({ success: true, data: logs });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1847,7 +2069,8 @@ router.get('/subscriptions', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1857,7 +2080,8 @@ router.get('/subscription-config', async (req, res) => {
     const config = await getSubscriptionConfig();
     return res.json({ success: true, data: config });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1870,7 +2094,7 @@ const subscriptionConfigSchema = z.object({
 });
 
 // PUT /api/admin/subscription-config - Update manual-payment config
-router.put('/subscription-config', async (req, res) => {
+router.put('/subscription-config', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
   try {
     const parsed = subscriptionConfigSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1889,7 +2113,8 @@ router.put('/subscription-config', async (req, res) => {
 
     return res.json({ success: true, data: config });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1918,7 +2143,8 @@ router.get('/ads', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1944,7 +2170,8 @@ router.post('/ads', async (req, res) => {
 
     return res.status(201).json({ success: true, data: campaign });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1978,7 +2205,8 @@ router.put('/campaigns/:id/status', async (req, res) => {
 
     return res.json({ success: true, data: campaign });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -1989,7 +2217,7 @@ const broadcastEmailSchema = z.object({
   targetRole: z.enum(['ALL', 'USER', 'DJ', 'ADMIN']).optional().default('ALL'),
 });
 
-router.post('/broadcast-email', async (req, res) => {
+router.post('/broadcast-email', requireRole('ADMIN'), async (req, res) => {
   try {
     const parsed = broadcastEmailSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -2013,7 +2241,7 @@ router.post('/broadcast-email', async (req, res) => {
       return res.json({ success: true, data: { sent: 0, message: 'No users match the target criteria' } });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://decksalone.com';
+    const frontendUrl = getFrontendUrl();
     const logoUrl = `${frontendUrl}/assets/logo.jpg`;
     const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#111;background:#fff">
       <div style="text-align:center;margin-bottom:24px">
@@ -2071,7 +2299,8 @@ router.post('/broadcast-email', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2127,7 +2356,8 @@ router.get('/sets', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2155,7 +2385,8 @@ router.get('/sets/:id', async (req, res) => {
 
     return res.json({ success: true, data: { ...set, mixCount: set.items.length } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2188,7 +2419,8 @@ router.put('/sets/:id', async (req, res) => {
 
     return res.json({ success: true, data: { ...set, mixCount: set.items.length } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2215,7 +2447,8 @@ router.delete('/sets/:id', async (req, res) => {
 
     return res.json({ success: true, data: { id: req.params.id, message: 'Set deleted' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2259,7 +2492,8 @@ router.post('/sets/:id/mixes', async (req, res) => {
 
     return res.status(201).json({ success: true, data: item });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2293,7 +2527,8 @@ router.delete('/sets/:id/mixes/:mixId', async (req, res) => {
 
     return res.json({ success: true, data: { removed: true } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2348,7 +2583,8 @@ router.put('/sets/:id/reorder', async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -2390,8 +2626,128 @@ router.get('/sets/stats', async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// POST /api/admin/test-email - Send instant SMTP test email
+// ───────────────────────────────────────────────────────────────────
+router.post('/test-email', async (req: any, res: any) => {
+  try {
+    const { to } = req.body;
+    if (!to || !to.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid recipient email required' });
+    }
+    const result = await sendEmail({
+      to,
+      subject: '✅ Deck Salone — Hostinger SMTP Test Email',
+      text: `This is an instant test email from Deck Salone Admin Dashboard sent to ${to}. Your Hostinger SMTP configuration (support@decksalone.com) is active and delivering correctly!`,
+      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:32px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#D4A24A;margin:0;">DECK SALONE</h1><p style="color:#22c55e;font-size:18px;font-weight:bold;margin:16px 0 8px;">✅ Hostinger SMTP is Working!</p><p style="color:#aaa;font-size:14px;">This test email was successfully dispatched via support@decksalone.com to <strong>${to}</strong> at ${new Date().toUTCString()}.</p></td></tr></table></td></tr></table></body></html>`
+    });
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error || 'Failed to send test email' });
+    }
+    return res.json({ success: true, data: { sentTo: to, message: `Test email sent to ${to}` } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// POST /api/admin/send-email - Send custom branded HTML email
+// ───────────────────────────────────────────────────────────────────
+router.post('/send-email', async (req: any, res: any) => {
+  try {
+    const { to, subject, body } = req.body;
+    if (!to || !to.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid target email is required' });
+    }
+    if (!subject || !body) {
+      return res.status(400).json({ success: false, error: 'Subject and body message are required' });
+    }
+    const result = await sendEmail({
+      to,
+      subject,
+      text: body,
+      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="580" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;"><tr style="text-align:center;"><td><h1 style="color:#D4A24A;margin:0 0 16px;">DECK SALONE</h1></td></tr><tr><td style="color:#ddd;font-size:15px;line-height:1.7;">${String(body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</td></tr><tr style="text-align:center;"><td><hr style="border:0;border-top:1px solid #222;margin:24px 0;"/><p style="color:#666;font-size:12px;margin:0;">Deck Salone — Sierra Leone's #1 Official DJ Platform</p></td></tr></table></td></tr></table></body></html>`
+    });
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error || 'Failed to send custom email' });
+    }
+    return res.json({ success: true, data: { sentTo: to, message: `Custom email delivered to ${to}` } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// POST /api/admin/dispatch-bug-report - Dispatch bug summary email
+// ───────────────────────────────────────────────────────────────────
+router.post('/dispatch-bug-report', async (req: any, res: any) => {
+  try {
+    const { sendDailyBugSummary } = require('../utils/bugReport');
+    const result = await sendDailyBugSummary();
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// POST /api/admin/nudge-incomplete-profiles - Send 5-step profile nudges
+// ───────────────────────────────────────────────────────────────────
+router.post('/nudge-incomplete-profiles', async (req: any, res: any) => {
+  try {
+    const { nudgeIncompleteProfiles } = require('../utils/profileCompletion');
+    const { userId } = req.body;
+    const result = await nudgeIncompleteProfiles(userId);
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────
+// POST /api/admin/trigger-birthday-emails - Trigger DJ birthday emails
+// ───────────────────────────────────────────────────────────────────
+router.post('/trigger-birthday-emails', async (req: any, res: any) => {
+  try {
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+
+    const birthdayUsers = await prisma.user.findMany({
+      where: {
+        dateOfBirth: { not: null },
+      },
+      select: { id: true, email: true, username: true, dateOfBirth: true, djProfile: { select: { stageName: true } } }
+    });
+
+    const matching = birthdayUsers.filter((u: any) => {
+      if (!u.dateOfBirth) return false;
+      const dob = new Date(u.dateOfBirth);
+      return dob.getMonth() + 1 === month && dob.getDate() === day;
+    });
+
+    let sent = 0;
+    for (const u of matching) {
+      const name = u.djProfile?.stageName || u.username || 'Friend';
+      await sendEmail({
+        to: u.email,
+        subject: `🎉 Happy Birthday from Deck Salone, ${name}!`,
+        text: `Happy Birthday ${name}! Wishing you maximum success and great vibes from the entire Deck Salone team!`,
+        html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#D4A24A;margin:0 0 16px;">DECK SALONE</h1><div style="font-size:48px;">🎂🎉</div><h2 style="color:#fff;margin:16px 0 8px;">Happy Birthday, ${name}!</h2><p style="color:#aaa;font-size:14px;line-height:1.6;">Wishing you an incredible birthday filled with music, joy, and success!</p></td></tr></table></td></tr></table></body></html>`
+      }).catch(() => {});
+      sent++;
+    }
+
+    return res.json({ success: true, data: { totalMatched: matching.length, emailsSent: sent, message: `${sent} birthday emails dispatched!` } });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
 module.exports = router;
+

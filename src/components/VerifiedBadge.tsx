@@ -21,8 +21,6 @@ export function VerifiedBadge({ dj, className = '', size = 16 }: VerifiedBadgePr
     color = '#FACC15';
   } else if (dj.verificationBadgeType === 'grey') {
     color = '#9CA3AF';
-  } else if (dj.isPro || dj.subscriptionTier === 'pro' || dj.subscriptionTier === 'legend') {
-    color = '#FACC15';
   }
 
   return (

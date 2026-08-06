@@ -258,25 +258,40 @@ async function recalculateAllRankingsV2() {
   // Sort by composite score descending
   allScored.sort((a, b) => b.compositeScore - a.compositeScore);
 
-  // Write scores in batches (transaction per batch)
+  // Write scores in batches (transaction per batch) & sync badges
   const now = new Date();
+  const top3Badges = ['#1 DJ of the Week', '#2 DJ of the Week', '#3 DJ of the Week'];
+
   for (let i = 0; i < allScored.length; i += BATCH_SIZE) {
     const batch = allScored.slice(i, i + BATCH_SIZE);
 
-    await prisma.$transaction(
-      batch.map((dj) =>
-        prisma.djProfile.update({
-          where: { id: dj.id },
-          data: {
-            rankingScore: dj.compositeScore,
-            digitalScore: dj.followerScore + dj.mixScore, // legacy mapping
-            industryScore: dj.bookingScore + dj.battleScore, // legacy mapping
-            communityScore: dj.ratingScore, // legacy mapping
-            rankingPosition: i + batch.indexOf(dj) + 1,
-          },
-        })
-      )
-    );
+    for (let j = 0; j < batch.length; j++) {
+      const dj = batch[j];
+      const position = i + j + 1;
+
+      // Fetch existing DJ badges
+      const existingDj = await prisma.djProfile.findUnique({
+        where: { id: dj.id },
+        select: { badges: true },
+      });
+
+      let currentBadges = (existingDj?.badges || []).filter((b: string) => !top3Badges.includes(b));
+      if (position === 1) currentBadges.push('#1 DJ of the Week');
+      else if (position === 2) currentBadges.push('#2 DJ of the Week');
+      else if (position === 3) currentBadges.push('#3 DJ of the Week');
+
+      await prisma.djProfile.update({
+        where: { id: dj.id },
+        data: {
+          rankingScore: dj.compositeScore,
+          digitalScore: dj.followerScore + dj.mixScore,
+          industryScore: dj.bookingScore + dj.battleScore,
+          communityScore: dj.ratingScore,
+          rankingPosition: position,
+          badges: currentBadges,
+        },
+      });
+    }
 
     await prisma.rankingHistory.createMany({
       data: batch.map((dj, idx) => ({
@@ -292,7 +307,50 @@ async function recalculateAllRankingsV2() {
     });
   }
 
+  // Trigger weekly email notification to Top 3 DJs asynchronously
+  try {
+    await sendTop3WeeklyNotifications();
+  } catch (err) {
+    console.error('[Rankings] Error sending weekly top 3 notifications:', err);
+  }
+
   return allScored;
+}
+
+/**
+ * Send weekly notification emails to Top 3 DJs
+ */
+async function sendTop3WeeklyNotifications() {
+  const { sendWeeklyTop3RankingEmail } = require('./email');
+
+  const topDjs = await prisma.djProfile.findMany({
+    where: { isPublic: true },
+    orderBy: { rankingScore: 'desc' },
+    take: 3,
+    include: {
+      user: { select: { email: true } },
+    },
+  });
+
+  const results = [];
+  for (let idx = 0; idx < topDjs.length; idx++) {
+    const dj = topDjs[idx];
+    const position = idx + 1;
+    if (dj.user?.email) {
+      const emailResult = await sendWeeklyTop3RankingEmail({
+        to: dj.user.email,
+        stageName: dj.stageName,
+        avatar: dj.avatar,
+        position,
+        score: dj.rankingScore,
+        digitalScore: dj.digitalScore,
+        industryScore: dj.industryScore,
+        communityScore: dj.communityScore,
+      });
+      results.push({ djId: dj.id, stageName: dj.stageName, email: dj.user.email, position, ...emailResult });
+    }
+  }
+  return results;
 }
 
 /**
@@ -371,6 +429,7 @@ async function getBattleLeaders(limit = 10) {
 module.exports = {
   computeDjScoreV2,
   recalculateAllRankingsV2,
+  sendTop3WeeklyNotifications,
   getRisingDjs,
   getBattleLeaders,
   WEIGHTS_V2,

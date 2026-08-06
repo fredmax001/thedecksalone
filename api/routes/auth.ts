@@ -8,7 +8,8 @@ const { signToken } = require('../utils/jwt');
 const { authMiddleware } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter } = require('../utils/rateLimiter');
-const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail } = require('../utils/email');
+const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail } = require('../utils/email');
+const { getFrontendUrl } = require('../utils/url');
 
 const router = express.Router();
 
@@ -161,7 +162,8 @@ router.post('/register', authLimiter, async (req, res) => {
     const token = signToken({ id: user.id, email: user.email, role: user.role });
     return res.status(201).json({ success: true, data: { user, token } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -194,7 +196,8 @@ router.post('/login', authLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -218,7 +221,8 @@ router.post('/phone/send-otp', authLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -268,7 +272,8 @@ router.post('/phone/verify', authLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -322,7 +327,8 @@ router.post('/email/send-otp', authLimiter, async (req, res) => {
       data: { email: normalizedEmail, sent: true },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -372,7 +378,8 @@ router.post('/email/verify', authLimiter, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Email verified successfully' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -415,16 +422,15 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
     const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
 
     // Send the reset email if SMTP is configured; otherwise log the URL in development
     if (isEmailConfigured()) {
-      const emailResult = await sendEmail({
+      const emailResult = await sendPasswordResetEmail({
         to: email,
-        subject: 'Reset your Deck Salone password',
-        text: `You requested a password reset. Click the link below to reset your password:\n\n${resetUrl}\n\nThis link expires in 15 minutes. If you did not request this, please ignore this email.`,
-        html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Click here to reset your password</a></p><p>This link expires in 15 minutes. If you did not request this, please ignore this email.</p>`,
+        username: user.username || 'User',
+        resetUrl,
       });
 
       if (!emailResult.success) {
@@ -439,7 +445,8 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
 
     return res.json(successResponse);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -481,7 +488,8 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Password updated successfully' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -509,7 +517,7 @@ router.get('/google/callback', (req, res, next) => {
   const stateFromCookie = req.cookies?.oauth_state;
 
   if (!stateFromQuery || !stateFromCookie || stateFromQuery !== stateFromCookie) {
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const FRONTEND_URL = getFrontendUrl();
     return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
   }
 
@@ -518,7 +526,7 @@ router.get('/google/callback', (req, res, next) => {
 
   passport.authenticate('google', { session: false })(req, res, next);
 }, (req, res) => {
-  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const FRONTEND_URL = getFrontendUrl();
   try {
     if (!req.user) {
       return res.redirect(`${FRONTEND_URL}/login?error=google_auth_failed`);
@@ -556,7 +564,8 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
     return res.json({ success: true, data: user });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -564,6 +573,14 @@ const updateProfileSchema = z.object({
   username: z.string().min(3).max(30).optional(),
   email: z.string().email().optional(),
   gender: z.enum(GENDER_VALUES).optional().or(z.literal('')),
+});
+
+const updateMeSchema = z.object({
+  username: z.string().trim().min(3).max(30).regex(/^[a-z0-9_-]+$/i).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  gender: z.string().optional(),
+  phone: z.string().trim().min(8).max(20).optional(),
+  dateOfBirth: z.string().datetime().or(z.literal('')).optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -576,9 +593,9 @@ const changePasswordSchema = z.object({
 // PUT /api/auth/me - Update current user's profile (username, email, etc.)
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const parsed = updateProfileSchema.safeParse(req.body);
+    const parsed = updateMeSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ success: false, error: 'Invalid input' });
     }
 
     const { username, email, gender } = parsed.data;
@@ -617,7 +634,8 @@ router.put('/me', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: user });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -653,7 +671,8 @@ router.post('/change-password', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Password updated successfully' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

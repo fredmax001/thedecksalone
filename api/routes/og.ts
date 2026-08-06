@@ -1,5 +1,6 @@
 const express = require('express');
 const { prisma } = require('../utils/prisma');
+const { getFrontendUrl } = require('../utils/url');
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ function renderMetaHtml(params: {
 router.get('/dj/:identifier', async (req, res) => {
   try {
     const { identifier } = req.params;
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const baseUrl = getFrontendUrl();
 
     const dj = await prisma.djProfile.findFirst({
       where: {
@@ -93,7 +94,7 @@ router.get('/dj/:identifier', async (req, res) => {
 router.get('/mix/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const baseUrl = getFrontendUrl();
 
     const mix = await prisma.mix.findUnique({
       where: { id },
@@ -128,7 +129,7 @@ router.get('/mix/:id', async (req, res) => {
 router.get('/user/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const baseUrl = getFrontendUrl();
 
     const user = await prisma.user.findUnique({
       where: { username: username.toLowerCase() },

@@ -71,7 +71,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        display: ['Clash Display', 'system-ui', 'sans-serif'],
+        display: ['Inter', 'system-ui', 'sans-serif'],
         body: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },

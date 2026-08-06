@@ -1,22 +1,23 @@
 /**
- * Phone OTP Service
- * Simple in-memory store for OTPs. For production, use Redis + a real SMS provider
+ * Phone OTP Service backed by Redis.
+ * For production, use Redis + a real SMS provider
  * (e.g., Twilio, MessageBird, Termii for Sierra Leone).
  */
 
 const crypto = require('crypto');
-const { signToken } = require('./jwt');
-
-// In-memory OTP store: { phone: { code, expiry, attempts } }
-// In production, replace with Redis
-const otpStore = new Map();
+import redisClient from './redis';
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_EXPIRY_SECONDS = OTP_EXPIRY_MS / 1000;
 const MAX_ATTEMPTS = 3;
 
 function generateOtp() {
   // 6-digit numeric OTP using cryptographically secure random
   return crypto.randomInt(100000, 999999).toString();
+}
+
+function getOtpKey(phone: string): string {
+  return `otp:${phone.trim().replace(/\s/g, '')}`;
 }
 
 /**
@@ -25,16 +26,19 @@ function generateOtp() {
  * For now, we log to console and return the code (dev mode).
  */
 async function sendOtp(phone) {
-  // Normalize phone number (basic)
+  if (!redisClient) {
+    throw new Error('Redis is not configured. OTP service unavailable.');
+  }
+
   const normalizedPhone = phone.trim().replace(/\s/g, '');
   const code = generateOtp();
   const expiry = Date.now() + OTP_EXPIRY_MS;
 
-  otpStore.set(normalizedPhone, {
-    code,
-    expiry,
-    attempts: 0,
-  });
+  await redisClient.setex(
+    getOtpKey(phone),
+    OTP_EXPIRY_SECONDS,
+    JSON.stringify({ code, expiry, attempts: 0 })
+  );
 
   // TODO: Replace with actual SMS provider (Termii, Twilio, etc.)
   // For Sierra Leone, Termii or Twilio are good options
@@ -44,47 +48,49 @@ async function sendOtp(phone) {
 }
 
 /**
- * Verify OTP and return a JWT if valid.
+ * Verify OTP and return a result object.
  */
 async function verifyOtp(phone, code) {
-  const normalizedPhone = phone.trim().replace(/\s/g, '');
-  const record = otpStore.get(normalizedPhone);
+  if (!redisClient) {
+    return { valid: false, error: 'OTP service unavailable.' };
+  }
 
-  if (!record) {
+  const key = getOtpKey(phone);
+  const data = await redisClient.get(key);
+
+  if (!data) {
+    return { valid: false, error: 'OTP not found or expired. Request a new one.' };
+  }
+
+  let record;
+  try {
+    record = JSON.parse(data);
+  } catch {
+    await redisClient.del(key);
     return { valid: false, error: 'OTP not found or expired. Request a new one.' };
   }
 
   if (Date.now() > record.expiry) {
-    otpStore.delete(normalizedPhone);
+    await redisClient.del(key);
     return { valid: false, error: 'OTP expired. Request a new one.' };
   }
 
   if (record.attempts >= MAX_ATTEMPTS) {
-    otpStore.delete(normalizedPhone);
+    await redisClient.del(key);
     return { valid: false, error: 'Too many attempts. Request a new OTP.' };
   }
 
   record.attempts += 1;
 
   if (record.code !== code) {
+    const remainingTtl = Math.max(1, Math.ceil((record.expiry - Date.now()) / 1000));
+    await redisClient.setex(key, remainingTtl, JSON.stringify(record));
     return { valid: false, error: 'Invalid OTP code.' };
   }
 
   // OTP is valid - clean up
-  otpStore.delete(normalizedPhone);
+  await redisClient.del(key);
   return { valid: true };
 }
-
-/**
- * Clean up expired OTPs periodically (every 30 minutes)
- */
-setInterval(() => {
-  const now = Date.now();
-  for (const [phone, record] of otpStore.entries()) {
-    if (now > record.expiry) {
-      otpStore.delete(phone);
-    }
-  }
-}, 30 * 60 * 1000);
 
 module.exports = { sendOtp, verifyOtp };

@@ -257,12 +257,20 @@ export default function Help() {
               <p className="mt-2 text-sm text-text-secondary max-w-md mx-auto">
                 Our support team is here to assist you. Reach out and we&apos;ll get back to you within 24 hours.
               </p>
-              <a
-                href="mailto:support@decksalone.com"
-                className="inline-block mt-5 px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-full hover:scale-[1.02] transition-transform"
-              >
-                Contact Support
-              </a>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
+                <a
+                  href="mailto:contact@decksalone.com"
+                  className="px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-full hover:scale-[1.02] transition-transform"
+                >
+                  Contact Us
+                </a>
+                <a
+                  href="mailto:support@decksalone.com"
+                  className="px-6 py-3 border border-white/10 text-text-primary font-semibold uppercase text-sm rounded-full hover:border-gold/50 transition-colors"
+                >
+                  Support Email
+                </a>
+              </div>
             </div>
           </FadeIn>
         </div>

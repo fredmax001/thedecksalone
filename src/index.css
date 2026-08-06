@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-@import url('https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -24,6 +23,15 @@
     --blue: #3B82F6;
     --purple: #8B5CF6;
     --orange: #F97316;
+
+    /* Semantic surface/bg tokens used throughout the app */
+    --bg-page: #0A0A0A;
+    --bg-card: #111111;
+    --bg-card-hover: #161616;
+    --bg-modal: #141414;
+    --bg-error: rgba(239, 68, 68, 0.06);
+    --bg-input: #0D0D0D;
+    --bg-surface: #181818;
 
     --background: 0 0% 4%;
     --foreground: 0 0% 96%;
@@ -62,6 +70,10 @@
   body {
     @apply bg-black text-text-primary antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   html[data-theme="light"] body {
@@ -77,6 +89,15 @@
     --black-surface: #F0F0F0;
     --dark-gray: #E8E8E8;
     --medium-gray: #F0F0F0;
+
+    /* Light mode semantic surface/bg overrides */
+    --bg-page: #F2F2F2;
+    --bg-card: #FFFFFF;
+    --bg-card-hover: #F8F8F8;
+    --bg-modal: #FFFFFF;
+    --bg-error: rgba(239, 68, 68, 0.06);
+    --bg-input: #FAFAFA;
+    --bg-surface: #F5F5F5;
   }
 
   html {
@@ -244,6 +265,46 @@
 
   html[data-theme="light"] .theme-text-muted {
     color: #888888;
+  }
+
+  /* Mobile UI Glassmorphism & High-Impact Card Utilities */
+  .glass-dock {
+    background: rgba(14, 14, 14, 0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(212, 162, 74, 0.25);
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(212, 162, 74, 0.08);
+  }
+
+  .glass-card {
+    background: rgba(22, 22, 22, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-card-gold {
+    background: linear-gradient(135deg, rgba(212, 162, 74, 0.12) 0%, rgba(18, 18, 18, 0.8) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(212, 162, 74, 0.3);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .gold-glow {
+    box-shadow: 0 0 25px rgba(212, 162, 74, 0.25);
+  }
+
+  .gold-glow-sm {
+    box-shadow: 0 0 12px rgba(212, 162, 74, 0.2);
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -447,3 +508,73 @@ html[data-theme="light"] textarea::placeholder {
   --sidebar-border: 0 0% 90%;
   --sidebar-ring: 40 60% 55%;
 }
+
+/* ─── Light mode: admin dashboard hardcoded dark background overrides ─── */
+html[data-theme="light"] .bg-\[\#080808\] { background-color: #F0F0F0 !important; }
+html[data-theme="light"] .bg-\[\#0C0C0C\] { background-color: #FAFAFA !important; }
+html[data-theme="light"] .bg-\[\#0E0E0E\] { background-color: #FAFAFA !important; }
+html[data-theme="light"] .bg-\[\#0F0F0F\] { background-color: #FAFAFA !important; }
+html[data-theme="light"] .bg-\[\#141414\] { background-color: #FFFFFF !important; }
+html[data-theme="light"] .bg-\[\#161616\] { background-color: #F8F8F8 !important; }
+html[data-theme="light"] .bg-\[\#181818\] { background-color: #F5F5F5 !important; }
+html[data-theme="light"] .bg-\[\#1E1E1E\] { background-color: #EEEEEE !important; }
+html[data-theme="light"] .bg-\[\#111\] { background-color: #FFFFFF !important; }
+
+/* Admin header in light mode */
+html[data-theme="light"] header.backdrop-blur-xl {
+  background-color: rgba(242,242,242,0.92) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Sidebar border in light mode */
+html[data-theme="light"] aside {
+  border-right-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Borders: white opacity -> black opacity in light mode */
+html[data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
+html[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.06) !important; }
+html[data-theme="light"] .border-white\/\[0\.08\] { border-color: rgba(0,0,0,0.08) !important; }
+
+/* White tint -> black tint backgrounds in light mode */
+html[data-theme="light"] .bg-white\/\[0\.04\] { background-color: rgba(0,0,0,0.03) !important; }
+html[data-theme="light"] .bg-white\/\[0\.06\] { background-color: rgba(0,0,0,0.04) !important; }
+html[data-theme="light"] .bg-white\/\[0\.08\] { background-color: rgba(0,0,0,0.05) !important; }
+html[data-theme="light"] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(0,0,0,0.05) !important; }
+html[data-theme="light"] .hover\:bg-white\/\[0\.08\]:hover { background-color: rgba(0,0,0,0.06) !important; }
+
+/* Input/select/textarea in light mode */
+html[data-theme="light"] select,
+html[data-theme="light"] input[type="text"],
+html[data-theme="light"] input[type="email"],
+html[data-theme="light"] input[type="password"],
+html[data-theme="light"] input[type="number"],
+html[data-theme="light"] input[type="search"],
+html[data-theme="light"] input[type="tel"],
+html[data-theme="light"] input[type="url"],
+html[data-theme="light"] textarea {
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  border-color: rgba(0,0,0,0.12);
+}
+
+html[data-theme="light"] select option {
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+}
+
+/* App-like mobile touch & viewport resets */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 16px);
+}
+

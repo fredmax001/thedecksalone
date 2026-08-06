@@ -312,7 +312,6 @@ export default function MixPlayer() {
       document.title = 'Deck Salone - DJ Booking & Mix Streaming';
     };
   }, [currentTrack, isPlaying]);
-
   // Reset internal tracking on track change
   useEffect(() => {
     setLiked(false);
@@ -405,6 +404,13 @@ export default function MixPlayer() {
     }
   }, [currentTrack?.id]);
 
+  // Periodically save playback position memory
+  const savePlaybackPosition = usePlayerStore((s) => s.savePlaybackPosition);
+  useEffect(() => {
+    if (!currentTrack || !isPlaying || currentTime < 2) return;
+    savePlaybackPosition(currentTrack.id, currentTime, currentTrack.duration || 0);
+  }, [currentTrack, isPlaying, Math.floor(currentTime / 3), savePlaybackPosition]);
+
   // Volume synchronization
   useEffect(() => {
     const audio = audioRef.current;
@@ -451,6 +457,93 @@ export default function MixPlayer() {
     togglePlay();
   }, [embed, togglePlay]);
 
+  // MediaSession API setup for Lock Screen, Control Center, Android Notifications & Media Cards
+  useEffect(() => {
+    if (!currentTrack || typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+
+    const getAbsoluteCover = (src?: string) => {
+      if (!src) return `${window.location.origin}/logo-icon.png`;
+      if (src.startsWith('http://') || src.startsWith('https://')) return src;
+      return `${window.location.origin}${src.startsWith('/') ? '' : '/'}${src}`;
+    };
+
+    const coverUrl = getAbsoluteCover(currentTrack.cover);
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.dj || 'Deck Salone',
+        album: currentTrack.genre || 'Salone Mix',
+        artwork: [
+          { src: coverUrl, sizes: '96x96', type: 'image/jpeg' },
+          { src: coverUrl, sizes: '128x128', type: 'image/jpeg' },
+          { src: coverUrl, sizes: '192x192', type: 'image/png' },
+          { src: coverUrl, sizes: '256x256', type: 'image/png' },
+          { src: coverUrl, sizes: '384x384', type: 'image/png' },
+          { src: coverUrl, sizes: '512x512', type: 'image/png' },
+        ],
+      });
+    } catch (err) {
+      console.warn('Failed to set mediaSession metadata:', err);
+    }
+  }, [currentTrack]);
+
+  // Sync playback state and action handlers with MediaSession
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+    const actionHandlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
+      ['play', () => togglePlayHandler()],
+      ['pause', () => togglePlayHandler()],
+      ['previoustrack', queue.length > 1 ? () => prev() : null],
+      ['nexttrack', queue.length > 1 ? () => next() : null],
+      [
+        'seekto',
+        (details) => {
+          if (details.seekTime !== undefined && currentTrack?.duration) {
+            handleSeek(details.seekTime / currentTrack.duration);
+          }
+        },
+      ],
+    ];
+
+    for (const [action, handler] of actionHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (err) {}
+    }
+
+    return () => {
+      for (const [action] of actionHandlers) {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch (err) {}
+      }
+    };
+  }, [isPlaying, queue.length, currentTrack?.duration, togglePlayHandler, prev, next, handleSeek]);
+
+  // Sync playback position state with MediaSession
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !('mediaSession' in navigator) ||
+      !('setPositionState' in navigator.mediaSession) ||
+      !currentTrack?.duration ||
+      currentTrack.duration <= 0
+    ) {
+      return;
+    }
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: currentTrack.duration,
+        playbackRate: 1.0,
+        position: Math.min(currentTime, currentTrack.duration),
+      });
+    } catch (err) {}
+  }, [currentTime, currentTrack?.duration]);
+
   const toggleMute = useCallback(() => setMuted(!isMuted), [isMuted, setMuted]);
   const toggleLike = useCallback(() => setLiked((l) => !l), []);
 
@@ -483,7 +576,7 @@ export default function MixPlayer() {
               ? 'bottom-0 h-[100dvh]'
               // Mobile: floating pill above the mobile tab bar
               // Desktop/Tablet (md+): full-width bar docked flush at the very bottom
-              : 'bottom-[76px] h-[72px] mx-4 mb-2 rounded-2xl border border-white/10 md:bottom-0 md:h-[80px] md:mx-0 md:mb-0 md:rounded-none md:border-t md:border-x-0 md:border-b-0 md:border-white/[0.08]'
+              : 'bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] h-[68px] mx-3 mb-1 rounded-2xl border border-gold/25 glass-dock md:bottom-0 md:h-[80px] md:mx-0 md:mb-0 md:rounded-none md:border-t md:border-x-0 md:border-b-0 md:border-gold/25'
           )}
         >
           {/* Background and Blur */}

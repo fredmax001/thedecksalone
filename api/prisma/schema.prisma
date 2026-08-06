@@ -32,7 +32,14 @@ model User {
   passwordResetToken      String?
   socialLinks             Json?
   status                  UserStatus   @default(ACTIVE)
+  referralCode            String?      @unique  // e.g. "DJ-XMAN-A1B2"
+  referredBy              String?              // referralCode of who referred them
+  dateOfBirth             DateTime?
+  lastBirthdayEmailSentAt DateTime?
+  lastProfileNudgeSentAt  DateTime?
   username                String       @unique @db.VarChar(30)
+
+
   notificationPreferences Json?
   privacyPreferences      Json?
   notifications           Notification[]
@@ -45,17 +52,25 @@ model User {
   receivedMessages        Message[]    @relation("ReceivedMessages")
   sentMessages            Message[]    @relation("SentMessages")
   mixLikes                MixLike[]
+  mixComments             MixComment[]
   payments                Payment[]    @relation("ClientPayments")
   reviews                 Review[]
   eventTickets            EventTicket[]
   eventRsvps              EventRSVP[]
+  submittedReports        ViolationReport[] @relation("SubmittedReports")
+  targetedReports         ViolationReport[] @relation("TargetedReports")
 
   @@index([email])
   @@index([username])
   @@index([phone])
   @@index([googleId])
   @@index([role])
+  @@index([role, createdAt])
+  @@index([status, createdAt])
   @@index([status, role, createdAt])
+  @@index([dateOfBirth])
+  @@index([referredBy])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -75,6 +90,7 @@ model Notification {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+  @@index([userId, read, createdAt])
   @@index([userId, createdAt])
   @@index([type])
   @@map("notifications")
@@ -171,6 +187,11 @@ model DjProfile {
   willTravel              Boolean                  @default(false)
   monthlyListeners        Int                      @default(0)
   hallOfFame              Boolean                  @default(false)
+  referralCount           Int                      @default(0)  // DJs who signed up via this DJ's link
+  promoGrantedAt          DateTime?                // when promo was activated
+  promoExpiresAt          DateTime?                // when free promo ends
+  promoGrantedById        String?                  // admin userId who granted it
+  promoGrants             PromoGrant[]
   campaigns               AdCampaign[]
   battleEntries           BattleEntry[]
   bookingsAsDj            Booking[]                @relation("DjBookings")
@@ -195,8 +216,12 @@ model DjProfile {
   @@index([community])
   @@index([verified])
   @@index([verificationStatus])
+  @@index([subscriptionTier])
   @@index([rankingScore])
   @@index([isPublic])
+  @@index([isPublic, createdAt])
+  @@index([isPublic, verified, rankingScore])
+  @@index([updatedAt])
   @@map("dj_profiles")
 }
 
@@ -252,8 +277,10 @@ model Mix {
   highlights  DjHighlight[]
   setItems    DjSetItem[]
   mixLikes    MixLike[]
+  mixComments MixComment[]
   mixPlays    MixPlay[]
   reups       MixReup[]
+  violationReports ViolationReport[]
   dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
 
   @@index([djId])
@@ -261,7 +288,37 @@ model Mix {
   @@index([genre])
   @@index([featured])
   @@index([createdAt])
+  @@index([plays])
+  @@index([likes])
+  @@index([title])
+  @@index([isPublic, createdAt])
+  @@index([isPublic, featured, createdAt])
+  @@index([isPublic, genre, createdAt])
+  @@index([isPublic, category, createdAt])
+  @@index([hallOfFame, isPublic, createdAt])
+  @@index([djId, isPublic])
   @@map("mixes")
+}
+
+model MixComment {
+  id        String       @id @default(cuid())
+  mixId     String
+  userId    String
+  content   String
+  parentId  String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  mix       Mix          @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    MixComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   MixComment[] @relation("CommentReplies")
+  violationReports ViolationReport[]
+
+  @@index([mixId, createdAt])
+  @@index([mixId, parentId, createdAt])
+  @@index([userId])
+  @@index([parentId])
+  @@map("mix_comments")
 }
 
 model MixLike {
@@ -334,6 +391,8 @@ model DjSet {
   dj          DjProfile   @relation(fields: [djId], references: [id], onDelete: Cascade)
 
   @@index([djId, createdAt])
+  @@index([djId, isPublic, createdAt])
+  @@index([isPublic, createdAt])
   @@map("dj_sets")
 }
 
@@ -385,8 +444,11 @@ model Booking {
   payments        Payment[]
 
   @@index([clientId])
+  @@index([clientId, createdAt])
   @@index([djId])
+  @@index([djId, status])
   @@index([status])
+  @@index([status, createdAt])
   @@index([eventDate])
   @@map("bookings")
 }
@@ -456,6 +518,8 @@ model Message {
 
   @@index([senderId])
   @@index([receiverId])
+  @@index([receiverId, createdAt])
+  @@index([senderId, receiverId, createdAt])
   @@index([bookingId])
   @@index([createdAt])
   @@map("messages")
@@ -480,7 +544,9 @@ model Payment {
 
   @@index([bookingId])
   @@index([clientId])
+  @@index([djId])
   @@index([status])
+  @@index([status, createdAt])
   @@index([providerRef])
   @@map("payments")
 }
@@ -520,12 +586,29 @@ model Event {
   city                 String
   venue                String?
   image                String?
+  banner               String?
+  poster               String?
+  endDate              DateTime?
+  googleMapsUrl        String?
+  organizerName        String?
+  organizerContact     String?
+  category             String?
+  musicGenre           String?
+  ageRestriction       String?    // all_ages, eighteen_plus, twenty_one_plus
+  capacity             Int?
+  refundPolicy         String?
+  termsConditions      String?
+  ticketSaleStartsAt   DateTime?
+  ticketSaleEndsAt     DateTime?
   isOpenSlot           Boolean    @default(false)
   slots                Int        @default(0)
   filledSlots          Int        @default(0)
   compensation         Float?
   requirements         String?
   status               String     @default("upcoming")
+  publishStatus        String     @default("draft") // draft, published, cancelled, suspended
+  publishedAt          DateTime?
+  approvalMode         String     @default("automatic") // automatic, manual
   soundItSaloneEventId String?
   soundItSaloneUrl     String?
   isSyncedToSalone     Boolean    @default(false)
@@ -534,47 +617,126 @@ model Event {
   ticketUrl            String?
   // Pro+ Ticketing Fields
   isTicketed           Boolean    @default(false)
-  ticketPrice          Float?
+  ticketPrice          Float?     // legacy single-price field
   ticketCurrency       String     @default("SLE")
   mobileMoneyNumber    String?
   mobileMoneyProvider  String?    // e.g. "Orange Money", "Africell Money"
-  totalTickets         Int?
+  totalTickets         Int?       // legacy total capacity
+  totalRevenue         Float      @default(0)
+  ticketsSold          Int        @default(0)
+  ticketsCheckedIn     Int        @default(0)
   dj                   DjProfile? @relation(fields: [djId], references: [id])
   applications         EventApplication[]
   eventTickets         EventTicket[]
+  ticketTypes          EventTicketType[]
   rsvps                EventRSVP[]
   gallery              EventPhoto[]
+  violationReports     ViolationReport[]
 
   @@index([djId])
   @@index([city])
   @@index([date])
+  @@index([status, date])
+  @@index([publishStatus])
+  @@index([publishStatus, status, date])
+  @@index([city, date])
+  @@index([isTicketed])
   @@index([soundItSaloneEventId])
   @@index([isSyncedToSalone])
+  @@index([publishStatus, date])
   @@map("events")
 }
 
+model EventTicketType {
+  id              String        @id @default(cuid())
+  eventId         String
+  name            String        // Early Bird, Regular, VIP, VVIP, Custom
+  description     String?
+  price           Float         // 0 = free
+  currency        String        @default("SLE")
+  quantity        Int?          // null = unlimited
+  sold            Int           @default(0)
+  maxPerOrder     Int           @default(10)
+  saleStartsAt    DateTime?
+  saleEndsAt      DateTime?
+  sortOrder       Int           @default(0)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventTickets    EventTicket[]
+
+  @@index([eventId])
+  @@index([isActive])
+  @@index([eventId, isActive])
+  @@map("event_ticket_types")
+}
+
 model EventTicket {
-  id                String    @id @default(cuid())
+  id                String          @id @default(cuid())
   eventId           String
+  ticketTypeId      String?
   userId            String
-  qrCode            String?   @unique  // unique token generated on approval
-  status            String    @default("pending") // pending, approved, declined, scanned
-  paymentScreenshot String
+  qrPayload         String?         @unique  // encrypted JSON payload
+  qrCode            String?         @unique  // legacy plain token (kept for compatibility)
+  ticketNumber      String?         @unique  // human-readable DS-XXXX-XXXX
+  status            String          @default("pending") // pending, approved, rejected, checked_in, cancelled, refunded
+  paymentStatus     String          @default("pending") // pending, paid, failed, refunded
+  paymentMethod     String?         // orange_money, africell_money, free
+  paymentScreenshot String?
   amount            Float
-  currency          String    @default("SLE")
+  currency          String          @default("SLE")
+  quantity          Int             @default(1)
+  buyerName         String?
+  buyerEmail        String?
+  buyerPhone        String?
+  notes             String?
+  internalNotes     String?
   approvedAt        DateTime?
-  scannedAt         DateTime?
-  declineReason     String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rejectedAt        DateTime?
+  cancelledAt       DateTime?
+  scannedAt         DateTime?       // check-in timestamp
+  checkedInBy       String?         // scanner userId
+  declineReason     String?         // legacy declined reason
+  transferredFrom   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  event             Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType        EventTicketType? @relation(fields: [ticketTypeId], references: [id])
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanLogs          EventScanLog[]
 
   @@index([eventId])
   @@index([userId])
   @@index([status])
-  @@index([qrCode])
+  @@index([ticketTypeId])
+  @@index([qrPayload])
+  @@index([ticketNumber])
+  @@index([eventId, status])
+  @@index([eventId, ticketTypeId])
+  @@index([eventId, createdAt])
+  @@index([eventId, userId])
+  @@index([userId, status])
+  @@index([status, paymentStatus])
   @@map("event_tickets")
+}
+
+model EventScanLog {
+  id          String       @id @default(cuid())
+  ticketId    String?
+  eventId     String
+  scannedBy   String
+  scannerRole String       // DJ, STAFF, ADMIN
+  status      String       // valid, already_used, invalid, wrong_event
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+  ticket      EventTicket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([eventId])
+  @@index([scannedBy])
+  @@index([createdAt])
+  @@map("event_scan_logs")
 }
 
 model EventRSVP {
@@ -722,6 +884,7 @@ model AdCampaign {
   ctr              Float      @default(0)
   creativeImageUrl String?
   ctaUrl           String?
+  description      String?
   startDate        DateTime?
   endDate          DateTime?
   createdAt        DateTime   @default(now())
@@ -731,6 +894,7 @@ model AdCampaign {
   @@index([status])
   @@index([advertiserId])
   @@index([targetType, status])
+  @@index([targetId])
   @@map("ad_campaigns")
 }
 
@@ -774,6 +938,7 @@ model Opportunity {
 
   @@index([eventDate])
   @@index([status])
+  @@index([status, eventDate])
   @@index([requiredTier])
   @@index([isFeatured])
   @@map("opportunities")
@@ -794,6 +959,23 @@ model OppApplications {
   @@index([opportunityId])
   @@index([djId])
   @@map("opp_applications")
+}
+
+model PromoGrant {
+  id          String    @id @default(cuid())
+  djId        String
+  type        String    @default("manual")  // "referral" | "manual"
+  plan        String    @default("legend")  // "pro" | "legend"
+  months      Int       @default(1)
+  activatedAt DateTime  @default(now())
+  expiresAt   DateTime
+  grantedById String?   // admin userId
+  reason      String?
+  dj          DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@index([djId])
+  @@index([expiresAt])
+  @@map("promo_grants")
 }
 
 enum NotificationType {
@@ -892,3 +1074,66 @@ model SiteVisit {
   @@index([city, createdAt])
   @@map("site_visits")
 }
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+
+model ViolationReport {
+  id            String       @id @default(cuid())
+  reporterId    String?
+  targetUserId  String?
+  mixId         String?
+  eventId       String?
+  commentId     String?
+  reason        String       // e.g. 'copyright_infringement', 'hate_speech', 'harassment', 'fraud', 'illegal_content', 'terms_violation'
+  details       String       @db.Text
+  status        ReportStatus @default(PENDING)
+  actionTaken   String?      // e.g. 'WARNING', 'CONTENT_REMOVED', 'SUSPENDED', 'BANNED'
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  reporter      User?        @relation("SubmittedReports", fields: [reporterId], references: [id], onDelete: SetNull)
+  targetUser    User?        @relation("TargetedReports", fields: [targetUserId], references: [id], onDelete: SetNull)
+  mix           Mix?         @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  event         Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  comment       MixComment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([reporterId])
+  @@index([targetUserId])
+  @@index([mixId])
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("violation_reports")
+}
+
+model SystemErrorLog {
+  id          String   @id @default(cuid())
+  level       String   @default("ERROR") // "ERROR" | "WARN" | "CRITICAL"
+  source      String   // "API" | "AUTH" | "DATABASE" | "CRON" | "FRONTEND"
+  message     String   @db.Text
+  stackTrace  String?  @db.Text
+  path        String?
+  method      String?
+  userId      String?
+  userEmail   String?
+  ipAddress   String?
+  metadata    Json?
+  reported    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([level])
+  @@index([reported])
+  @@index([createdAt])
+  @@map("system_error_logs")
+}
+
+
+

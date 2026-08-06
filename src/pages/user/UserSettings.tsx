@@ -83,6 +83,10 @@ export default function UserSettings() {
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [gender, setGender] = useState(user?.gender || '');
+  const [dateOfBirth, setDateOfBirth] = useState(
+    user?.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''
+  );
+
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -122,6 +126,7 @@ export default function UserSettings() {
       setUsername(user.username || '');
       setEmail(user.email || '');
       setGender(user.gender || '');
+      setDateOfBirth(user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '');
     }
   }, [user]);
 
@@ -131,7 +136,7 @@ export default function UserSettings() {
     setIsSavingProfile(true);
 
     try {
-      const res = await api.put('/users/profile', { username, email, gender });
+      const res = await api.put('/users/profile', { username, email, gender, dateOfBirth });
       if (res.data?.success) {
         setSaved(true);
         toast.success('Profile updated successfully');
@@ -273,7 +278,21 @@ export default function UserSettings() {
             />
           </div>
           <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label className="text-text-secondary">Date of Birth 🎂</Label>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#D4A24A]/10 border border-[#D4A24A]/30 text-[#D4A24A]">16+ Only</span>
+            </div>
+            <Input
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              className="bg-black-surface border-dark-gray text-text-primary"
+            />
+            <p className="text-[11px] text-text-muted">Must be at least 16 years old. You'll receive a birthday wish email on your birthday!</p>
+          </div>
+          <div className="space-y-2">
             <Label className="text-text-secondary">Gender</Label>
+
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}

@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const {
   recalculateAllRankingsV2,
   getRisingDjs,
@@ -44,7 +45,7 @@ const discoverDjsSchema = z.object({
 /* ──────────────────── Mix Discovery ──────────────────── */
 
 // GET /api/discover/mixes — Algorithmic mix discovery
-router.get('/mixes', async (req, res) => {
+router.get('/mixes', conditionalSearchLimiter, async (req, res) => {
   try {
     const parsed = discoverMixesSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -63,7 +64,8 @@ router.get('/mixes', async (req, res) => {
 
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -74,7 +76,8 @@ router.get('/mixes/trending', async (req, res) => {
     const mixes = await getTrendingMixes(limitNum);
     return res.json({ success: true, data: mixes });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -85,7 +88,8 @@ router.get('/mixes/for-you', authMiddleware, async (req, res) => {
     const mixes = await getPersonalizedRecommendations(req.user.id, limitNum);
     return res.json({ success: true, data: mixes });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -96,14 +100,15 @@ router.get('/mixes/hall-of-fame', async (req, res) => {
     const mixes = await getHallOfFameCandidates(limitNum);
     return res.json({ success: true, data: mixes });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 /* ──────────────────── DJ Discovery ──────────────────── */
 
 // GET /api/discover/djs — Discover DJs with enhanced ranking + campaign boost
-router.get('/djs', async (req, res) => {
+router.get('/djs', conditionalSearchLimiter, async (req, res) => {
   try {
     const parsed = discoverDjsSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -214,7 +219,8 @@ router.get('/djs', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -225,7 +231,8 @@ router.get('/djs/rising', async (req, res) => {
     const djs = await getRisingDjs(limitNum);
     return res.json({ success: true, data: djs });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -236,7 +243,8 @@ router.get('/djs/battle-leaders', async (req, res) => {
     const djs = await getBattleLeaders(limitNum);
     return res.json({ success: true, data: djs });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -263,7 +271,8 @@ router.post('/recalculate', authMiddleware, requireRole('ADMIN', 'MODERATOR'), a
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -276,7 +285,8 @@ router.get('/rankings/:djId/score', async (req, res) => {
     }
     return res.json({ success: true, data: score });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

@@ -1,24 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Calendar,
-  Loader2,
-  Plus,
-  X,
-  MapPin,
-  Ticket,
-  Trash2,
-  Edit3,
-  ImageIcon,
-  ExternalLink,
-  QrCode,
-  ScanLine,
-  CheckCircle2,
-  XCircle,
-  Crown,
-  Images,
+  Calendar, Loader2, Plus, X, MapPin, Ticket, Trash2, Edit3, ImageIcon,
+  ScanLine, Crown, Share2, LayoutDashboard, BarChart3, Users, Eye, EyeOff,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import api from '@/lib/api';
@@ -28,14 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import TicketTypeBuilder, { type TicketTypeInput } from '@/components/events/TicketTypeBuilder';
 
 interface DJEvent {
   id: string;
@@ -43,10 +26,24 @@ interface DJEvent {
   description?: string;
   type: string;
   date: string;
+  endDate?: string | null;
   location: string;
   city?: string;
   venue?: string;
   image?: string | null;
+  banner?: string | null;
+  googleMapsUrl?: string | null;
+  organizerName?: string | null;
+  organizerContact?: string | null;
+  category?: string | null;
+  musicGenre?: string | null;
+  ageRestriction?: string | null;
+  capacity?: number | null;
+  refundPolicy?: string | null;
+  termsConditions?: string | null;
+  ticketSaleStartsAt?: string | null;
+  ticketSaleEndsAt?: string | null;
+  approvalMode?: string;
   ticketUrl?: string | null;
   isTicketed: boolean;
   ticketPrice?: number | null;
@@ -54,36 +51,41 @@ interface DJEvent {
   mobileMoneyNumber?: string | null;
   mobileMoneyProvider?: string | null;
   totalTickets?: number | null;
+  publishStatus: string;
   status: string;
   createdAt: string;
-}
-
-interface EventTicket {
-  id: string;
-  eventId: string;
-  userId: string;
-  status: string; // pending | approved | declined | scanned
-  paymentScreenshot: string;
-  amount: number;
-  currency: string;
-  qrCode?: string | null;
-  approvedAt?: string | null;
-  declineReason?: string | null;
-  createdAt: string;
-  user: { id: string; name?: string; username: string; avatar?: string; email: string };
+  ticketTypes?: any[];
 }
 
 const EVENT_TYPES = ['Club Night', 'Festival', 'Private Party', 'Wedding', 'Corporate Event', 'Open DJ Slot'];
 const STATUS_OPTIONS = ['upcoming', 'ongoing', 'completed', 'cancelled'];
+const AGE_OPTIONS = [
+  { value: 'all_ages', label: 'All Ages' },
+  { value: 'eighteen_plus', label: '18+' },
+  { value: 'twenty_one_plus', label: '21+' },
+];
 
 const emptyForm = {
   title: '',
   description: '',
   type: 'Club Night',
   date: '',
+  endDate: '',
   location: '',
   city: '',
   venue: '',
+  googleMapsUrl: '',
+  organizerName: '',
+  organizerContact: '',
+  category: '',
+  musicGenre: '',
+  ageRestriction: '',
+  capacity: '',
+  refundPolicy: '',
+  termsConditions: '',
+  ticketSaleStartsAt: '',
+  ticketSaleEndsAt: '',
+  approvalMode: 'automatic',
   ticketUrl: '',
   status: 'upcoming',
   isTicketed: false,
@@ -96,28 +98,21 @@ const emptyForm = {
 
 export default function DjEvents() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
+  const { checkFeature } = useFeatureAccess();
   const [events, setEvents] = useState<DJEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [ticketTypes, setTicketTypes] = useState<TicketTypeInput[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
-
-  // Ticket management state
-  const [ticketEventId, setTicketEventId] = useState<string | null>(null);
-  const [tickets, setTickets] = useState<EventTicket[]>([]);
-  const [ticketsLoading, setTicketsLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  // Gallery upload state
-  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [shareEvent, setShareEvent] = useState<DJEvent | null>(null);
 
   const isDj = user?.role === 'DJ';
   const djId = user?.djProfile?.id;
-  const { checkFeature } = useFeatureAccess();
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
   const isProPlus = subscriptionTier === 'legend';
 
@@ -136,6 +131,8 @@ export default function DjEvents() {
     setImageFile(null);
     setImagePreview(null);
     setIsEditing(null);
+    setTicketTypes([]);
+    setActiveTab('details');
   };
 
   const handleEdit = (event: DJEvent) => {
@@ -144,10 +141,23 @@ export default function DjEvents() {
       title: event.title,
       description: event.description || '',
       type: event.type,
-      date: event.date.slice(0, 16),
+      date: event.date ? event.date.slice(0, 16) : '',
+      endDate: event.endDate ? event.endDate.slice(0, 16) : '',
       location: event.location,
       city: event.city || '',
       venue: event.venue || '',
+      googleMapsUrl: event.googleMapsUrl || '',
+      organizerName: event.organizerName || '',
+      organizerContact: event.organizerContact || '',
+      category: event.category || '',
+      musicGenre: event.musicGenre || '',
+      ageRestriction: event.ageRestriction || '',
+      capacity: event.capacity ? String(event.capacity) : '',
+      refundPolicy: event.refundPolicy || '',
+      termsConditions: event.termsConditions || '',
+      ticketSaleStartsAt: event.ticketSaleStartsAt ? event.ticketSaleStartsAt.slice(0, 16) : '',
+      ticketSaleEndsAt: event.ticketSaleEndsAt ? event.ticketSaleEndsAt.slice(0, 16) : '',
+      approvalMode: event.approvalMode || 'automatic',
       ticketUrl: event.ticketUrl || '',
       status: event.status,
       isTicketed: event.isTicketed || false,
@@ -158,6 +168,18 @@ export default function DjEvents() {
       totalTickets: event.totalTickets ? String(event.totalTickets) : '',
     });
     setImagePreview(event.image || null);
+    setTicketTypes((event.ticketTypes || []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description || '',
+      price: t.price,
+      currency: t.currency,
+      quantity: t.quantity ? String(t.quantity) : '',
+      maxPerOrder: t.maxPerOrder,
+      saleStartsAt: t.saleStartsAt ? t.saleStartsAt.slice(0, 16) : '',
+      saleEndsAt: t.saleEndsAt ? t.saleEndsAt.slice(0, 16) : '',
+      isActive: t.isActive,
+    })));
     setIsFormOpen(true);
   };
 
@@ -187,8 +209,8 @@ export default function DjEvents() {
       toast.error('Title, date, and location are required');
       return;
     }
-    if (form.isTicketed && !isProPlus) {
-      toast.error('Ticketed events require a Pro+ subscription');
+    if (form.isTicketed && ticketTypes.length === 0) {
+      toast.error('Add at least one ticket type for a ticketed event');
       return;
     }
 
@@ -198,9 +220,22 @@ export default function DjEvents() {
     formData.append('description', form.description);
     formData.append('type', form.type);
     formData.append('date', new Date(form.date).toISOString());
+    if (form.endDate) formData.append('endDate', new Date(form.endDate).toISOString());
     formData.append('location', form.location);
     formData.append('city', form.city);
     formData.append('venue', form.venue);
+    if (form.googleMapsUrl) formData.append('googleMapsUrl', form.googleMapsUrl);
+    if (form.organizerName) formData.append('organizerName', form.organizerName);
+    if (form.organizerContact) formData.append('organizerContact', form.organizerContact);
+    if (form.category) formData.append('category', form.category);
+    if (form.musicGenre) formData.append('musicGenre', form.musicGenre);
+    if (form.ageRestriction) formData.append('ageRestriction', form.ageRestriction);
+    if (form.capacity) formData.append('capacity', form.capacity);
+    if (form.refundPolicy) formData.append('refundPolicy', form.refundPolicy);
+    if (form.termsConditions) formData.append('termsConditions', form.termsConditions);
+    if (form.ticketSaleStartsAt) formData.append('ticketSaleStartsAt', new Date(form.ticketSaleStartsAt).toISOString());
+    if (form.ticketSaleEndsAt) formData.append('ticketSaleEndsAt', new Date(form.ticketSaleEndsAt).toISOString());
+    formData.append('approvalMode', form.approvalMode);
     formData.append('status', form.status);
     if (form.ticketUrl) formData.append('ticketUrl', form.ticketUrl);
     if (imageFile) formData.append('image', imageFile);
@@ -221,10 +256,34 @@ export default function DjEvents() {
         : await api.post('/events', formData);
 
       if (res.data.success) {
-        toast.success(isEditing ? 'Event updated' : 'Event created');
-        setEvents(prev =>
-          isEditing ? prev.map(ev => ev.id === isEditing ? res.data.data : ev) : [res.data.data, ...prev]
-        );
+        const eventId = res.data.data.id;
+
+        // Create/update ticket types for ticketed events
+        if (form.isTicketed) {
+          for (const tt of ticketTypes) {
+            const payload = {
+              name: tt.name,
+              description: tt.description,
+              price: tt.price,
+              currency: tt.currency,
+              quantity: tt.quantity ? Number(tt.quantity) : undefined,
+              maxPerOrder: tt.maxPerOrder,
+              saleStartsAt: tt.saleStartsAt ? new Date(tt.saleStartsAt).toISOString() : undefined,
+              saleEndsAt: tt.saleEndsAt ? new Date(tt.saleEndsAt).toISOString() : undefined,
+              isActive: tt.isActive,
+            };
+            if (tt.id) {
+              await api.put(`/events/${eventId}/ticketing/ticket-types/${tt.id}`, payload);
+            } else {
+              await api.post(`/events/${eventId}/ticketing/ticket-types`, payload);
+            }
+          }
+        }
+
+        toast.success(isEditing ? 'Event updated' : 'Event created as draft');
+        // Refresh list
+        const listRes = await api.get(`/events?djId=${djId}&limit=100`);
+        if (listRes.data.success) setEvents(listRes.data.data || []);
         setIsFormOpen(false);
         resetForm();
       } else {
@@ -237,69 +296,25 @@ export default function DjEvents() {
     }
   };
 
-  // ── Ticket Management ──────────────────────────────────────────────────────
-  const openTicketManagement = async (eventId: string) => {
-    setTicketEventId(eventId);
-    setTicketsLoading(true);
+  const handlePublishToggle = async (event: DJEvent) => {
     try {
-      const res = await api.get(`/events/${eventId}/tickets`);
-      setTickets(res.data.data || []);
+      const publish = event.publishStatus !== 'published';
+      await api.post(`/events/${event.id}/ticketing/${publish ? 'publish' : 'unpublish'}`);
+      toast.success(publish ? 'Event published' : 'Event unpublished');
+      const listRes = await api.get(`/events?djId=${djId}&limit=100`);
+      if (listRes.data.success) setEvents(listRes.data.data || []);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to load tickets');
-    } finally {
-      setTicketsLoading(false);
+      toast.error(err?.response?.data?.error || 'Failed to update publish status');
     }
   };
 
-  const handleApproveTicket = async (eventId: string, ticketId: string) => {
-    setActionLoading(ticketId);
-    try {
-      const res = await api.put(`/events/${eventId}/tickets/${ticketId}/approve`);
-      setTickets(prev => prev.map(t => t.id === ticketId ? res.data.data : t));
-      toast.success('✅ Ticket approved! User notified.');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to approve');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDeclineTicket = async (eventId: string, ticketId: string) => {
-    const reason = prompt('Reason for declining (optional):');
-    if (reason === null) return; // user pressed cancel
-    setActionLoading(ticketId);
-    try {
-      await api.put(`/events/${eventId}/tickets/${ticketId}/decline`, { reason });
-      setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: 'declined', declineReason: reason } : t));
-      toast.success('Ticket declined. User notified.');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to decline');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // ── Gallery Upload ─────────────────────────────────────────────────────────
-  const handleGalleryUpload = async (eventId: string, files: FileList) => {
-    if (!files || files.length === 0) return;
-    setGalleryUploading(true);
-    try {
-      const fd = new FormData();
-      Array.from(files).forEach(f => fd.append('photos', f));
-      await api.post(`/events/${eventId}/gallery`, fd);
-      toast.success(`${files.length} photo(s) uploaded to gallery`);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to upload photos');
-    } finally {
-      setGalleryUploading(false);
-    }
-  };
-
-  const ticketStatusColor: Record<string, string> = {
-    pending: 'text-orange border-orange/30 bg-orange/10',
-    approved: 'text-green border-green/30 bg-green/10',
-    declined: 'text-red-400 border-red-500/30 bg-red-500/10',
-    scanned: 'text-text-muted border-white/10 bg-white/5',
+  const statusBadge = (event: DJEvent) => {
+    const isPublished = event.publishStatus === 'published';
+    return (
+      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${isPublished ? 'bg-green/15 text-green border-green/30' : 'bg-text-muted/15 text-text-muted border-white/10'}`}>
+        {isPublished ? 'Published' : event.publishStatus === 'draft' ? 'Draft' : 'Cancelled'}
+      </span>
+    );
   };
 
   if (loading) {
@@ -316,23 +331,25 @@ export default function DjEvents() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">My Events</h1>
-          {isProPlus && (
+          {isProPlus ? (
             <p className="text-xs text-gold/70 mt-1 flex items-center gap-1">
-              <Crown className="w-3 h-3" /> Pro+ — Ticketed events, RSVP & gallery unlocked
+              <Crown className="w-3 h-3" /> Pro+ — Full event management & ticketing unlocked
             </p>
+          ) : (
+            <p className="text-xs text-text-muted mt-1">Pro+ subscription required to create and manage events with ticketing.</p>
           )}
         </div>
         {isDj && (
           <Button
             className="bg-gold-gradient text-black hover:opacity-90"
             onClick={() => {
-              if (!checkFeature('pro', 'Create Events')) return;
+              if (!checkFeature('legend', 'Create Events')) return;
               resetForm();
               setIsFormOpen(true);
             }}
           >
             <Plus className="w-4 h-4 mr-2" />
-            Add Event
+            Create Event
           </Button>
         )}
       </div>
@@ -345,7 +362,7 @@ export default function DjEvents() {
             <p className="text-text-secondary mb-2">No events yet</p>
             <p className="text-sm text-text-muted mb-4">Create your first event to let fans know where you're playing next.</p>
             {isDj && (
-              <Button className="bg-gold-gradient text-black" onClick={() => { if (!checkFeature('pro', 'Create Events')) return; resetForm(); setIsFormOpen(true); }}>
+              <Button className="bg-gold-gradient text-black" onClick={() => { if (!checkFeature('legend', 'Create Events')) return; resetForm(); setIsFormOpen(true); }}>
                 <Plus className="w-4 h-4 mr-2" /> Create Your First Event
               </Button>
             )}
@@ -355,7 +372,7 @@ export default function DjEvents() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {events.map((event) => {
             const date = new Date(event.date);
-            const isPast = date < new Date();
+            const isPublished = event.publishStatus === 'published';
             return (
               <motion.div
                 key={event.id}
@@ -367,6 +384,7 @@ export default function DjEvents() {
                   <img src={event.image || '/placeholder.jpg'} alt={event.title} className="w-full h-full object-cover" />
                   <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                     <Badge className="bg-gold text-black border-0 text-[10px] uppercase">{event.type}</Badge>
+                    {statusBadge(event)}
                     {event.isTicketed && (
                       <Badge className="bg-black/60 backdrop-blur border border-white/20 text-white text-[10px] uppercase flex items-center gap-1">
                         <Ticket className="w-2.5 h-2.5" /> Ticketed
@@ -391,6 +409,18 @@ export default function DjEvents() {
                       <button onClick={() => handleEdit(event)} className="p-2 text-text-muted hover:text-gold hover:bg-gold/10 rounded-lg transition-colors">
                         <Edit3 className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => {
+                          const shareUrl = `${window.location.origin}/events/${event.id}`;
+                          const shareData = { title: event.title, text: `${event.title} — ${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${event.venue || event.location}`, url: shareUrl };
+                          if (navigator.share) navigator.share(shareData).catch(() => setShareEvent(event));
+                          else setShareEvent(event);
+                        }}
+                        className="p-2 text-text-muted hover:text-gold hover:bg-gold/10 rounded-lg transition-colors"
+                        title="Share event"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
                       <button onClick={() => handleDelete(event.id)} className="p-2 text-text-muted hover:text-red hover:bg-red/10 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -398,52 +428,45 @@ export default function DjEvents() {
                   </div>
 
                   {/* Action buttons row */}
-                  <div className="mt-3 flex flex-col gap-2">
-                    {/* Ticket management (Pro+ only) */}
-                    {event.isTicketed && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => openTicketManagement(event.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-gold/10 border border-gold/20 text-gold text-xs font-semibold rounded-lg hover:bg-gold/20 transition-colors"
-                        >
-                          <QrCode className="w-3.5 h-3.5" /> Manage Tickets
-                        </button>
-                        <button
-                          onClick={() => navigate(`/dashboard/events/${event.id}/scan`)}
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
-                        >
-                          <ScanLine className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Gallery upload (Pro+ only, past events) */}
-                    {isProPlus && isPast && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link
+                      to={`/dashboard/events/${event.id}`}
+                      className="flex items-center justify-center gap-1.5 py-2 bg-gold/10 border border-gold/20 text-gold text-xs font-semibold rounded-lg hover:bg-gold/20 transition-colors"
+                    >
+                      <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                    </Link>
+                    {event.isTicketed && isProPlus && (
                       <>
-                        <label className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors cursor-pointer">
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => e.target.files && handleGalleryUpload(event.id, e.target.files)}
-                          />
-                          {galleryUploading ? (
-                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...</>
-                          ) : (
-                            <><Images className="w-3.5 h-3.5" /> Add Gallery Photos</>
-                          )}
-                        </label>
+                        <Link
+                          to={`/dashboard/events/${event.id}/tickets`}
+                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                        >
+                          <Users className="w-3.5 h-3.5" /> Tickets
+                        </Link>
+                        <Link
+                          to={`/dashboard/events/${event.id}/analytics`}
+                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5" /> Analytics
+                        </Link>
+                        <Link
+                          to={`/dashboard/events/${event.id}/scan`}
+                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                        >
+                          <ScanLine className="w-3.5 h-3.5" /> Scanner
+                        </Link>
                       </>
                     )}
+                  </div>
 
-                    {/* Ticket link */}
-                    {event.ticketUrl && !event.isTicketed && (
-                      <a href={event.ticketUrl} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-gold-gradient text-black text-xs font-bold uppercase rounded-full hover:scale-[1.02] transition-transform">
-                        <Ticket className="w-3.5 h-3.5" /> Get Tickets <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => handlePublishToggle(event)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors ${isPublished ? 'bg-red/10 border border-red/30 text-red-400 hover:bg-red/20' : 'bg-green/10 border border-green/30 text-green hover:bg-green/20'}`}
+                    >
+                      {isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {isPublished ? 'Unpublish' : 'Publish'}
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -463,183 +486,222 @@ export default function DjEvents() {
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-black-surface border border-dark-gray rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+              className="bg-black-surface border border-dark-gray rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col"
             >
               <div className="p-5 border-b border-dark-gray flex items-center justify-between sticky top-0 bg-black-surface z-10">
                 <h3 className="text-lg font-display font-bold text-text-primary uppercase">
-                  {isEditing ? 'Edit Event' : 'Add Event'}
+                  {isEditing ? 'Edit Event' : 'Create Event'}
                 </h3>
                 <button onClick={() => setIsFormOpen(false)} className="p-2 text-text-muted hover:text-text-primary rounded-lg">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-5 space-y-4">
-                {/* Title */}
-                <div>
-                  <Label htmlFor="title" className="text-text-secondary text-xs uppercase">Event Title *</Label>
-                  <Input id="title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    placeholder="e.g. Freetown Summer Vibes" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                </div>
-
-                {/* Type + Status */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-text-secondary text-xs uppercase">Type</Label>
-                    <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                      <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-black-surface border-dark-gray">
-                        {EVENT_TYPES.map(t => <SelectItem key={t} value={t} className="text-text-primary">{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-text-secondary text-xs uppercase">Status</Label>
-                    <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                      <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-black-surface border-dark-gray">
-                        {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s} className="text-text-primary capitalize">{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Date */}
-                <div>
-                  <Label htmlFor="date" className="text-text-secondary text-xs uppercase">Date & Time *</Label>
-                  <Input id="date" type="datetime-local" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                </div>
-
-                {/* Location + City */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-text-secondary text-xs uppercase">Location *</Label>
-                    <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                      placeholder="e.g. Freetown" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                  </div>
-                  <div>
-                    <Label className="text-text-secondary text-xs uppercase">City</Label>
-                    <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-                      placeholder="e.g. Freetown" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                  </div>
-                </div>
-
-                {/* Venue */}
-                <div>
-                  <Label className="text-text-secondary text-xs uppercase">Venue</Label>
-                  <Input value={form.venue} onChange={e => setForm(f => ({ ...f, venue: e.target.value }))}
-                    placeholder="e.g. Atlantic Hall" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                </div>
-
-                {/* Ticket URL (legacy) */}
-                <div>
-                  <Label className="text-text-secondary text-xs uppercase">External Ticket Link (optional)</Label>
-                  <Input type="url" value={form.ticketUrl} onChange={e => setForm(f => ({ ...f, ticketUrl: e.target.value }))}
-                    placeholder="https://..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                </div>
-
-                {/* ── Pro+ Ticketing Toggle ──────────────────────────── */}
-                <div className={`rounded-xl border p-4 space-y-4 ${isProPlus ? 'border-gold/20 bg-gold/5' : 'border-white/10 bg-white/2 opacity-60'}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                        <Crown className="w-4 h-4 text-gold" /> Pro+ Ticketing
-                      </p>
-                      <p className="text-xs text-text-muted mt-0.5">Mobile Money payment + QR code entry</p>
-                    </div>
-                    {isProPlus ? (
-                      <button
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, isTicketed: !f.isTicketed }))}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.isTicketed ? 'bg-gold' : 'bg-white/10'}`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.isTicketed ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
-                    ) : (
-                      <span className="text-[10px] px-2 py-1 bg-gold/15 text-gold rounded-full font-bold">Pro+ Only</span>
-                    )}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <div className="px-5 pt-4 border-b border-dark-gray sticky top-0 bg-black-surface z-10">
+                    <TabsList className="bg-black-elevated border border-dark-gray">
+                      <TabsTrigger value="details" className="data-[state=active]:bg-gold data-[state=active]:text-black text-text-secondary text-xs">Details</TabsTrigger>
+                      <TabsTrigger value="tickets" className="data-[state=active]:bg-gold data-[state=active]:text-black text-text-secondary text-xs">Tickets</TabsTrigger>
+                      <TabsTrigger value="settings" className="data-[state=active]:bg-gold data-[state=active]:text-black text-text-secondary text-xs">Settings</TabsTrigger>
+                    </TabsList>
                   </div>
 
-                  {form.isTicketed && isProPlus && (
-                    <div className="space-y-3 pt-2 border-t border-white/10">
-                      <div className="grid grid-cols-2 gap-3">
+                  <div className="p-5 space-y-5">
+                    <TabsContent value="details" className="space-y-4 mt-0">
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Event Title *</Label>
+                        <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Freetown Summer Vibes" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-text-secondary text-xs uppercase">Ticket Price</Label>
-                          <Input type="number" min="0" value={form.ticketPrice} onChange={e => setForm(f => ({ ...f, ticketPrice: e.target.value }))}
-                            placeholder="e.g. 50000" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
-                        </div>
-                        <div>
-                          <Label className="text-text-secondary text-xs uppercase">Currency</Label>
-                          <Select value={form.ticketCurrency} onValueChange={v => setForm(f => ({ ...f, ticketCurrency: v }))}>
+                          <Label className="text-text-secondary text-xs uppercase">Type</Label>
+                          <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
                             <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
                             <SelectContent className="bg-black-surface border-dark-gray">
-                              {['SLE', 'USD', 'GBP'].map(c => <SelectItem key={c} value={c} className="text-text-primary">{c}</SelectItem>)}
+                              {EVENT_TYPES.map(t => <SelectItem key={t} value={t} className="text-text-primary">{t}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Status</Label>
+                          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                            <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
+                            <SelectContent className="bg-black-surface border-dark-gray">
+                              {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s} className="text-text-primary capitalize">{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
 
-                      <div>
-                        <Label className="text-text-secondary text-xs uppercase">Total Tickets (leave blank for unlimited)</Label>
-                        <Input type="number" min="1" value={form.totalTickets} onChange={e => setForm(f => ({ ...f, totalTickets: e.target.value }))}
-                          placeholder="e.g. 200" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Start Date & Time *</Label>
+                          <Input type="datetime-local" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">End Date & Time</Label>
+                          <Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Location *</Label>
+                          <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Freetown" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">City</Label>
+                          <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="e.g. Freetown" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
                       </div>
 
                       <div>
-                        <Label className="text-text-secondary text-xs uppercase">Mobile Money Provider</Label>
-                        <Select value={form.mobileMoneyProvider} onValueChange={v => setForm(f => ({ ...f, mobileMoneyProvider: v }))}>
-                          <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
+                        <Label className="text-text-secondary text-xs uppercase">Venue</Label>
+                        <Input value={form.venue} onChange={e => setForm(f => ({ ...f, venue: e.target.value }))} placeholder="e.g. Atlantic Hall" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                      </div>
+
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Google Maps URL</Label>
+                        <Input value={form.googleMapsUrl} onChange={e => setForm(f => ({ ...f, googleMapsUrl: e.target.value }))} placeholder="https://maps.google.com/..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                      </div>
+
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Description</Label>
+                        <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Tell fans what to expect..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary min-h-[80px]" />
+                      </div>
+
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Event Image</Label>
+                        <div className="mt-1">
+                          <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                          {imagePreview ? (
+                            <div className="relative rounded-xl overflow-hidden aspect-video bg-black-elevated">
+                              <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                              <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }} className="absolute top-2 right-2 p-1.5 bg-black/70 text-white rounded-full hover:bg-red">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => imageInputRef.current?.click()} className="w-full py-8 border border-dashed border-dark-gray rounded-xl flex flex-col items-center justify-center text-text-muted hover:border-gold/50 hover:text-gold transition-colors">
+                              <ImageIcon className="w-8 h-8 mb-2" />
+                              <span className="text-xs font-medium">Click to upload image</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="tickets" className="space-y-4 mt-0">
+                      <div className={`rounded-xl border p-4 space-y-4 ${isProPlus ? 'border-gold/20 bg-gold/5' : 'border-white/10 bg-white/2 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                              <Crown className="w-4 h-4 text-gold" /> Pro+ Ticketing
+                            </p>
+                            <p className="text-xs text-text-muted mt-0.5">Sell tickets with multiple types and QR entry</p>
+                          </div>
+                          {isProPlus ? (
+                            <Switch checked={form.isTicketed} onCheckedChange={(checked) => setForm(f => ({ ...f, isTicketed: checked }))} />
+                          ) : (
+                            <span className="text-[10px] px-2 py-1 bg-gold/15 text-gold rounded-full font-bold">Pro+ Only</span>
+                          )}
+                        </div>
+
+                        {form.isTicketed && isProPlus && (
+                          <div className="space-y-4 pt-2 border-t border-white/10">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-text-secondary text-xs uppercase">Capacity (optional)</Label>
+                                <Input type="number" min="1" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} placeholder="Total event capacity" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                              </div>
+                              <div>
+                                <Label className="text-text-secondary text-xs uppercase">Approval Mode</Label>
+                                <Select value={form.approvalMode} onValueChange={v => setForm(f => ({ ...f, approvalMode: v }))}>
+                                  <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue /></SelectTrigger>
+                                  <SelectContent className="bg-black-surface border-dark-gray">
+                                    <SelectItem value="automatic" className="text-text-primary">Automatic (after payment)</SelectItem>
+                                    <SelectItem value="manual" className="text-text-primary">Manual (organizer approves)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-text-secondary text-xs uppercase">Ticket Sale Window</Label>
+                              <div className="grid grid-cols-2 gap-4 mt-1">
+                                <Input type="datetime-local" value={form.ticketSaleStartsAt} onChange={e => setForm(f => ({ ...f, ticketSaleStartsAt: e.target.value }))} className="bg-black-elevated border-dark-gray text-text-primary" />
+                                <Input type="datetime-local" value={form.ticketSaleEndsAt} onChange={e => setForm(f => ({ ...f, ticketSaleEndsAt: e.target.value }))} className="bg-black-elevated border-dark-gray text-text-primary" />
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-text-secondary text-xs uppercase">Mobile Money Number</Label>
+                              <Input value={form.mobileMoneyNumber} onChange={e => setForm(f => ({ ...f, mobileMoneyNumber: e.target.value }))} placeholder="+232 XX XXX XXXX" className="mt-1 bg-black-elevated border-dark-gray text-text-primary font-mono" />
+                            </div>
+
+                            <div>
+                              <Label className="text-text-secondary text-xs uppercase">Ticket Types</Label>
+                              <div className="mt-2">
+                                <TicketTypeBuilder types={ticketTypes} onChange={setTicketTypes} currency={form.ticketCurrency} />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="settings" className="space-y-4 mt-0">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Organizer Name</Label>
+                          <Input value={form.organizerName} onChange={e => setForm(f => ({ ...f, organizerName: e.target.value }))} className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Organizer Contact</Label>
+                          <Input value={form.organizerContact} onChange={e => setForm(f => ({ ...f, organizerContact: e.target.value }))} className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Category</Label>
+                          <Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="e.g. Electronic" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                        <div>
+                          <Label className="text-text-secondary text-xs uppercase">Music Genre</Label>
+                          <Input value={form.musicGenre} onChange={e => setForm(f => ({ ...f, musicGenre: e.target.value }))} placeholder="e.g. Afrobeats" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Age Restriction</Label>
+                        <Select value={form.ageRestriction} onValueChange={v => setForm(f => ({ ...f, ageRestriction: v }))}>
+                          <SelectTrigger className="mt-1 bg-black-elevated border-dark-gray text-text-primary"><SelectValue placeholder="Select" /></SelectTrigger>
                           <SelectContent className="bg-black-surface border-dark-gray">
-                            {['Orange Money', 'Africell Money', 'QMoney', 'Other'].map(p => <SelectItem key={p} value={p} className="text-text-primary">{p}</SelectItem>)}
+                            {AGE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value} className="text-text-primary">{o.label}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div>
-                        <Label className="text-text-secondary text-xs uppercase">Your Mobile Money Number</Label>
-                        <Input value={form.mobileMoneyNumber} onChange={e => setForm(f => ({ ...f, mobileMoneyNumber: e.target.value }))}
-                          placeholder="+232 XX XXX XXXX" className="mt-1 bg-black-elevated border-dark-gray text-text-primary font-mono" />
-                        <p className="text-[10px] text-text-muted mt-1">Users will send payment to this number and upload their receipt.</p>
+                        <Label className="text-text-secondary text-xs uppercase">Refund Policy</Label>
+                        <Textarea value={form.refundPolicy} onChange={e => setForm(f => ({ ...f, refundPolicy: e.target.value }))} placeholder="Describe your refund policy..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary min-h-[60px]" />
                       </div>
-                    </div>
-                  )}
-                </div>
 
-                {/* Description */}
-                <div>
-                  <Label className="text-text-secondary text-xs uppercase">Description</Label>
-                  <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Tell fans what to expect..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary min-h-[80px]" />
-                </div>
-
-                {/* Event Image */}
-                <div>
-                  <Label className="text-text-secondary text-xs uppercase">Event Image</Label>
-                  <div className="mt-1">
-                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                    {imagePreview ? (
-                      <div className="relative rounded-xl overflow-hidden aspect-video bg-black-elevated">
-                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }}
-                          className="absolute top-2 right-2 p-1.5 bg-black/70 text-white rounded-full hover:bg-red">
-                          <X className="w-4 h-4" />
-                        </button>
+                      <div>
+                        <Label className="text-text-secondary text-xs uppercase">Terms & Conditions</Label>
+                        <Textarea value={form.termsConditions} onChange={e => setForm(f => ({ ...f, termsConditions: e.target.value }))} placeholder="Event terms and conditions..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary min-h-[80px]" />
                       </div>
-                    ) : (
-                      <button type="button" onClick={() => imageInputRef.current?.click()}
-                        className="w-full py-8 border border-dashed border-dark-gray rounded-xl flex flex-col items-center justify-center text-text-muted hover:border-gold/50 hover:text-gold transition-colors">
-                        <ImageIcon className="w-8 h-8 mb-2" />
-                        <span className="text-xs font-medium">Click to upload image</span>
-                      </button>
-                    )}
+                    </TabsContent>
                   </div>
-                </div>
+                </Tabs>
 
-                <div className="pt-2 flex gap-3">
+                <div className="p-5 border-t border-dark-gray flex gap-3 sticky bottom-0 bg-black-surface">
                   <Button type="button" variant="outline" className="flex-1 border-dark-gray text-text-secondary" onClick={() => setIsFormOpen(false)}>Cancel</Button>
                   <Button type="submit" disabled={submitLoading} className="flex-1 bg-gold-gradient text-black hover:opacity-90">
-                    {submitLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? 'Save Changes' : 'Create Event'}
+                    {submitLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? 'Save Changes' : 'Save Draft'}
                   </Button>
                 </div>
               </form>
@@ -648,115 +710,30 @@ export default function DjEvents() {
         )}
       </AnimatePresence>
 
-      {/* ── Ticket Management Modal ───────────────────────────────────────── */}
+      {/* Share sheet placeholder */}
       <AnimatePresence>
-        {ticketEventId && (
+        {shareEvent && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={() => setTicketEventId(null)}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShareEvent(null)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-black-surface border border-dark-gray rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-sm bg-black-surface border border-dark-gray rounded-2xl p-5"
             >
-              <div className="p-5 border-b border-dark-gray flex items-center justify-between sticky top-0 bg-black-surface z-10">
-                <div>
-                  <h3 className="text-lg font-display font-bold text-text-primary uppercase flex items-center gap-2">
-                    <QrCode className="w-5 h-5 text-gold" /> Manage Tickets
-                  </h3>
-                  <p className="text-xs text-text-muted mt-0.5">{tickets.length} submissions</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setTicketEventId(null); navigate(`/dashboard/events/${ticketEventId}/scan`); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gold/10 border border-gold/20 text-gold text-xs font-semibold rounded-lg hover:bg-gold/20 transition-colors"
-                  >
-                    <ScanLine className="w-3.5 h-3.5" /> Scanner
-                  </button>
-                  <button onClick={() => setTicketEventId(null)} className="p-2 text-text-muted hover:text-text-primary rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-bold text-text-primary">Share Event</h3>
+                <button onClick={() => setShareEvent(null)}><X className="w-5 h-5 text-text-muted" /></button>
               </div>
-
-              <div className="p-5">
-                {ticketsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                  </div>
-                ) : tickets.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Ticket className="w-10 h-10 text-text-muted mx-auto mb-3" />
-                    <p className="text-text-muted text-sm">No ticket submissions yet</p>
-                    <p className="text-text-muted text-xs mt-1">Share the event page so fans can buy tickets.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {tickets.map(ticket => (
-                      <div key={ticket.id} className="bg-black-elevated rounded-xl border border-white/5 p-4">
-                        <div className="flex items-start gap-3">
-                          {/* User avatar */}
-                          <div className="w-9 h-9 rounded-full bg-gold/20 overflow-hidden flex-shrink-0 flex items-center justify-center text-gold font-bold text-sm">
-                            {ticket.user.avatar ? <img src={ticket.user.avatar} alt="" className="w-full h-full object-cover" /> : ticket.user.name?.[0] || '?'}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-semibold text-text-primary">{ticket.user.name || ticket.user.username}</p>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border capitalize ${ticketStatusColor[ticket.status] || 'text-text-muted'}`}>
-                                {ticket.status}
-                              </span>
-                            </div>
-                            <p className="text-xs text-text-muted">{ticket.user.email}</p>
-                            <p className="text-xs text-text-secondary mt-1">
-                              {ticket.currency} {ticket.amount?.toLocaleString()}
-                              <span className="text-text-muted"> · {new Date(ticket.createdAt).toLocaleDateString()}</span>
-                            </p>
-                          </div>
-
-                          {/* Screenshot */}
-                          <a href={ticket.paymentScreenshot} target="_blank" rel="noreferrer"
-                            className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-white/10 hover:border-gold/30 transition-colors">
-                            <img src={ticket.paymentScreenshot} alt="Screenshot" className="w-full h-full object-cover" />
-                          </a>
-                        </div>
-
-                        {ticket.status === 'pending' && (
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              onClick={() => handleApproveTicket(ticketEventId!, ticket.id)}
-                              disabled={actionLoading === ticket.id}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-green/15 border border-green/30 text-green text-xs font-bold rounded-lg hover:bg-green/25 transition-colors disabled:opacity-50"
-                            >
-                              {actionLoading === ticket.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleDeclineTicket(ticketEventId!, ticket.id)}
-                              disabled={actionLoading === ticket.id}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                            >
-                              <XCircle className="w-3.5 h-3.5" /> Decline
-                            </button>
-                          </div>
-                        )}
-
-                        {ticket.status === 'approved' && ticket.qrCode && (
-                          <div className="mt-2 px-3 py-2 bg-green/5 border border-green/15 rounded-lg">
-                            <p className="text-[10px] text-green font-mono break-all">QR: {ticket.qrCode}</p>
-                          </div>
-                        )}
-
-                        {ticket.status === 'declined' && ticket.declineReason && (
-                          <p className="text-[10px] text-red-400 mt-2">Reason: {ticket.declineReason}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <p className="text-sm text-text-secondary mb-3">{shareEvent.title}</p>
+              <button
+                onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/events/${shareEvent.id}`); toast.success('Link copied'); setShareEvent(null); } catch { toast.error('Failed to copy'); } }}
+                className="w-full py-3 bg-gold-gradient text-black font-bold rounded-xl"
+              >
+                Copy Link
+              </button>
             </motion.div>
           </motion.div>
         )}

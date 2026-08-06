@@ -1,18 +1,8 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft,
-  MapPin,
-  Calendar,
-  CheckCircle2,
-  Ticket,
-  Loader2,
-  Upload,
-  Smartphone,
-  X,
-  Users,
-  Images,
-  Bell,
+  ArrowLeft, MapPin, Calendar, CheckCircle2, Ticket, Loader2, Upload,
+  Smartphone, X, Users, Images, Bell, Minus, Plus,
 } from 'lucide-react';
 import { useEvent } from '@/hooks/useEvents';
 import { imageFallback } from '@/lib/utils';
@@ -21,6 +11,9 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
+import { useEventAvailability, usePurchaseTicket } from '@/hooks/useEventTicketing';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 // ─── Countdown Component ───────────────────────────────────────────────────────
 function useCountdown(targetDate: Date) {
@@ -65,30 +58,56 @@ function CountdownBlock({ value, label }: { value: number; label: string }) {
 // ─── Buy Ticket Modal ─────────────────────────────────────────────────────────
 function BuyTicketModal({
   event,
+  ticketTypes,
   onClose,
   onSuccess,
 }: {
   event: any;
+  ticketTypes: any[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const [selectedType, setSelectedType] = useState<any>(ticketTypes[0]);
+  const [quantity, setQuantity] = useState(1);
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [notes, setNotes] = useState('');
+  const purchase = usePurchaseTicket(event.id);
+
+  const total = selectedType.price * quantity;
+  const isFree = total === 0;
 
   const handleSubmit = async () => {
-    if (!file) { toast.error('Please upload your payment screenshot'); return; }
-    setLoading(true);
+    if (!isFree && !file) { toast.error('Please upload your payment screenshot'); return; }
     try {
-      const fd = new FormData();
-      fd.append('screenshot', file);
-      await api.post(`/events/${event.id}/tickets`, fd);
-      toast.success('Ticket request submitted! The DJ will review your payment.');
+      const payload: any = {
+        ticketTypeId: selectedType.id,
+        quantity,
+        buyerName: buyerName || undefined,
+        buyerEmail: buyerEmail || undefined,
+        buyerPhone: buyerPhone || undefined,
+        notes: notes || undefined,
+      };
+      if (!isFree && file) {
+        const fd = new FormData();
+        fd.append('ticketTypeId', selectedType.id);
+        fd.append('quantity', String(quantity));
+        if (buyerName) fd.append('buyerName', buyerName);
+        if (buyerEmail) fd.append('buyerEmail', buyerEmail);
+        if (buyerPhone) fd.append('buyerPhone', buyerPhone);
+        if (notes) fd.append('notes', notes);
+        fd.append('screenshot', file);
+        await api.post(`/events/${event.id}/ticketing/purchase`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        await purchase.mutateAsync(payload);
+      }
+      toast.success(isFree ? 'Ticket reserved!' : 'Ticket request submitted! The organizer will review your payment.');
       onSuccess();
       onClose();
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed to submit');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -98,70 +117,119 @@ function BuyTicketModal({
         initial={{ y: 60, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 60, opacity: 0 }}
-        className="w-full max-w-md bg-black-surface rounded-2xl border border-gold/20 p-6 shadow-2xl"
+        className="w-full max-w-md bg-black-surface rounded-2xl border border-gold/20 p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display font-bold text-text-primary text-lg">Buy Ticket</h3>
+          <h3 className="font-display font-bold text-text-primary text-lg">Get Ticket</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
             <X className="w-4 h-4 text-text-muted" />
           </button>
         </div>
 
+        {/* Ticket type selector */}
+        <div className="space-y-2 mb-5">
+          {ticketTypes.map((type: any) => (
+            <button
+              key={type.id}
+              onClick={() => setSelectedType(type)}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                selectedType?.id === type.id ? 'border-gold bg-gold/10' : 'border-dark-gray hover:border-gold/30'
+              }`}
+            >
+              <div className="text-left">
+                <p className="text-sm font-semibold text-text-primary">{type.name}</p>
+                <p className="text-xs text-text-muted">{type.description || ''}</p>
+              </div>
+              <p className="text-sm font-bold text-gold">{type.currency} {type.price.toLocaleString()}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Quantity */}
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-sm text-text-secondary">Quantity</p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="w-8 text-center text-text-primary font-bold">{quantity}</span>
+            <button onClick={() => setQuantity(q => Math.min(selectedType.maxPerOrder, q + 1))} className="w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Buyer details */}
+        <div className="space-y-3 mb-5">
+          <div>
+            <Label className="text-text-secondary text-xs uppercase">Name</Label>
+            <Input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Attendee name" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+          </div>
+          <div>
+            <Label className="text-text-secondary text-xs uppercase">Email</Label>
+            <Input type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="attendee@email.com" className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+          </div>
+          <div>
+            <Label className="text-text-secondary text-xs uppercase">Phone</Label>
+            <Input value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+232..." className="mt-1 bg-black-elevated border-dark-gray text-text-primary" />
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <Label className="text-text-secondary text-xs uppercase">Notes for Organizer</Label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Any special requests..."
+            className="w-full mt-1 bg-black-elevated border border-dark-gray text-text-primary rounded-md px-3 py-2 text-sm min-h-[60px]"
+          />
+        </div>
+
         {/* Price */}
         <div className="rounded-xl bg-black-elevated border border-white/5 p-4 mb-5">
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Ticket Price</p>
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Total</p>
           <p className="text-2xl font-bold text-text-primary">
-            {event.ticketCurrency || 'SLE'} {event.ticketPrice?.toLocaleString()}
+            {selectedType.currency} {total.toLocaleString()}
           </p>
         </div>
 
-        {/* Payment Instructions */}
-        <div className="rounded-xl bg-orange/10 border border-orange/20 p-4 mb-5">
-          <p className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-orange" />
-            {event.mobileMoneyProvider || 'Mobile Money'} Payment
-          </p>
-          <p className="text-xs text-text-muted mb-1">Send payment to:</p>
-          <p className="font-mono text-xl text-text-primary font-bold">{event.mobileMoneyNumber}</p>
-          <p className="text-xs text-text-muted mt-2">
-            After paying, take a screenshot of the confirmation and upload it below.
-          </p>
-        </div>
-
-        {/* Upload */}
-        <label className="block cursor-pointer mb-4">
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])}
-          />
-          <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
-            file ? 'border-gold/40 bg-gold/5' : 'border-white/10 hover:border-gold/20'
-          }`}>
-            {file ? (
-              <p className="text-sm text-gold font-semibold">✓ {file.name}</p>
-            ) : (
-              <>
-                <Upload className="w-6 h-6 text-text-muted mx-auto mb-2" />
-                <p className="text-sm text-text-muted">Upload payment screenshot</p>
-              </>
-            )}
+        {/* Payment Instructions (paid only) */}
+        {!isFree && event.mobileMoneyNumber && (
+          <div className="rounded-xl bg-orange/10 border border-orange/20 p-4 mb-5">
+            <p className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-orange" />
+              {event.mobileMoneyProvider || 'Mobile Money'} Payment
+            </p>
+            <p className="text-xs text-text-muted mb-1">Send payment to:</p>
+            <p className="font-mono text-xl text-text-primary font-bold">{event.mobileMoneyNumber}</p>
+            <p className="text-xs text-text-muted mt-2">After paying, take a screenshot of the confirmation and upload it below.</p>
           </div>
-        </label>
+        )}
+
+        {/* Upload (paid only) */}
+        {!isFree && (
+          <label className="block cursor-pointer mb-4">
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])} />
+            <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${file ? 'border-gold/40 bg-gold/5' : 'border-white/10 hover:border-gold/20'}`}>
+              {file ? <p className="text-sm text-gold font-semibold">✓ {file.name}</p> : <><Upload className="w-6 h-6 text-text-muted mx-auto mb-2" /><p className="text-sm text-text-muted">Upload payment screenshot</p></>}
+            </div>
+          </label>
+        )}
 
         <button
           onClick={handleSubmit}
-          disabled={loading || !file}
+          disabled={purchase.isPending || (!isFree && !file)}
           className="w-full py-3 bg-gold-gradient text-black font-bold uppercase rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-          {loading ? 'Submitting...' : 'Submit Payment Proof'}
+          {purchase.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isFree ? 'Reserve Free Ticket' : 'Submit Payment Proof'}
         </button>
       </motion.div>
     </div>
   );
 }
+
+import ShareButton from '@/components/ShareButton';
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EventDetail() {
@@ -169,6 +237,7 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { data: event, isLoading, error, refetch } = useEvent(id);
+  const { data: availability } = useEventAvailability(id);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [localRsvp, setLocalRsvp] = useState<boolean | null>(null);
@@ -179,6 +248,7 @@ export default function EventDetail() {
   const isPastEvent = date < new Date();
   const isUpcoming = !isPastEvent;
   const isTicketedEvent = event?.isTicketed;
+  const ticketTypes = availability?.ticketTypes || event?.ticketTypes || [];
 
   const handleRsvp = async () => {
     if (!user) { toast.error('Please log in to RSVP'); return; }
@@ -197,7 +267,9 @@ export default function EventDetail() {
   };
 
   const userRsvped = localRsvp !== null ? localRsvp : event?.userRsvp;
-  const userTicket = event?.userTicket;
+  // New system supports multiple tickets; show first relevant one
+  const userTickets = event?.userTickets || (event?.userTicket ? [event.userTicket] : []);
+  const primaryTicket = userTickets[0];
 
   if (isLoading) {
     return (
@@ -212,10 +284,7 @@ export default function EventDetail() {
       <div className="min-h-[100dvh] bg-black flex items-center justify-center p-6 text-center">
         <div>
           <p className="text-red-400 font-medium">Event not found</p>
-          <button
-            onClick={() => navigate('/events')}
-            className="mt-4 px-4 py-2 bg-gold-gradient text-black text-xs font-bold uppercase rounded-full hover:scale-[1.02] transition-transform"
-          >
+          <button onClick={() => navigate('/events')} className="mt-4 px-4 py-2 bg-gold-gradient text-black text-xs font-bold uppercase rounded-full hover:scale-[1.02] transition-transform">
             Back to Events
           </button>
         </div>
@@ -232,62 +301,50 @@ export default function EventDetail() {
 
   return (
     <div className="min-h-[100dvh] bg-black">
-      {/* Back button */}
-      <div className="max-w-container mx-auto px-6 pt-6">
-        <button
-          onClick={() => navigate('/events')}
-          className="flex items-center gap-2 text-text-muted hover:text-gold transition-colors text-sm"
-        >
-          <ArrowLeft size={16} />
-          Back to Events
+      {/* Back button & Share */}
+      <div className="max-w-container mx-auto px-6 pt-6 flex items-center justify-between">
+        <button onClick={() => navigate('/events')} className="flex items-center gap-2 text-text-muted hover:text-gold transition-colors text-sm">
+          <ArrowLeft size={16} /> Back to Events
         </button>
+        <ShareButton
+          url={window.location.href}
+          title={event.title}
+          description={event.description}
+          preview={{
+            type: "event",
+            title: event.title,
+            image: event.image || event.coverImage,
+            date: event.date,
+            venue: event.venue || event.location,
+            city: event.city,
+            djName: event.dj?.stageName,
+            djAvatar: event.dj?.avatar,
+          }}
+          size="md"
+        />
       </div>
 
       {/* Hero Image */}
       <section className="max-w-container mx-auto px-6 pt-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative rounded-2xl overflow-hidden border border-white/5 aspect-[4/3] sm:aspect-[16/9] lg:aspect-[21/9]"
-        >
-          <img
-            src={event.image || '/placeholder.jpg'}
-            alt={event.title}
-            className="w-full h-full object-cover"
-          />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative rounded-2xl overflow-hidden border border-white/5 aspect-[4/3] sm:aspect-[16/9] lg:aspect-[21/9]">
+          <img src={event.image || '/placeholder.jpg'} alt={event.title} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-6 lg:p-8">
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <span className="inline-block px-3 py-1 bg-gold text-black text-[10px] font-bold uppercase rounded-full">
-                {event.type}
-              </span>
-              {isTicketedEvent && (
-                <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur border border-white/20 text-white text-[10px] font-bold uppercase rounded-full flex items-center gap-1">
-                  <Ticket size={10} /> Ticketed
-                </span>
-              )}
-              {isPastEvent && (
-                <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur border border-white/20 text-white/70 text-[10px] font-bold uppercase rounded-full">
-                  Past Event
-                </span>
-              )}
+              <span className="inline-block px-3 py-1 bg-gold text-black text-[10px] font-bold uppercase rounded-full">{event.type}</span>
+              {isTicketedEvent && <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur border border-white/20 text-white text-[10px] font-bold uppercase rounded-full flex items-center gap-1"><Ticket size={10} /> Ticketed</span>}
+              {isPastEvent && <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur border border-white/20 text-white/70 text-[10px] font-bold uppercase rounded-full">Past Event</span>}
+              {event.publishStatus !== 'published' && <span className="inline-block px-3 py-1 bg-text-muted/20 backdrop-blur border border-white/20 text-white text-[10px] font-bold uppercase rounded-full">{event.publishStatus}</span>}
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-text-primary uppercase tracking-tight">
-              {event.title}
-            </h1>
+            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-text-primary uppercase tracking-tight">{event.title}</h1>
           </div>
         </motion.div>
       </section>
 
-      {/* Countdown (only for upcoming events) */}
+      {/* Countdown */}
       {isUpcoming && !countdown.isPast && (
         <section className="max-w-container mx-auto px-6 pt-6">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="rounded-2xl bg-black-surface border border-gold/15 p-5 flex flex-col items-center"
-          >
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-2xl bg-black-surface border border-gold/15 p-5 flex flex-col items-center">
             <p className="text-xs text-text-muted uppercase tracking-widest mb-4">Event starts in</p>
             <div className="flex items-center gap-3">
               <CountdownBlock value={countdown.days} label="Days" />
@@ -306,88 +363,43 @@ export default function EventDetail() {
       <section className="max-w-container mx-auto px-6 pt-8 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left column */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-2 space-y-6"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-2 space-y-6">
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-text-secondary">
-                <Calendar size={18} className="text-gold" />
-                <span className="text-sm">{formattedDate}</span>
-              </div>
-              <div className="flex items-center gap-2 text-text-secondary">
-                <MapPin size={18} className="text-gold" />
-                <span className="text-sm">
-                  {event.venue || event.location}
-                  {event.city ? `, ${event.city}` : ''}
-                </span>
-              </div>
-              {rsvpCount > 0 && (
-                <div className="flex items-center gap-2 text-text-secondary">
-                  <Users size={18} className="text-gold" />
-                  <span className="text-sm">{rsvpCount} {rsvpCount === 1 ? 'person' : 'people'} going</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-text-secondary"><Calendar size={18} className="text-gold" /><span className="text-sm">{formattedDate}</span></div>
+              <div className="flex items-center gap-2 text-text-secondary"><MapPin size={18} className="text-gold" /><span className="text-sm">{event.venue || event.location}{event.city ? `, ${event.city}` : ''}</span></div>
+              {rsvpCount > 0 && <div className="flex items-center gap-2 text-text-secondary"><Users size={18} className="text-gold" /><span className="text-sm">{rsvpCount} {rsvpCount === 1 ? 'person' : 'people'} going</span></div>}
             </div>
 
             {event.description && (
               <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-3">
-                  About This Event
-                </h3>
-                <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
-                  {event.description}
-                </p>
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-3">About This Event</h3>
+                <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{event.description}</p>
               </div>
             )}
 
             {event.dj && (
               <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-3">
-                  Featured DJ
-                </h3>
-                <button
-                  onClick={() => navigate(`/dj/${event.dj.id}`)}
-                  className="flex items-center gap-3 group"
-                >
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-3">Featured DJ</h3>
+                <button onClick={() => navigate(`/dj/${event.dj.id}`)} className="flex items-center gap-3 group">
                   <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center text-gold font-bold text-lg border border-gold/30 overflow-hidden">
-                    {event.dj.avatar ? (
-                      <img src={event.dj.avatar} alt={event.dj.stageName} onError={imageFallback} className="w-full h-full object-cover" />
-                    ) : (
-                      event.dj.stageName.charAt(0).toUpperCase()
-                    )}
+                    {event.dj.avatar ? <img src={event.dj.avatar} alt={event.dj.stageName} onError={imageFallback} className="w-full h-full object-cover" /> : event.dj.stageName.charAt(0).toUpperCase()}
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-text-primary group-hover:text-gold transition-colors">
-                      {event.dj.stageName}
-                    </p>
+                    <p className="text-sm font-semibold text-text-primary group-hover:text-gold transition-colors">{event.dj.stageName}</p>
                     <p className="text-xs text-text-muted">View Profile</p>
                   </div>
                 </button>
               </div>
             )}
 
-            {/* Event Gallery (for past events) */}
             {isPastEvent && gallery.length > 0 && (
               <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2">
-                  <Images size={16} className="text-gold" /> Event Gallery
-                </h3>
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2"><Images size={16} className="text-gold" /> Event Gallery</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {gallery.map((photo: any) => (
-                    <button
-                      key={photo.id}
-                      onClick={() => setSelectedPhoto(photo.url)}
-                      className="relative aspect-square rounded-lg overflow-hidden group"
-                    >
+                    <button key={photo.id} onClick={() => setSelectedPhoto(photo.url)} className="relative aspect-square rounded-lg overflow-hidden group">
                       <img src={photo.url} alt={photo.caption || 'Event photo'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      {photo.caption && (
-                        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                          <p className="text-white text-[10px] truncate">{photo.caption}</p>
-                        </div>
-                      )}
+                      {photo.caption && <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"><p className="text-white text-[10px] truncate">{photo.caption}</p></div>}
                     </button>
                   ))}
                 </div>
@@ -396,109 +408,66 @@ export default function EventDetail() {
           </motion.div>
 
           {/* Right column: Ticketing / RSVP sidebar */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-4 order-first lg:order-none"
-          >
-            {/* USER'S APPROVED TICKET: Show QR */}
-            {userTicket && userTicket.status === 'approved' && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4 order-first lg:order-none">
+            {/* USER'S APPROVED TICKET */}
+            {primaryTicket && (primaryTicket.status === 'approved' || primaryTicket.status === 'checked_in') && (
               <div className="bg-black-elevated rounded-xl p-5 border border-green/20 text-center">
-                <div className="w-8 h-8 rounded-full bg-green/20 mx-auto flex items-center justify-center mb-2">
-                  <CheckCircle2 className="w-5 h-5 text-green" />
-                </div>
-                <p className="text-sm font-bold text-green mb-1">Ticket Approved!</p>
-                <p className="text-xs text-text-muted mb-4">Show this QR code at the door</p>
-                <div className="bg-white rounded-xl p-4 inline-block mx-auto">
-                  <QRCodeSVG value={userTicket.qrCode!} size={160} level="H" />
-                </div>
-                <p className="text-[10px] text-text-muted mt-3 font-mono break-all">{userTicket.qrCode}</p>
-              </div>
-            )}
-
-            {/* USER'S PENDING TICKET */}
-            {userTicket && userTicket.status === 'pending' && (
-              <div className="bg-black-elevated rounded-xl p-5 border border-orange/20">
-                <p className="text-sm font-bold text-orange flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Ticket Pending
-                </p>
-                <p className="text-xs text-text-muted mt-2">
-                  Your payment screenshot is being reviewed. You'll receive a notification when it's approved.
-                </p>
-              </div>
-            )}
-
-            {/* USER'S SCANNED TICKET */}
-            {userTicket && userTicket.status === 'scanned' && (
-              <div className="bg-black-elevated rounded-xl p-5 border border-white/10 text-center">
-                <CheckCircle2 className="w-8 h-8 text-text-muted mx-auto mb-2" />
-                <p className="text-sm font-bold text-text-muted">Ticket Used</p>
-                <p className="text-xs text-text-muted mt-1">This ticket has been scanned at the event.</p>
-              </div>
-            )}
-
-            {/* BUY TICKET (if ticketed, upcoming, no existing ticket) */}
-            {isTicketedEvent && isUpcoming && !userTicket && (
-              <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2">
-                  <Ticket size={14} className="text-gold" /> Get Your Ticket
-                </h3>
-                <div className="mb-4">
-                  <p className="text-xs text-text-muted">Price</p>
-                  <p className="text-2xl font-bold text-text-primary">
-                    {event.ticketCurrency || 'SLE'} {event.ticketPrice?.toLocaleString()}
-                  </p>
-                </div>
-                {user ? (
-                  <button
-                    onClick={() => setShowBuyModal(true)}
-                    className="w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-                  >
-                    <Ticket size={16} />
-                    Buy Ticket
-                  </button>
-                ) : (
-                  <Link
-                    to="/login"
-                    className="block w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl text-center"
-                  >
-                    Log in to Buy
-                  </Link>
+                <div className="w-8 h-8 rounded-full bg-green/20 mx-auto flex items-center justify-center mb-2"><CheckCircle2 className="w-5 h-5 text-green" /></div>
+                <p className="text-sm font-bold text-green mb-1">{primaryTicket.status === 'checked_in' ? 'Checked In!' : 'Ticket Confirmed!'}</p>
+                <p className="text-xs text-text-muted mb-4">{primaryTicket.ticketType?.name || 'Ticket'} · {primaryTicket.ticketNumber}</p>
+                {primaryTicket.status !== 'checked_in' && primaryTicket.qrPayload && (
+                  <div className="bg-white rounded-xl p-4 inline-block mx-auto">
+                    <QRCodeSVG value={primaryTicket.qrPayload} size={160} level="H" />
+                  </div>
+                )}
+                {userTickets.length > 1 && (
+                  <Link to="/user/tickets" className="block mt-4 text-xs text-gold hover:underline">View all {userTickets.length} tickets</Link>
                 )}
               </div>
             )}
 
-            {/* RSVP (if not ticketed, upcoming) */}
+            {/* USER'S PENDING TICKET */}
+            {primaryTicket && primaryTicket.status === 'pending' && (
+              <div className="bg-black-elevated rounded-xl p-5 border border-orange/20">
+                <p className="text-sm font-bold text-orange flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Ticket Pending</p>
+                <p className="text-xs text-text-muted mt-2">Your payment is being reviewed. You'll receive a notification when it's approved.</p>
+              </div>
+            )}
+
+            {/* BUY TICKET */}
+            {isTicketedEvent && isUpcoming && ticketTypes.length > 0 && !primaryTicket && (
+              <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2"><Ticket size={14} className="text-gold" /> Get Your Ticket</h3>
+                <div className="space-y-2 mb-4">
+                  {ticketTypes.slice(0, 3).map((type: any) => (
+                    <div key={type.id} className="flex items-center justify-between text-sm">
+                      <span className="text-text-secondary">{type.name}</span>
+                      <span className="font-bold text-text-primary">{type.currency} {type.price.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                {user ? (
+                  <button onClick={() => setShowBuyModal(true)} className="w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                    <Ticket size={16} /> Buy Ticket
+                  </button>
+                ) : (
+                  <Link to="/login" className="block w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl text-center">Log in to Buy</Link>
+                )}
+              </div>
+            )}
+
+            {/* RSVP */}
             {!isTicketedEvent && isUpcoming && (
               <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2">
-                  <Bell size={14} className="text-gold" /> RSVP to This Event
-                </h3>
-                <p className="text-xs text-text-muted mb-4">
-                  {rsvpCount > 0 ? `${rsvpCount} people are going. ` : ''}
-                  Let the organizer know you're attending.
-                </p>
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2"><Bell size={14} className="text-gold" /> RSVP to This Event</h3>
+                <p className="text-xs text-text-muted mb-4">{rsvpCount > 0 ? `${rsvpCount} people are going. ` : ''}Let the organizer know you're attending.</p>
                 {user ? (
-                  <button
-                    onClick={handleRsvp}
-                    disabled={rsvpLoading}
-                    className={`w-full py-3 text-sm font-bold uppercase rounded-xl flex items-center justify-center gap-2 transition-all ${
-                      userRsvped
-                        ? 'bg-green/15 border border-green/30 text-green hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
-                        : 'bg-gold-gradient text-black hover:opacity-90'
-                    }`}
-                  >
+                  <button onClick={handleRsvp} disabled={rsvpLoading} className={`w-full py-3 text-sm font-bold uppercase rounded-xl flex items-center justify-center gap-2 transition-all ${userRsvped ? 'bg-green/15 border border-green/30 text-green hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30' : 'bg-gold-gradient text-black hover:opacity-90'}`}>
                     {rsvpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     {userRsvped ? '✓ You\'re Going (click to cancel)' : 'RSVP – I\'m Going!'}
                   </button>
                 ) : (
-                  <Link
-                    to="/login"
-                    className="block w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl text-center"
-                  >
-                    Log in to RSVP
-                  </Link>
+                  <Link to="/login" className="block w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-xl text-center">Log in to RSVP</Link>
                 )}
               </div>
             )}
@@ -506,18 +475,8 @@ export default function EventDetail() {
             {/* Old ticket URL fallback */}
             {event.ticketUrl && !isTicketedEvent && (
               <div className="bg-black-elevated rounded-xl p-5 border border-white/5">
-                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4">
-                  Get Tickets
-                </h3>
-                <a
-                  href={event.ticketUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-full hover:scale-[1.02] transition-transform"
-                >
-                  <Ticket size={16} />
-                  Buy Tickets
-                </a>
+                <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4">Get Tickets</h3>
+                <a href={event.ticketUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full py-3 bg-gold-gradient text-black text-sm font-bold uppercase rounded-full hover:scale-[1.02] transition-transform"><Ticket size={16} /> Buy Tickets</a>
               </div>
             )}
           </motion.div>
@@ -526,28 +485,16 @@ export default function EventDetail() {
 
       {/* Buy Ticket Modal */}
       <AnimatePresence>
-        {showBuyModal && (
-          <BuyTicketModal
-            event={event}
-            onClose={() => setShowBuyModal(false)}
-            onSuccess={() => { refetch?.(); }}
-          />
+        {showBuyModal && ticketTypes.length > 0 && (
+          <BuyTicketModal event={event} ticketTypes={ticketTypes} onClose={() => setShowBuyModal(false)} onSuccess={() => { refetch?.(); }} />
         )}
       </AnimatePresence>
 
       {/* Photo Lightbox */}
       <AnimatePresence>
         {selectedPhoto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSelectedPhoto(null)}
-            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
-          >
-            <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-              <X className="w-5 h-5 text-white" />
-            </button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedPhoto(null)} className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
+            <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><X className="w-5 h-5 text-white" /></button>
             <img src={selectedPhoto} alt="" className="max-w-full max-h-[85vh] rounded-xl object-contain" />
           </motion.div>
         )}

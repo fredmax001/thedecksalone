@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
+const { searchLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
 const { uploadAvatar } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
@@ -100,7 +101,8 @@ router.get('/activity', authMiddleware, async (req, res) => {
       data: activities,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -188,7 +190,8 @@ router.get('/following-feed', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -342,7 +345,8 @@ router.get('/notifications', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -396,7 +400,8 @@ router.get('/:username', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -432,7 +437,8 @@ router.get('/profile', authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -482,7 +488,8 @@ router.get('/:username', async (req, res) => {
 
     return res.json({ success: true, data: publicUser });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -548,7 +555,8 @@ router.put('/profile', authMiddleware, async (req, res) => {
       data: { ...user, social: user.socialLinks || {} },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -591,7 +599,8 @@ router.put('/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req,
 
     return res.json({ success: true, data: { avatar: avatarUrl } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -626,7 +635,8 @@ router.put('/password', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Password updated successfully' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -688,7 +698,8 @@ router.get('/following', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -699,7 +710,8 @@ router.patch('/notifications/:id/read', authMiddleware, async (req, res) => {
     // Notifications are synthetic; nothing to persist yet.
     return res.json({ success: true, data: { id, read: true } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -709,12 +721,13 @@ router.patch('/notifications/read-all', authMiddleware, async (req, res) => {
     // Notifications are synthetic; nothing to persist yet.
     return res.json({ success: true, data: { read: true } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // GET /api/users/search - Search for users by name/username/email (for DJs to find clients)
-router.get('/search', authMiddleware, async (req, res) => {
+router.get('/search', authMiddleware, searchLimiter, async (req, res) => {
   try {
     const { q, limit } = req.query;
     if (!q || typeof q !== 'string' || q.trim().length < 2) {
@@ -730,7 +743,6 @@ router.get('/search', authMiddleware, async (req, res) => {
           {
             OR: [
               { username: { contains: searchTerm, mode: 'insensitive' } },
-              { email: { contains: searchTerm, mode: 'insensitive' } },
               { name: { contains: searchTerm, mode: 'insensitive' } },
             ],
           },
@@ -739,7 +751,6 @@ router.get('/search', authMiddleware, async (req, res) => {
       select: {
         id: true,
         username: true,
-        email: true,
         name: true,
         avatar: true,
       },
@@ -756,7 +767,8 @@ router.get('/search', authMiddleware, async (req, res) => {
       })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -812,7 +824,7 @@ router.delete('/account', authMiddleware, async (req, res) => {
     return res.json({ success: true, data: { deleted: true } });
   } catch (error) {
     console.error('Delete account error:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -890,7 +902,8 @@ router.get('/settings', authMiddleware, async (req, res) => {
       data: { notifications, privacy },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -948,7 +961,8 @@ router.put('/settings', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Settings updated' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

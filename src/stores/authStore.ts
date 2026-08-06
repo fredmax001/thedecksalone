@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
 
-export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR' | 'FINANCE_ADMIN' | 'VERIFICATION_ADMIN';
+export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR' | 'FINANCE_ADMIN' | 'VERIFICATION_ADMIN' | 'SUPER_ADMIN';
 
 export interface User {
   id: string;
@@ -14,6 +14,10 @@ export interface User {
   phone?: string;
   phoneVerified?: boolean;
   gender?: string | null;
+  dateOfBirth?: string | Date | null;
+  referralCode?: string | null;
+  referredBy?: string | null;
+
   djProfile?: {
     id: string;
     stageName: string;
@@ -22,6 +26,14 @@ export interface User {
     isPro?: boolean;
     subscriptionTier?: string;
   } | null;
+  trialStatus?: {
+    isSubscribed: boolean;
+    isTrialActive: boolean;
+    hasFeatureAccess: boolean;
+    daysLeft: number;
+    trialEnd?: string;
+    status: string;
+  };
 }
 
 interface AuthState {
@@ -37,6 +49,8 @@ interface AuthState {
   init: () => void;
 }
 
+import { usePlayerStore } from '@/stores/playerStore';
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -47,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
 
       setAuth: (user, token) => {
         set({ user, token, isAuthenticated: true });
+        usePlayerStore.getState().setCurrentUserId(user.id);
       },
 
       login: async (email, password) => {
@@ -55,6 +70,7 @@ export const useAuthStore = create<AuthState>()(
           if (res.data.success) {
             const { user, token } = res.data.data;
             set({ user, token, isAuthenticated: true });
+            usePlayerStore.getState().setCurrentUserId(user.id);
             // Fetch full profile (including djProfile) immediately after login
             get().fetchMe();
             return { success: true };
@@ -71,6 +87,7 @@ export const useAuthStore = create<AuthState>()(
           if (res.data.success) {
             const { user, token } = res.data.data;
             set({ user, token, isAuthenticated: true });
+            usePlayerStore.getState().setCurrentUserId(user.id);
             return { success: true };
           }
           return { success: false, error: 'Registration failed' };
@@ -80,12 +97,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        usePlayerStore.getState().clearSession();
         set({ user: null, token: null, isAuthenticated: false });
       },
 
       fetchMe: async () => {
         const token = get().token;
         if (!token) {
+          usePlayerStore.getState().clearSession();
           set({ isLoading: false });
           return;
         }
@@ -93,9 +112,12 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
           const res = await api.get('/auth/me');
           if (res.data.success) {
-            set({ user: res.data.data, token, isAuthenticated: true, isLoading: false });
+            const userData = res.data.data;
+            set({ user: userData, token, isAuthenticated: true, isLoading: false });
+            usePlayerStore.getState().setCurrentUserId(userData.id);
           }
         } catch {
+          usePlayerStore.getState().clearSession();
           set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
@@ -106,10 +128,12 @@ export const useAuthStore = create<AuthState>()(
           set({ isAuthenticated: true });
           get().fetchMe();
         } else {
+          usePlayerStore.getState().clearSession();
           set({ isLoading: false });
         }
       },
     }),
+
     {
       name: 'soundit-auth',
       partialize: (state) => ({ token: state.token }),

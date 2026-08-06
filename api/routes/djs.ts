@@ -7,6 +7,7 @@ const { uploadAvatar, uploadDjProfileImages, uploadDocument } = require('../util
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
+const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
 
 const router = express.Router();
@@ -76,6 +77,14 @@ const createDjSchema = z.object({
 
 // updateDjSchema is the same shape as createDjSchema but every field is optional
 const updateDjSchema = createDjSchema.partial();
+
+const verificationRequestSchema = z.object({
+  nationality: z.string().max(100).optional(),
+  idDocumentType: z.string().max(100).optional(),
+  fullLegalName: z.string().max(200).optional(),
+  socialProofLinks: z.string().max(2000).optional(),
+  whyVerified: z.string().max(2000).optional(),
+});
 
 // Helper to parse JSON fields from FormData (multer stores them as strings)
 function parseFormFields(body) {
@@ -214,7 +223,7 @@ async function updateDjProfile(req, res, id) {
 }
 
 // GET /api/djs - List DJs with filtering
-router.get('/', async (req, res) => {
+router.get('/', conditionalSearchLimiter, async (req, res) => {
   try {
     const parsed = djFilterSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -284,7 +293,8 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -333,7 +343,8 @@ router.get('/hall-of-fame', async (req, res) => {
       })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -347,7 +358,8 @@ router.get('/cities', async (req, res) => {
     });
     return res.json({ success: true, data: cities.map((c) => c.city).filter(Boolean) });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -364,7 +376,8 @@ router.get('/genres', async (req, res) => {
     `;
     return res.json({ success: true, data: rows.map((r) => r.genre) });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -385,13 +398,19 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { ...dj, username: dj.user.username, userId: dj.user.id } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/djs/verification-request - Submit passport/ID verification
 router.post('/verification-request', authMiddleware, uploadDocument.single('document'), async (req, res) => {
   try {
+    const parsed = verificationRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
       return res.status(404).json({ success: false, error: 'DJ profile not found' });
@@ -400,7 +419,7 @@ router.post('/verification-request', authMiddleware, uploadDocument.single('docu
       return res.status(403).json({ success: false, error: 'Verification requests require a Pro subscription' });
     }
 
-    const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = req.body;
+    const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = parsed.data;
 
     if (!nationality || !idDocumentType || !fullLegalName) {
       return res.status(400).json({ success: false, error: 'Nationality, ID document type, and full legal name are required' });
@@ -435,7 +454,8 @@ router.post('/verification-request', authMiddleware, uploadDocument.single('docu
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -449,7 +469,7 @@ router.get('/:identifier', async (req, res) => {
       mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
       streamingPlatforms: true,
       reviews: {
-        include: { user: { select: { email: true } } },
+        include: { user: { select: { id: true, username: true, avatar: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       },
@@ -494,7 +514,8 @@ router.get('/:identifier', async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -560,7 +581,8 @@ router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
 
     return res.status(201).json({ success: true, data: dj });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -573,7 +595,8 @@ router.put('/me', authMiddleware, uploadDjProfileImages, async (req, res) => {
     }
     return updateDjProfile(req, res, dj.id);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -581,7 +604,8 @@ router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
   try {
     return updateDjProfile(req, res, req.params.id);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -599,7 +623,8 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'DJ'), async (req, re
     await prisma.djProfile.delete({ where: { id: req.params.id } });
     return res.json({ success: true, data: { message: 'DJ profile deleted' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -624,7 +649,8 @@ router.post('/:id/follow', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { following: true } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -644,7 +670,8 @@ router.delete('/:id/follow', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { following: false } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -661,7 +688,8 @@ router.get('/:id/follow-status', softAuthMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { following: !!follow } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -693,7 +721,8 @@ router.post('/:id/recalculate', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { scores, dj: updated } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -724,7 +753,8 @@ router.get('/me/highlights', authMiddleware, requirePro, async (req, res) => {
     });
     return res.json({ success: true, data: highlights });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -744,7 +774,8 @@ router.get('/:id/highlights', async (req, res) => {
     });
     return res.json({ success: true, data: highlights });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -795,7 +826,8 @@ router.post('/me/highlights', authMiddleware, requirePro, async (req, res) => {
 
     return res.status(201).json({ success: true, data: highlight });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -832,7 +864,8 @@ router.put('/me/highlights/reorder', authMiddleware, requirePro, async (req, res
 
     return res.json({ success: true, data: highlights });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -856,7 +889,8 @@ router.delete('/me/highlights/:mixId', authMiddleware, requirePro, async (req, r
 
     return res.json({ success: true, data: { highlighted: false } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -880,7 +914,8 @@ router.get('/me/sets', authMiddleware, requirePro, async (req, res) => {
       data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -899,7 +934,8 @@ router.get('/:id/sets', async (req, res) => {
       data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -919,7 +955,8 @@ router.get('/:id/reups', async (req, res) => {
     });
     return res.json({ success: true, data: reups });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

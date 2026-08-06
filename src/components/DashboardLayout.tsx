@@ -1,27 +1,29 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import NotificationBell from '@/components/NotificationBell';
 import {
-  LayoutDashboard,
   Calendar,
-  CalendarDays,
-  MessageSquare,
+  ChevronRight,
+  LayoutDashboard,
+  LogOut,
   Music,
-  ListMusic,
-  Camera,
+  Search,
+  Settings,
+  Smartphone,
+  User,
+  MessageSquare,
+  Zap,
   BarChart3,
   Wallet,
-  User,
-  Settings,
-  LogOut,
-  Bell,
-  Search,
-  ChevronRight,
   CreditCard,
-  Megaphone,
   BriefcaseBusiness,
+  Megaphone,
   Crown,
-  Zap,
+  ScanLine,
+  ListMusic,
+  Camera,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -40,6 +42,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
+import TrialBanner from '@/components/TrialBanner';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
@@ -67,6 +70,7 @@ export default function DashboardLayout() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const isDj = user?.role === 'DJ';
+  const isProPlus = user?.djProfile?.subscriptionTier === 'legend';
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
@@ -158,7 +162,7 @@ export default function DashboardLayout() {
         collapsed && 'justify-center px-2'
       )}>
         <img
-          src="/logo.png"
+          src="/logo-web.png?v=4"
           alt="Deck Salone"
           className="h-10 w-auto object-contain flex-shrink-0"
         />
@@ -262,19 +266,20 @@ export default function DashboardLayout() {
         className="flex-1 flex flex-col min-h-screen transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
       >
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-dark-gray">
-          <div className="flex items-center justify-between h-16 px-4 lg:px-6">
-            {/* Left: Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm">
-              <Link to="/" className="text-text-muted hover:text-text-primary transition-colors">
-                Home
+        <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-xl border-b border-dark-gray pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 lg:px-6">
+            {/* Left: Breadcrumb / Mobile Home Link */}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+              <Link to="/" className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
+                <img src="/logo-mobile.png?v=4" alt="Home" className="h-6 w-auto lg:hidden object-contain" />
+                <span className="hidden sm:inline">Home</span>
               </Link>
               <ChevronRight className="w-3 h-3 text-text-muted" />
-              <span className="text-text-secondary">Dashboard</span>
+              <span className="text-text-secondary font-medium">Dashboard</span>
               {location.pathname !== '/dashboard' && (
                 <>
                   <ChevronRight className="w-3 h-3 text-text-muted" />
-                  <span className="text-gold capitalize">
+                  <span className="text-gold capitalize truncate max-w-[100px] sm:max-w-none">
                     {location.pathname.replace('/dashboard/', '').replace(/-/g, ' ')}
                   </span>
                 </>
@@ -289,55 +294,41 @@ export default function DashboardLayout() {
                   placeholder="Search bookings, mixes, messages..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted focus:border-gold/50 focus:ring-gold/20"
+                  className="w-full pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted focus:border-gold/50 focus:ring-gold/20 h-9 text-xs"
                 />
               </div>
             </div>
 
             {/* Right: Notifications + Profile */}
-            <div className="flex items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative text-text-secondary hover:text-text-primary"
-                  >
-                    <Bell className="w-5 h-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 bg-black-surface border-dark-gray">
-                  <div className="p-3 border-b border-dark-gray">
-                    <p className="text-sm font-medium text-text-primary">Notifications</p>
-                  </div>
-                  <div className="p-6 text-center">
-                    <Bell className="w-8 h-8 text-text-muted mx-auto mb-2" />
-                    <p className="text-sm text-text-secondary">No new notifications</p>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <NotificationBell />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-black-elevated">
+                  <Button variant="ghost" className="flex items-center gap-2 h-8 sm:h-9 px-1.5 sm:px-2 hover:bg-black-elevated">
                     <Avatar className="w-7 h-7 border border-gold/30">
                       <AvatarImage src={avatarUrl} />
                       <AvatarFallback className="bg-gold/20 text-gold text-[10px] font-bold">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden md:inline text-sm text-text-primary">{djName}</span>
+                    <span className="hidden md:inline text-xs font-semibold text-text-primary">{djName}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray">
+                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-48 shadow-2xl z-50">
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard/profile" className="cursor-pointer">Profile</Link>
+                    <Link to="/dashboard/profile" className="cursor-pointer text-xs">Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard/settings" className="cursor-pointer">Settings</Link>
+                    <Link to="/dashboard/settings" className="cursor-pointer text-xs">Settings</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
+                      <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red">
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
                     Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -349,10 +340,11 @@ export default function DashboardLayout() {
         {/* Page Content */}
         <main
           className={cn(
-            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300',
+            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300 space-y-4',
             currentTrack ? 'pb-40 lg:pb-24' : 'pb-20 lg:pb-6'
           )}
         >
+          <TrialBanner />
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -367,7 +359,13 @@ export default function DashboardLayout() {
         </main>
       </div>
 
-      <MobileTabBar items={navItems} />
+      <MobileTabBar
+        items={
+          isProPlus
+            ? [...navItems, { icon: ScanLine, label: 'Scanner', path: '/dashboard/scanner' }]
+            : navItems
+        }
+      />
 
       {/* Global Upgrade Modal — triggered from any component via useUpgradeModalStore */}
       <GlobalUpgradeModal />

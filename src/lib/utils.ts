@@ -6,5 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function imageFallback(e: React.SyntheticEvent<HTMLImageElement>) {
-  e.currentTarget.src = '/placeholder.jpg';
+  e.currentTarget.src = '/default-avatar.jpg';
+}
+
+export function getAvatarUrl(url?: string | null): string {
+  if (!url || url.trim() === '' || url === '/placeholder.jpg') {
+    return '/default-avatar.jpg';
+  }
+  return url;
 }

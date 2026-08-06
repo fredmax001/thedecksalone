@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { uploadEventImage } = require('../utils/upload');
 const { processEventImage } = require('../utils/imageProcessor');
 const { uploadBuffer } = require('../utils/storage');
@@ -79,8 +79,13 @@ const updateApplicationSchema = z.object({
   status: z.enum(['PENDING', 'ACCEPTED', 'DECLINED']),
 });
 
+const syncToSaloneSchema = z.object({
+  soundItSaloneEventId: z.string().min(1).max(200),
+  soundItSaloneUrl: z.string().url().max(500),
+});
+
 // GET /api/events - List events
-router.get('/', async (req, res) => {
+router.get('/', softAuthMiddleware, async (req, res) => {
   try {
     const parsed = eventFilterSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -94,6 +99,20 @@ router.get('/', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
+    // Public listings only show published events. Owner/admin filtered views may include drafts via djId.
+    if (!djId) {
+      where.publishStatus = 'published';
+    } else {
+      const isAdmin = req.user?.role === 'ADMIN';
+      let isOwner = false;
+      if (req.user?.id) {
+        const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+        isOwner = dj?.id === djId;
+      }
+      if (!isOwner && !isAdmin) {
+        where.publishStatus = 'published';
+      }
+    }
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (type) where.type = { equals: type, mode: 'insensitive' };
     if (status) where.status = status;
@@ -125,7 +144,8 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -142,7 +162,8 @@ router.get('/types', async (req, res) => {
     ];
     return res.json({ success: true, data: types });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -179,7 +200,8 @@ router.get('/:id', async (req: any, res: any) => {
 
     return res.json({ success: true, data: { ...event, userRsvp: !!userRsvp, userTicket } });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -227,7 +249,8 @@ router.post('/', authMiddleware, uploadEventImage.single('image'), async (req, r
 
     return res.status(201).json({ success: true, data: event });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -267,7 +290,8 @@ router.put('/:id', authMiddleware, uploadEventImage.single('image'), async (req,
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -297,13 +321,19 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: { message: 'Event deleted' } });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
 // POST /api/events/:id/sync-to-salone - Mark event as synced to Sound It Salone
 router.post('/:id/sync-to-salone', authMiddleware, async (req, res) => {
   try {
+    const parsed = syncToSaloneSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) {
       return res.status(404).json({ success: false, error: 'Event not found' });
@@ -316,7 +346,7 @@ router.post('/:id/sync-to-salone', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const { soundItSaloneEventId, soundItSaloneUrl } = req.body;
+    const { soundItSaloneEventId, soundItSaloneUrl } = parsed.data;
 
     const updated = await prisma.event.update({
       where: { id: req.params.id },
@@ -329,7 +359,8 @@ router.post('/:id/sync-to-salone', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: updated });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -374,7 +405,8 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: application });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -403,7 +435,8 @@ router.get('/:id/applications', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, data: applications });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -449,7 +482,8 @@ router.patch('/:id/applications/:appId', authMiddleware, async (req: any, res: a
 
     return res.json({ success: true, data: updated });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -473,7 +507,8 @@ router.post('/:id/rsvp', authMiddleware, async (req: any, res: any) => {
     await prisma.eventRSVP.create({ data: { eventId: req.params.id, userId: req.user.id } });
     return res.json({ success: true, data: { rsvped: true } });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -509,7 +544,8 @@ router.post('/:id/gallery', authMiddleware, uploadGallery.array('photos', 20), a
 
     return res.status(201).json({ success: true, data: photos });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -524,7 +560,8 @@ router.delete('/:id/gallery/:photoId', authMiddleware, async (req: any, res: any
     await prisma.eventPhoto.delete({ where: { id: req.params.photoId } });
     return res.json({ success: true });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

@@ -16,6 +16,7 @@ import {
 import { type MixTrack } from '@/components/MixPlayer';
 import { useMixes, useTrendingMixes, useLikeMix, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
+import { GENRES } from '@/constants/genres';
 import { cn } from '@/lib/utils';
 
 /* ──────────────────────── Animation helpers ──────────────────────── */
@@ -71,7 +72,7 @@ function toMixTrack(mix: any): MixTrack {
     title: mix.title,
     dj: mix.dj?.stageName || 'Unknown DJ',
     duration: mix.duration || 0,
-    cover: mix.coverImage || '/placeholder.jpg',
+    cover: mix.coverImage || mix.dj?.avatar || mix.djAvatar || '/mix-placeholder.jpg',
     genre: mix.genre || mix.category || 'Mix',
     audioUrl: mix.audioUrl,
     audioSource: mix.audioSource,
@@ -81,17 +82,21 @@ function toMixTrack(mix: any): MixTrack {
   };
 }
 
+import { computeGenreRanks } from '@/utils/mixRanking';
+
 /* ──────────────────────── MixCard Component ──────────────────────── */
 function MixCard({
   mix,
   onPlay,
   index,
   isNew,
+  genreRank,
 }: {
   mix: MixTrack;
   onPlay: (mix: MixTrack) => void;
   index: number;
   isNew?: boolean;
+  genreRank?: number;
 }) {
   const [liked, setLiked] = useState(false);
   const { mutate: likeMix } = useLikeMix();
@@ -126,6 +131,22 @@ function MixCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          
+          {/* Genre Ranking BadgeOverlay (#1, #2, #3, #4, #5) */}
+          {genreRank && genreRank <= 5 && (
+            <div
+              className={cn(
+                "absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-black tracking-wider shadow-lg z-20 flex items-center gap-1 border",
+                genreRank === 1 ? "bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-black border-amber-300 shadow-yellow-500/20" :
+                genreRank === 2 ? "bg-gradient-to-r from-slate-200 via-gray-300 to-slate-400 text-black border-slate-200 shadow-slate-400/20" :
+                genreRank === 3 ? "bg-gradient-to-r from-amber-700 via-amber-600 to-amber-800 text-white border-amber-500 shadow-amber-700/20" :
+                "bg-black/85 backdrop-blur-md text-amber-400 border-amber-400/40"
+              )}
+            >
+              <span>#{genreRank}</span>
+            </div>
+          )}
+
           <div
             className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
             onClick={() => onPlay(mix)}
@@ -136,7 +157,7 @@ function MixCard({
           </div>
           {isNew && (
             <motion.span
-              className="absolute top-2 left-2 px-2 py-0.5 bg-red text-white text-[10px] font-semibold uppercase rounded-full"
+              className="absolute top-2 right-2 px-2 py-0.5 bg-red text-white text-[10px] font-semibold uppercase rounded-full"
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 1.5, repeat: Infinity }}
             >
@@ -176,10 +197,12 @@ function MixListItem({
   mix,
   onPlay,
   isNew,
+  genreRank,
 }: {
   mix: MixTrack;
   onPlay: (mix: MixTrack) => void;
   isNew?: boolean;
+  genreRank?: number;
 }) {
   const [liked, setLiked] = useState(false);
   const { mutate: likeMix } = useLikeMix();
@@ -198,6 +221,17 @@ function MixListItem({
         className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-20"
       >
         <img src={mix.cover} alt={mix.title} className="h-full w-full object-cover" />
+        {genreRank && genreRank <= 5 && (
+          <span className={cn(
+            "absolute top-1 left-1 px-1.5 py-0.2 rounded text-[10px] font-black z-10",
+            genreRank === 1 ? "bg-amber-400 text-black" :
+            genreRank === 2 ? "bg-slate-300 text-black" :
+            genreRank === 3 ? "bg-amber-700 text-white" :
+            "bg-black/80 text-amber-400 border border-amber-400/40"
+          )}>
+            #{genreRank}
+          </span>
+        )}
         <span className="absolute inset-0 flex items-center justify-center bg-black/45">
           <Play size={18} className="text-gold" />
         </span>
@@ -231,6 +265,14 @@ function MixListItem({
         <ShareButton
           url={`${window.location.origin}/mix/${mix.id}`}
           title={`${mix.title} by ${mix.dj}`}
+          preview={{
+            type: "mix",
+            title: mix.title,
+            djName: mix.dj,
+            coverImage: mix.cover,
+            genre: mix.genre,
+            plays: mix.plays,
+          }}
           size="sm"
         />
         <button onClick={handleLike} className="shrink-0 rounded-full p-2 hover:bg-white/5">
@@ -242,7 +284,7 @@ function MixListItem({
 }
 
 /* ──────────────────────── Trending Card ──────────────────────── */
-function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: MixTrack) => void; index: number }) {
+function TrendingCard({ mix, onPlay, index, genreRank }: { mix: MixTrack; onPlay: (mix: MixTrack) => void; index: number; genreRank?: number }) {
   return (
     <motion.div
       variants={fadeUp}
@@ -257,6 +299,19 @@ function TrendingCard({ mix, onPlay, index }: { mix: MixTrack; onPlay: (mix: Mix
       )}>
         {mix.djTier === 'legend' && (
           <div className="absolute inset-0 bg-yellow-400/10 pointer-events-none mix-blend-screen z-10" />
+        )}
+        {genreRank && genreRank <= 5 && (
+          <div
+            className={cn(
+              "absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-black tracking-wider shadow-lg z-20 flex items-center gap-1 border",
+              genreRank === 1 ? "bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-black border-amber-300 shadow-yellow-500/20" :
+              genreRank === 2 ? "bg-gradient-to-r from-slate-200 via-gray-300 to-slate-400 text-black border-slate-200 shadow-slate-400/20" :
+              genreRank === 3 ? "bg-gradient-to-r from-amber-700 via-amber-600 to-amber-800 text-white border-amber-500 shadow-amber-700/20" :
+              "bg-black/85 backdrop-blur-md text-amber-400 border-amber-400/40"
+            )}
+          >
+            <span>#{genreRank}</span>
+          </div>
         )}
         <img src={mix.cover} alt={mix.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-0" />
@@ -307,9 +362,11 @@ export default function MixHub() {
   // Read filters from URL query params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const genreParam = params.get('genre');
-    if (genreParam) {
-      setActiveGenre(genreParam);
+    const rawParam = params.get('genre') || params.get('category');
+    if (rawParam) {
+      const normalized = rawParam.replace(/-/g, ' ').toLowerCase();
+      const matched = GENRES.find((g) => g.toLowerCase() === normalized);
+      setActiveGenre(matched || rawParam);
     }
   }, []);
 
@@ -318,6 +375,7 @@ export default function MixHub() {
     const url = new URL(window.location.href);
     if (activeGenre === 'all') {
       url.searchParams.delete('genre');
+      url.searchParams.delete('category');
     } else {
       url.searchParams.set('genre', activeGenre);
     }
@@ -325,7 +383,10 @@ export default function MixHub() {
   }, [activeGenre]);
 
   const { data: genres = [], isLoading: genresLoading } = useMixGenres();
-  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(8);
+  const { data: trendingData = [], isLoading: trendingLoading } = useTrendingMixes(
+    8,
+    activeGenre !== 'all' ? activeGenre : undefined
+  );
 
   const { data: latestData, isLoading: latestLoading } = useMixes({
     genre: activeGenre !== 'all' ? activeGenre : undefined,
@@ -337,6 +398,13 @@ export default function MixHub() {
 
   const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
   const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
+
+  const allMixesForRank = useMemo(() => {
+    const combined = [...trending, ...latest];
+    return combined.filter((m, idx, arr) => arr.findIndex((x) => x.id === m.id) === idx);
+  }, [trending, latest]);
+
+  const genreRanks = useMemo(() => computeGenreRanks(allMixesForRank), [allMixesForRank]);
 
   const handlePlay = useCallback((mix: MixTrack) => {
     // Build a queue from all currently visible mixes so next/prev works
@@ -493,7 +561,7 @@ export default function MixHub() {
         </div>
         <div className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
           {trending.map((mix: any, i: any) => (
-            <TrendingCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} />
+            <TrendingCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} genreRank={genreRanks[mix.id]} />
           ))}
           {trending.length === 0 && !trendingLoading && (
             <div className="text-center py-8 w-full">
@@ -505,18 +573,31 @@ export default function MixHub() {
 
       {/* Latest Uploads */}
       <section className="max-w-container mx-auto px-6 pt-12">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <span className="text-gold text-[10px] font-semibold uppercase tracking-wider">FRESH DROPS</span>
-            <h2 className="font-display text-2xl lg:text-3xl font-semibold text-text-primary uppercase tracking-tight mt-1">LATEST UPLOADS</h2>
+            <span className="text-gold text-[10px] font-semibold uppercase tracking-wider">
+              {activeGenre !== 'all' ? `FILTERED BY GENRE: ${activeGenre.toUpperCase()}` : 'FRESH DROPS'}
+            </span>
+            <h2 className="font-display text-2xl lg:text-3xl font-bold text-text-primary uppercase tracking-tight mt-0.5">
+              {activeGenre !== 'all' ? `${activeGenre} Mixes` : 'LATEST UPLOADS'}
+            </h2>
           </div>
+          {activeGenre !== 'all' && (
+            <button
+              onClick={() => { setActiveGenre('all'); setPage(1); }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/15 border border-gold/50 text-gold text-xs font-bold uppercase hover:bg-gold/25 transition-colors self-start sm:self-auto shadow-md"
+            >
+              <span>Showing: {activeGenre}</span>
+              <span className="text-sm font-black text-gold">✕</span>
+            </button>
+          )}
         </div>
         <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5' : 'space-y-3'}>
           {latest.map((mix: any, i: any) => (
             viewMode === 'grid' ? (
-              <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} />
+              <MixCard key={mix.id} mix={mix} onPlay={handlePlay} index={i} isNew={i < 3 && page === 1} genreRank={genreRanks[mix.id]} />
             ) : (
-              <MixListItem key={mix.id} mix={mix} onPlay={handlePlay} isNew={i < 3 && page === 1} />
+              <MixListItem key={mix.id} mix={mix} onPlay={handlePlay} isNew={i < 3 && page === 1} genreRank={genreRanks[mix.id]} />
             )
           ))}
           {latest.length === 0 && !latestLoading && (
