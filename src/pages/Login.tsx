@@ -64,8 +64,16 @@ export default function Login() {
     setIsSubmitting(false);
     if (result.success) {
       const user = useAuthStore.getState().user;
-      if (user?.role === 'ADMIN' || user?.role === 'MODERATOR') {
+      if (user?.role === 'MODERATOR') {
+        navigate('/moderator');
+      } else if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
         navigate('/admin');
+      } else if (user?.role === 'FINANCE_ADMIN') {
+        navigate('/finance');
+      } else if (user?.role === 'SUPPORT_ADMIN') {
+        navigate('/support');
+      } else if (user?.role === 'VERIFICATION_ADMIN') {
+        navigate('/verification');
       } else if (user?.role === 'DJ') {
         // On mobile/tablet, DJs land on the public platform and open the dashboard from the profile menu.
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;

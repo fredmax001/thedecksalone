@@ -181,6 +181,41 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
   );
 }
 
+type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all';
+
+function TimeRangeSelector({ selected, onChange }: { selected: TimeRange; onChange: (range: TimeRange) => void }) {
+  const options: { id: TimeRange; label: string }[] = [
+    { id: '1m', label: '1 Month' },
+    { id: '3m', label: '3 Months' },
+    { id: '6m', label: '6 Months' },
+    { id: '12m', label: '1 Year' },
+    { id: 'all', label: 'All Time' },
+  ];
+
+  return (
+    <div className="inline-flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/10 gap-1">
+      <Calendar className="w-3.5 h-3.5 text-[#D4A24A] ml-2 mr-1 opacity-80" />
+      {options.map((opt) => {
+        const isActive = selected === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => onChange(opt.id)}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              isActive
+                ? 'bg-[#D4A24A] text-black shadow-md shadow-[#D4A24A]/20'
+                : 'text-text-muted hover:text-text-primary hover:bg-white/[0.06]'
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function LoadingCenter() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -228,8 +263,9 @@ function formatCurrency(value: number) {
 /* ─────────────────────── Section 1: Dashboard ─────────────────────── */
 
 function DashboardSection() {
+  const [timeRange, setTimeRange] = useState<TimeRange>('6m');
   const { data: stats, isLoading, error } = useAdminStats();
-  const { data: analytics } = useAdminAnalytics();
+  const { data: analytics } = useAdminAnalytics(timeRange);
   const { data: djsData } = useAdminDjs({ limit: 100 });
   const { data: geography } = useAdminGeography();
 
@@ -342,6 +378,14 @@ function DashboardSection() {
             <p className="mt-3 text-[10px] uppercase tracking-wider text-text-muted font-bold truncate">{kpi.label}</p>
           </motion.div>
         ))}
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+        <div>
+          <h3 className="font-display text-lg font-bold uppercase tracking-tight text-text-primary">Performance & Growth Trends</h3>
+          <p className="text-xs text-text-muted">Filter analytics data by time period</p>
+        </div>
+        <TimeRangeSelector selected={timeRange} onChange={setTimeRange} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -1906,9 +1950,10 @@ function BattlesSection() {
 /* ─────────────────────── Section 8: Revenue ─────────────────────── */
 
 function RevenueSection() {
+  const [timeRange, setTimeRange] = useState<TimeRange>('6m');
   const { data: stats } = useAdminStats();
   const { data: paymentsData, isLoading, error } = useAdminPayments({ limit: 50 });
-  const { data: analytics } = useAdminAnalytics();
+  const { data: analytics } = useAdminAnalytics(timeRange);
 
   const payments = paymentsData?.data || [];
   const commission = (stats?.estimatedRevenue || 0) * 0.15;
@@ -1923,7 +1968,11 @@ function RevenueSection() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Revenue Dashboard" subtitle="Platform revenue and payment tracking" />
+      <SectionHeader
+        title="Revenue Dashboard"
+        subtitle="Platform revenue and payment tracking"
+        action={<TimeRangeSelector selected={timeRange} onChange={setTimeRange} />}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
@@ -2014,7 +2063,8 @@ function RevenueSection() {
 /* ─────────────────────── Section 9: Analytics ─────────────────────── */
 
 function AnalyticsSection() {
-  const { data: analytics, isLoading, error } = useAdminAnalytics();
+  const [timeRange, setTimeRange] = useState<TimeRange>('6m');
+  const { data: analytics, isLoading, error } = useAdminAnalytics(timeRange);
   const { data: rankingsData } = useAdminRankings();
   const { data: djsData } = useAdminDjs({ limit: 100 });
   const { data: platformsData } = useAdminPlatforms();
@@ -2070,7 +2120,11 @@ function AnalyticsSection() {
 
   return (
     <div className="space-y-8">
-      <SectionHeader title="Platform Analytics" subtitle="Deep dive into platform performance metrics" />
+      <SectionHeader
+        title="Platform Analytics"
+        subtitle="Deep dive into platform performance metrics"
+        action={<TimeRangeSelector selected={timeRange} onChange={setTimeRange} />}
+      />
 
       <div className="grid lg:grid-cols-2 gap-6">
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -5331,12 +5385,23 @@ function PromoSection() {
 /* ─────────────────────── Main Component ─────────────────────── */
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [section, setSection] = useState<AdminSection>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' ? true : window.innerWidth >= 1024);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [bellOpen, setBellOpen] = useState(false);
   const { user, logout } = useAuthStore();
+
+  useEffect(() => {
+    if (user?.role === 'MODERATOR') {
+      navigate('/moderator', { replace: true });
+    }
+  }, [user, navigate]);
+
+  if (user?.role === 'MODERATOR') {
+    return null;
+  }
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 60000);

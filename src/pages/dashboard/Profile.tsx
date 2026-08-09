@@ -394,9 +394,7 @@ export default function Profile() {
       if (verificationForm.whyVerified) formData.append('whyVerified', verificationForm.whyVerified);
       formData.append('document', idDocFile);
 
-      await api.post('/djs/verification-request', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.post('/djs/verification-request', formData);
 
       toast.success('Verification request submitted for review. Our team will get back to you within 2-3 business days.');
     } catch (err: any) {
@@ -457,9 +455,7 @@ export default function Profile() {
                         const formData = new FormData();
                         formData.append('avatar', file);
                         try {
-                          await api.put('/users/avatar', formData, {
-                            headers: { 'Content-Type': 'multipart/form-data' },
-                          });
+                          await api.put('/users/avatar', formData);
                           toast.success('Avatar updated successfully!');
                         } catch (err: any) {
                           toast.error(err.response?.data?.error || 'Failed to update avatar');
@@ -1091,10 +1087,9 @@ export default function Profile() {
             <CardContent className="p-6 space-y-6">
               {/* Verification Status */}
               <div className="flex items-center gap-4 p-4 rounded-xl bg-black-elevated border border-dark-gray">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  djData?.verified ? 'bg-white/10' : verificationPending ? 'bg-yellow-500/20 text-yellow-500' : verificationRejected ? 'bg-red/20 text-red' : 'bg-yellow-500/20 text-yellow-500'
-                }`}>
-                  {djData?.verified 
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${djData?.verified ? 'bg-white/10' : verificationPending ? 'bg-yellow-500/20 text-yellow-500' : verificationRejected ? 'bg-red/20 text-red' : 'bg-yellow-500/20 text-yellow-500'
+                  }`}>
+                  {djData?.verified
                     ? <VerifiedBadge dj={djData} size={36} />
                     : <Shield className="w-6 h-6" />}
                 </div>
@@ -1113,12 +1108,11 @@ export default function Profile() {
                   </p>
                 </div>
                 {djData?.verified && (
-                  <Badge 
-                    className={`border-0 ml-auto ${
-                      djData?.verificationBadgeType === 'gold'
+                  <Badge
+                    className={`border-0 ml-auto ${djData?.verificationBadgeType === 'gold'
                         ? 'bg-yellow-400/10 text-yellow-400'
                         : 'bg-gray-400/10 text-gray-400'
-                    }`}
+                      }`}
                   >
                     {djData?.verificationBadgeType === 'gold' ? '🥇 Gold Verified' : '✓ Verified'}
                   </Badge>

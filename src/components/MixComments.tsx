@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import ModeratorBadge from '@/components/ModeratorBadge';
 
 interface CommentUser {
   id: string;
@@ -136,6 +137,9 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
           <span className="bg-gold-gradient text-black text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
             <ShieldCheck className="w-2.5 h-2.5" /> CREATOR DJ
           </span>
+        )}
+        {(author.role === 'MODERATOR' || author.role === 'ADMIN') && (
+          <ModeratorBadge user={author} showText size="sm" />
         )}
       </span>
     );

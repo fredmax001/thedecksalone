@@ -1,12 +1,28 @@
 const rateLimit = require('express-rate-limit');
 
+// Try to use Redis store for rate limiting if available (persistent across restarts)
+// Install: npm install rate-limit-redis
+let RedisStore = null;
+let redisClient = null;
+try {
+  RedisStore = require('rate-limit-redis');
+  const redisModule = require('./redis');
+  redisClient = redisModule.default || redisModule.redisClient;
+} catch {
+  // Redis store not available — falling back to in-memory store
+}
+
+const storeOptions = RedisStore && redisClient
+  ? { store: new RedisStore({ sendCommand: (...args) => redisClient.call(...args) }) }
+  : {};
+
 // General API rate limiter
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
@@ -15,6 +31,7 @@ const generalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Dedicated login rate limiter: Max 10 requests per IP per 1 minute
@@ -23,7 +40,7 @@ const loginRateLimiter = rateLimit({
   max: 10, // Max 10 login attempts per IP per minute
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
@@ -32,6 +49,7 @@ const loginRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // General auth rate limiter (signup, otp, password reset)
@@ -40,7 +58,7 @@ const authLimiter = rateLimit({
   max: 15,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   message: {
@@ -49,6 +67,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Booking creation limiter
@@ -62,6 +81,7 @@ const bookingLimiter = rateLimit({
   keyGenerator: (req: any) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Vote limiter
@@ -75,6 +95,7 @@ const voteLimiter = rateLimit({
   keyGenerator: (req: any) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Mix play limiter — cap play-count inflation per mix per IP/user
@@ -83,7 +104,7 @@ const playLimiter = rateLimit({
   max: 10,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   keyGenerator: (req: any) => `${req.ip || 'unknown'}:${req.params.id || req.params.id}`,
@@ -93,6 +114,7 @@ const playLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Ticket purchase limiter — prevent spam pending orders
@@ -101,7 +123,7 @@ const purchaseLimiter = rateLimit({
   max: 10,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   keyGenerator: (req: any) => req.user?.id || req.ip || 'unknown',
@@ -111,6 +133,7 @@ const purchaseLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 // Search / discovery limiter — cap expensive text-search queries
@@ -119,7 +142,7 @@ const searchLimiter = rateLimit({
   max: 30,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.connection.remoteAddress || '';
+    const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   keyGenerator: (req: any) => req.ip || 'unknown',
@@ -129,6 +152,7 @@ const searchLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...storeOptions,
 });
 
 function conditionalSearchLimiter(req: any, res: any, next: any) {

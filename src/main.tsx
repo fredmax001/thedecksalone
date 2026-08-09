@@ -6,21 +6,27 @@ import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/stores/authStore';
 import { ErrorBoundary } from 'react-error-boundary';
 import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
-import { registerSW } from 'virtual:pwa-register';
 
-// Auto-update PWA service worker and reload for fresh deployments
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    updateSW(true);
-  },
-  onOfflineReady() {},
-});
+// Only register PWA service worker on web/browser — NOT inside native Capacitor app
+const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.();
 
-// Check for new deployments every 60 seconds
-setInterval(() => {
-  updateSW(true);
-}, 60 * 1000);
+if (!isNativeApp) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    // Auto-update PWA service worker and reload for fresh deployments
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        updateSW(true);
+      },
+      onOfflineReady() {},
+    });
+
+    // Check for new deployments every 60 seconds
+    setInterval(() => {
+      updateSW(true);
+    }, 60 * 1000);
+  });
+}
 
 useAuthStore.getState().init();
 
@@ -31,3 +37,4 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </ErrorBoundary>
 );
+

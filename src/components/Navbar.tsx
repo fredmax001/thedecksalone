@@ -25,6 +25,7 @@ const navLinks = [
   { label: 'Discover', path: '/discover' },
   { label: 'Rankings', path: '/rankings' },
   { label: 'Mixes', path: '/mixes' },
+  { label: 'Playlists', path: '/playlists' },
   { label: 'Events', path: '/events' },
   { label: 'Battles', path: '/battles' },
   { label: 'Request DJ', path: '/request-dj' },
@@ -37,18 +38,29 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
 
-  const isAdmin =
-    user?.role === 'ADMIN' ||
-    user?.role === 'SUPER_ADMIN' ||
-    user?.role === 'MODERATOR' ||
-    user?.role === 'FINANCE_ADMIN' ||
-    user?.role === 'VERIFICATION_ADMIN';
+  const isModerator = user?.role === 'MODERATOR';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+  const isFinanceAdmin = user?.role === 'FINANCE_ADMIN';
+  const isSupportAdmin = user?.role === 'SUPPORT_ADMIN';
+  const isVerificationAdmin = user?.role === 'VERIFICATION_ADMIN';
+  const isAdmin = isSuperAdmin || isFinanceAdmin || isSupportAdmin || isVerificationAdmin;
   const isDj = user?.role === 'DJ';
-  const dashboardPath = isAdmin ? '/admin' : isDj ? '/dashboard' : '/user/dashboard';
-  const profilePath = isAdmin ? '/admin' : isDj ? '/dashboard/profile' : '/user/profile';
-  const settingsPath = isAdmin ? '/admin' : isDj ? '/dashboard/settings' : '/user/settings';
-  const displayName = user?.djProfile?.stageName || user?.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
-  const avatarUrl = user?.djProfile?.avatar || '';
+
+  const roleDashboardMap: Record<string, string> = {
+    MODERATOR: '/moderator',
+    SUPER_ADMIN: '/admin',
+    ADMIN: '/admin',
+    FINANCE_ADMIN: '/finance',
+    SUPPORT_ADMIN: '/support',
+    VERIFICATION_ADMIN: '/verification',
+    DJ: '/dashboard',
+    USER: '/user/dashboard',
+  };
+  const dashboardPath = roleDashboardMap[user?.role || 'USER'] || '/discover';
+  const profilePath = isAdmin ? dashboardPath : isDj ? '/dashboard/profile' : '/user/profile';
+  const settingsPath = isAdmin ? dashboardPath : isDj ? '/dashboard/settings' : '/user/settings';
+  const displayName = user?.djProfile?.stageName || user?.name || user?.email?.split('@')[0] || (isModerator ? 'Moderator' : isAdmin ? 'Admin' : 'User');
+  const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
 
   useEffect(() => {
@@ -81,7 +93,7 @@ export default function Navbar() {
       <div className="w-full pt-[env(safe-area-inset-top,0px)] bg-black/95">
         <div className="max-w-container mx-auto h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-4 lg:px-8">
           {/* Logo */}
-          <Link to={isAdmin ? '/admin' : '/'} className="flex items-center shrink-0">
+          <Link to={isAdmin ? dashboardPath : '/'} className="flex items-center shrink-0">
             {/* Mobile icon logo */}
             <img
               src="/logo-mobile.png?v=3"
@@ -141,13 +153,22 @@ export default function Navbar() {
               <kbd className="px-1.5 py-0.5 rounded bg-black border border-white/15 text-[9px] font-mono text-gold font-bold">⌘K</kbd>
             </button>
 
-            {isAdmin && (
+            {isModerator && (
               <Link
-                to="/admin"
+                to="/moderator"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-amber-500/25 transition-all shadow-[0_0_12px_rgba(212,162,74,0.2)]"
+              >
+                ⚙️ Moderator Console
+              </Link>
+            )}
+
+            {(isSuperAdmin || isFinanceAdmin || isSupportAdmin || isVerificationAdmin) && (
+              <Link
+                to={dashboardPath}
                 className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-gold/25 transition-all shadow-[0_0_12px_rgba(212,162,74,0.2)]"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Admin Console
+                {isSuperAdmin ? 'Admin Console' : isFinanceAdmin ? 'Finance Console' : isSupportAdmin ? 'Support Console' : 'Verification Console'}
               </Link>
             )}
 
@@ -182,11 +203,21 @@ export default function Navbar() {
                       <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
                       <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
                     </div>
-                    {isAdmin ? (
+                    {user?.role === 'MODERATOR' && (
                       <DropdownMenuItem asChild>
-                        <Link to="/admin" className="cursor-pointer text-xs font-bold text-gold">Admin Dashboard</Link>
+                        <Link to="/moderator" className="cursor-pointer font-bold text-gold text-xs flex items-center">
+                          ⚙️ Moderator Console
+                        </Link>
                       </DropdownMenuItem>
-                    ) : (
+                    )}
+                    {isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link to={dashboardPath} className="cursor-pointer text-xs font-bold text-gold">
+                          {isSuperAdmin ? 'Admin Dashboard' : isFinanceAdmin ? 'Finance Dashboard' : isSupportAdmin ? 'Support Dashboard' : 'Verification Dashboard'}
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    {!isAdmin && (
                       <>
                         <DropdownMenuItem asChild>
                           <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
@@ -256,30 +287,34 @@ export default function Navbar() {
 
                   {isAuthenticated && user ? (
                     <>
-                      <SheetClose asChild>
-                        <Link
-                          to={profilePath}
-                          className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
-                        >
-                          Profile
-                        </Link>
-                      </SheetClose>
+                      {!isAdmin && (
+                        <SheetClose asChild>
+                          <Link
+                            to={profilePath}
+                            className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                          >
+                            Profile
+                          </Link>
+                        </SheetClose>
+                      )}
                       <SheetClose asChild>
                         <Link
                           to={dashboardPath}
                           className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
                         >
-                          Dashboard
+                          {isAdmin ? 'Dashboard' : 'Dashboard'}
                         </Link>
                       </SheetClose>
-                      <SheetClose asChild>
-                        <Link
-                          to={settingsPath}
-                          className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
-                        >
-                          Settings
-                        </Link>
-                      </SheetClose>
+                      {!isAdmin && (
+                        <SheetClose asChild>
+                          <Link
+                            to={settingsPath}
+                            className="rounded-lg px-4 py-3 text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-text-primary transition-colors"
+                          >
+                            Settings
+                          </Link>
+                        </SheetClose>
+                      )}
                       <button
                         onClick={handleLogout}
                         className="rounded-lg px-4 py-3 text-sm font-medium text-red hover:bg-white/5 transition-colors text-left"

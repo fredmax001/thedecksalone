@@ -1,4 +1,5 @@
-import { useEffect, Suspense, lazy } from 'react';
+import { useEffect, Suspense, lazy, useState } from 'react';
+import AppIntroScreen, { shouldShowIntro } from '@/components/AppIntroScreen';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
@@ -37,6 +38,24 @@ const About = lazy(() => import('./pages/About'));
 const RequestDj = lazy(() => import('./pages/RequestDj'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
 
+/* ─── Role-Based Admin Dashboards ─── */
+const FinanceDashboard = lazy(() => import('./pages/FinanceDashboard'));
+const SupportDashboard = lazy(() => import('./pages/SupportDashboard'));
+const VerificationDashboard = lazy(() => import('./pages/VerificationDashboard'));
+
+/* ─── Moderator Console pages ─── */
+const ModeratorLayout = lazy(() => import('./pages/moderator/ModeratorLayout'));
+const ModeratorOverview = lazy(() => import('./pages/moderator/ModeratorOverview'));
+const ModeratorMixes = lazy(() => import('./pages/moderator/ModeratorMixes'));
+const ModeratorPlaylists = lazy(() => import('./pages/moderator/ModeratorPlaylists'));
+const ModeratorRankings = lazy(() => import('./pages/moderator/ModeratorRankings'));
+const ModeratorReports = lazy(() => import('./pages/moderator/ModeratorReports'));
+const ModeratorAuditLogs = lazy(() => import('./pages/moderator/ModeratorAuditLogs'));
+
+/* ─── Official Playlists ─── */
+const OfficialPlaylists = lazy(() => import('./pages/OfficialPlaylists'));
+const OfficialPlaylistDetail = lazy(() => import('./pages/OfficialPlaylistDetail'));
+
 /* ─── DJ Dashboard pages ─── */
 const DashboardOverview = lazy(() => import('./pages/dashboard/Overview'));
 const DashboardBookings = lazy(() => import('./pages/dashboard/Bookings'));
@@ -59,6 +78,7 @@ const EventAnalytics = lazy(() => import('./pages/dashboard/EventAnalytics'));
 const DashboardOpportunities = lazy(() =>
   import('./pages/Opportunities').then((m) => ({ default: m.Opportunities }))
 );
+const DashboardFollowers = lazy(() => import('./pages/dashboard/Followers'));
 
 /* ─── User Dashboard pages ─── */
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
@@ -94,7 +114,7 @@ function RequireLegendRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
   const isLegend = user.djProfile?.subscriptionTier === 'legend';
-  const isAdmin = user.role === 'ADMIN' || user.role === 'MODERATOR';
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FINANCE_ADMIN' || user.role === 'VERIFICATION_ADMIN' || user.role === 'SUPPORT_ADMIN' || user.role === 'MODERATOR';
   if (!isLegend && !isAdmin) {
     return <Navigate to="/dashboard/events" replace />;
   }
@@ -117,6 +137,12 @@ function VisitTracker() {
 
 /* ──────────────────────── Router ──────────────────────── */
 export default function App() {
+  const [showIntro, setShowIntro] = useState(() => shouldShowIntro());
+
+  if (showIntro) {
+    return <AppIntroScreen onDone={() => setShowIntro(false)} />;
+  }
+
   return (
     <BrowserRouter>
       <AuthInitializer />
@@ -127,8 +153,37 @@ export default function App() {
           <Route path="auth/callback" element={<AuthCallback />} />
 
           {/* Admin — protected, standalone layout */}
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN']} fallback="/login" />}>
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']} fallback="/login" />}>
             <Route path="admin" element={<AdminDashboard />} />
+          </Route>
+
+          {/* Finance Admin — protected, standalone layout */}
+          <Route element={<ProtectedRoute allowedRoles={['FINANCE_ADMIN']} fallback="/login" />}>
+            <Route path="finance" element={<FinanceDashboard />} />
+          </Route>
+
+          {/* Support Admin — protected, standalone layout */}
+          <Route element={<ProtectedRoute allowedRoles={['SUPPORT_ADMIN']} fallback="/login" />}>
+            <Route path="support" element={<SupportDashboard />} />
+          </Route>
+
+          {/* Verification Admin — protected, standalone layout */}
+          <Route element={<ProtectedRoute allowedRoles={['VERIFICATION_ADMIN']} fallback="/login" />}>
+            <Route path="verification" element={<VerificationDashboard />} />
+          </Route>
+
+          {/* Moderator Console — protected */}
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR']} fallback="/login" />}>
+            <Route element={<Layout />}>
+              <Route path="moderator" element={<ModeratorLayout />}>
+                <Route index element={<ModeratorOverview />} />
+                <Route path="mixes" element={<ModeratorMixes />} />
+                <Route path="playlists" element={<ModeratorPlaylists />} />
+                <Route path="rankings" element={<ModeratorRankings />} />
+                <Route path="reports" element={<ModeratorReports />} />
+                <Route path="logs" element={<ModeratorAuditLogs />} />
+              </Route>
+            </Route>
           </Route>
 
           {/* DJ Dashboard — protected, custom layout (no public navbar/footer) */}
@@ -147,6 +202,7 @@ export default function App() {
               <Route path="dashboard/events/:id/analytics" element={<EventAnalytics />} />
               <Route path="dashboard/analytics" element={<DashboardAnalytics />} />
               <Route path="dashboard/earnings" element={<DashboardEarnings />} />
+              <Route path="dashboard/followers" element={<DashboardFollowers />} />
               <Route path="dashboard/profile" element={<DashboardProfile />} />
               <Route path="dashboard/subscription" element={<DashboardSubscription />} />
               <Route path="dashboard/opportunities" element={<DashboardOpportunities />} />
@@ -202,6 +258,8 @@ export default function App() {
             <Route path="booking" element={<Booking />} />
             <Route path="mixes" element={<MixHub />} />
             <Route path="mix/:id" element={<MixDetail />} />
+            <Route path="playlists" element={<OfficialPlaylists />} />
+            <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
             <Route path="user/:username" element={<UserPublicProfile />} />
             <Route path="events" element={<Events />} />
             <Route path="events/:id" element={<EventDetail />} />

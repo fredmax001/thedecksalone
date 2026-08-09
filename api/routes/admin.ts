@@ -42,8 +42,8 @@ async function createAuditLog(params: {
   }
 }
 
-// All routes require admin or moderator role
-router.use(requireRole('ADMIN', 'MODERATOR', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'));
+// All routes require admin role (MODERATOR role uses /api/moderator routes)
+router.use(requireRole('ADMIN', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'));
 
 const userFilterSchema = z.object({
   role: z.string().optional(),
@@ -757,13 +757,22 @@ router.post('/rankings/recalculate', async (req, res) => {
 // GET /api/admin/analytics - Monthly platform analytics (cached 60s)
 router.get('/analytics', async (req, res) => {
   try {
-    const data = await withCache('admin:analytics', 60000, async () => {
+    const range = (req.query.range as string) || '6m';
+    const cacheKey = `admin:analytics:${range}`;
+    const data = await withCache(cacheKey, 60000, async () => {
       const now = new Date();
+      let numMonths = 6;
+      if (range === '1m') numMonths = 1;
+      else if (range === '3m') numMonths = 3;
+      else if (range === '6m') numMonths = 6;
+      else if (range === '12m') numMonths = 12;
+      else if (range === 'all') numMonths = 24;
+
       const months = [];
-      for (let i = 5; i >= 0; i--) {
+      for (let i = numMonths - 1; i >= 0; i--) {
         const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-        const label = start.toLocaleString('en-US', { month: 'short' });
+        const label = start.toLocaleString('en-US', { month: 'short', year: numMonths > 12 ? '2-digit' : undefined });
         const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
           prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),

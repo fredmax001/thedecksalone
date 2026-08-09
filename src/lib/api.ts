@@ -1,9 +1,26 @@
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (Capacitor.isNativePlatform()) {
+    return 'https://app.decksalone.com/api';
+  }
+  return '/api';
+};
+
+export const getMediaUrl = (path: string | null | undefined): string => {
+  if (!path) return '';
+  if (path.startsWith('data:') || path.startsWith('blob:')) return path;
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, 'https://app.decksalone.com');
+  }
+  const baseUrl = 'https://app.decksalone.com';
+  return path.startsWith('/') ? `${baseUrl}${path}` : `${baseUrl}/${path}`;
+};
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -11,6 +28,9 @@ export const api = axios.create({
 
 // Attach JWT token to every request if available
 api.interceptors.request.use((config) => {
+  const currentBaseUrl = getApiUrl();
+  config.baseURL = currentBaseUrl;
+
   let token = null;
   const authData = localStorage.getItem('soundit-auth');
   if (authData) {

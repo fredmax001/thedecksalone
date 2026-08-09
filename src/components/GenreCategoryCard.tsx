@@ -131,7 +131,7 @@ export default function GenreCategoryCard({
     <Link to={`/mixes?genre=${encodeURIComponent(targetGenre)}`} className="group block">
       <div className="overflow-hidden rounded-2xl bg-black-surface border border-dark-gray hover:border-gold/60 transition-all duration-300 shadow-xl hover:-translate-y-1">
         {/* Cover Aspect Square */}
-        <div className={`aspect-square relative p-5 flex flex-col justify-between bg-gradient-to-br ${theme.gradient} overflow-hidden`}>
+        <div className={`aspect-square relative p-3 sm:p-5 flex flex-col justify-between bg-gradient-to-br ${theme.gradient} overflow-hidden`}>
           {/* Subtle noise/glow overlays */}
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
           <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/15 blur-2xl pointer-events-none" />
@@ -139,28 +139,28 @@ export default function GenreCategoryCard({
 
           {/* Top Badge */}
           <div className="relative z-10 flex items-center justify-between">
-            <span className="w-8 h-8 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-gold shadow-lg">
-              <Radio className="w-4 h-4" />
+            <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-gold shadow-lg">
+              <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
 
-          {/* Center Title - Extra Bold Bolder Typography with High Contrast */}
-          <div className="relative z-10 text-center my-auto px-2">
-            <h3 className="font-extrabold sm:font-black text-2xl sm:text-3xl uppercase tracking-wider text-white drop-shadow-[0_4px_16px_rgba(0,0,0,1)] leading-tight">
+          {/* Center Title - Responsive Mobile Sizing */}
+          <div className="relative z-10 text-center my-auto px-1">
+            <h3 className="font-extrabold sm:font-black text-base sm:text-2xl uppercase tracking-tight sm:tracking-wider text-white drop-shadow-[0_4px_16px_rgba(0,0,0,1)] leading-tight break-words">
               {category.name}
             </h3>
-            <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-gold drop-shadow-[0_2px_8px_rgba(0,0,0,1)] mt-2">
+            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gold drop-shadow-[0_2px_8px_rgba(0,0,0,1)] mt-1 opacity-90">
               {theme.subtitle}
             </p>
           </div>
         </div>
 
         {/* Bottom Footer Info */}
-        <div className="p-3.5 bg-black-surface flex items-center justify-between border-t border-dark-gray/60">
-          <span className="text-xs sm:text-sm font-black uppercase text-text-primary group-hover:text-gold transition-colors truncate">
+        <div className="p-2 sm:p-3.5 bg-black-surface flex items-center justify-between gap-1 border-t border-dark-gray/60">
+          <span className="text-[10px] sm:text-xs font-bold uppercase text-text-primary group-hover:text-gold transition-colors truncate min-w-0">
             {category.name}
           </span>
-          <span className="text-xs font-extrabold text-gold bg-gold/10 px-2.5 py-1 rounded-full border border-gold/30 shrink-0">
+          <span className="text-[9px] sm:text-xs font-semibold text-gold bg-gold/10 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-gold/30 shrink-0">
             {category.count || 0} mixes
           </span>
         </div>

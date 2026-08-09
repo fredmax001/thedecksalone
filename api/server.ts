@@ -58,6 +58,8 @@ const eventTicketingRoutes = require('./routes/eventTicketing');
 const userTicketRoutes = require('./routes/userTickets');
 const sitemapRoutes = require('./routes/sitemap');
 const reportRoutes = require('./routes/reports');
+const moderatorRoutes = require('./routes/moderator');
+const officialPlaylistRoutes = require('./routes/officialPlaylists');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -81,21 +83,18 @@ app.use(helmet({
   noSniff: true,
 }));
 
-function isAllowedOrigin(origin) {
-  if (!origin) return process.env.NODE_ENV !== 'production';
+function isAllowedOrigin(origin: string | undefined) {
+  if (!origin) return true; // Allow requests without Origin header (mobile apps, curl, etc.)
   if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (/^https?:\/\/([a-z0-9-]+\.)*decksalone\.com$/i.test(origin)) return true;
   return process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
-}
-
-function logRejectedOrigin(origin, req) {
-  logger.warn('CORS origin rejected', { origin, ip: req.ip, path: req.path });
 }
 
 // Middleware - restrict browser origins in production.
 app.use(cors({
-  origin: (origin, req, callback) => {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (isAllowedOrigin(origin)) return callback(null, true);
-    logRejectedOrigin(origin, req);
+    logger.warn('CORS origin rejected', { origin });
     return callback(null, false);
   },
   credentials: true,
@@ -143,7 +142,6 @@ app.use(cookieParser());
 
 // Passport initialization
 app.use(passport.initialize());
-app.use(passport.initialize());
 
 // Serve uploaded files statically
 serveUploads(app);
@@ -189,62 +187,15 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/battles', battleRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
+app.use('/api/moderator', moderatorRoutes);
+app.use('/api/official-playlists', officialPlaylistRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/v1/reports', reportRoutes);
-// Public user profile lookup (must come before the authenticated /api/users mount)
-app.get('/api/users/public/:username', async (req, res) => {
-  try {
-    const username = (req.params.username || '').toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { username },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        avatar: true,
-        favoriteGenres: true,
-        role: true,
-        createdAt: true,
-        djProfile: {
-          select: {
-            id: true,
-            stageName: true,
-            bio: true,
-            avatar: true,
-            city: true,
-            community: true,
-            country: true,
-            isPublic: true,
-            subscriptionTier: true,
-            verified: true,
-            user: { select: { username: true } },
-          },
-        },
-      },
-    });
+app.use('/api/users', userRoutes);
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        ...user,
-        djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/discover', discoverRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/gigs', gigRoutes);
@@ -278,8 +229,33 @@ app.use(express.static(distDir, {
 
 const fs = require('fs');
 
+// Simple in-memory LRU cache for SSR meta tags (30s TTL) to avoid DB hits on every page load
+const META_CACHE_TTL_MS = 30_000;
+const metaCache = new Map();
+function getCachedMeta(path) {
+  const entry = metaCache.get(path);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > META_CACHE_TTL_MS) {
+    metaCache.delete(path);
+    return null;
+  }
+  return entry.data;
+}
+function setCachedMeta(path, data) {
+  metaCache.set(path, { ts: Date.now(), data });
+  // Simple LRU: cap at 200 entries
+  if (metaCache.size > 200) {
+    const firstKey = metaCache.keys().next().value;
+    metaCache.delete(firstKey);
+  }
+}
+
 // Dynamic Open Graph & Meta Tag SSR handler for social media previews (WhatsApp, Instagram, Twitter, FB, etc.)
 async function serveAppWithMeta(req, res) {
+  if (req.path.startsWith('/assets/') || req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|json|woff2?|ttf|eot)$/)) {
+    return res.status(404).send('Asset Not Found');
+  }
+
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -303,106 +279,118 @@ async function serveAppWithMeta(req, res) {
   let image = "https://decksalone.com/logo-web.png";
   let pageUrl = `https://decksalone.com${req.path}`;
 
-  try {
-    // 1. Mix Detail Route: /mix/:id
-    const mixMatch = req.path.match(/^\/mix\/([a-zA-Z0-9_-]+)/);
-    if (mixMatch) {
-      const mixId = mixMatch[1];
-      const mix = await prisma.mix.findUnique({
-        where: { id: mixId },
-        include: { dj: true },
-      });
-      if (mix) {
-        const djName = mix.dj?.stageName || 'DJ';
-        title = `🎵 ${mix.title} by ${djName} — Deck Salone`;
-        description = mix.description
-          ? mix.description.slice(0, 160)
-          : `Listen to "${mix.title}" by ${djName} (${mix.genre || 'Mix'}). ${mix.plays || 0} plays on Deck Salone.`;
-        image = makeAbsoluteUrl(mix.coverImage || mix.dj?.avatar);
+  // Check cache first to avoid DB queries on every page load
+  const cached = getCachedMeta(req.path);
+  if (cached) {
+    title = cached.title;
+    description = cached.description;
+    image = cached.image;
+    pageUrl = cached.pageUrl;
+  } else {
+    try {
+      // 1. Mix Detail Route: /mix/:id
+      const mixMatch = req.path.match(/^\/mix\/([a-zA-Z0-9_-]+)/);
+      if (mixMatch) {
+        const mixId = mixMatch[1];
+        const mix = await prisma.mix.findUnique({
+          where: { id: mixId },
+          include: { dj: true },
+        });
+        if (mix) {
+          const djName = mix.dj?.stageName || 'DJ';
+          title = `🎵 ${mix.title} by ${djName} — Deck Salone`;
+          description = mix.description
+            ? mix.description.slice(0, 160)
+            : `Listen to "${mix.title}" by ${djName} (${mix.genre || 'Mix'}). ${mix.plays || 0} plays on Deck Salone.`;
+          image = makeAbsoluteUrl(mix.coverImage || mix.dj?.avatar);
+        }
       }
-    }
 
-    // 2. DJ Profile Route: /dj/:identifier
-    const djMatch = req.path.match(/^\/dj\/([a-zA-Z0-9_-]+)/);
-    if (djMatch) {
-      const identifier = djMatch[1];
-      const dj = await prisma.djProfile.findFirst({
-        where: {
-          OR: [
-            { id: identifier },
-            { user: { username: { equals: identifier, mode: 'insensitive' } } },
-          ],
-        },
-        include: { user: true },
-      });
-      if (dj) {
-        title = `🎧 ${dj.stageName} — Official DJ Profile on Deck Salone`;
-        description = dj.bio
-          ? dj.bio.slice(0, 160)
-          : `Book ${dj.stageName} for events, listen to mixes, and explore official DJ rankings on Deck Salone.`;
-        image = makeAbsoluteUrl(dj.avatar || dj.coverBanner);
+      // 2. DJ Profile Route: /dj/:identifier
+      const djMatch = req.path.match(/^\/dj\/([a-zA-Z0-9_-]+)/);
+      if (djMatch) {
+        const identifier = djMatch[1];
+        const dj = await prisma.djProfile.findFirst({
+          where: {
+            OR: [
+              { id: identifier },
+              { user: { username: { equals: identifier, mode: 'insensitive' } } },
+            ],
+          },
+          include: { user: true },
+        });
+        if (dj) {
+          title = `🎧 ${dj.stageName} — Official DJ Profile on Deck Salone`;
+          description = dj.bio
+            ? dj.bio.slice(0, 160)
+            : `Book ${dj.stageName} for events, listen to mixes, and explore official DJ rankings on Deck Salone.`;
+          image = makeAbsoluteUrl(dj.avatar || dj.coverBanner);
+        }
       }
-    }
 
-    // 3. User Profile Route: /user/:username
-    const userMatch = req.path.match(/^\/user\/([a-zA-Z0-9_-]+)/);
-    if (userMatch) {
-      const username = userMatch[1].toLowerCase();
-      const user = await prisma.user.findUnique({
-        where: { username },
-        include: { djProfile: true },
-      });
-      if (user) {
-        const nameStr = user.djProfile?.stageName || user.name || user.username;
-        title = `👤 ${nameStr} (@${user.username}) — Deck Salone`;
-        description = user.bio
-          ? user.bio.slice(0, 160)
-          : `Check out ${nameStr}'s profile on Deck Salone, Sierra Leone's #1 DJ platform.`;
-        image = makeAbsoluteUrl(user.avatar || user.djProfile?.avatar);
+      // 3. User Profile Route: /user/:username
+      const userMatch = req.path.match(/^\/user\/([a-zA-Z0-9_-]+)/);
+      if (userMatch) {
+        const username = userMatch[1].toLowerCase();
+        const user = await prisma.user.findUnique({
+          where: { username },
+          include: { djProfile: true },
+        });
+        if (user) {
+          const nameStr = user.djProfile?.stageName || user.name || user.username;
+          title = `👤 ${nameStr} (@${user.username}) — Deck Salone`;
+          description = user.bio
+            ? user.bio.slice(0, 160)
+            : `Check out ${nameStr}'s profile on Deck Salone, Sierra Leone's #1 DJ platform.`;
+          image = makeAbsoluteUrl(user.avatar || user.djProfile?.avatar);
+        }
       }
-    }
 
-    // 4. Event Detail Route: /events/:id or /event/:id
-    const eventMatch = req.path.match(/^\/(?:events|event)\/([a-zA-Z0-9_-]+)/);
-    if (eventMatch) {
-      const eventId = eventMatch[1];
-      const event = await prisma.event.findUnique({
-        where: { id: eventId },
-        include: { dj: true },
-      });
-      if (event) {
-        const djStr = event.dj ? ` by ${event.dj.stageName}` : '';
-        title = `🎉 ${event.title}${djStr} — Event on Deck Salone`;
-        description = event.description
-          ? event.description.slice(0, 160)
-          : `Get tickets and details for ${event.title} at ${event.venue || event.city || 'Sierra Leone'} on Deck Salone.`;
-        image = makeAbsoluteUrl(event.coverImage || event.dj?.avatar);
+      // 4. Event Detail Route: /events/:id or /event/:id
+      const eventMatch = req.path.match(/^\/(?:events|event)\/([a-zA-Z0-9_-]+)/);
+      if (eventMatch) {
+        const eventId = eventMatch[1];
+        const event = await prisma.event.findUnique({
+          where: { id: eventId },
+          include: { dj: true },
+        });
+        if (event) {
+          const djStr = event.dj ? ` by ${event.dj.stageName}` : '';
+          title = `🎉 ${event.title}${djStr} — Event on Deck Salone`;
+          description = event.description
+            ? event.description.slice(0, 160)
+            : `Get tickets and details for ${event.title} at ${event.venue || event.city || 'Sierra Leone'} on Deck Salone.`;
+          image = makeAbsoluteUrl(event.coverImage || event.dj?.avatar);
+        }
       }
-    }
 
-    // 5. Hall of Fame Route: /hall-of-fame
-    if (req.path.startsWith('/hall-of-fame')) {
-      title = `👑 Hall of Fame — Deck Salone Legends`;
-      description = `Celebrating Sierra Leone's most legendary DJs and iconic mixes of all time on Deck Salone.`;
-      const legendDj = await prisma.djProfile.findFirst({
-        where: { isPublic: true },
-        orderBy: { rankingScore: 'desc' },
-      });
-      image = makeAbsoluteUrl(legendDj?.avatar || legendDj?.coverBanner);
-    }
+      // 5. Hall of Fame Route: /hall-of-fame
+      if (req.path.startsWith('/hall-of-fame')) {
+        title = `👑 Hall of Fame — Deck Salone Legends`;
+        description = `Celebrating Sierra Leone's most legendary DJs and iconic mixes of all time on Deck Salone.`;
+        const legendDj = await prisma.djProfile.findFirst({
+          where: { isPublic: true },
+          orderBy: { rankingScore: 'desc' },
+        });
+        image = makeAbsoluteUrl(legendDj?.avatar || legendDj?.coverBanner);
+      }
 
-    // 6. Rankings Route: /rankings
-    if (req.path.startsWith('/rankings')) {
-      title = `🏆 Official DJ Rankings — Deck Salone`;
-      description = `Top rated DJs in Sierra Leone based on weekly streams, gig bookings, community votes, and activity.`;
-      const topDj = await prisma.djProfile.findFirst({
-        where: { isPublic: true },
-        orderBy: { rankingScore: 'desc' },
-      });
-      image = makeAbsoluteUrl(topDj?.avatar);
+      // 6. Rankings Route: /rankings
+      if (req.path.startsWith('/rankings')) {
+        title = `🏆 Official DJ Rankings — Deck Salone`;
+        description = `Top rated DJs in Sierra Leone based on weekly streams, gig bookings, community votes, and activity.`;
+        const topDj = await prisma.djProfile.findFirst({
+          where: { isPublic: true },
+          orderBy: { rankingScore: 'desc' },
+        });
+        image = makeAbsoluteUrl(topDj?.avatar);
+      }
+
+      // Store result in cache for subsequent requests
+      setCachedMeta(req.path, { title, description, image, pageUrl });
+    } catch (err) {
+      logger.error('Meta injection error:', { error: err.message, path: req.path });
     }
-  } catch (err) {
-    logger.error('Meta injection error:', { error: err.message, path: req.path });
   }
 
   const escapeHtml = (str) =>

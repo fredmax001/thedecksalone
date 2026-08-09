@@ -21,6 +21,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import FadeIn from '@/components/FadeIn';
 import SEOHead from '@/components/SEOHead';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
+import { useUsers } from '@/hooks/useUsers';
 import { imageFallback } from '@/lib/utils';
 import ShareButton from '@/components/ShareButton';
 import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
@@ -58,6 +59,27 @@ type DJsResponse = {
   };
 };
 
+interface DiscoveredUser {
+  id: string;
+  name: string | null;
+  username: string;
+  avatar: string | null;
+  location: string | null;
+  bio: string | null;
+  favoriteGenres: string[];
+  createdAt: string;
+  displayName: string;
+}
+
+type UsersResponse = {
+  data: DiscoveredUser[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+};
 /* ─────────────────── Constants ─────────────────── */
 
 const EQUIPMENT = ['Pioneer DJ', 'Serato', 'Traktor', 'Rekordbox'];
@@ -323,6 +345,123 @@ function DJListRow({ dj, index }: { dj: DJ; index: number }) {
   );
 }
 
+/* ─────────────────── User Card ─────────────────── */
+
+function UserCard({ user, index }: { user: DiscoveredUser; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      transition={{ duration: 0.5, delay: index * 0.06, ease: easeSmooth }}
+      className="group relative bg-black-elevated rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card hover:border-gold/30"
+    >
+      <div className="relative aspect-square overflow-hidden">
+        <img
+          src={user.avatar || '/default-avatar.jpg'}
+          alt={user.displayName}
+          onError={imageFallback}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
+      </div>
+
+      <div className="p-4">
+        {user.favoriteGenres?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {user.favoriteGenres.slice(0, 2).map((g) => (
+              <span
+                key={g}
+                className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-secondary"
+              >
+                {g}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <Link to={`/user/${user.username}`}>
+          <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5 hover:text-gold transition-colors">
+            {user.displayName}
+          </h3>
+        </Link>
+
+        {user.location && (
+          <div className="flex items-center gap-1 mt-1 mb-3">
+            <MapPin className="w-3.5 h-3.5 text-text-muted" />
+            <span className="text-xs text-text-muted">{user.location}</span>
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
+          <Link
+            to={`/user/${user.username}`}
+            className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
+          >
+            View Profile
+          </Link>
+          <ShareButton
+            url={`${window.location.origin}/user/${user.username}`}
+            title={`Check out ${user.displayName} on The Deck Salone`}
+            size="sm"
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─────────────────── User List Row ─────────────────── */
+
+function UserListRow({ user, index }: { user: DiscoveredUser; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ duration: 0.4, delay: index * 0.04, ease: easeSmooth }}
+      className="group flex items-center gap-4 p-4 bg-black-elevated rounded-xl border border-white/5 hover:border-gold/30 transition-all duration-300"
+    >
+      <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
+        <img
+          src={user.avatar || '/default-avatar.jpg'}
+          alt={user.displayName}
+          onError={imageFallback}
+          className="w-full h-full object-cover"
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Link to={`/user/${user.username}`}>
+            <h3 className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary hover:text-gold transition-colors truncate">
+              {user.displayName}
+            </h3>
+          </Link>
+        </div>
+        {user.location && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <MapPin className="w-3 h-3 text-text-muted" />
+            <span className="text-xs text-text-muted truncate">{user.location}</span>
+          </div>
+        )}
+        {user.bio && (
+          <p className="text-xs text-text-secondary mt-1 truncate">{user.bio}</p>
+        )}
+      </div>
+
+      <div className="hidden md:flex flex-col items-end gap-2 shrink-0">
+        <Link
+          to={`/user/${user.username}`}
+          className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors"
+        >
+          View
+        </Link>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ─────────────────── Filter Chip ─────────────────── */
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -372,7 +511,10 @@ function EmptyState({ onClear }: { onClear: () => void }) {
 
 /* ─────────────────── Main Component ─────────────────── */
 
+type TabType = 'djs' | 'people';
+
 export default function Discover() {
+  const [activeTab, setActiveTab] = useState<TabType>('djs');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeGenre, setActiveGenre] = useState('All');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -397,6 +539,12 @@ export default function Discover() {
     limit: ITEMS_PER_PAGE,
   });
 
+  const usersQuery = useUsers({
+    search: searchQuery || undefined,
+    page: currentPage,
+    limit: ITEMS_PER_PAGE,
+  });
+
   const genresQuery = useDJGenres();
 
   /* ── Debug logging ── */
@@ -416,6 +564,7 @@ export default function Discover() {
   }, [djsQuery.data]);
 
   const djsData = djsQuery.data as DJsResponse | undefined;
+  const usersData = usersQuery.data as UsersResponse | undefined;
   const genreOptions = useMemo(
     () => ['All', ...((genresQuery.data as string[] | undefined) ?? [])],
     [genresQuery.data]
@@ -556,6 +705,33 @@ export default function Discover() {
               FIND YOUR PERFECT DJ
             </h1>
           </FadeIn>
+          {/* Tab Switcher */}
+          <FadeIn delay={0.3}>
+            <div className="flex justify-center mt-6">
+              <div className="inline-flex items-center bg-black-surface border border-dark-gray rounded-full p-1">
+                <button
+                  onClick={() => { setActiveTab('djs'); setCurrentPage(1); }}
+                  className={`px-6 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                    activeTab === 'djs'
+                      ? 'bg-gold-gradient text-black'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  DJs
+                </button>
+                <button
+                  onClick={() => { setActiveTab('people'); setCurrentPage(1); }}
+                  className={`px-6 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                    activeTab === 'people'
+                      ? 'bg-gold-gradient text-black'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  People
+                </button>
+              </div>
+            </div>
+          </FadeIn>
           {/* Search Bar */}
           <FadeIn delay={0.4}>
             <div className="max-w-2xl mx-auto mt-8">
@@ -563,7 +739,7 @@ export default function Discover() {
                 <Search className="absolute left-4 w-5 h-5 text-gold pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search by DJ name, city, or community..."
+                  placeholder={activeTab === 'djs' ? "Search by DJ name, city, or community..." : "Search people by name or username..."}
                   value={searchQuery}
                   onChange={handleSearch}
                   className="w-full pl-12 pr-28 py-3.5 bg-black-surface border border-dark-gray rounded-full text-text-primary placeholder:text-text-muted text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
@@ -576,6 +752,7 @@ export default function Discover() {
           </FadeIn>
 
           {/* Genre Filter Pills — Desktop */}
+          {activeTab === 'djs' && (
           <FadeIn delay={0.5}>
             <div className="hidden md:flex flex-wrap justify-center gap-2 mt-5">
               {genreOptions.map((genre, i) => (
@@ -596,8 +773,10 @@ export default function Discover() {
               ))}
             </div>
           </FadeIn>
+          )}
 
           {/* Genre Filter Dropdown — Mobile */}
+          {activeTab === 'djs' && (
           <FadeIn delay={0.5}>
             <div className="md:hidden mt-5" ref={genreDropdownRef}>
               <button
@@ -643,8 +822,10 @@ export default function Discover() {
               </AnimatePresence>
             </div>
           </FadeIn>
+          )}
 
           {/* Advanced Filters Toggle */}
+          {activeTab === 'djs' && (
           <FadeIn delay={0.7}>
             <div className="flex justify-center mt-4">
               <button
@@ -659,8 +840,10 @@ export default function Discover() {
               </button>
             </div>
           </FadeIn>
+          )}
 
           {/* Advanced Filters Panel */}
+          {activeTab === 'djs' && (
           <AnimatePresence>
             {showAdvanced && (
               <motion.div
@@ -812,6 +995,7 @@ export default function Discover() {
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </div>
       </section>
 
@@ -841,7 +1025,9 @@ export default function Discover() {
 
           {/* Result Count */}
           <span className="font-mono text-xs text-text-muted hidden sm:block">
-            Showing {displayedDjs.length} of {serverTotal} DJs
+            {activeTab === 'djs'
+              ? `Showing ${displayedDjs.length} of ${serverTotal} DJs`
+              : `Showing ${usersData?.data?.length ?? 0} of ${usersData?.meta?.total ?? 0} People`}
           </span>
 
           {/* View Mode Toggle */}
@@ -899,94 +1085,199 @@ export default function Discover() {
         </div>
       </section>
 
-      {/* ════════ Section 3: DJ Grid ════════ */}
+      {/* ════════ Section 3: Results ════════ */}
       <section className="py-8">
         <div className="container-main">
-          <AnimatePresence mode="wait">
-            {djsQuery.isLoading ? (
-              <motion.div
-                key="loading"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-              >
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
-                    <div className="w-full h-48 bg-white/5" />
-                    <div className="p-5">
-                      <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
-                      <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
-                      <div className="flex gap-2 mb-4">
-                        <div className="h-6 w-16 bg-white/5 rounded-full" />
-                        <div className="h-6 w-16 bg-white/5 rounded-full" />
-                      </div>
-                      <div className="h-10 bg-white/5 rounded-lg w-full" />
-                    </div>
-                  </div>
-                ))}
-              </motion.div>
-            ) : djsQuery.error ? (
-              <motion.div
-                key="error"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="flex flex-col items-center justify-center py-20"
-              >
-                <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
-                  <Search className="w-8 h-8 text-text-muted" />
-                </div>
-                <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
-                  FAILED TO LOAD DJS
-                </h3>
-                <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
-                  {(djsQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
-                </p>
-                <button
-                  onClick={() => djsQuery.refetch()}
-                  className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
+          {activeTab === 'djs' ? (
+            <AnimatePresence mode="wait">
+              {djsQuery.isLoading ? (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                 >
-                  Try Again
-                </button>
-              </motion.div>
-            ) : displayedDjs.length === 0 ? (
-              <EmptyState key="empty" onClear={clearAllFilters} />
-            ) : viewMode === 'list' ? (
-              <motion.div
-                key="list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-3"
-              >
-                <AnimatePresence>
-                  {displayedDjs.map((dj, i) => (
-                    <DJListRow key={dj.id} dj={dj} index={i} />
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
+                      <div className="w-full h-48 bg-white/5" />
+                      <div className="p-5">
+                        <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
+                        <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
+                        <div className="flex gap-2 mb-4">
+                          <div className="h-6 w-16 bg-white/5 rounded-full" />
+                          <div className="h-6 w-16 bg-white/5 rounded-full" />
+                        </div>
+                        <div className="h-10 bg-white/5 rounded-lg w-full" />
+                      </div>
+                    </div>
                   ))}
-                </AnimatePresence>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="grid"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
-              >
-                <AnimatePresence>
-                  {displayedDjs.map((dj, i) => (
-                    <DJCard key={dj.id} dj={dj} index={i} />
+                </motion.div>
+              ) : djsQuery.error ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="flex flex-col items-center justify-center py-20"
+                >
+                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
+                    <Search className="w-8 h-8 text-text-muted" />
+                  </div>
+                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
+                    FAILED TO LOAD DJS
+                  </h3>
+                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
+                    {(djsQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
+                  </p>
+                  <button
+                    onClick={() => djsQuery.refetch()}
+                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </motion.div>
+              ) : displayedDjs.length === 0 ? (
+                <EmptyState key="empty" onClear={clearAllFilters} />
+              ) : viewMode === 'list' ? (
+                <motion.div
+                  key="list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-3"
+                >
+                  <AnimatePresence>
+                    {displayedDjs.map((dj, i) => (
+                      <DJListRow key={dj.id} dj={dj} index={i} />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="grid"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
+                  <AnimatePresence>
+                    {displayedDjs.map((dj, i) => (
+                      <DJCard key={dj.id} dj={dj} index={i} />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ) : (
+            <AnimatePresence mode="wait">
+              {usersQuery.isLoading ? (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
+                      <div className="w-full h-48 bg-white/5" />
+                      <div className="p-5">
+                        <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
+                        <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
+                        <div className="flex gap-2 mb-4">
+                          <div className="h-6 w-16 bg-white/5 rounded-full" />
+                          <div className="h-6 w-16 bg-white/5 rounded-full" />
+                        </div>
+                        <div className="h-10 bg-white/5 rounded-lg w-full" />
+                      </div>
+                    </div>
                   ))}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              ) : usersQuery.isError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="flex flex-col items-center justify-center py-20"
+                >
+                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
+                    <Search className="w-8 h-8 text-text-muted" />
+                  </div>
+                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
+                    FAILED TO LOAD PEOPLE
+                  </h3>
+                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
+                    {(usersQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
+                  </p>
+                  <button
+                    onClick={() => usersQuery.refetch()}
+                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </motion.div>
+              ) : (usersData?.data?.length ?? 0) === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center py-20"
+                >
+                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
+                    <Users className="w-8 h-8 text-text-muted" />
+                  </div>
+                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
+                    NO PEOPLE FOUND
+                  </h3>
+                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
+                    Try adjusting your search or check back later.
+                  </p>
+                  <button
+                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
+                  >
+                    Clear Search
+                  </button>
+                </motion.div>
+              ) : viewMode === 'list' ? (
+                <motion.div
+                  key="list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-3"
+                >
+                  <AnimatePresence>
+                    {usersData!.data.map((user, i) => (
+                      <UserListRow key={user.id} user={user} index={i} />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="grid"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
+                  <AnimatePresence>
+                    {usersData!.data.map((user, i) => (
+                      <UserCard key={user.id} user={user} index={i} />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
         </div>
       </section>
 
       {/* ════════ Section 4: Pagination ════════ */}
-      {totalPages > 1 && displayedDjs.length > 0 && (
+      {((activeTab === 'djs' && totalPages > 1 && displayedDjs.length > 0) ||
+        (activeTab === 'people' && (usersData?.meta?.totalPages ?? 0) > 1 && (usersData?.data?.length ?? 0) > 0)) && (
         <section className="pb-8">
           <div className="container-main flex flex-col items-center gap-4">
             {/* Page Numbers */}
@@ -999,7 +1290,7 @@ export default function Discover() {
                 <ChevronLeft className="w-5 h-5" />
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              {Array.from({ length: activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0) }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
@@ -1014,8 +1305,8 @@ export default function Discover() {
               ))}
 
               <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0), p + 1))}
+                disabled={currentPage === (activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0))}
                 className="p-2 rounded-full text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
@@ -1023,14 +1314,14 @@ export default function Discover() {
             </div>
 
             {/* Load More */}
-            {currentPage < totalPages && (
+            {currentPage < (activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0)) && (
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0), p + 1))}
                 className="px-8 py-3 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
               >
-                Load More DJs
+                {activeTab === 'djs' ? 'Load More DJs' : 'Load More People'}
               </motion.button>
             )}
           </div>

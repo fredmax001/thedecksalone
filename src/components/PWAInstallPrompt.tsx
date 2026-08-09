@@ -44,9 +44,13 @@ export default function PWAInstallPrompt() {
   const [tab, setTab] = useState<'android' | 'ios'>('android');
   const os = getOS();
 
+  // Never show PWA prompt on native Capacitor app
+  const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
+  if (isNativeApp) return null;
+
   useEffect(() => {
-    // Don't show if already installed or not on mobile
-    if (isInStandaloneMode()) return;
+    // Don't show if already installed, on native app, or not on mobile
+    if (isInStandaloneMode() || isNativeApp) return;
     if (os === 'other') return;
 
     // Don't show if dismissed recently

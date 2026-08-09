@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { motion } from 'framer-motion';
 import {
   Loader2,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+interface UserProfileForm {
+  username: string;
+  name: string;
+  bio: string;
+  location: string;
+  gender: string;
+  dateOfBirth: string;
+  avatar: string;
+  favoriteGenres: string[];
+  social: {
+    instagram: string;
+    twitter: string;
+    facebook: string;
+  };
+}
+
+function parseApiError(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.error || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+}
 
 const GENRES = [
   'Amapiano',
@@ -69,14 +96,15 @@ export default function UserProfile() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<UserProfileForm>({
     username: '',
     name: '',
     bio: '',
     location: '',
     gender: '',
+    dateOfBirth: '',
     avatar: '',
-    favoriteGenres: [] as string[],
+    favoriteGenres: [],
     social: {
       instagram: '',
       twitter: '',
@@ -97,6 +125,7 @@ export default function UserProfile() {
           bio: data.bio || '',
           location: data.location || '',
           gender: data.gender || '',
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().slice(0, 10) : '',
           avatar: data.avatar || '',
           favoriteGenres: data.favoriteGenres || [],
           social: {
@@ -105,8 +134,8 @@ export default function UserProfile() {
             facebook: data.social?.facebook || '',
           },
         });
-      } catch (err: any) {
-        toast.error(err.response?.data?.error || 'Failed to load profile');
+      } catch (err: unknown) {
+        toast.error(parseApiError(err, 'Failed to load profile'));
         setForm((prev) => ({
           ...prev,
           username: user?.username || '',
@@ -131,8 +160,8 @@ export default function UserProfile() {
       } else {
         toast.error(res.data?.error || 'Failed to update profile');
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update profile');
+    } catch (err: unknown) {
+      toast.error(parseApiError(err, 'Failed to update profile'));
     } finally {
       setSaving(false);
     }
@@ -166,8 +195,8 @@ export default function UserProfile() {
       } else {
         toast.error(res.data?.error || 'Invalid response from server');
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to upload avatar');
+    } catch (err: unknown) {
+      toast.error(parseApiError(err, 'Failed to upload avatar'));
     } finally {
       setUploadingAvatar(false);
       // Reset input so the same file can be selected again
@@ -209,7 +238,7 @@ export default function UserProfile() {
           <div className="flex items-center gap-6">
             <div className="relative">
               <Avatar className="w-24 h-24 border-2 border-gold/30">
-                <AvatarImage src={form.avatar} />
+                <AvatarImage src={getMediaUrl(form.avatar)} />
                 <AvatarFallback className="bg-gold/10 text-gold text-2xl">
                   <User className="w-10 h-10" />
                 </AvatarFallback>
@@ -282,17 +311,17 @@ export default function UserProfile() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
             <div className="space-y-2">
-              <Label className="text-text-secondary flex items-center gap-1">
+              <Label className="text-text-secondary text-xs sm:text-sm flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5" /> Location
               </Label>
               <Select
                 value={form.location}
                 onValueChange={(v) => setForm((prev) => ({ ...prev, location: v }))}
               >
-                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
-                  <SelectValue placeholder="Select your city" />
+                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary text-xs sm:text-sm px-2.5">
+                  <SelectValue placeholder="City" />
                 </SelectTrigger>
                 <SelectContent className="bg-black-surface border-dark-gray">
                   {CITIES.map((city) => (
@@ -304,23 +333,31 @@ export default function UserProfile() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-text-secondary">Gender</Label>
+              <Label className="text-text-secondary text-xs sm:text-sm">Gender</Label>
               <Select
                 value={form.gender}
                 onValueChange={(v) => setForm((prev) => ({ ...prev, gender: v }))}
               >
-                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
-                  <SelectValue placeholder="Select your gender" />
+                <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary text-xs sm:text-sm px-2.5">
+                  <SelectValue placeholder="Gender" />
                 </SelectTrigger>
                 <SelectContent className="bg-black-surface border-dark-gray">
-                  <SelectItem value="">Prefer not to say</SelectItem>
+                  <SelectItem value="PREFER_NOT_TO_SAY">Prefer not to say</SelectItem>
                   <SelectItem value="MALE">Male</SelectItem>
                   <SelectItem value="FEMALE">Female</SelectItem>
                   <SelectItem value="NON_BINARY">Non-binary</SelectItem>
                   <SelectItem value="OTHER">Other</SelectItem>
-                  <SelectItem value="PREFER_NOT_TO_SAY">Prefer not to say</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-text-secondary text-xs sm:text-sm">Date of Birth</Label>
+              <Input
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) => setForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+                className="bg-black-surface border-dark-gray text-text-primary placeholder:text-text-muted text-xs sm:text-sm px-2.5"
+              />
             </div>
           </div>
         </CardContent>
@@ -334,22 +371,54 @@ export default function UserProfile() {
             Favorite Genres
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {GENRES.map((genre) => (
-              <button
-                key={genre}
-                onClick={() => toggleGenre(genre)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  form.favoriteGenres.includes(genre)
-                    ? 'bg-gold/20 text-gold border border-gold/30'
-                    : 'bg-black-surface text-text-muted border border-dark-gray hover:border-text-muted'
-                }`}
-              >
-                {genre}
-              </button>
-            ))}
-          </div>
+        <CardContent className="space-y-3">
+          <Select
+            onValueChange={(val) => {
+              if (val && !form.favoriteGenres.includes(val)) {
+                setForm((prev) => ({
+                  ...prev,
+                  favoriteGenres: [...prev.favoriteGenres, val],
+                }));
+              }
+            }}
+          >
+            <SelectTrigger className="bg-black-surface border-dark-gray text-text-primary">
+              <SelectValue placeholder="Select favorite genres to add..." />
+            </SelectTrigger>
+            <SelectContent className="bg-black-surface border-dark-gray max-h-60 overflow-y-auto">
+              {GENRES.map((genre) => (
+                <SelectItem
+                  key={genre}
+                  value={genre}
+                  disabled={form.favoriteGenres.includes(genre)}
+                  className="cursor-pointer text-xs"
+                >
+                  {genre} {form.favoriteGenres.includes(genre) ? '✓ Added' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Active Selected Badges */}
+          {form.favoriteGenres.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {form.favoriteGenres.map((genre) => (
+                <span
+                  key={genre}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gold/15 text-gold border border-gold/30"
+                >
+                  {genre}
+                  <button
+                    type="button"
+                    onClick={() => toggleGenre(genre)}
+                    className="hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

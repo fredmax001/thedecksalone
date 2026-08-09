@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
+const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { playLimiter, conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthlyListeners');
@@ -132,6 +132,51 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
       prisma.mix.findMany({
         where,
         orderBy,
+        skip,
+        take: limitNum,
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+        },
+      }),
+      prisma.mix.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: mixes,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    console.error('[Mixes API] Error:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/mixes/all - List ALL mixes (including private) for ADMIN and MODERATOR only
+router.get('/all', authMiddleware, requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
+  try {
+    const { search, page, limit } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim().length > 0) {
+      const term = search.trim();
+      where.OR = [
+        { title: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+        { tags: { has: term } },
+        { genre: { contains: term, mode: 'insensitive' } },
+        { category: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const [mixes, total] = await Promise.all([
+      prisma.mix.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limitNum,
         include: {

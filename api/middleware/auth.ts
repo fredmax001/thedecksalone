@@ -59,15 +59,12 @@ async function softAuthMiddleware(req, res, next) {
 
 function requireRole(...roles) {
   const allowedRoles = roles.flat().filter(Boolean);
-  return async (req, res, next) => {
+  return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { role: true },
-    });
-    if (!user || !allowedRoles.includes(user.role)) {
+    // Role is already on req.user from authMiddleware — no extra DB query needed
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
     }
     next();

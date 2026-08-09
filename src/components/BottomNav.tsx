@@ -28,7 +28,6 @@ export default function BottomNav() {
 
   const isDj = user?.role === 'DJ';
   const isProPlus = user?.djProfile?.subscriptionTier === 'legend';
-  const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
 
   const mainItems = [
     ...baseItems,
@@ -43,12 +42,18 @@ export default function BottomNav() {
     return location.pathname.startsWith(path);
   };
 
+  const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
+  const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
+  const bookingsPath = isDj ? '/dashboard/bookings' : '/user/bookings';
+  const likesPath = isDj ? '/dashboard/mixes' : '/user/activity';
+  const playlistsPath = isDj ? '/dashboard/sets' : '/mixes';
+
   const fabActions = [
-    { label: 'Profile', path: profilePath, icon: User },
-    { label: 'Install App', path: '/install', icon: Smartphone },
-    { label: 'Likes', path: isDj ? '/dashboard/mixes' : '/user/activity', icon: Heart },
-    { label: 'Sets', path: isDj ? '/dashboard/sets' : '/mixes', icon: Radio },
-    { label: 'Uploads', path: isDj ? '/dashboard/mixes' : '/user/activity', icon: Upload },
+    { label: 'Profile', path: dashboardPath, icon: User },
+    { label: 'Likes', path: likesPath, icon: Heart },
+    { label: 'Playlists', path: playlistsPath, icon: Radio },
+    { label: 'Bookings', path: bookingsPath, icon: Upload },
+    ...(!isNativeApp ? [{ label: 'Install App', path: '/install', icon: Smartphone }] : []),
   ];
 
   return (

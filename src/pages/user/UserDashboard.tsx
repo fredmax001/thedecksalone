@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   CalendarCheck,
@@ -27,7 +28,14 @@ const quickLinks = [
 
 export default function UserDashboard() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const displayName = user?.username || user?.email?.split('@')[0] || 'Fan';
+
+  useEffect(() => {
+    if (user?.role === 'MODERATOR') {
+      navigate('/moderator', { replace: true });
+    }
+  }, [user, navigate]);
 
   return (
     <div className="space-y-8">

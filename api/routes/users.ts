@@ -355,54 +355,20 @@ router.get('/notifications', authMiddleware, async (req, res) => {
 const GENDER_VALUES = ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'] as const;
 
 const updateProfileSchema = z.object({
-  username: z.string().min(3).max(30).optional(),
-  email: z.string().email().optional(),
-  name: z.string().max(100).optional().or(z.literal('')),
-  bio: z.string().max(500).optional().or(z.literal('')),
-  location: z.string().max(100).optional().or(z.literal('')),
-  gender: z.enum(GENDER_VALUES).optional().or(z.literal('')),
-  favoriteGenres: z.array(z.string()).optional(),
+  username: z.string().max(50).optional().nullable().or(z.literal('')),
+  email: z.string().optional().nullable().or(z.literal('')),
+  name: z.string().max(100).optional().nullable().or(z.literal('')),
+  bio: z.string().max(2000).optional().nullable().or(z.literal('')),
+  location: z.string().max(100).optional().nullable().or(z.literal('')),
+  gender: z.string().max(50).optional().nullable().or(z.literal('')),
+  dateOfBirth: z.string().optional().nullable().or(z.literal('')),
+  avatar: z.string().optional().nullable().or(z.literal('')),
+  favoriteGenres: z.array(z.string()).optional().nullable(),
   social: z.object({
-    instagram: z.string().optional().or(z.literal('')),
-    twitter: z.string().optional().or(z.literal('')),
-    facebook: z.string().optional().or(z.literal('')),
-  }).optional(),
-});
-
-// GET /api/users/:username - Public user profile
-router.get('/:username', async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { username: req.params.username.toLowerCase() },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        avatar: true,
-        favoriteGenres: true,
-        socialLinks: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        ...user,
-        social: user.socialLinks || {},
-      },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+    instagram: z.string().optional().nullable().or(z.literal('')),
+    twitter: z.string().optional().nullable().or(z.literal('')),
+    facebook: z.string().optional().nullable().or(z.literal('')),
+  }).optional().nullable(),
 });
 
 // GET /api/users/profile - Current user's extended profile
@@ -418,6 +384,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
         bio: true,
         location: true,
         gender: true,
+        dateOfBirth: true,
         avatar: true,
         favoriteGenres: true,
         socialLinks: true,
@@ -442,57 +409,6 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/users/:username - Public user profile
-router.get('/:username', async (req, res) => {
-  try {
-    const username = req.params.username.toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { username },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        avatar: true,
-        favoriteGenres: true,
-        role: true,
-        createdAt: true,
-        djProfile: {
-          select: {
-            id: true,
-            stageName: true,
-            bio: true,
-            avatar: true,
-            city: true,
-            community: true,
-            country: true,
-            isPublic: true,
-            subscriptionTier: true,
-            verified: true,
-            user: { select: { username: true } },
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    // Only expose DJ profile if public
-    const publicUser = {
-      ...user,
-      djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
-    };
-
-    return res.json({ success: true, data: publicUser });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
 // PUT /api/users/profile - Update current user's profile
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
@@ -501,15 +417,15 @@ router.put('/profile', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { username, email, name, bio, location, gender, favoriteGenres, social } = parsed.data;
+    const { username, email, name, bio, location, gender, dateOfBirth, avatar, favoriteGenres, social } = parsed.data;
     const updateData: any = {};
 
     if (gender !== undefined) {
       updateData.gender = gender === '' ? null : gender;
     }
 
-    if (username !== undefined) {
-      const normalized = username.toLowerCase();
+    if (username && username.trim() !== '') {
+      const normalized = username.toLowerCase().trim();
       const existing = await prisma.user.findUnique({ where: { username: normalized } });
       if (existing && existing.id !== req.user.id) {
         return res.status(409).json({ success: false, error: 'Username already taken' });
@@ -517,13 +433,28 @@ router.put('/profile', authMiddleware, async (req, res) => {
       updateData.username = normalized;
     }
 
-    if (email !== undefined) {
+    if (email && email.trim() !== '') {
       const normalizedEmail = email.toLowerCase().trim();
       const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (existing && existing.id !== req.user.id) {
         return res.status(409).json({ success: false, error: 'Email already in use' });
       }
       updateData.email = normalizedEmail;
+    }
+
+    if (dateOfBirth !== undefined) {
+      if (!dateOfBirth || dateOfBirth.trim() === '') {
+        updateData.dateOfBirth = null;
+      } else {
+        const parsedDate = new Date(dateOfBirth);
+        if (!Number.isNaN(parsedDate.getTime())) {
+          updateData.dateOfBirth = parsedDate;
+        }
+      }
+    }
+
+    if (avatar !== undefined && avatar !== '') {
+      updateData.avatar = avatar;
     }
 
     if (name !== undefined) updateData.name = name || null;
@@ -543,12 +474,20 @@ router.put('/profile', authMiddleware, async (req, res) => {
         bio: true,
         location: true,
         gender: true,
+        dateOfBirth: true,
         avatar: true,
         favoriteGenres: true,
         socialLinks: true,
         role: true,
       },
     });
+
+    if (updateData.avatar) {
+      await prisma.djProfile.updateMany({
+        where: { userId: req.user.id },
+        data: { avatar: updateData.avatar },
+      }).catch(() => {});
+    }
 
     return res.json({
       success: true,
@@ -596,6 +535,12 @@ router.put('/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req,
       where: { id: req.user.id },
       data: { avatar: avatarUrl },
     });
+
+    // Sync to DjProfile if user is a DJ
+    await prisma.djProfile.updateMany({
+      where: { userId: req.user.id },
+      data: { avatar: avatarUrl },
+    }).catch(() => { });
 
     return res.json({ success: true, data: { avatar: avatarUrl } });
   } catch (error) {
@@ -680,19 +625,19 @@ router.get('/following', authMiddleware, async (req, res) => {
       followerCount: f.dj._count.followers,
       latestMix: f.dj.mixes[0]
         ? {
-            id: f.dj.mixes[0].id,
-            title: f.dj.mixes[0].title,
-            coverArt: f.dj.mixes[0].coverImage,
-            createdAt: f.dj.mixes[0].createdAt,
-          }
+          id: f.dj.mixes[0].id,
+          title: f.dj.mixes[0].title,
+          coverArt: f.dj.mixes[0].coverImage,
+          createdAt: f.dj.mixes[0].createdAt,
+        }
         : undefined,
       latestEvent: f.dj.events[0]
         ? {
-            id: f.dj.events[0].id,
-            title: f.dj.events[0].title,
-            eventDate: f.dj.events[0].date,
-            city: f.dj.events[0].city,
-          }
+          id: f.dj.events[0].id,
+          title: f.dj.events[0].title,
+          eventDate: f.dj.events[0].date,
+          city: f.dj.events[0].city,
+        }
         : undefined,
     }));
 
@@ -788,6 +733,7 @@ router.delete('/account', authMiddleware, async (req, res) => {
 
     await prisma.$transaction(async (tx) => {
       // User-scoped relations that do not cascade on user delete
+      await tx.notification.deleteMany({ where: { userId } });
       await tx.battleVote.deleteMany({ where: { userId } });
       await tx.mixLike.deleteMany({ where: { userId } });
       await tx.follow.deleteMany({ where: { userId } });
@@ -960,6 +906,107 @@ router.put('/settings', authMiddleware, async (req, res) => {
     }
 
     return res.json({ success: true, data: { message: 'Settings updated' } });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/public/:username - Public user profile lookup (no auth required)
+// NOTE: Also mounted at server-level as /api/users/public/:username
+router.get('/public/:username', async (req, res) => {
+  try {
+    const username = (req.params.username || '').toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        bio: true,
+        location: true,
+        avatar: true,
+        favoriteGenres: true,
+        role: true,
+        createdAt: true,
+        djProfile: {
+          select: {
+            id: true,
+            stageName: true,
+            bio: true,
+            avatar: true,
+            city: true,
+            community: true,
+            country: true,
+            isPublic: true,
+            subscriptionTier: true,
+            verified: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/users/:username - Public user profile by username (MUST be last GET route)
+router.get('/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        bio: true,
+        location: true,
+        avatar: true,
+        favoriteGenres: true,
+        role: true,
+        createdAt: true,
+        djProfile: {
+          select: {
+            id: true,
+            stageName: true,
+            bio: true,
+            avatar: true,
+            city: true,
+            community: true,
+            country: true,
+            isPublic: true,
+            subscriptionTier: true,
+            verified: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const publicUser = {
+      ...user,
+      djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
+    };
+
+    return res.json({ success: true, data: publicUser });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

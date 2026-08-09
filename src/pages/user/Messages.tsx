@@ -9,9 +9,10 @@ import {
   CheckCheck,
   Music,
   Plus,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -299,8 +300,8 @@ export default function Messages() {
       )}
 
       <div className="flex h-[calc(100vh-220px)] min-h-[500px] gap-4">
-        {/* Conversations Sidebar */}
-        <Card className="w-full max-w-sm bg-black-elevated border-dark-gray flex flex-col">
+        {/* Conversations Sidebar (Full width on mobile when no chat selected) */}
+        <Card className={`w-full md:w-80 md:max-w-xs bg-black-elevated border-dark-gray flex flex-col shrink-0 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-3 border-b border-dark-gray">
             <div className="flex items-center gap-2 mb-2">
               <Button
@@ -343,7 +344,7 @@ export default function Messages() {
                 >
                   <div className="relative">
                     <Avatar className="w-10 h-10 border border-gold/20">
-                      <AvatarImage src={conv.avatar || undefined} />
+                      <AvatarImage src={getMediaUrl(conv.avatar) || undefined} />
                       <AvatarFallback className="bg-gold/10 text-gold text-xs">
                         <Music className="w-4 h-4" />
                       </AvatarFallback>
@@ -373,21 +374,29 @@ export default function Messages() {
           </div>
         </Card>
 
-        {/* Chat Area */}
-        <Card className="flex-1 bg-black-elevated border-dark-gray flex flex-col">
+        {/* Chat Area (Full width on mobile when active chat exists) */}
+        <Card className={`w-full flex-1 bg-black-elevated border-dark-gray flex flex-col ${activeConversation ? 'flex' : 'hidden md:flex'}`}>
           {activeConversation && partner ? (
             <>
-              {/* Chat Header */}
-              <div className="flex items-center gap-3 p-4 border-b border-dark-gray">
+              {/* Chat Header with Mobile Back Button */}
+              <div className="flex items-center gap-3 p-3 sm:p-4 border-b border-dark-gray">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveConversation(null)}
+                  className="md:hidden p-1.5 h-8 text-gold hover:text-white"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
                 <Avatar className="w-8 h-8 border border-gold/20">
-                  <AvatarImage src={partner.avatar || undefined} />
+                  <AvatarImage src={getMediaUrl(partner.avatar) || undefined} />
                   <AvatarFallback className="bg-gold/10 text-gold text-xs">
                     <Music className="w-3 h-3" />
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="text-sm font-medium text-text-primary">{partner.name}</p>
-                  <p className="text-[10px] text-text-muted">DJ</p>
+                  <p className="text-[10px] text-text-muted">DJ / Contact</p>
                 </div>
               </div>
 

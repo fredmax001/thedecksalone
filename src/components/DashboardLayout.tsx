@@ -12,6 +12,7 @@ import {
   Settings,
   Smartphone,
   User,
+  Users,
   MessageSquare,
   Zap,
   BarChart3,
@@ -54,6 +55,7 @@ const navItems = [
   { icon: CalendarDays, label: 'Events', path: '/dashboard/events' },
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
+  { icon: Users, label: 'Followers', path: '/dashboard/followers' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
   { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
   { icon: BriefcaseBusiness, label: 'Opportunities', path: '/dashboard/opportunities' },
@@ -74,8 +76,15 @@ export default function DashboardLayout() {
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
-  const avatarUrl = djProfile?.avatar || localAvatarUrl || '';
+  const avatarUrl = djProfile?.avatar || localAvatarUrl || user?.avatar || '';
   const initials = djName.slice(0, 2).toUpperCase();
+
+  // Redirect Moderators to Moderator Console
+  useEffect(() => {
+    if (user?.role === 'MODERATOR') {
+      navigate('/moderator', { replace: true });
+    }
+  }, [user, navigate]);
 
   // Fetch DJ profile directly if auth store doesn't have avatar yet
   useEffect(() => {
@@ -322,11 +331,13 @@ export default function DashboardLayout() {
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard/settings" className="cursor-pointer text-xs">Settings</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
-                      <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
-                    </Link>
-                  </DropdownMenuItem>
+                  {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
+                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator className="bg-dark-gray" />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
                     Logout

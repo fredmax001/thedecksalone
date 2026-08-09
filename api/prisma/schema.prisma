@@ -166,6 +166,8 @@ model DjProfile {
   idDocumentType          String?
   idDocumentUrl           String?
   isLegendFeatured        Boolean                  @default(false)
+  isModeratorFeatured     Boolean                  @default(false)
+  isRisingDj              Boolean                  @default(false)
   isPro                   Boolean                  @default(false)
   isVerifiedEligible      Boolean                  @default(false)
   legalName               String?
@@ -271,9 +273,13 @@ model Mix {
   featured    Boolean       @default(false)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-  audioSource String?
   originalUrl String?
   hallOfFame  Boolean       @default(false)
+  secondaryGenres  String[]      @default([])
+  flaggedForReview Boolean       @default(false)
+  flaggedReason    String?
+  moderatorCurated Boolean       @default(false)
+  moderatorNotes   String?
   highlights  DjHighlight[]
   setItems    DjSetItem[]
   mixLikes    MixLike[]
@@ -281,6 +287,7 @@ model Mix {
   mixPlays    MixPlay[]
   reups       MixReup[]
   violationReports ViolationReport[]
+  officialItems OfficialPlaylistItem[]
   dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
 
   @@index([djId])
@@ -1134,6 +1141,62 @@ model SystemErrorLog {
   @@index([createdAt])
   @@map("system_error_logs")
 }
+
+model OfficialPlaylist {
+  id          String                 @id @default(cuid())
+  title       String
+  description String?                @db.Text
+  coverImage  String?
+  slug        String                 @unique
+  isFeatured  Boolean                @default(false)
+  isPublished Boolean                @default(true)
+  createdById String
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  items       OfficialPlaylistItem[]
+
+  @@index([isPublished])
+  @@index([isFeatured])
+  @@index([createdAt])
+  @@map("official_playlists")
+}
+
+model OfficialPlaylistItem {
+  id         String           @id @default(cuid())
+  playlistId String
+  mixId      String
+  position   Int              @default(0)
+  addedAt    DateTime         @default(now())
+
+  playlist   OfficialPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  mix        Mix              @relation(fields: [mixId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, mixId])
+  @@index([playlistId, position])
+  @@map("official_playlist_items")
+}
+
+model ModeratorAuditLog {
+  id           String   @id @default(cuid())
+  moderatorId  String
+  moderatorName String?
+  action       String   // e.g. 'CHANGE_GENRE', 'HIDE_MIX', 'FEATURE_MIX', 'CREATE_PLAYLIST', 'RANKING_ADJUSTMENT', 'RESOLVE_REPORT'
+  targetType   String   // 'MIX', 'USER', 'DJ', 'PLAYLIST', 'REPORT', 'RANKING'
+  targetId     String?
+  targetName   String?
+  previousData Json?
+  newData      Json?
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([moderatorId])
+  @@index([action])
+  @@index([targetType])
+  @@index([createdAt])
+  @@map("moderator_audit_logs")
+}
+
 
 
 

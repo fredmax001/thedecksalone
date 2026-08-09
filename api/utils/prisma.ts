@@ -3,22 +3,27 @@ import logger from './logger';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+const logConfig = isProduction
+  ? [{ emit: 'stdout' as const, level: 'error' as const }]
+  : [
+      { emit: 'event' as const, level: 'query' as const },
+      { emit: 'stdout' as const, level: 'error' as const },
+      { emit: 'stdout' as const, level: 'warn' as const },
+    ];
+
 export const prisma = globalForPrisma.prisma || new PrismaClient({
-  // Use emit for query so we can track query execution time
-  log: [
-    { emit: 'event', level: 'query' },
-    { emit: 'stdout', level: 'error' },
-    { emit: 'stdout', level: 'warn' },
-  ],
+  log: logConfig,
 });
 
-if (!globalForPrisma.prisma) {
-  // Setup slow query logging (e.g. queries > 500ms)
+if (!globalForPrisma.prisma && !isProduction) {
+  // Setup slow query logging (e.g. queries > 500ms) — DEV only
   // @ts-ignore
   prisma.$on('query' as any, (e: any) => {
     if (e.duration >= 500) {
       logger.warn(`Slow Query [${e.duration}ms]: ${e.query}`);
-    } else if (process.env.NODE_ENV === 'development') {
+    } else {
       logger.info(`Query [${e.duration}ms]: ${e.query}`);
     }
   });

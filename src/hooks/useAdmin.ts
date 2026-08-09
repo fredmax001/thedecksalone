@@ -376,11 +376,11 @@ export function useAdminStats() {
   });
 }
 
-export function useAdminAnalytics() {
+export function useAdminAnalytics(range: string = '6m') {
   return useQuery<AdminAnalytics[]>({
-    queryKey: ['adminAnalytics'],
+    queryKey: ['adminAnalytics', range],
     queryFn: async () => {
-      const res = await api.get('/admin/analytics');
+      const res = await api.get('/admin/analytics', { params: { range } });
       return res.data.data;
     },
   });

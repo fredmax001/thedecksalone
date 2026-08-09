@@ -42,6 +42,12 @@ const discoverDjsSchema = z.object({
   maxFee: z.string().optional(),
 });
 
+const discoverUsersSchema = z.object({
+  search: z.string().optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
+});
+
 /* ──────────────────── Mix Discovery ──────────────────── */
 
 // GET /api/discover/mixes — Algorithmic mix discovery
@@ -242,6 +248,69 @@ router.get('/djs/battle-leaders', async (req, res) => {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
     const djs = await getBattleLeaders(limitNum);
     return res.json({ success: true, data: djs });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/* ──────────────────── User Discovery ──────────────────── */
+
+// GET /api/discover/users — Discover platform users (non-DJs)
+router.get('/users', conditionalSearchLimiter, async (req, res) => {
+  try {
+    const parsed = discoverUsersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
+    }
+
+    const { search, page, limit } = parsed.data;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {
+      role: 'USER',
+      status: 'ACTIVE',
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          avatar: true,
+          location: true,
+          bio: true,
+          favoriteGenres: true,
+          createdAt: true,
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: users.map((u) => ({
+        ...u,
+        displayName: u.name || u.username || 'User',
+      })),
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

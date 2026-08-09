@@ -95,15 +95,17 @@ function GuestLandingHero({ statsData }: { statsData?: { totalDjs: number; verif
               </Link>
             </div>
 
-            {/* Install pill */}
-            <div className="mt-5">
-              <Link
-                to="/install"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-gold/80 hover:text-gold underline tracking-wide transition-colors"
-              >
-                <Smartphone className="w-3.5 h-3.5" /> Install Mobile App (iOS &amp; Android)
-              </Link>
-            </div>
+            {/* Install pill — web only */}
+            {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
+              <div className="mt-5">
+                <Link
+                  to="/install"
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-gold/80 hover:text-gold underline tracking-wide transition-colors"
+                >
+                  <Smartphone className="w-3.5 h-3.5" /> Install Mobile App (iOS &amp; Android)
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Right: Platform Stats Grid — desktop only */}
@@ -555,11 +557,11 @@ function DjRail({ djs }: { djs: any[] }) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Headphones className="h-5 w-5 text-gold" />
-          <h2 className="font-display text-xl font-bold uppercase text-text-primary">Featured Salone DJs</h2>
+        <div className="flex items-center gap-2.5">
+          <Headphones className="h-4 sm:h-5 w-4 sm:w-5 text-gold shrink-0" />
+          <h2 className="font-display text-base sm:text-xl font-bold uppercase text-text-primary tracking-wide">Featured Salone DJs</h2>
         </div>
-        <Link to="/discover" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1">
+        <Link to="/discover" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1 shrink-0">
           View All <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
@@ -609,16 +611,16 @@ function MixRail({ categories }: { categories: any[] }) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Radio className="h-5 w-5 text-gold" />
-          <h2 className="font-display text-xl font-bold uppercase text-text-primary">Mix Hub Categories</h2>
+        <div className="flex items-center gap-2.5">
+          <Radio className="h-4 sm:h-5 w-4 sm:w-5 text-gold shrink-0" />
+          <h2 className="font-display text-base sm:text-xl font-bold uppercase text-text-primary tracking-wide">Mix Hub Categories</h2>
         </div>
-        <Link to="/mixes" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1">
+        <Link to="/mixes" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1 shrink-0">
           View All <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {categories.slice(0, 4).map((category) => (
           <GenreCategoryCard key={category.id || category.name} category={category} />
         ))}
@@ -631,11 +633,11 @@ function EventRail({ events }: { events: any[] }) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Calendar className="h-5 w-5 text-gold" />
-          <h2 className="font-display text-xl font-bold uppercase text-text-primary">Upcoming Events</h2>
+        <div className="flex items-center gap-2.5">
+          <Calendar className="h-4 sm:h-5 w-4 sm:w-5 text-gold shrink-0" />
+          <h2 className="font-display text-base sm:text-xl font-bold uppercase text-text-primary tracking-wide">Upcoming Events</h2>
         </div>
-        <Link to="/events" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1">
+        <Link to="/events" className="text-xs font-bold uppercase text-text-muted hover:text-gold flex items-center gap-1 shrink-0">
           View All <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
@@ -671,7 +673,6 @@ export default function Home() {
   const isAdmin =
     user?.role === 'ADMIN' ||
     user?.role === 'SUPER_ADMIN' ||
-    user?.role === 'MODERATOR' ||
     user?.role === 'FINANCE_ADMIN' ||
     user?.role === 'VERIFICATION_ADMIN';
 
@@ -688,7 +689,7 @@ export default function Home() {
   }
 
   return (
-    <main className="px-4 py-6 sm:px-8 lg:px-12">
+    <main className="px-4 py-6 pb-24 md:pb-8 sm:px-8 lg:px-12">
       <SEOHead
         title="Deck Salone — Sierra Leone's Official DJ Platform"
         description="Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone."
@@ -718,24 +719,28 @@ export default function Home() {
         <MixRail categories={mixCategories.data || []} />
         <EventRail events={events.data || []} />
 
-        {/* Footer App Install Banner */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-black-surface via-black-elevated to-black-surface border border-gold/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gold/15 flex items-center justify-center text-gold shrink-0">
-              <Smartphone className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-bold text-text-primary text-sm uppercase">Get Deck Salone on Your Mobile</h4>
-              <p className="text-xs text-text-muted">Install PWA on iOS or Android for push notifications & instant access</p>
+        {/* App Install Banner — Web only */}
+        {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
+          <div className="mt-16 rounded-2xl bg-black-surface border border-gold/20 p-5 sm:p-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-gold/15 flex items-center justify-center text-gold shrink-0">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-text-primary text-sm uppercase">Get Deck Salone on Your Mobile</h4>
+                  <p className="text-xs text-text-muted">Install PWA on iOS or Android for push notifications & instant access</p>
+                </div>
+              </div>
+              <Link
+                to="/install"
+                className="px-5 py-2.5 rounded-full bg-gold-gradient text-black font-extrabold text-xs uppercase tracking-wider shrink-0 hover:scale-102 transition-all"
+              >
+                PWA Setup Guide
+              </Link>
             </div>
           </div>
-          <Link
-            to="/install"
-            className="px-5 py-2.5 rounded-full bg-gold-gradient text-black font-extrabold text-xs uppercase tracking-wider shrink-0 hover:scale-102 transition-all"
-          >
-            PWA Setup Guide
-          </Link>
-        </div>
+        )}
       </div>
     </main>
   );

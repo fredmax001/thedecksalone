@@ -10,6 +10,7 @@ const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter } = require('../utils/rateLimiter');
 const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
+const { getCache, setCache, clearCache } = require('../utils/redis');
 
 const router = express.Router();
 
@@ -245,10 +246,12 @@ router.post('/phone/verify', authLimiter, async (req, res) => {
     let user = await prisma.user.findUnique({ where: { phone } });
 
     if (!user) {
-      // Create new user with phone
+      // Create new user with phone — generate a real username and use correct brand domain
+      const phoneUsername = await generateUsername(`phone${Date.now()}@decksalone.com`);
       user = await prisma.user.create({
         data: {
-          email: `phone_${Date.now()}@soundit.sl`, // Temporary email - user should update
+          email: `phone_${Date.now()}@decksalone.com`, // Temporary email — user can update in settings
+          username: phoneUsername,
           phone,
           phoneVerified: true,
           role: 'USER',
@@ -281,13 +284,44 @@ router.post('/phone/verify', authLimiter, async (req, res) => {
 // EMAIL OTP (for email verification & passwordless login)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// In-memory store for email OTPs (production: use Redis)
-const emailOtpStore = new Map();
-const EMAIL_OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const EMAIL_OTP_TTL_SECONDS = 10 * 60; // 10 minutes
 const EMAIL_MAX_ATTEMPTS = 3;
 
 function generateEmailOtp() {
   return crypto.randomInt(100000, 999999).toString();
+}
+
+function otpRedisKey(email: string) {
+  return `email_otp:${email}`;
+}
+
+// Fallback in-memory store (used only when Redis is unavailable)
+const emailOtpFallback = new Map<string, { code: string; expiry: number; attempts: number }>();
+
+async function saveEmailOtp(email: string, code: string) {
+  const record = { code, expiry: Date.now() + EMAIL_OTP_TTL_SECONDS * 1000, attempts: 0 };
+  const stored = await setCache(otpRedisKey(email), record, EMAIL_OTP_TTL_SECONDS).then(() => true).catch(() => false);
+  if (!stored) emailOtpFallback.set(email, record);
+}
+
+async function getEmailOtp(email: string) {
+  const fromRedis = await getCache(otpRedisKey(email));
+  if (fromRedis) return { record: fromRedis, source: 'redis' as const };
+  const fallback = emailOtpFallback.get(email);
+  return fallback ? { record: fallback, source: 'fallback' as const } : null;
+}
+
+async function deleteEmailOtp(email: string) {
+  clearCache(otpRedisKey(email));
+  emailOtpFallback.delete(email);
+}
+
+async function incrementOtpAttempts(email: string, record: any) {
+  record.attempts += 1;
+  // Re-save with remaining TTL so attempts persist
+  const remainingTtl = Math.max(1, Math.floor((record.expiry - Date.now()) / 1000));
+  const saved = await setCache(otpRedisKey(email), record, remainingTtl).then(() => true).catch(() => false);
+  if (!saved) emailOtpFallback.set(email, record);
 }
 
 // POST /api/auth/email/send-otp - Send OTP to email
@@ -300,15 +334,9 @@ router.post('/email/send-otp', authLimiter, async (req, res) => {
 
     const { email } = parsed.data;
     const normalizedEmail = email.toLowerCase().trim();
-
     const code = generateEmailOtp();
-    const expiry = Date.now() + EMAIL_OTP_EXPIRY_MS;
 
-    emailOtpStore.set(normalizedEmail, {
-      code,
-      expiry,
-      attempts: 0,
-    });
+    await saveEmailOtp(normalizedEmail, code);
 
     // Send OTP via email
     if (isEmailConfigured()) {
@@ -342,30 +370,31 @@ router.post('/email/verify', authLimiter, async (req, res) => {
 
     const { email, code } = parsed.data;
     const normalizedEmail = email.toLowerCase().trim();
-    const record = emailOtpStore.get(normalizedEmail);
+    const result = await getEmailOtp(normalizedEmail);
 
-    if (!record) {
+    if (!result) {
       return res.status(400).json({ success: false, error: 'OTP not found or expired. Request a new one.' });
     }
 
+    const { record } = result;
+
     if (Date.now() > record.expiry) {
-      emailOtpStore.delete(normalizedEmail);
+      await deleteEmailOtp(normalizedEmail);
       return res.status(400).json({ success: false, error: 'OTP expired. Request a new one.' });
     }
 
     if (record.attempts >= EMAIL_MAX_ATTEMPTS) {
-      emailOtpStore.delete(normalizedEmail);
+      await deleteEmailOtp(normalizedEmail);
       return res.status(400).json({ success: false, error: 'Too many attempts. Request a new OTP.' });
     }
 
-    record.attempts += 1;
-
     if (record.code !== code) {
+      await incrementOtpAttempts(normalizedEmail, record);
       return res.status(400).json({ success: false, error: 'Invalid OTP code.' });
     }
 
-    // OTP is valid - clean up
-    emailOtpStore.delete(normalizedEmail);
+    // OTP is valid — clean up
+    await deleteEmailOtp(normalizedEmail);
 
     // Mark email as verified
     const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -382,16 +411,6 @@ router.post('/email/verify', authLimiter, async (req, res) => {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
-
-// Clean up expired email OTPs every 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [email, record] of emailOtpStore.entries()) {
-    if (now > record.expiry) {
-      emailOtpStore.delete(email);
-    }
-  }
-}, 30 * 60 * 1000);
 
 // POST /api/auth/forgot-password - Request password reset
 router.post('/forgot-password', authLimiter, async (req, res) => {
@@ -549,10 +568,16 @@ router.get('/me', authMiddleware, async (req, res) => {
         id: true,
         email: true,
         username: true,
+        name: true,
+        avatar: true,
+        bio: true,
+        location: true,
         role: true,
         phone: true,
         phoneVerified: true,
         gender: true,
+        dateOfBirth: true,
+        favoriteGenres: true,
         createdAt: true,
         notificationPreferences: true,
         privacyPreferences: true,
@@ -590,7 +615,7 @@ const changePasswordSchema = z.object({
   }),
 });
 
-// PUT /api/auth/me - Update current user's profile (username, email, etc.)
+// PUT /api/auth/me - Update current user's profile (username, email, gender, phone, dateOfBirth)
 router.put('/me', authMiddleware, async (req, res) => {
   try {
     const parsed = updateMeSchema.safeParse(req.body);
@@ -598,11 +623,26 @@ router.put('/me', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input' });
     }
 
-    const { username, email, gender } = parsed.data;
+    const { username, email, gender, phone, dateOfBirth } = parsed.data;
     const updateData: any = {};
 
     if (gender !== undefined) {
       updateData.gender = gender === '' ? null : gender;
+    }
+
+    if (phone !== undefined) {
+      updateData.phone = phone.trim() || null;
+    }
+
+    if (dateOfBirth !== undefined) {
+      if (!dateOfBirth || dateOfBirth.trim() === '') {
+        updateData.dateOfBirth = null;
+      } else {
+        const parsed = new Date(dateOfBirth);
+        if (!Number.isNaN(parsed.getTime())) {
+          updateData.dateOfBirth = parsed;
+        }
+      }
     }
 
     if (username !== undefined) {
@@ -629,7 +669,11 @@ router.put('/me', authMiddleware, async (req, res) => {
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: updateData,
-      select: { id: true, email: true, username: true, role: true, phone: true, phoneVerified: true, gender: true, createdAt: true, djProfile: true },
+      select: {
+        id: true, email: true, username: true, role: true,
+        phone: true, phoneVerified: true, gender: true,
+        dateOfBirth: true, createdAt: true, djProfile: true,
+      },
     });
 
     return res.json({ success: true, data: user });

@@ -54,25 +54,25 @@ const createDjSchema = z.object({
     description: z.string().optional(),
   })).optional(),
   isPro: z.boolean().optional(),
-  website: z.string().url().optional().or(z.literal('')),
-  whatsappNumber: z.string().max(20).optional(),
+  website: z.string().max(500).optional().nullable().or(z.literal('')),
+  whatsappNumber: z.string().max(30).optional().nullable(),
   isPublic: z.boolean().optional(),
   socialLinks: z.object({
-    instagram: z.string().url().optional().or(z.literal('')),
-    twitter: z.string().url().optional().or(z.literal('')),
-    tiktok: z.string().url().optional().or(z.literal('')),
-    youtube: z.string().url().optional().or(z.literal('')),
-    facebook: z.string().url().optional().or(z.literal('')),
-  }).optional(),
+    instagram: z.string().max(500).optional().nullable().or(z.literal('')),
+    twitter: z.string().max(500).optional().nullable().or(z.literal('')),
+    tiktok: z.string().max(500).optional().nullable().or(z.literal('')),
+    youtube: z.string().max(500).optional().nullable().or(z.literal('')),
+    facebook: z.string().max(500).optional().nullable().or(z.literal('')),
+  }).optional().nullable(),
   streamingLinks: z.object({
-    audiomack: z.string().url().optional().or(z.literal('')),
-    mixcloud: z.string().url().optional().or(z.literal('')),
-    soundcloud: z.string().url().optional().or(z.literal('')),
-    youtube: z.string().url().optional().or(z.literal('')),
-    hearthis: z.string().url().optional().or(z.literal('')),
-    appleMusic: z.string().url().optional().or(z.literal('')),
-    spotify: z.string().url().optional().or(z.literal('')),
-  }).optional(),
+    audiomack: z.string().max(500).optional().nullable().or(z.literal('')),
+    mixcloud: z.string().max(500).optional().nullable().or(z.literal('')),
+    soundcloud: z.string().max(500).optional().nullable().or(z.literal('')),
+    youtube: z.string().max(500).optional().nullable().or(z.literal('')),
+    hearthis: z.string().max(500).optional().nullable().or(z.literal('')),
+    appleMusic: z.string().max(500).optional().nullable().or(z.literal('')),
+    spotify: z.string().max(500).optional().nullable().or(z.literal('')),
+  }).optional().nullable(),
 });
 
 // updateDjSchema is the same shape as createDjSchema but every field is optional
@@ -212,6 +212,13 @@ async function updateDjProfile(req, res, id) {
 
   if (updateData.genres && updateData.genres.length > 5) {
     return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
+  }
+
+  if (updateData.avatar) {
+    await prisma.user.update({
+      where: { id: dj.userId },
+      data: { avatar: updateData.avatar },
+    }).catch(() => {});
   }
 
   const updated = await prisma.djProfile.update({
@@ -692,6 +699,68 @@ router.get('/:id/follow-status', softAuthMiddleware, async (req, res) => {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
+
+// GET /api/djs/me/followers - List users who follow the current DJ
+router.get('/me/followers', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    const { page, limit } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [followers, total] = await Promise.all([
+      prisma.follow.findMany({
+        where: { djId: dj.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              email: true,
+              avatar: true,
+              location: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+      prisma.follow.count({ where: { djId: dj.id } }),
+    ]);
+
+    const data = followers.map((f) => ({
+      id: f.user.id,
+      name: f.user.name || f.user.username || f.user.email.split('@')[0],
+      username: f.user.username,
+      email: f.user.email,
+      avatar: f.user.avatar,
+      location: f.user.location,
+      followedAt: f.createdAt,
+    }));
+
+    return res.json({
+      success: true,
+      data,
+      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 
 // POST /api/djs/:id/recalculate - Recalculate ranking for a DJ (admin or self)
 router.post('/:id/recalculate', authMiddleware, async (req, res) => {

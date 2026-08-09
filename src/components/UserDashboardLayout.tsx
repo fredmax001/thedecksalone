@@ -52,7 +52,7 @@ export default function UserDashboardLayout() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const displayName = user?.username || user?.email?.split('@')[0] || 'User';
-  const avatarUrl = user?.djProfile?.avatar || '';
+  const avatarUrl = user?.avatar || user?.djProfile?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const isActive = (path: string) => {
@@ -262,11 +262,13 @@ export default function UserDashboardLayout() {
                   <DropdownMenuItem asChild>
                     <Link to="/user/settings" className="cursor-pointer text-xs">Settings</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
-                      <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
-                    </Link>
-                  </DropdownMenuItem>
+                  {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
+                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator className="bg-dark-gray" />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
                     Logout

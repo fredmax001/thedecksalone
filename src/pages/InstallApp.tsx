@@ -154,14 +154,23 @@ export default function InstallApp() {
             </div>
           </div>
 
-          {deferredPrompt && (
-            <Button
-              onClick={handleNativeInstall}
-              className="w-full md:w-auto px-8 py-3 bg-gold-gradient text-black font-extrabold text-sm uppercase tracking-wide rounded-full shadow-[0_0_20px_rgba(212,162,74,0.3)] hover:scale-105 active:scale-95 transition-all"
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            {deferredPrompt && (
+              <Button
+                onClick={handleNativeInstall}
+                className="w-full sm:w-auto px-6 py-3 bg-gold-gradient text-black font-extrabold text-sm uppercase tracking-wide rounded-full shadow-[0_0_20px_rgba(212,162,74,0.3)] hover:scale-105 active:scale-95 transition-all"
+              >
+                <Download className="w-4 h-4 mr-2" /> Install PWA App
+              </Button>
+            )}
+            <a
+              href="/deck-salone-debug.apk"
+              download="DeckSalone.apk"
+              className="w-full sm:w-auto px-6 py-3 bg-black-surface hover:bg-gold/15 text-gold border border-gold/40 font-bold text-sm uppercase tracking-wide rounded-full flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 text-center"
             >
-              <Download className="w-4 h-4 mr-2" /> Install App Now
-            </Button>
-          )}
+              <Smartphone className="w-4 h-4 text-gold" /> Download Android APK (24MB)
+            </a>
+          </div>
         </div>
       </div>
 

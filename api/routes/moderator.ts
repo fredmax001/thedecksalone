@@ -1,0 +1,731 @@
+const express = require('express');
+const { z } = require('zod');
+const { prisma } = require('../utils/prisma');
+const { authMiddleware, requireRole } = require('../middleware/auth');
+const logger = require('../utils/logger');
+
+const router = express.Router();
+
+// Enforce Moderator or Admin role on all /api/moderator endpoints
+router.use(authMiddleware, requireRole('MODERATOR', 'ADMIN'));
+
+// Helper to log moderator actions
+async function createModeratorLog({
+  moderatorId,
+  moderatorName,
+  action,
+  targetType,
+  targetId,
+  targetName,
+  previousData,
+  newData,
+  reason,
+}: {
+  moderatorId: string;
+  moderatorName?: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  targetName?: string;
+  previousData?: any;
+  newData?: any;
+  reason?: string;
+}) {
+  try {
+    await prisma.moderatorAuditLog.create({
+      data: {
+        moderatorId,
+        moderatorName: moderatorName || 'Moderator',
+        action,
+        targetType,
+        targetId: targetId || null,
+        targetName: targetName || null,
+        previousData: previousData ? JSON.parse(JSON.stringify(previousData)) : null,
+        newData: newData ? JSON.parse(JSON.stringify(newData)) : null,
+        reason: reason || null,
+      },
+    });
+  } catch (err: any) {
+    logger.error('Failed to write moderator audit log:', err.message);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   1. MODERATOR DASHBOARD STATS
+   GET /api/moderator/stats
+   ───────────────────────────────────────────────────────────── */
+router.get('/stats', async (req: any, res: any) => {
+  try {
+    const [
+      totalDjs,
+      verifiedDjs,
+      totalMixes,
+      awaitingReview,
+      reportedMixes,
+      reportedUsers,
+      officialPlaylistsCount,
+      topRankedDjs,
+      recentUploads,
+    ] = await Promise.all([
+      prisma.djProfile.count(),
+      prisma.djProfile.count({ where: { verified: true } }),
+      prisma.mix.count(),
+      prisma.mix.count({ where: { flaggedForReview: true } }),
+      prisma.violationReport.count({ where: { status: 'PENDING', mixId: { not: null } } }),
+      prisma.violationReport.count({ where: { status: 'PENDING', targetUserId: { not: null } } }),
+      prisma.officialPlaylist.count(),
+      prisma.djProfile.findMany({
+        take: 5,
+        orderBy: { rankingPosition: 'asc' },
+        select: {
+          id: true,
+          stageName: true,
+          avatar: true,
+          rankingPosition: true,
+          rankingScore: true,
+          verified: true,
+        },
+      }),
+      prisma.mix.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          coverImage: true,
+          genre: true,
+          createdAt: true,
+          isPublic: true,
+          dj: { select: { id: true, stageName: true, avatar: true } },
+        },
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        totalDjs,
+        verifiedDjs,
+        totalMixes,
+        awaitingReview,
+        reportedMixes,
+        reportedUsers,
+        officialPlaylistsCount,
+        topRankedDjs,
+        recentUploads,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error fetching moderator stats:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to load moderator dashboard stats' });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   2. MIX MANAGEMENT & GENRE CURATION
+   GET /api/moderator/mixes
+   PUT /api/moderator/mixes/:id
+   POST /api/moderator/mixes/:id/flag
+   POST /api/moderator/mixes/:id/report
+   ───────────────────────────────────────────────────────────── */
+router.get('/mixes', async (req: any, res: any) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const search = (req.query.search as string || '').trim();
+    const genre = req.query.genre as string;
+    const flagged = req.query.flagged === 'true';
+    const hidden = req.query.hidden === 'true';
+
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { dj: { stageName: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (genre && genre !== 'ALL') where.genre = genre;
+    if (flagged) where.flaggedForReview = true;
+    if (hidden) where.isPublic = false;
+
+    const [total, mixes] = await Promise.all([
+      prisma.mix.count({ where }),
+      prisma.mix.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, verified: true } },
+          _count: { select: { violationReports: true, mixLikes: true, mixComments: true } },
+        },
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: mixes,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error fetching moderator mixes:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to fetch mixes' });
+  }
+});
+
+const updateMixSchema = z.object({
+  title: z.string().min(1).max(150).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  genre: z.string().min(1).optional(),
+  secondaryGenres: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional(),
+  moderatorCurated: z.boolean().optional(),
+  moderatorNotes: z.string().max(1000).optional().nullable(),
+  flaggedForReview: z.boolean().optional(),
+  reason: z.string().optional(),
+});
+
+router.put('/mixes/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const parsed = updateMixSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const existingMix = await prisma.mix.findUnique({
+      where: { id },
+      include: { dj: { select: { stageName: true } } },
+    });
+    if (!existingMix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    const { reason, ...updateFields } = parsed.data;
+
+    const updatedMix = await prisma.mix.update({
+      where: { id },
+      data: updateFields,
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    // Record Audit Log
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: updateFields.isPublic === false ? 'UNPUBLISH_MIX' : 'UPDATE_MIX_METADATA',
+      targetType: 'MIX',
+      targetId: id,
+      targetName: updatedMix.title,
+      previousData: {
+        title: existingMix.title,
+        genre: existingMix.genre,
+        secondaryGenres: existingMix.secondaryGenres,
+        isPublic: existingMix.isPublic,
+      },
+      newData: {
+        title: updatedMix.title,
+        genre: updatedMix.genre,
+        secondaryGenres: updatedMix.secondaryGenres,
+        isPublic: updatedMix.isPublic,
+      },
+      reason: reason || updateFields.moderatorNotes || 'Moderator content update',
+    });
+
+    return res.json({ success: true, data: updatedMix });
+  } catch (error: any) {
+    logger.error('Error updating mix by moderator:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to update mix' });
+  }
+});
+
+// Flag mix for Admin review
+router.post('/mixes/:id/flag', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const mix = await prisma.mix.findUnique({ where: { id } });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    const updated = await prisma.mix.update({
+      where: { id },
+      data: {
+        flaggedForReview: true,
+        flaggedReason: reason || 'Flagged by moderator for admin review',
+      },
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'FLAG_MIX_FOR_ADMIN',
+      targetType: 'MIX',
+      targetId: id,
+      targetName: mix.title,
+      reason: reason || 'Flagged for Admin review',
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   3. OFFICIAL PLAYLIST CREATION & CURATION
+   GET /api/moderator/playlists
+   POST /api/moderator/playlists
+   PUT /api/moderator/playlists/:id
+   DELETE /api/moderator/playlists/:id
+   POST /api/moderator/playlists/:id/items
+   DELETE /api/moderator/playlists/:id/items/:itemId
+   ───────────────────────────────────────────────────────────── */
+router.get('/playlists', async (req: any, res: any) => {
+  try {
+    const playlists = await prisma.officialPlaylist.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          orderBy: { position: 'asc' },
+          include: {
+            mix: {
+              select: {
+                id: true,
+                title: true,
+                coverImage: true,
+                genre: true,
+                plays: true,
+                dj: { select: { id: true, stageName: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return res.json({ success: true, data: playlists });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/playlists', async (req: any, res: any) => {
+  try {
+    const { title, description, coverImage, isFeatured, isPublished } = req.body;
+    if (!title || title.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Playlist title is required' });
+    }
+
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+
+    const playlist = await prisma.officialPlaylist.create({
+      data: {
+        title: title.trim(),
+        description: description || null,
+        coverImage: coverImage || null,
+        slug,
+        isFeatured: Boolean(isFeatured),
+        isPublished: isPublished !== undefined ? Boolean(isPublished) : true,
+        createdById: req.user.id,
+      },
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'CREATE_OFFICIAL_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: playlist.id,
+      targetName: playlist.title,
+      reason: 'Created Official Deck Salone Playlist',
+    });
+
+    return res.json({ success: true, data: playlist });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/playlists/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { title, description, coverImage, isFeatured, isPublished } = req.body;
+
+    const existing = await prisma.officialPlaylist.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title.trim();
+    if (description !== undefined) updateData.description = description;
+    if (coverImage !== undefined) updateData.coverImage = coverImage;
+    if (isFeatured !== undefined) updateData.isFeatured = Boolean(isFeatured);
+    if (isPublished !== undefined) updateData.isPublished = Boolean(isPublished);
+
+    const updated = await prisma.officialPlaylist.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'UPDATE_OFFICIAL_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: updated.title,
+      previousData: { title: existing.title, isPublished: existing.isPublished },
+      newData: { title: updated.title, isPublished: updated.isPublished },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/playlists/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.officialPlaylist.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    await prisma.officialPlaylist.delete({ where: { id } });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'DELETE_OFFICIAL_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: existing.title,
+    });
+
+    return res.json({ success: true, message: 'Playlist deleted' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add mix to playlist
+router.post('/playlists/:id/items', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { mixId } = req.body;
+    if (!mixId) return res.status(400).json({ success: false, error: 'mixId required' });
+
+    const [playlist, mix, itemCount] = await Promise.all([
+      prisma.officialPlaylist.findUnique({ where: { id } }),
+      prisma.mix.findUnique({ where: { id: mixId } }),
+      prisma.officialPlaylistItem.count({ where: { playlistId: id } }),
+    ]);
+
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+
+    const item = await prisma.officialPlaylistItem.create({
+      data: {
+        playlistId: id,
+        mixId,
+        position: itemCount + 1,
+      },
+      include: {
+        mix: { select: { id: true, title: true, coverImage: true, dj: { select: { stageName: true } } } },
+      },
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'ADD_MIX_TO_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: `${mix.title} -> ${playlist.title}`,
+    });
+
+    return res.json({ success: true, data: item });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove item from playlist
+router.delete('/playlists/:id/items/:itemId', async (req: any, res: any) => {
+  try {
+    const { id, itemId } = req.params;
+    await prisma.officialPlaylistItem.delete({ where: { id: itemId } });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'REMOVE_MIX_FROM_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+    });
+
+    return res.json({ success: true, message: 'Item removed from playlist' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   4. DJ RANKING MANAGEMENT & AUDIT TRAIL
+   GET /api/moderator/rankings
+   POST /api/moderator/rankings/adjust
+   POST /api/moderator/djs/:id/feature
+   ───────────────────────────────────────────────────────────── */
+router.get('/rankings', async (req: any, res: any) => {
+  try {
+    const djs = await prisma.djProfile.findMany({
+      orderBy: { rankingPosition: 'asc' },
+      select: {
+        id: true,
+        stageName: true,
+        avatar: true,
+        city: true,
+        verified: true,
+        rankingPosition: true,
+        rankingScore: true,
+        communityScore: true,
+        industryScore: true,
+        monthlyListeners: true,
+        totalMixUploads: true,
+        isModeratorFeatured: true,
+        isRisingDj: true,
+        user: { select: { id: true, username: true, email: true } },
+      },
+    });
+
+    return res.json({ success: true, data: djs });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manual ranking position/score adjustment with required audit log
+router.post('/rankings/adjust', async (req: any, res: any) => {
+  try {
+    const { djId, newPosition, newScore, reason } = req.body;
+    if (!djId || !reason || reason.trim() === '') {
+      return res.status(400).json({ success: false, error: 'djId and a mandatory reason are required for audit trail' });
+    }
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { id: djId },
+      select: { id: true, stageName: true, rankingPosition: true, rankingScore: true },
+    });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+
+    const previousPosition = dj.rankingPosition;
+    const previousScore = dj.rankingScore;
+
+    const updateData: any = {};
+    if (newPosition !== undefined) updateData.rankingPosition = Number(newPosition);
+    if (newScore !== undefined) updateData.rankingScore = Number(newScore);
+
+    const updated = await prisma.djProfile.update({
+      where: { id: djId },
+      data: updateData,
+    });
+
+    // Record entry in RankingHistory for historical audit
+    await prisma.rankingHistory.create({
+      data: {
+        djId,
+        position: updated.rankingPosition,
+        score: updated.rankingScore,
+        communityScore: dj.rankingScore,
+        industryScore: 0,
+      },
+    }).catch(() => {});
+
+    // Mandatory Moderator Audit Log
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'RANKING_ADJUSTMENT',
+      targetType: 'RANKING',
+      targetId: djId,
+      targetName: dj.stageName,
+      previousData: { position: previousPosition, score: previousScore },
+      newData: { position: updated.rankingPosition, score: updated.rankingScore },
+      reason: reason.trim(),
+    });
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: `Ranking updated for ${dj.stageName}. Adjustment logged in audit trail.`,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Feature DJ or Highlight Rising DJ
+router.post('/djs/:id/feature', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { isModeratorFeatured, isRisingDj } = req.body;
+
+    const dj = await prisma.djProfile.findUnique({ where: { id } });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+
+    const updateData: any = {};
+    if (isModeratorFeatured !== undefined) updateData.isModeratorFeatured = Boolean(isModeratorFeatured);
+    if (isRisingDj !== undefined) updateData.isRisingDj = Boolean(isRisingDj);
+
+    const updated = await prisma.djProfile.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'FEATURE_DJ',
+      targetType: 'DJ',
+      targetId: id,
+      targetName: dj.stageName,
+      newData: updateData,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   5. REPORTS & COMMUNITY MODERATION
+   GET /api/moderator/reports
+   POST /api/moderator/reports/:id/action
+   ───────────────────────────────────────────────────────────── */
+router.get('/reports', async (req: any, res: any) => {
+  try {
+    const status = req.query.status as string;
+    const where: any = {};
+    if (status && status !== 'ALL') where.status = status;
+
+    const reports = await prisma.violationReport.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reporter: { select: { id: true, username: true, email: true, avatar: true } },
+        targetUser: { select: { id: true, username: true, email: true, avatar: true, status: true } },
+        mix: { select: { id: true, title: true, coverImage: true, isPublic: true } },
+        event: { select: { id: true, title: true } },
+        comment: { select: { id: true, content: true } },
+      },
+    });
+
+    return res.json({ success: true, data: reports });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/reports/:id/action', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { action, notes } = req.body;
+    // Action types: 'NO_VIOLATION' | 'WARNING' | 'REMOVE_CONTENT' | 'UNPUBLISH' | 'RESTRICT' | 'ESCALATE_ADMIN'
+
+    const report = await prisma.violationReport.findUnique({
+      where: { id },
+      include: { mix: true, targetUser: true },
+    });
+    if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
+
+    let status = 'RESOLVED';
+    let actionTaken = action || 'RESOLVED';
+
+    if (action === 'NO_VIOLATION') {
+      status = 'DISMISSED';
+      actionTaken = 'NO_VIOLATION';
+    } else if (action === 'REMOVE_CONTENT' || action === 'UNPUBLISH') {
+      if (report.mixId) {
+        await prisma.mix.update({
+          where: { id: report.mixId },
+          data: { isPublic: false, flaggedForReview: true, flaggedReason: notes || 'Unpublished due to community report' },
+        });
+      }
+    } else if (action === 'ESCALATE_ADMIN') {
+      status = 'INVESTIGATING';
+      actionTaken = 'ESCALATED_TO_ADMIN';
+      if (report.mixId) {
+        await prisma.mix.update({
+          where: { id: report.mixId },
+          data: { flaggedForReview: true, flaggedReason: notes || 'Escalated to Super Admin' },
+        });
+      }
+    }
+
+    const updatedReport = await prisma.violationReport.update({
+      where: { id },
+      data: {
+        status: status as any,
+        actionTaken,
+        resolvedBy: req.user.id,
+        resolvedAt: new Date(),
+      },
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: `REPORT_ACTION_${actionTaken}`,
+      targetType: 'REPORT',
+      targetId: id,
+      targetName: report.reason,
+      reason: notes || `Moderator action: ${actionTaken}`,
+    });
+
+    return res.json({ success: true, data: updatedReport });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   6. AUDIT LOGS
+   GET /api/moderator/audit-logs
+   ───────────────────────────────────────────────────────────── */
+router.get('/audit-logs', async (req: any, res: any) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 30));
+
+    const [total, logs] = await Promise.all([
+      prisma.moderatorAuditLog.count(),
+      prisma.moderatorAuditLog.findMany({
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: logs,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+module.exports = router;

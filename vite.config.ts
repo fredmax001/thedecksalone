@@ -1,7 +1,6 @@
 import path from "path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import viteCompression from 'vite-plugin-compression'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
@@ -9,8 +8,8 @@ export default defineConfig({
   base: '/',
   plugins: [
     react(),
-    viteCompression({ algorithm: 'gzip', ext: '.gz' }),
-    viteCompression({ algorithm: 'brotliCompress', ext: '.br' }),
+    // viteCompression({ algorithm: 'gzip', ext: '.gz' }),
+    // viteCompression({ algorithm: 'brotliCompress', ext: '.br' }),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {

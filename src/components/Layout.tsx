@@ -101,6 +101,7 @@ export default function Layout() {
   const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
   const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
   const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
+  const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
 
   // Scroll to top on route change
   useEffect(() => {
@@ -298,7 +299,7 @@ export default function Layout() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
-                      <Avatar className="h-8 w-8 sm:h-9 sm:h-9 border border-gold/40">
+                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border border-gold/40">
                         <AvatarImage src={avatarUrl || '/default-avatar.jpg'} alt={displayName} />
                         <AvatarFallback className="bg-black-surface">
                           <img src="/default-avatar.jpg" alt="avatar" className="w-full h-full object-cover rounded-full" />
@@ -327,11 +328,13 @@ export default function Layout() {
                     <DropdownMenuItem asChild>
                       <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer text-xs">Settings</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
-                        Install App
-                      </Link>
-                    </DropdownMenuItem>
+                    {!isNativeApp && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
+                          Install App
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator className="bg-dark-gray" />
                     <DropdownMenuItem asChild>
                       <Link to="/about" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
