@@ -18,12 +18,16 @@ import {
 } from 'lucide-react';
 import FadeIn from '@/components/FadeIn';
 import { useDJs, useDJCities, useDJGenres } from '@/hooks/useDJs';
+import UpcomingDJs from '@/components/UpcomingDJs';
+import LegacyDJs from '@/components/LegacyDJs';
 
 /* ─────────────────── Types ─────────────────── */
 
 interface DJ {
   id: string;
+  username?: string;
   stageName: string;
+  djType?: string;
   avatar: string;
   city: string;
   country: string;
@@ -160,6 +164,13 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
         <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5">
           {dj.stageName}
         </h3>
+        
+        {/* DJ Type */}
+        {dj.djType && (
+          <p className="text-xs text-gold mt-1 uppercase tracking-wider font-medium">
+            {dj.djType}
+          </p>
+        )}
 
         {/* City */}
         <div className="flex items-center gap-1 mt-1 mb-3">
@@ -571,6 +582,14 @@ export default function Discover() {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+      </section>
+
+      {/* ════════ Section 1.5: Upcoming Talent ════════ */}
+      <section className="bg-black py-8 border-b border-white/5">
+        <div className="container-main">
+          <UpcomingDJs limit={8} />
+          <LegacyDJs limit={8} />
         </div>
       </section>
 

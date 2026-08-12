@@ -61,6 +61,26 @@ const uploadEventImage = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
+// Combined upload for mix creation/update (audio + coverImage)
+// Uses fields() so both audio and coverImage can be parsed from one multipart request.
+// Memory storage means req.files['audio'][0].buffer is available (no .filename).
+const uploadMixFiles = multer({
+  storage: memoryStorage,
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const audioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac'];
+    if (imageTypes.includes(file.mimetype) || audioTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}`), false);
+    }
+  },
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max
+}).fields([
+  { name: 'audio', maxCount: 1 },
+  { name: 'coverImage', maxCount: 1 },
+]);
+
 // Combined upload for DJ profile update (avatar + cover)
 const uploadDjProfileImages = multer({
   storage: memoryStorage,
@@ -82,6 +102,7 @@ module.exports = {
   uploadMixAudio,
   uploadMixCover,
   uploadEventImage,
+  uploadMixFiles,
   uploadDjProfileImages,
   serveUploads,
 };

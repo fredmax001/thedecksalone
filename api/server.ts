@@ -1,5 +1,6 @@
-require('dotenv').config({ path: '../.env' });
-require('dotenv').config({ path: '.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -23,6 +24,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
 const messageRoutes = require('./routes/messages');
+const hearthisRoutes = require('./routes/hearthis');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -79,6 +81,7 @@ app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
+app.use('/api/hearthis', hearthisRoutes);
 
 // OG Meta route for social media sharing
 app.get('/og/dj/:identifier', async (req, res) => {

@@ -2,7 +2,8 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
-const { uploadMixAudio, uploadMixCover } = require('../utils/upload');
+const { uploadMixFiles } = require('../utils/upload');
+const { uploadBuffer, deleteFile } = require('../utils/storage');
 
 const router = express.Router();
 
@@ -160,7 +161,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/mixes - Create mix (auth required)
-router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.single('coverImage'), async (req, res) => {
+router.post('/', authMiddleware, uploadMixFiles, async (req, res) => {
   try {
     const parsed = createMixSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -175,12 +176,27 @@ router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.
     const djId = dj ? dj.id : req.body.djId;
     const data = parsed.data;
 
+    // Process audio file from memory buffer
+    let audioUrl = null;
+    if (req.files && req.files['audio'] && req.files['audio'][0]) {
+      const audioFile = req.files['audio'][0];
+      const ext = audioFile.mimetype.includes('mpeg') || audioFile.mimetype.includes('mp3') ? 'mp3' : 'audio';
+      audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', { contentType: audioFile.mimetype, ext });
+    }
+
+    // Process cover image from memory buffer
+    let coverImageUrl = null;
+    if (req.files && req.files['coverImage'] && req.files['coverImage'][0]) {
+      const coverFile = req.files['coverImage'][0];
+      coverImageUrl = await uploadBuffer(coverFile.buffer, 'covers', { contentType: coverFile.mimetype, ext: 'webp' });
+    }
+
     const mix = await prisma.mix.create({
       data: {
         ...data,
         djId,
-        audioUrl: req.file ? `/uploads/mixes/${req.file.filename}` : null,
-        coverImage: req.files?.coverImage ? `/uploads/covers/${req.files.coverImage[0].filename}` : null,
+        audioUrl,
+        coverImage: coverImageUrl,
       },
     });
 
@@ -197,7 +213,7 @@ router.post('/', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.
 });
 
 // PUT /api/mixes/:id - Update mix
-router.put('/:id', authMiddleware, uploadMixAudio.single('audio'), uploadMixCover.single('coverImage'), async (req, res) => {
+router.put('/:id', authMiddleware, uploadMixFiles, async (req, res) => {
   try {
     const parsed = updateMixSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -212,17 +228,29 @@ router.put('/:id', authMiddleware, uploadMixAudio.single('audio'), uploadMixCove
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (mix.dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    const updateData = { ...parsed.data };
-    if (req.file) {
-      updateData.audioUrl = `/uploads/mixes/${req.file.filename}`;
+    const updateData: any = { ...parsed.data };
+
+    // Process audio file from memory buffer
+    if (req.files && req.files['audio'] && req.files['audio'][0]) {
+      const audioFile = req.files['audio'][0];
+      const ext = audioFile.mimetype.includes('mpeg') || audioFile.mimetype.includes('mp3') ? 'mp3' : 'audio';
+      if (mix.audioUrl) {
+        await deleteFile(mix.audioUrl).catch(() => {});
+      }
+      updateData.audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', { contentType: audioFile.mimetype, ext });
     }
-    if (req.files?.coverImage) {
-      updateData.coverImage = `/uploads/covers/${req.files.coverImage[0].filename}`;
+
+    // Process cover image from memory buffer
+    if (req.files && req.files['coverImage'] && req.files['coverImage'][0]) {
+      const coverFile = req.files['coverImage'][0];
+      if (mix.coverImage) {
+        await deleteFile(mix.coverImage).catch(() => {});
+      }
+      updateData.coverImage = await uploadBuffer(coverFile.buffer, 'covers', { contentType: coverFile.mimetype, ext: 'webp' });
     }
 
     const updated = await prisma.mix.update({

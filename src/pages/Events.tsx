@@ -7,13 +7,10 @@ import {
   ChevronRight,
   List,
   LayoutGrid,
-  Briefcase,
-  Check,
   Music,
   Loader2,
 } from 'lucide-react';
 import { useEvents, useEventTypes } from '@/hooks/useEvents';
-import { useDJs } from '@/hooks/useDJs';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -100,15 +97,15 @@ export default function Events() {
   const events = useMemo(() => {
     let result = (eventsData?.data || []).map(toEventItem);
     if (activeType !== 'All Types') {
-      result = result.filter((e) => e.type.toLowerCase() === activeType.toLowerCase());
+      result = result.filter((e: EventItem) => e.type.toLowerCase() === activeType.toLowerCase());
     }
     if (activeCity !== 'All Cities') {
-      result = result.filter((e) => e.city === activeCity);
+      result = result.filter((e: EventItem) => e.city === activeCity);
     }
     if (sortBy === 'Alphabetical') {
-      result.sort((a, b) => a.title.localeCompare(b.title));
+      result.sort((a: EventItem, b: EventItem) => a.title.localeCompare(b.title));
     } else {
-      result.sort((a, b) => new Date(a.month + ' ' + a.date + ' 2025').getTime() - new Date(b.month + ' ' + b.date + ' 2025').getTime());
+      result.sort((a: EventItem, b: EventItem) => new Date(a.month + ' ' + a.date + ' 2025').getTime() - new Date(b.month + ' ' + b.date + ' 2025').getTime());
     }
     return result;
   }, [eventsData, activeType, activeCity, sortBy]);
@@ -199,7 +196,7 @@ export default function Events() {
       {!showCalendar && featured.length > 0 && (
         <section className="max-w-container mx-auto px-6 pt-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {featured.map((ev, i) => (
+            {featured.map((ev: EventItem, i: number) => (
               <motion.div
                 key={ev.id}
                 variants={fadeUp}
@@ -237,11 +234,11 @@ export default function Events() {
           <AnimatePresence mode="wait">
             {viewMode === 'list' ? (
               <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-                {events.map((ev, i) => <EventListRow key={ev.id} event={ev} index={i} />)}
+                {events.map((ev: EventItem, i: number) => <EventListRow key={ev.id} event={ev} index={i} />)}
               </motion.div>
             ) : (
               <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {events.map((ev, i) => <EventGridCard key={ev.id} event={ev} index={i} />)}
+                {events.map((ev: EventItem, i: number) => <EventGridCard key={ev.id} event={ev} index={i} />)}
               </motion.div>
             )}
           </AnimatePresence>
@@ -258,7 +255,7 @@ export default function Events() {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {openSlots.map((slot, i) => <DJSlotCard key={slot.id} slot={slot} index={i} />)}
+            {openSlots.map((slot: EventItem, i: number) => <DJSlotCard key={slot.id} slot={slot} index={i} />)}
           </div>
         </div>
       </section>

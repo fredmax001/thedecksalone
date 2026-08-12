@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
+import { useVerificationStatus, useApplyVerification } from '@/hooks/useDJs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,16 @@ const CITIES = [
 
 const LANGUAGES = ['English', 'Krio', 'Mende', 'Temne', 'Limba', 'Other'];
 
+const DJ_TYPES = [
+  'Corporate DJ',
+  'Resident DJ',
+  'Open Format DJ',
+  'Club DJ',
+  'Event DJ',
+  'Turntablist',
+  'Producer/DJ',
+];
+
 const EQUIPMENT = [
   'Pioneer DJ',
   'Serato DJ',
@@ -85,12 +96,18 @@ export default function Profile() {
   const isDj = user?.role === 'DJ';
   const djId = user?.djProfile?.id;
 
+  const { data: verificationRequest, refetch: refetchVerification } = useVerificationStatus(djId);
+  const { mutateAsync: applyForVerification } = useApplyVerification();
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [applying, setApplying] = useState(false);
+
   // Form state
   const [form, setForm] = useState({
     stageName: '',
     fullName: '',
     bio: '',
     yearsActive: '',
+    djType: '',
     city: '',
     genres: [] as string[],
     awards: [] as string[],
@@ -136,6 +153,7 @@ export default function Profile() {
             fullName: dj.fullName || '',
             bio: dj.bio || '',
             yearsActive: String(dj.yearsActive || ''),
+            djType: dj.djType || '',
             city: dj.city || '',
             genres: dj.genres || [],
             awards: dj.awards || [],
@@ -190,6 +208,7 @@ export default function Profile() {
         if (form.fullName) formData.append('fullName', form.fullName);
         if (form.bio) formData.append('bio', form.bio);
         if (form.yearsActive) formData.append('yearsActive', form.yearsActive);
+        if (form.djType) formData.append('djType', form.djType);
         if (form.city) formData.append('city', form.city);
         if (form.genres.length) form.genres.forEach((g) => formData.append('genres', g));
         if (form.awards.length) form.awards.forEach((a) => formData.append('awards', a));
@@ -316,6 +335,7 @@ export default function Profile() {
           <TabsTrigger value="genres" className="data-[state=active]:bg-gold data-[state=active]:text-black">Genres & Skills</TabsTrigger>
           <TabsTrigger value="pricing" className="data-[state=active]:bg-gold data-[state=active]:text-black">Pricing</TabsTrigger>
           <TabsTrigger value="social" className="data-[state=active]:bg-gold data-[state=active]:text-black">Social & Links</TabsTrigger>
+          <TabsTrigger value="verification" className="data-[state=active]:bg-gold data-[state=active]:text-black">Verification</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="mt-4 space-y-4">
@@ -361,6 +381,19 @@ export default function Profile() {
                     onChange={(e) => setForm({ ...form, yearsActive: e.target.value })}
                     className="bg-black-elevated border-dark-gray text-text-primary"
                   />
+                </div>
+                <div>
+                  <Label className="text-text-secondary mb-2 block">DJ Type</Label>
+                  <Select value={form.djType} onValueChange={(v) => setForm({ ...form, djType: v })}>
+                    <SelectTrigger className="bg-black-elevated border-dark-gray text-text-primary">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-black-surface border-dark-gray">
+                      {DJ_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-text-secondary mb-2 block">City</Label>
@@ -685,7 +718,7 @@ export default function Profile() {
                   { key: 'mixcloud', label: 'Mixcloud', placeholder: 'https://mixcloud.com/...' },
                   { key: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/...' },
                   { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/...' },
-                  { key: 'hearthis', label: 'Hearthis.at', placeholder: 'https://hearthis.at/...' },
+                  { key: 'hearthis', label: 'Hearthis.at (Mix Hub Required)', placeholder: 'https://hearthis.at/... or username' },
                   { key: 'appleMusic', label: 'Apple Music', placeholder: 'https://music.apple.com/...' },
                   { key: 'spotify', label: 'Spotify', placeholder: 'https://open.spotify.com/...' },
                 ].map(({ key, label, placeholder }) => (
@@ -704,6 +737,109 @@ export default function Profile() {
                     />
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="verification" className="mt-4">
+          <Card className="bg-black-surface border-dark-gray">
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <h3 className="text-xl font-display font-bold text-white mb-2">Verification Badge</h3>
+                <p className="text-sm text-text-secondary mb-6">
+                  Apply for a verified badge (blue tick) to show clients and fans that your profile is authentic. 
+                  DJs who have been active for over 15 years (Legacy DJs) are strongly encouraged to apply.
+                </p>
+                
+                {djData?.verified ? (
+                  <div className="bg-green/10 border border-green/30 p-6 rounded-xl flex items-start gap-4">
+                    <Check className="w-8 h-8 text-green shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-green mb-1">You are Verified!</h4>
+                      <p className="text-sm text-green/80">Your profile proudly displays the verified badge.</p>
+                    </div>
+                  </div>
+                ) : verificationRequest?.status === 'PENDING' ? (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-xl flex items-start gap-4">
+                    <Loader2 className="w-8 h-8 text-yellow-500 animate-spin shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-yellow-500 mb-1">Verification Pending</h4>
+                      <p className="text-sm text-yellow-500/80">We are currently reviewing your application. This may take a few days.</p>
+                    </div>
+                  </div>
+                ) : verificationRequest?.status === 'REJECTED' ? (
+                  <div className="space-y-4">
+                    <div className="bg-red/10 border border-red/30 p-6 rounded-xl flex items-start gap-4">
+                      <div>
+                        <h4 className="font-bold text-red mb-1">Application Rejected</h4>
+                        <p className="text-sm text-red/80">Your previous verification request was not approved. You can try applying again.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4 pt-4 border-t border-dark-gray">
+                      <div>
+                        <Label className="text-text-secondary mb-2 block">Why should you be verified? (Optional but recommended)</Label>
+                        <Textarea 
+                          value={verificationNotes}
+                          onChange={(e) => setVerificationNotes(e.target.value)}
+                          placeholder="Link to news articles, major event flyers, or explain your legacy..."
+                          className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                          rows={4}
+                        />
+                      </div>
+                      <Button 
+                        onClick={async () => {
+                          setApplying(true);
+                          try {
+                            await applyForVerification({ djId: djId!, notes: verificationNotes });
+                            refetchVerification();
+                          } catch (e: any) {
+                            alert(e.response?.data?.error || 'Failed to apply');
+                          } finally {
+                            setApplying(false);
+                          }
+                        }}
+                        disabled={applying}
+                        className="bg-gold-gradient text-black"
+                      >
+                        {applying ? 'Submitting...' : 'Re-apply for Verification'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-[#111] border border-white/5 p-6 rounded-xl space-y-4">
+                      <div>
+                        <Label className="text-text-secondary mb-2 block">Why should you be verified? (Optional but recommended)</Label>
+                        <Textarea 
+                          value={verificationNotes}
+                          onChange={(e) => setVerificationNotes(e.target.value)}
+                          placeholder="Link to news articles, major event flyers, or explain your legacy (e.g. active for 15+ years)..."
+                          className="bg-black-elevated border-dark-gray text-text-primary resize-none"
+                          rows={4}
+                        />
+                      </div>
+                      <Button 
+                        onClick={async () => {
+                          setApplying(true);
+                          try {
+                            await applyForVerification({ djId: djId!, notes: verificationNotes });
+                            refetchVerification();
+                          } catch (e: any) {
+                            alert(e.response?.data?.error || 'Failed to apply');
+                          } finally {
+                            setApplying(false);
+                          }
+                        }}
+                        disabled={applying}
+                        className="bg-gold-gradient text-black"
+                      >
+                        {applying ? 'Submitting...' : 'Apply for Verification'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

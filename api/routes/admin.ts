@@ -167,36 +167,68 @@ router.put('/users/:id/role', async (req, res) => {
   }
 });
 
-// GET /api/admin/djs/pending - Get DJs pending verification
-router.get('/djs/pending', async (req, res) => {
+// GET /api/admin/verifications - Get verification requests
+router.get('/verifications', async (req, res) => {
   try {
-    const djs = await prisma.djProfile.findMany({
-      where: { verified: false },
+    const status = req.query.status || 'PENDING';
+    const requests = await prisma.verificationRequest.findMany({
+      where: status !== 'ALL' ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, email: true, createdAt: true } },
-        streamingPlatforms: true,
+        dj: {
+          include: {
+            user: { select: { id: true, email: true, createdAt: true } },
+          }
+        }
       },
     });
 
-    return res.json({ success: true, data: djs });
+    return res.json({ success: true, data: requests });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// PUT /api/admin/djs/:id/verify - Verify a DJ
-router.put('/djs/:id/verify', async (req, res) => {
+// PUT /api/admin/verifications/:id/approve - Approve a verification request
+router.put('/verifications/:id/approve', async (req, res) => {
   try {
-    const dj = await prisma.djProfile.update({
+    const request = await prisma.verificationRequest.findUnique({
       where: { id: req.params.id },
-      data: {
-        verified: true,
-        badges: { push: 'Verified DJ' },
-      },
+      include: { dj: true }
+    });
+
+    if (!request) return res.status(404).json({ success: false, error: 'Request not found' });
+
+    // Update request
+    await prisma.verificationRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'APPROVED' }
+    });
+
+    // Update DJ
+    const badges = request.dj.badges || [];
+    if (!badges.includes('Verified DJ')) badges.push('Verified DJ');
+
+    const dj = await prisma.djProfile.update({
+      where: { id: request.djId },
+      data: { verified: true, badges },
     });
 
     return res.json({ success: true, data: dj });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/admin/verifications/:id/reject - Reject a verification request
+router.put('/verifications/:id/reject', async (req, res) => {
+  try {
+    const request = await prisma.verificationRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'REJECTED' }
+    });
+
+    return res.json({ success: true, data: request });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

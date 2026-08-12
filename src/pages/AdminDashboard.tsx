@@ -17,8 +17,8 @@ import {
   MessageCircle, Ban,
   Loader2
 } from 'lucide-react';
-import { useAdminStats, useAdminUsers, useAdminPendingDJs } from '@/hooks/useAdmin';
-import { useDJs } from '@/hooks/useDJs';
+import { useAdminStats, useAdminUsers } from '@/hooks/useAdmin';
+import { useDJs, useAdminVerifications, useApproveVerification, useRejectVerification } from '@/hooks/useDJs';
 
 /* ─────────────────────── Types ─────────────────────── */
 type AdminSection =
@@ -290,12 +290,45 @@ function UsersSection() {
 }
 
 function VerificationSection() {
-  const { data: pendingData, isLoading } = useAdminPendingDJs();
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const { data: pendingData, isLoading, refetch } = useAdminVerifications(statusFilter);
+  const { mutateAsync: approve } = useApproveVerification();
+  const { mutateAsync: reject } = useRejectVerification();
   const pending = pendingData || [];
+
+  const handleApprove = async (id: string) => {
+    if (confirm('Approve this verification request?')) {
+      try {
+        await approve(id);
+        refetch();
+      } catch (err) {
+        alert('Failed to approve');
+      }
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (confirm('Reject this verification request?')) {
+      try {
+        await reject(id);
+        refetch();
+      } catch (err) {
+        alert('Failed to reject');
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
       <SectionHeader title="DJ Verification" subtitle="Review incoming verification requests" />
+      
+      <div className="flex gap-2">
+        <button onClick={() => setStatusFilter('ALL')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${statusFilter === 'ALL' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>All</button>
+        <button onClick={() => setStatusFilter('PENDING')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${statusFilter === 'PENDING' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>Pending</button>
+        <button onClick={() => setStatusFilter('APPROVED')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${statusFilter === 'APPROVED' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>Approved</button>
+        <button onClick={() => setStatusFilter('REJECTED')} className={`px-4 py-2 text-xs font-bold uppercase rounded-full ${statusFilter === 'REJECTED' ? 'bg-gold text-black' : 'bg-white/5 text-text-muted'}`}>Rejected</button>
+      </div>
+
       {isLoading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-10 h-10 text-gold animate-spin" />
@@ -303,25 +336,39 @@ function VerificationSection() {
       )}
       <div className="grid gap-4">
         {pending.map((v: any) => (
-          <div key={v.id} className="bg-black-elevated border border-white/5 p-5 rounded-2xl flex justify-between items-center">
+          <div key={v.id} className="bg-black-elevated border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <p className="font-bold">{v.stageName}</p>
-              <p className="text-xs text-text-muted">Submitted: {new Date(v.createdAt).toLocaleDateString()}</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="font-bold text-lg">{v.dj.stageName}</p>
+                <StatusBadge status={v.status.toLowerCase()} />
+              </div>
+              <p className="text-xs text-text-muted mb-2">Submitted: {new Date(v.createdAt).toLocaleDateString()}</p>
+              
+              {v.notes && (
+                <div className="bg-black/50 p-3 rounded-lg border border-white/5 text-sm text-text-secondary mt-2 mb-2 max-w-xl">
+                  <span className="text-gold font-semibold text-xs block mb-1">NOTES:</span>
+                  "{v.notes}"
+                </div>
+              )}
+              
               <div className="flex gap-4 mt-2 text-xs">
-                <span className={v.bio ? "text-green-400" : "text-red-400"}>Profile complete</span>
-                <span className="text-red-400">ID provided</span>
-                <span className={v.totalMixes > 0 ? "text-green-400" : "text-red-400"}>Mixes uploaded</span>
+                <span className="text-gray-400">Years Active: {v.dj.yearsActive || 0}</span>
+                <span className="text-gray-400">Followers: {v.dj.totalFollowers || 0}</span>
+                <span className={v.dj.bio ? "text-green-400" : "text-red-400"}>{v.dj.bio ? "Profile complete" : "Profile incomplete"}</span>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button className="px-4 py-2 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/20">Approve</button>
-              <button className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20">Reject (Reason)</button>
-            </div>
+            
+            {v.status === 'PENDING' && (
+              <div className="flex gap-2 w-full md:w-auto">
+                <button onClick={() => handleApprove(v.id)} className="flex-1 md:flex-none px-4 py-2 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/20">Approve</button>
+                <button onClick={() => handleReject(v.id)} className="flex-1 md:flex-none px-4 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20">Reject</button>
+              </div>
+            )}
           </div>
         ))}
       </div>
       {!isLoading && pending.length === 0 && (
-        <p className="text-sm text-text-muted text-center">No pending verification requests.</p>
+        <p className="text-sm text-text-muted text-center">No verification requests found.</p>
       )}
     </div>
   );

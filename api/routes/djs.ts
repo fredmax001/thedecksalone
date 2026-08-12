@@ -6,6 +6,7 @@ const { uploadAvatar, uploadDjProfileImages } = require('../utils/upload');
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
+const { aggregateMetrics } = require('../utils/metricsAggregator');
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ const createDjSchema = z.object({
   fullName: z.string().min(1).max(200),
   bio: z.string().max(2000).optional(),
   yearsActive: z.number().int().min(0).max(50).optional(),
+  djType: z.string().max(50).optional(),
   city: z.string().max(100).optional(),
   genres: z.array(z.string()).max(5).optional(),
   awards: z.array(z.string()).optional(),
@@ -61,6 +63,7 @@ const updateDjSchema = z.object({
   fullName: z.string().min(1).max(200).optional(),
   bio: z.string().max(2000).optional(),
   yearsActive: z.number().int().min(0).max(50).optional(),
+  djType: z.string().max(50).optional(),
   city: z.string().max(100).optional(),
   genres: z.array(z.string()).max(5).optional(),
   awards: z.array(z.string()).optional(),
@@ -222,6 +225,48 @@ router.get('/genres', async (req, res) => {
   }
 });
 
+// GET /api/djs/upcoming - Get upcoming DJs (<= 3 years active)
+router.get('/upcoming', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 12;
+    const djs = await prisma.djProfile.findMany({
+      where: { yearsActive: { lte: 3 }, isPublic: true },
+      orderBy: [
+        { rankingScore: 'desc' },
+        { totalFollowers: 'desc' }
+      ],
+      take: limit,
+      include: {
+        user: { select: { username: true } }
+      }
+    });
+    return res.json({ success: true, data: djs.map(dj => ({ ...dj, username: dj.user.username })) });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/legacies - Get legacy DJs (>= 15 years active)
+router.get('/legacies', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 12;
+    const djs = await prisma.djProfile.findMany({
+      where: { yearsActive: { gte: 15 }, isPublic: true },
+      orderBy: [
+        { rankingScore: 'desc' },
+        { totalFollowers: 'desc' }
+      ],
+      take: limit,
+      include: {
+        user: { select: { username: true } }
+      }
+    });
+    return res.json({ success: true, data: djs.map(dj => ({ ...dj, username: dj.user.username })) });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/djs/:identifier - Get single DJ by id or username
 router.get('/:identifier', async (req, res) => {
   try {
@@ -307,6 +352,23 @@ router.post('/', authMiddleware, uploadAvatar.single('avatar'), async (req, res)
   }
 });
 
+// GET /api/djs/:id/metrics - Get cross-platform metrics
+router.get('/:id/metrics', async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, streamingLinks: true }
+    });
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+    const metricsResult = await aggregateMetrics(dj);
+    return res.json({ success: true, data: metricsResult });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // PUT /api/djs/:id - Update DJ profile
 router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
   try {
@@ -360,6 +422,54 @@ router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
     });
 
     return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/djs/:id/verify-request - Check verification status
+router.get('/:id/verify-request', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+    
+    if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const request = await prisma.verificationRequest.findUnique({ where: { djId: req.params.id } });
+    return res.json({ success: true, data: request });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/djs/:id/verify-request - Apply for verification
+router.post('/:id/verify-request', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+    
+    if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    if (dj.verified) {
+      return res.status(400).json({ success: false, error: 'DJ is already verified' });
+    }
+
+    const existing = await prisma.verificationRequest.findUnique({ where: { djId: req.params.id } });
+    if (existing && existing.status === 'PENDING') {
+      return res.status(400).json({ success: false, error: 'Verification request already pending' });
+    }
+
+    const data = { djId: req.params.id, notes: req.body.notes || '', status: 'PENDING' };
+
+    const request = existing 
+      ? await prisma.verificationRequest.update({ where: { id: existing.id }, data })
+      : await prisma.verificationRequest.create({ data });
+
+    return res.status(201).json({ success: true, data: request });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

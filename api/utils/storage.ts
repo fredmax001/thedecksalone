@@ -55,7 +55,7 @@ function keyFromUrl(url) {
   return null;
 }
 
-async function uploadBuffer(buffer, folder, options = {}) {
+async function uploadBuffer(buffer: any, folder: string, options: any = {}) {
   const ext = options.ext || 'webp';
   const key = `${folder}/${randomUUID()}.${ext}`;
 

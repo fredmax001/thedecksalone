@@ -8,7 +8,6 @@ import {
   Play,
   Heart,
   MessageCircle,
-  Share2,
   Music,
   Headphones,
   Calendar,
@@ -32,9 +31,8 @@ import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
+import MetricsDashboard from "@/components/MetricsDashboard";
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -210,11 +208,7 @@ const scaleIn = {
   },
 };
 
-const badgeColors: Record<string, string> = {
-  gold: "bg-gold text-black",
-  orange: "bg-orange text-black",
-  purple: "bg-purple text-white",
-};
+
 
 /* ───── Star Rating Component ───── */
 function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
@@ -580,6 +574,9 @@ function OverviewTab({ dj }: { dj: DJ }) {
     >
       {/* Left Column */}
       <div className="space-y-8">
+        {/* Metrics Dashboard */}
+        <MetricsDashboard djId={dj.id} />
+
         {/* About */}
         {dj.bio && (
           <section>
@@ -666,27 +663,7 @@ function OverviewTab({ dj }: { dj: DJ }) {
         </div>
 
         {/* Streaming Platforms */}
-        {dj.streamingPlatforms.length > 0 && (
-          <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6">
-            <span className="section-label">Streaming Platforms</span>
-            <div className="mt-4 space-y-3">
-              {dj.streamingPlatforms.map((platform) => (
-                <div key={platform.platform} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Music size={18} className="text-gold" />
-                    <span className="text-sm text-text-secondary capitalize">
-                      {platform.platform.replace(/([A-Z])/g, " $1").trim()}
-                    </span>
-                  </div>
-                  <span className="font-mono-data text-sm text-gold">
-                    {formatCompact(platform.followers)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* Replaced by MetricsDashboard */}
         {/* Social Links */}
         {hasSocialLinks && (
           <div className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6">
@@ -1620,7 +1597,7 @@ export default function DjProfile() {
 
             {/* Badges Row */}
             <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              {dj.badges.map((badge, i) => (
+              {dj.badges.map((badge: string, i: number) => (
                 <motion.span
                   key={badge}
                   className={cn(
@@ -1643,7 +1620,7 @@ export default function DjProfile() {
             {/* Meta Row */}
             <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1 text-sm text-text-muted">
               <div className="flex flex-wrap gap-1.5">
-                {dj.genres.slice(0, 3).map((genre) => (
+                {dj.genres.slice(0, 3).map((genre: string) => (
                   <span
                     key={genre}
                     className="px-2 py-0.5 rounded-full border border-gold/40 text-[10px] text-gold"

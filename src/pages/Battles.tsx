@@ -92,10 +92,6 @@ function getEntryVotes(entry: BattleEntry) {
   return entry.voteCount ?? entry.votes ?? entry.votesCast?.length ?? 0;
 }
 
-function getTotalVotes(entries?: BattleEntry[]) {
-  return (entries || []).reduce((sum, e) => sum + getEntryVotes(e), 0);
-}
-
 function formatDateRange(start: string, end: string) {
   const s = parseISO(start);
   const e = parseISO(end);

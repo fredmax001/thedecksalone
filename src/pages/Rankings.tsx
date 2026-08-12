@@ -6,6 +6,7 @@ import {
   MapPin,
   Star,
   TrendingDown,
+  TrendingUp,
   CheckCircle2,
   Flame,
   Award,
@@ -27,7 +28,6 @@ import {
 } from 'recharts';
 import FadeIn from '@/components/FadeIn';
 import { useRankings } from '@/hooks/useRankings';
-import { useDJs } from '@/hooks/useDJs';
 
 /* ─────────────────── Easing ─────────────────── */
 
@@ -39,6 +39,7 @@ interface RankedDJ {
   id: string;
   rankingPosition: number;
   stageName: string;
+  username?: string; // optional, used as URL slug if available
   genres: string[];
   city: string;
   country: string;

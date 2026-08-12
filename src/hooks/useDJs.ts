@@ -65,3 +65,64 @@ export function useDJGenres() {
     },
   });
 }
+
+export function useLegacyDJs(limit = 8) {
+  return useQuery({
+    queryKey: ['legacyDJs', limit],
+    queryFn: async () => {
+      const res = await api.get(`/djs/legacies?limit=${limit}`);
+      return res.data.data;
+    },
+  });
+}
+
+// Verification Hooks
+export function useVerificationStatus(djId: string | undefined) {
+  return useQuery({
+    queryKey: ['verificationStatus', djId],
+    queryFn: async () => {
+      if (!djId) return null;
+      const res = await api.get(`/djs/${djId}/verify-request`);
+      return res.data.data;
+    },
+    enabled: !!djId,
+  });
+}
+
+export function useApplyVerification() {
+  return {
+    mutateAsync: async ({ djId, notes }: { djId: string; notes: string }) => {
+      const res = await api.post(`/djs/${djId}/verify-request`, { notes });
+      return res.data.data;
+    }
+  };
+}
+
+// Admin Verification Hooks
+export function useAdminVerifications(status = 'ALL') {
+  return useQuery({
+    queryKey: ['adminVerifications', status],
+    queryFn: async () => {
+      const res = await api.get(`/admin/verifications?status=${status}`);
+      return res.data.data;
+    },
+  });
+}
+
+export function useApproveVerification() {
+  return {
+    mutateAsync: async (requestId: string) => {
+      const res = await api.put(`/admin/verifications/${requestId}/approve`);
+      return res.data.data;
+    }
+  };
+}
+
+export function useRejectVerification() {
+  return {
+    mutateAsync: async (requestId: string) => {
+      const res = await api.put(`/admin/verifications/${requestId}/reject`);
+      return res.data.data;
+    }
+  };
+}
