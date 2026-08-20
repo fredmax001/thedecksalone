@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { recordMixPlaybackTaste } from '@/lib/recommendations';
 
 export interface MixTrack {
   id: string;
@@ -8,10 +9,19 @@ export interface MixTrack {
   cover: string;
   genre: string;
   plays?: number;
+  downloads?: number;
+  likes?: number;
+  reups?: number;
   audioUrl?: string;
   audioSource?: string;
   originalUrl?: string;
-  djTier?: 'free' | 'pro' | 'legend';
+  djTier?: 'free' | 'pro' | 'legend' | string;
+  djId?: string;
+  djAvatar?: string;
+  isExclusive?: boolean;
+  promotedUntil?: string | null;
+  subscriptionPrice?: number;
+  createdAt?: string;
 }
 
 export interface SavedPosition {
@@ -25,6 +35,7 @@ export interface SavedPosition {
 
 const HISTORY_KEY_PREFIX = 'decksalone_playback_history';
 const LAST_SESSION_PREFIX = 'decksalone_last_session';
+const GUEST_PLAYBACK_KEY = 'decksalone_guest_playback';
 
 function getKey(prefix: string, userId?: string | null): string {
   return userId ? `${prefix}_${userId}` : prefix;
@@ -67,6 +78,7 @@ interface PlayerState {
   // Actions
   setCurrentUserId: (userId: string | null) => void;
   clearSession: () => void;
+  resetPlayback: () => void;
   setTrack: (track: MixTrack, initialTime?: number) => void;
   play: (track?: MixTrack, initialTime?: number) => void;
   pause: () => void;
@@ -99,31 +111,80 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   history: {},
   lastSession: null,
 
-  setCurrentUserId: (userId: string | null) => {
-    if (userId === get().currentUserId) return;
-    if (!userId) {
-      get().clearSession();
+  setCurrentUserId: (newUserId: string | null) => {
+    const previousUserId = get().currentUserId;
+    if (newUserId === previousUserId) return;
+
+    // Transition: Logging out (User -> null)
+    if (!newUserId) {
+      // Detach user, reset active playback state, and unload user's history from memory
+      set({
+        currentUserId: null,
+        currentTrack: null,
+        isPlaying: false,
+        progress: 0,
+        currentTime: 0,
+        duration: 0,
+        queue: [],
+        currentIndex: -1,
+        history: {},
+        lastSession: null,
+      });
       return;
     }
-    const history = getStoredHistory(userId);
-    const lastSession = getStoredLastSession(userId);
+
+    // Transition: Account Switching (User A -> User B)
+    if (previousUserId && previousUserId !== newUserId) {
+      // Completely reset playback and queue from previous user before hydrating new user
+      const newHistory = getStoredHistory(newUserId);
+      const newLastSession = getStoredLastSession(newUserId);
+      set({
+        currentUserId: newUserId,
+        currentTrack: null,
+        isPlaying: false,
+        progress: 0,
+        currentTime: 0,
+        duration: 0,
+        queue: [],
+        currentIndex: -1,
+        history: newHistory,
+        lastSession: newLastSession,
+      });
+      return;
+    }
+
+    // Transition: Guest -> Authenticated User (null -> User A)
+    const userHistory = getStoredHistory(newUserId);
+    const userLastSession = getStoredLastSession(newUserId);
+
+    // Keep active playback running if user was listening to a public track as a guest,
+    // but bind state strictly to newUserId and load user's private history.
     set({
-      currentUserId: userId,
-      history,
-      lastSession,
+      currentUserId: newUserId,
+      history: userHistory,
+      lastSession: userLastSession,
+    });
+  },
+
+  // Reset active playback in memory
+  resetPlayback: () => {
+    set({
+      currentTrack: null,
+      isPlaying: false,
+      progress: 0,
+      currentTime: 0,
+      duration: 0,
+      queue: [],
+      currentIndex: -1,
     });
   },
 
   clearSession: () => {
-    // Clear legacy non-scoped storage keys
+    // Clear legacy non-scoped storage keys and reset store state
     try {
       localStorage.removeItem(HISTORY_KEY_PREFIX);
       localStorage.removeItem(LAST_SESSION_PREFIX);
-      const uid = get().currentUserId;
-      if (uid) {
-        localStorage.removeItem(getKey(HISTORY_KEY_PREFIX, uid));
-        localStorage.removeItem(getKey(LAST_SESSION_PREFIX, uid));
-      }
+      localStorage.removeItem(GUEST_PLAYBACK_KEY);
     } catch {}
 
     set({
@@ -164,6 +225,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentTime: startPos,
       duration: trackDur,
     });
+    recordMixPlaybackTaste(track);
   },
 
   play: (track, initialTime) => {

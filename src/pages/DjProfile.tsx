@@ -27,6 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn, imageFallback } from "@/lib/utils";
+import { api, getMediaUrl } from "@/lib/api";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { usePlayerStore } from "@/stores/playerStore";
@@ -35,6 +36,7 @@ import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
+import DjFanSubscribeModal from "@/components/DjFanSubscribeModal";
 import {
   XAxis,
   YAxis,
@@ -154,6 +156,7 @@ interface DJ {
   website?: string;
   whatsappNumber?: string;
   subscriptionTier?: 'free' | 'pro' | 'legend';
+  subscriptionPrice?: number;
   monthlyListeners: number;
   highlights: HighlightItem[];
   sets: SetSummary[];
@@ -684,7 +687,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
       {/* Right Column */}
       <div className="space-y-6">
         {/* Booking Info Card */}
-        <div className="bg-[#111111] border border-[rgba(212,162,74,0.15)] rounded-2xl p-6">
+        <div className="bg-[#111111] border border-[rgba(244,224,89,0.15)] rounded-2xl p-6">
           <span className="section-label">Booking Information</span>
           <div className="mt-4">
             <p className="font-mono-data text-2xl font-semibold text-gold">
@@ -693,7 +696,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
             <p className="mt-1 text-xs text-text-muted">per event</p>
           </div>
           <div className="mt-4 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-gold shadow-[0_0_6px_rgba(212,162,74,0.7)]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-gold shadow-[0_0_6px_rgba(244,224,89,0.7)]" />
             <span className="text-sm text-text-secondary">Available for bookings</span>
           </div>
           <p className="mt-2 text-xs text-text-muted">Typically responds within 24 hours</p>
@@ -731,7 +734,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                   href={dj.socialLinks.instagram}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(244,224,89,0.1)] transition-colors"
                   title="Instagram"
                 >
                   <Instagram size={18} />
@@ -742,7 +745,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                   href={dj.socialLinks.twitter}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(244,224,89,0.1)] transition-colors"
                   title="X (Twitter)"
                 >
                   <Twitter size={18} />
@@ -753,7 +756,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                   href={dj.socialLinks.tiktok}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(244,224,89,0.1)] transition-colors"
                   title="TikTok"
                 >
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px]">
@@ -766,7 +769,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                   href={dj.socialLinks.youtube}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(244,224,89,0.1)] transition-colors"
                   title="YouTube"
                 >
                   <Play size={18} />
@@ -777,7 +780,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                   href={dj.socialLinks.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(212,162,74,0.1)] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center text-text-muted hover:text-gold hover:bg-[rgba(244,224,89,0.1)] transition-colors"
                   title="Facebook"
                 >
                   <Facebook size={18} />
@@ -894,7 +897,7 @@ function MixesTab({ dj }: { dj: DJ }) {
               className={cn(
                 "px-4 py-2 rounded-full text-sm font-medium transition-all",
                 i === 0
-                  ? "bg-[rgba(212,162,74,0.15)] text-gold border border-gold/30"
+                  ? "bg-[rgba(244,224,89,0.15)] text-gold border border-gold/30"
                   : "border border-[rgba(255,255,255,0.1)] text-text-muted hover:text-text-primary hover:border-[rgba(255,255,255,0.3)]"
               )}
             >
@@ -909,7 +912,7 @@ function MixesTab({ dj }: { dj: DJ }) {
         {dj.mixes.map((mix, i) => (
           <motion.div
             key={mix.id}
-            className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
+            className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(244,224,89,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08, duration: 0.5 }}
@@ -1146,7 +1149,7 @@ function StatsTab({ dj }: { dj: DJ }) {
                         color: "#F5F5F5",
                       }}
                     />
-                    <Bar dataKey="position" fill="#D4A24A" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="position" fill="#f4e059" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1190,7 +1193,7 @@ function StatsTab({ dj }: { dj: DJ }) {
                 cy="60"
                 r="52"
                 fill="none"
-                stroke="#D4A24A"
+                stroke="#f4e059"
                 strokeWidth="8"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 52}`}
@@ -1545,7 +1548,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
           <motion.a
             key={djItem.id}
             href={`/dj/${djItem.username || djItem.id}`}
-            className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
+            className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(244,224,89,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -1650,7 +1653,7 @@ function DjFollowButton({ djId, djUserId }: { djId: string; djUserId?: string })
         className={cn(
           "flex-1 sm:flex-auto px-4 py-2.5 rounded-full text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 disabled:opacity-70",
           isFollowing
-            ? "bg-[rgba(212,162,74,0.15)] text-gold border border-gold/30"
+            ? "bg-[rgba(244,224,89,0.15)] text-gold border border-gold/30"
             : "border border-[rgba(255,255,255,0.2)] text-text-primary hover:bg-[rgba(255,255,255,0.05)]"
         )}
       >
@@ -1681,13 +1684,14 @@ function SetsTab({ djId }: { djId: string }) {
   const { play, setQueue } = usePlayerStore();
 
   useEffect(() => {
-    import("@/lib/api").then(({ api }) => {
-      api.get(`/sets/dj/${djId}`).then((res) => {
+    api.get(`/sets/dj/${djId}`)
+      .then((res) => {
         if (res.data.success) {
           setSets(res.data.data || []);
         }
-      }).catch(() => {}).finally(() => setLoading(false));
-    });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [djId]);
 
   if (loading) {
@@ -1714,7 +1718,11 @@ function SetsTab({ djId }: { djId: string }) {
         <div key={set.id} className="bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-4 flex flex-col justify-between hover:border-gold/30 transition-all">
           <div>
             <div className="relative aspect-[16/9] rounded-xl overflow-hidden mb-3 bg-black">
-              <img src={set.coverImage || set.items?.[0]?.mix?.coverImage || '/cover-placeholder.jpg'} alt={set.title} className="w-full h-full object-cover" />
+              <img
+                src={getMediaUrl(set.coverImage || set.items?.[0]?.mix?.coverImage) || '/cover-placeholder.jpg'}
+                alt={set.title}
+                className="w-full h-full object-cover"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3 justify-between">
                 <span className="text-[10px] uppercase font-bold text-gold px-2 py-0.5 rounded bg-black/60 border border-gold/30">{set.genre || 'Playlist'}</span>
                 <span className="text-[10px] text-white px-2 py-0.5 rounded bg-black/60">{set.mixCount || 0} Mixes</span>
@@ -1726,17 +1734,22 @@ function SetsTab({ djId }: { djId: string }) {
           <button
             onClick={() => {
               if (set.items && set.items.length > 0) {
-                const tracks = set.items.map((i: any) => ({
-                  id: i.mix.id,
-                  title: i.mix.title,
-                  dj: i.mix.dj?.stageName || 'DJ',
-                  duration: 0,
-                  cover: i.mix.coverImage || set.coverImage || '/cover-placeholder.jpg',
-                  genre: i.mix.genre || set.genre || 'Afrobeats',
-                  audioUrl: i.mix.audioUrl,
-                }));
-                setQueue(tracks as any);
-                play(tracks[0] as any);
+                const tracks = set.items
+                  .filter((i: any) => i.mix)
+                  .map((i: any) => ({
+                    id: i.mix.id,
+                    title: i.mix.title,
+                    dj: i.mix.dj?.stageName || 'DJ',
+                    duration: typeof i.mix.duration === 'number' ? i.mix.duration : parseInt(String(i.mix.duration)) || 0,
+                    cover: getMediaUrl(i.mix.coverImage || set.coverImage) || '/cover-placeholder.jpg',
+                    genre: i.mix.genre || set.genre || 'Salone Mix',
+                    plays: i.mix.plays || 0,
+                    audioUrl: getMediaUrl(i.mix.audioUrl) || '',
+                  }));
+                if (tracks.length > 0) {
+                  setQueue(tracks as any);
+                  play(tracks[0] as any);
+                }
               }
             }}
             className="mt-4 w-full bg-gold-gradient text-black font-bold uppercase text-xs py-2 rounded-full flex items-center justify-center gap-1.5"
@@ -1757,6 +1770,8 @@ export default function DjProfile() {
   const [activeTab, setActiveTab] = useState("overview");
   const { user } = useAuthStore();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
+  const [isSubscribedToDj, setIsSubscribedToDj] = useState(false);
 
   const handleMessageClick = () => {
     if (!user) {
@@ -1779,6 +1794,18 @@ export default function DjProfile() {
       navigate(`/dj/${dj.username}`, { replace: true });
     }
   }, [dj, identifier, navigate]);
+
+  useEffect(() => {
+    if (dj?.id && user) {
+      api.get(`/djs/${dj.id}/subscription-status`)
+        .then((res) => {
+          if (res.data?.success && res.data?.data?.isSubscribed) {
+            setIsSubscribedToDj(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [dj?.id, user]);
 
   const tabs = useMemo(
     () => [
@@ -1925,7 +1952,7 @@ export default function DjProfile() {
                   <motion.span
                     key={badge}
                     className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wighter border border-gold/30 text-gold bg-[rgba(212,162,74,0.1)]"
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wighter border border-gold/30 text-gold bg-[rgba(244,224,89,0.1)]"
                     )}
                     initial={{ opacity: 0, scale: 0 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -1971,6 +1998,23 @@ export default function DjProfile() {
             transition={{ duration: 0.5, delay: 0.6 }}
           >
             <DjFollowButton djId={dj.id} djUserId={dj.userId} />
+
+            {/* Direct Fan-to-DJ Subscribe Button */}
+            {user?.id && dj.userId && user.id === dj.userId ? null : isSubscribedToDj ? (
+              <div className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full bg-[#f4e059]/15 border border-[#f4e059]/40 text-[#f4e059] text-xs font-bold uppercase flex items-center justify-center gap-1.5 shadow-sm">
+                <Crown size={15} />
+                <span>✓ VIP Fan Subscribed</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsSubscribeOpen(true)}
+                className="flex-1 sm:flex-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-[#f4e059] to-yellow-300 text-black text-xs font-black uppercase hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f4e059]/20"
+              >
+                <Crown size={15} />
+                <span>Subscribe (from SLE {dj.subscriptionPrice || 50})</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsBookingOpen(true)}
               className="flex-1 sm:flex-auto px-6 py-2.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
@@ -2117,7 +2161,20 @@ export default function DjProfile() {
       {/* ══════ Booking Modal ══════ */}
       <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} dj={dj} />
 
-
+      {/* ══════ DJ Fan Subscription Modal ══════ */}
+      {dj && (
+        <DjFanSubscribeModal
+          isOpen={isSubscribeOpen}
+          onClose={() => setIsSubscribeOpen(false)}
+          dj={{
+            id: dj.id,
+            stageName: dj.stageName,
+            avatar: dj.avatar,
+            subscriptionPrice: dj.subscriptionPrice || 100,
+          }}
+          onSuccess={() => setIsSubscribedToDj(true)}
+        />
+      )}
     </div>
   );
 }

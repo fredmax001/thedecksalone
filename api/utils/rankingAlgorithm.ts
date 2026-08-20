@@ -426,9 +426,54 @@ async function getBattleLeaders(limit = 10) {
   return leaders;
 }
 
+/**
+ * Calculate a battle entry's base score from the DJ's current metrics.
+ * This is the "metric" component of the battle (not user votes).
+ */
+async function calculateBattleBaseScore(djId: string, metricType = 'COMPOSITE') {
+  const dj = await prisma.djProfile.findUnique({
+    where: { id: djId },
+    include: {
+      streamingPlatforms: true,
+      mixes: { select: { likes: true, plays: true } },
+      reviews: { select: { rating: true } },
+    },
+  });
+
+  if (!dj) return 0;
+
+  switch (metricType) {
+    case 'PLAYS': {
+      const totalPlays = dj.mixes.reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+      return Math.min(100, (totalPlays / 100000) * 100);
+    }
+    case 'STREAMS': {
+      const totalStreams = dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+      return Math.min(100, (totalStreams / 500000) * 100);
+    }
+    case 'FOLLOWERS': {
+      const totalFollowers = dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.followers || 0), 0);
+      return Math.min(100, (totalFollowers / 25000) * 100);
+    }
+    case 'LIKES': {
+      const totalLikes = dj.mixes.reduce((sum: number, m: any) => sum + (m.likes || 0), 0);
+      return Math.min(100, (totalLikes / 10000) * 100);
+    }
+    case 'COMPOSITE':
+    default: {
+      const scores = await computeDjScoreV2(djId);
+      return scores ? scores.compositeScore : 0;
+    }
+  }
+}
+
 module.exports = {
+  computeDjScore: computeDjScoreV2,
   computeDjScoreV2,
+  recalculateAllRankings: recalculateAllRankingsV2,
   recalculateAllRankingsV2,
+  updateAllDjRankings: recalculateAllRankingsV2,
+  calculateBattleBaseScore,
   sendTop3WeeklyNotifications,
   getRisingDjs,
   getBattleLeaders,
@@ -439,3 +484,4 @@ module.exports = {
   calculateBookingScore,
   calculateBattleScore,
 };
+

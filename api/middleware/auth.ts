@@ -1,5 +1,6 @@
 const { verifyToken } = require('../utils/jwt');
 const { prisma } = require('../utils/prisma');
+const { getCache, setCache, clearCache } = require('../utils/redis');
 
 async function getActiveUserFromToken(token) {
   const decoded = verifyToken(token);
@@ -8,18 +9,35 @@ async function getActiveUserFromToken(token) {
   const userId = decoded.id || decoded.userId;
   if (!userId) return null;
 
+  const cacheKey = `auth_user:${userId}`;
+  const cached = await getCache(cacheKey);
+  if (cached && cached.id && cached.role) {
+    return cached;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, email: true, role: true, status: true },
   });
   if (!user || user.status !== 'ACTIVE') return null;
 
-  return {
+  const authUser = {
     id: user.id,
     email: user.email,
     role: user.role,
   };
+
+  // Cache user auth session for 5 minutes (300s) to avoid repetitive DB SELECTs
+  await setCache(cacheKey, authUser, 300);
+
+  return authUser;
 }
+
+function invalidateUserAuthCache(userId) {
+  if (!userId) return;
+  clearCache(`auth_user:${userId}`);
+}
+
 
 async function authMiddleware(req, res, next) {
   try {
@@ -71,4 +89,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authMiddleware, softAuthMiddleware, requireRole };
+module.exports = { authMiddleware, softAuthMiddleware, requireRole, invalidateUserAuthCache };

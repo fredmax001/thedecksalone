@@ -6,16 +6,15 @@ import {
   Music,
   AlertTriangle,
   ListMusic,
-  Trophy,
   ArrowRight,
   Loader2,
-  Settings,
   Sparkles,
 } from 'lucide-react';
+
 import api, { getMediaUrl } from '@/lib/api';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+
 
 export function ModeratorOverview() {
   const [loading, setLoading] = useState(true);
@@ -42,7 +41,7 @@ export function ModeratorOverview() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-gold animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
       </div>
     );
   }
@@ -50,7 +49,7 @@ export function ModeratorOverview() {
   const statCards = [
     { label: 'Total DJs', value: stats?.totalDjs || 0, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
     { label: 'Verified DJs', value: stats?.verifiedDjs || 0, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { label: 'Total Mixes', value: stats?.totalMixes || 0, icon: Music, color: 'text-gold', bg: 'bg-gold/10' },
+    { label: 'Total Mixes', value: stats?.totalMixes || 0, icon: Music, color: 'text-[#f4e059]', bg: 'bg-[#f4e059]/10' },
     { label: 'Awaiting Review', value: stats?.awaitingReview || 0, icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/10' },
     { label: 'Reported Mixes', value: stats?.reportedMixes || 0, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' },
     { label: 'Reported Users', value: stats?.reportedUsers || 0, icon: AlertTriangle, color: 'text-purple-400', bg: 'bg-purple-500/10' },
@@ -60,38 +59,41 @@ export function ModeratorOverview() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-gold/10 via-black-surface to-black-elevated p-4 sm:p-6 rounded-xl border border-gold/20">
+      <div className="rounded-2xl overflow-hidden relative bg-[#101010] border border-white/5 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f4e059]/50 to-transparent"></div>
         <div>
+          <span className="text-[#f4e059] text-[10px] uppercase font-bold tracking-widest mb-2 block">
+            MODERATOR OVERVIEW
+          </span>
           <div className="flex items-center gap-2 mb-1">
-            <Settings className="w-5 h-5 text-gold animate-spin-slow" />
-            <h2 className="text-lg font-bold text-white">Content & Community Dashboard</h2>
+            <h2 className="text-xl font-bold text-white">Content & Community Dashboard</h2>
           </div>
-          <p className="text-xs text-text-secondary">
+          <p className="text-sm text-text-muted">
             Manage published mixes, curate official playlists, review DJ rankings, and resolve community reports.
           </p>
         </div>
         <Link to="/moderator/playlists">
-          <Button size="sm" className="bg-gold text-black hover:bg-gold-light font-semibold text-xs gap-1.5 hidden sm:flex">
-            <Sparkles className="w-3.5 h-3.5" />
+          <Button size="sm" className="bg-[#f4e059] text-black hover:bg-[#f4e059]/90 font-bold px-5 py-2 h-auto rounded-lg gap-2 hidden sm:flex transition-colors">
+            <Sparkles className="w-4 h-4" />
             Create Playlist
           </Button>
         </Link>
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {statCards.map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <Card key={i} className="bg-black-elevated border-dark-gray p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-text-secondary">{stat.label}</p>
-                <p className="text-xl sm:text-2xl font-bold text-white mt-1">{stat.value}</p>
+            <div key={i} className="rounded-2xl p-5 border border-white/5 bg-[#101010] hover:border-white/20 transition-all flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">{stat.label}</p>
+                <div className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                  <Icon className={`w-4 h-4 ${stat.color}`} />
+                </div>
               </div>
-              <div className={`p-2.5 rounded-lg ${stat.bg}`}>
-                <Icon className={`w-5 h-5 ${stat.color}`} />
-              </div>
-            </Card>
+              <p className="font-mono text-2xl font-bold text-text-primary mt-auto">{stat.value}</p>
+            </div>
           );
         })}
       </div>
@@ -99,13 +101,12 @@ export function ModeratorOverview() {
       {/* Two Column Layout: Top Ranked DJs & Recent Uploads */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top-Ranked DJs */}
-        <Card className="bg-black-elevated border-dark-gray p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-dark-gray">
+        <div className="rounded-2xl bg-[#101010] border border-white/5 p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.04]">
             <div className="flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-gold" />
-              <h3 className="text-sm font-bold text-white">Top-Ranked DJs</h3>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider pl-3 border-l-2 border-[#f4e059]">Top-Ranked DJs</h3>
             </div>
-            <Link to="/moderator/rankings" className="text-xs text-gold hover:underline flex items-center gap-1">
+            <Link to="/moderator/rankings" className="text-xs text-text-muted hover:text-[#f4e059] transition-colors flex items-center gap-1">
               Manage Rankings <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
@@ -115,39 +116,38 @@ export function ModeratorOverview() {
               <p className="text-xs text-text-muted py-4 text-center">No ranked DJs available</p>
             ) : (
               stats?.topRankedDjs?.map((dj: any, index: number) => (
-                <div key={dj.id} className="flex items-center justify-between p-2.5 rounded-lg bg-black-surface border border-dark-gray/50">
+                <div key={dj.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/[0.05] p-3 hover:bg-white/[0.05] transition-colors">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-gold w-5 text-center">#{index + 1}</span>
+                    <span className="text-xs font-bold text-[#f4e059] w-5 text-center">#{index + 1}</span>
                     <img
                       src={getMediaUrl(dj.avatar) || '/placeholder-dj.jpg'}
                       alt={dj.stageName}
-                      className="w-8 h-8 rounded-full object-cover border border-gold/20"
+                      className="w-10 h-10 rounded-full object-cover border border-white/10"
                     />
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-semibold text-white">{dj.stageName}</p>
-                        <VerifiedBadge dj={dj} size={12} />
+                        <p className="text-sm font-semibold text-white">{dj.stageName}</p>
+                        <VerifiedBadge dj={dj} size={14} />
                       </div>
-                      <p className="text-[10px] text-text-muted">Rank Position #{dj.rankingPosition || index + 1}</p>
+                      <p className="text-[11px] text-text-muted">Rank Position #{dj.rankingPosition || index + 1}</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-gold bg-gold/10 px-2 py-0.5 rounded border border-gold/20">
+                  <span className="text-xs font-bold text-[#f4e059] bg-[#f4e059]/10 px-2.5 py-1 rounded-lg border border-[#f4e059]/20 font-mono">
                     {Math.round(dj.rankingScore || 0)} pts
                   </span>
                 </div>
               ))
             )}
           </div>
-        </Card>
+        </div>
 
         {/* Recent Uploads */}
-        <Card className="bg-black-elevated border-dark-gray p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-dark-gray">
+        <div className="rounded-2xl bg-[#101010] border border-white/5 p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.04]">
             <div className="flex items-center gap-2">
-              <Music className="w-4 h-4 text-gold" />
-              <h3 className="text-sm font-bold text-white">Recent Uploads</h3>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider pl-3 border-l-2 border-[#f4e059]">Recent Uploads</h3>
             </div>
-            <Link to="/moderator/mixes" className="text-xs text-gold hover:underline flex items-center gap-1">
+            <Link to="/moderator/mixes" className="text-xs text-text-muted hover:text-[#f4e059] transition-colors flex items-center gap-1">
               View All Mixes <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
@@ -157,24 +157,24 @@ export function ModeratorOverview() {
               <p className="text-xs text-text-muted py-4 text-center">No recent uploads</p>
             ) : (
               stats?.recentUploads?.map((mix: any) => (
-                <div key={mix.id} className="flex items-center justify-between p-2.5 rounded-lg bg-black-surface border border-dark-gray/50">
+                <div key={mix.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/[0.05] p-3 hover:bg-white/[0.05] transition-colors">
                   <div className="flex items-center gap-3">
                     <img
                       src={getMediaUrl(mix.coverImage) || '/placeholder-mix.jpg'}
                       alt={mix.title}
-                      className="w-10 h-10 rounded object-cover border border-dark-gray"
+                      className="w-12 h-12 rounded-lg object-cover border border-white/10"
                     />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate max-w-[180px] sm:max-w-[240px]">
+                      <p className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-[240px]">
                         {mix.title}
                       </p>
-                      <p className="text-[10px] text-text-secondary truncate">
-                        by {mix.dj?.stageName || 'DJ'} • <span className="text-gold">{mix.genre}</span>
+                      <p className="text-[11px] text-text-muted truncate mt-0.5">
+                        by <span className="text-text-primary font-medium">{mix.dj?.stageName || 'DJ'}</span> • <span className="text-[#f4e059]">{mix.genre}</span>
                       </p>
                     </div>
                   </div>
                   <Link to="/moderator/mixes">
-                    <Button size="sm" variant="ghost" className="text-[10px] h-7 text-gold hover:text-white">
+                    <Button size="sm" variant="ghost" className="text-xs font-semibold h-8 text-[#f4e059] hover:text-white bg-[#f4e059]/5 hover:bg-[#f4e059]/20 transition-colors">
                       Review
                     </Button>
                   </Link>
@@ -182,7 +182,7 @@ export function ModeratorOverview() {
               ))
             )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

@@ -32,7 +32,7 @@ api.interceptors.request.use((config) => {
   config.baseURL = currentBaseUrl;
 
   let token = null;
-  const authData = localStorage.getItem('soundit-auth');
+  const authData = localStorage.getItem('decksalone-auth') || localStorage.getItem('soundit-auth');
   if (authData) {
     try {
       token = JSON.parse(authData).state?.token;
@@ -53,16 +53,26 @@ api.interceptors.request.use((config) => {
 // Handle 401 globally — but don't redirect on auth validation calls
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
       const isAuthCheck = error.config?.url?.includes('/auth/me');
-      localStorage.removeItem('soundit-auth');
-      if (!isAuthCheck) {
+      try {
+        localStorage.removeItem('decksalone-auth');
+        localStorage.removeItem('soundit-auth');
+        // Dynamic import to avoid circular dependencies
+        const { queryClient } = await import('@/lib/queryClient');
+        queryClient.clear();
+        const { usePlayerStore } = await import('@/stores/playerStore');
+        usePlayerStore.getState().setCurrentUserId(null);
+      } catch (e) {}
+
+      if (!isAuthCheck && typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
     return Promise.reject(error);
   }
 );
+
 
 export default api;

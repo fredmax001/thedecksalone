@@ -33,18 +33,18 @@ export default function ReferralCard() {
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl p-6 border border-[#D4A24A]/30 bg-gradient-to-br from-[#1a160d] via-[#121212] to-[#0d0d0d] shadow-xl"
+      className="relative overflow-hidden rounded-2xl p-6 border border-[#f4e059]/30 bg-gradient-to-br from-[#1a160d] via-[#121212] to-[#000000] shadow-xl"
     >
       {/* Background Decorative Glow */}
-      <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#D4A24A]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#f4e059]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="space-y-2 max-w-xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D4A24A]/15 border border-[#D4A24A]/30 text-[#D4A24A] text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4e059]/15 border border-[#f4e059]/30 text-[#f4e059] text-xs font-bold uppercase tracking-wider">
             <Gift className="w-3.5 h-3.5" /> Special DJ Promo
           </div>
           <h3 className="text-lg md:text-xl font-extrabold text-white">
-            Share to 5 DJs & Get <span className="text-[#D4A24A]">1 Month Free Pro+</span>
+            Share to 5 DJs & Get <span className="text-[#f4e059]">1 Month Free Pro+</span>
           </h3>
           <p className="text-xs text-text-muted leading-relaxed">
             Invite fellow DJs to create their profile on Deck Salone using your unique referral link. Once 5 DJs sign up, you unlock a free 1-month Pro+ upgrade!
@@ -54,13 +54,13 @@ export default function ReferralCard() {
           <div className="pt-2">
             <div className="flex justify-between items-center text-xs mb-1.5 font-medium">
               <span className="text-text-secondary flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-[#D4A24A]" /> Progress: {referral.referralCount} / {referral.promoThreshold} DJs referred
+                <Trophy className="w-3.5 h-3.5 text-[#f4e059]" /> Progress: {referral.referralCount} / {referral.promoThreshold} DJs referred
               </span>
-              <span className="text-[#D4A24A] font-bold">{Math.round(progressPercent)}%</span>
+              <span className="text-[#f4e059] font-bold">{Math.round(progressPercent)}%</span>
             </div>
             <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[#D4A24A] to-[#F3E0A2] transition-all duration-500 rounded-full"
+                className="h-full bg-gradient-to-r from-[#ceb100] to-[#f4e059] transition-all duration-500 rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -87,7 +87,7 @@ export default function ReferralCard() {
             />
             <button
               onClick={copyLink}
-              className="p-1.5 hover:bg-white/10 rounded-md text-[#D4A24A] transition-colors"
+              className="p-1.5 hover:bg-white/10 rounded-md text-[#f4e059] transition-colors"
               title="Copy Link"
             >
               {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
@@ -99,7 +99,7 @@ export default function ReferralCard() {
               onClick={copyLink}
               className="flex-1 py-2 px-3 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-[#D4A24A]" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-[#f4e059]" />}
               {copied ? 'Copied!' : 'Copy Link'}
             </button>
             <button

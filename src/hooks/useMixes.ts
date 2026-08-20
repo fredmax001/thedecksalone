@@ -131,8 +131,36 @@ export function useHallOfFameMixes(limit = 6) {
 export function useImportHearthis() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { urls: string; defaultGenre?: string; defaultCategory?: string; isPublic?: boolean }) => {
-      const res = await api.post('/mixes/import-hearthis', payload);
+    mutationFn: async (payload: { urls: string[] | string; defaultGenre?: string; defaultCategory?: string; isPublic?: boolean }) => {
+      const urlsArray = Array.isArray(payload.urls)
+        ? payload.urls
+        : payload.urls.split(/[\n,]+/).map((u) => u.trim()).filter(Boolean);
+      const res = await api.post('/mixes/import-hearthis', {
+        ...payload,
+        urls: urlsArray,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mixes'] });
+      queryClient.invalidateQueries({ queryKey: ['trendingMixes'] });
+      queryClient.invalidateQueries({ queryKey: ['mixGenres'] });
+      queryClient.invalidateQueries({ queryKey: ['mixCategories'] });
+    },
+  });
+}
+
+export function useImportSoundcloud() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { urls: string[] | string; defaultGenre?: string; defaultCategory?: string; isPublic?: boolean }) => {
+      const urlsArray = Array.isArray(payload.urls)
+        ? payload.urls
+        : payload.urls.split(/[\n,]+/).map((u) => u.trim()).filter(Boolean);
+      const res = await api.post('/mixes/import-soundcloud', {
+        ...payload,
+        urls: urlsArray,
+      });
       return res.data;
     },
     onSuccess: () => {

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListMusic, Play, X, Disc3 } from 'lucide-react';
+import { ListMusic, Play, Pause, X, Disc3 } from 'lucide-react';
 import { useSet } from '@/hooks/useSets';
+import { getMediaUrl } from '@/lib/api';
+import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 
 interface SetSummary {
   id: string;
@@ -31,7 +33,7 @@ export function SetsTab({ sets }: SetsTabProps) {
       >
         <ListMusic size={48} className="mx-auto mb-4 opacity-50" />
         <p className="text-lg font-medium">No sets yet</p>
-        <p className="text-sm mt-2">Pro DJs can create curated playlists of their mixes.</p>
+        <p className="text-sm mt-2">DJs can create curated playlists of their mixes.</p>
       </motion.div>
     );
   }
@@ -68,6 +70,42 @@ function SetCard({
   onToggle: () => void;
 }) {
   const { data: setDetail, isLoading } = useSet(isExpanded ? set.id : undefined);
+  const { play, pause, setQueue, currentTrack, isPlaying } = usePlayerStore();
+
+  const getSetTracks = (): MixTrack[] => {
+    if (!setDetail?.items) return [];
+    return setDetail.items
+      .filter((item) => item.mix)
+      .map((item) => ({
+        id: item.mix.id,
+        title: item.mix.title,
+        dj: item.mix.dj?.stageName || 'DJ',
+        duration: typeof item.mix.duration === 'number' ? item.mix.duration : parseInt(String(item.mix.duration)) || 0,
+        cover: getMediaUrl(item.mix.coverImage || set.coverImage) || '',
+        genre: item.mix.genre || set.genre || 'Salone Mix',
+        plays: item.mix.plays || 0,
+        audioUrl: getMediaUrl(item.mix.audioUrl) || '',
+      }));
+  };
+
+  const handlePlayTrack = (mix: any) => {
+    const tracks = getSetTracks();
+    if (tracks.length === 0) return;
+    const target = tracks.find((t) => t.id === mix.id);
+    if (!target) return;
+
+    if (currentTrack?.id === mix.id) {
+      if (isPlaying) {
+        pause();
+      } else {
+        play();
+      }
+      return;
+    }
+
+    setQueue(tracks);
+    play(target);
+  };
 
   return (
     <motion.div
@@ -82,7 +120,7 @@ function SetCard({
       >
         <div className="relative aspect-[16/10] overflow-hidden">
           <img
-            src={set.coverImage || '/mix-placeholder.jpg'}
+            src={getMediaUrl(set.coverImage) || '/mix-placeholder.jpg'}
             alt={set.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
           />
@@ -129,50 +167,54 @@ function SetCard({
                 <div className="py-4 text-center text-text-muted text-sm">Loading tracks...</div>
               )}
 
-              {!isLoading && setDetail?.items?.length === 0 && (
+              {!isLoading && (!setDetail?.items || setDetail.items.length === 0) && (
                 <div className="py-4 text-center text-text-muted text-sm">This set is empty.</div>
               )}
 
               {!isLoading &&
-                setDetail?.items?.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 py-2 border-b border-[rgba(255,255,255,0.03)] last:border-0"
-                  >
-                    <span className="text-xs text-text-muted w-4">{idx + 1}</span>
-                    <img
-                      src={item.mix.coverImage || '/mix-placeholder.jpg'}
-                      alt={item.mix.title}
-                      className="w-10 h-10 rounded object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-primary truncate">{item.mix.title}</p>
-                      <p className="text-xs text-text-muted truncate">
-                        {item.mix.dj?.stageName}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (item.mix.audioUrl) {
-                          window.dispatchEvent(
-                            new CustomEvent('play-mix', {
-                              detail: {
-                                track: item.mix,
-                                queue: setDetail.items
-                                  .filter((i) => i.mix.audioUrl)
-                                  .map((i) => i.mix),
-                              },
-                            })
-                          );
-                        }
-                      }}
-                      disabled={!item.mix.audioUrl}
-                      className="p-2 rounded-full bg-gold/10 text-gold hover:bg-gold/20 disabled:opacity-40"
+                setDetail?.items?.map((item, idx) => {
+                  const isCurrent = currentTrack?.id === item.mix.id;
+                  const isCurrentPlaying = isCurrent && isPlaying;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-3 py-2 px-2 rounded-lg border-b border-[rgba(255,255,255,0.03)] last:border-0 transition ${
+                        isCurrent ? 'bg-gold/10' : ''
+                      }`}
                     >
-                      <Play size={14} fill="currentColor" />
-                    </button>
-                  </div>
-                ))}
+                      <span className="text-xs text-text-muted w-4">{idx + 1}</span>
+                      <img
+                        src={getMediaUrl(item.mix.coverImage) || '/mix-placeholder.jpg'}
+                        alt={item.mix.title}
+                        className="w-10 h-10 rounded object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${isCurrent ? 'text-gold' : 'text-text-primary'}`}>
+                          {item.mix.title}
+                        </p>
+                        <p className="text-xs text-text-muted truncate">
+                          {item.mix.dj?.stageName || 'DJ'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handlePlayTrack(item.mix)}
+                        disabled={!item.mix.audioUrl}
+                        className={`p-2 rounded-full transition disabled:opacity-40 ${
+                          isCurrentPlaying
+                            ? 'bg-gold text-black'
+                            : 'bg-gold/10 text-gold hover:bg-gold/20'
+                        }`}
+                      >
+                        {isCurrentPlaying ? (
+                          <Pause size={14} fill="currentColor" />
+                        ) : (
+                          <Play size={14} fill="currentColor" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
             </div>
           </motion.div>
         )}
@@ -180,3 +222,4 @@ function SetCard({
     </motion.div>
   );
 }
+

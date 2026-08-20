@@ -163,7 +163,7 @@ async function sendLockoutNotification(email: string): Promise<void> {
             <h2 style="color: #d9534f;">Security Alert: Failed Login Attempts</h2>
             <p>We detected multiple failed login attempts on your Deck Salone account. To protect your data, account access is temporarily paused for 15 minutes.</p>
             <p>If you forgot your password or suspect unauthorized access, click below to reset your password:</p>
-            <p><a href="${resetUrl}" style="background-color: #D4A24A; color: #000; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 20px; display: inline-block;">Reset Your Password</a></p>
+            <p><a href="${resetUrl}" style="background-color: #f4e059; color: #000; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 20px; display: inline-block;">Reset Your Password</a></p>
             <p style="font-size: 12px; color: #777; margin-top: 20px;">If you triggered this login attempt, you can log in after 15 minutes.</p>
           </div>
         `,

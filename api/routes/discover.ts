@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { authMiddleware, requireRole } = require('../middleware/auth');
+const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const {
   recalculateAllRankingsV2,
@@ -356,6 +356,210 @@ router.get('/rankings/:djId/score', async (req, res) => {
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/* ──────────────────── Recommended DJs For User ──────────────────── */
+// GET /api/discover/djs/recommended — Smart DJ suggestions based on listening taste
+router.get('/djs/recommended', softAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit) || 8));
+    let preferredGenres: string[] = [];
+
+    if (req.user?.id) {
+      const likedMixes = await prisma.mixLike.findMany({
+        where: { userId: req.user.id },
+        include: { mix: { select: { genre: true } } },
+        take: 20,
+      });
+
+      const genreCounts: Record<string, number> = {};
+      for (const item of likedMixes) {
+        if (item.mix?.genre) {
+          genreCounts[item.mix.genre] = (genreCounts[item.mix.genre] || 0) + 1;
+        }
+      }
+      preferredGenres = Object.entries(genreCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([g]) => g);
+    }
+
+    // Query DJs matching preferred genres or top ranking DJs
+    const where: any = {
+      user: { status: 'ACTIVE' },
+    };
+
+    if (preferredGenres.length > 0) {
+      where.OR = [
+        { genres: { hasSome: preferredGenres } },
+        { verified: true },
+      ];
+    }
+
+    const djs = await prisma.djProfile.findMany({
+      where,
+      take: limit,
+      orderBy: [{ verified: 'desc' }, { rankingScore: 'desc' }, { totalFollowers: 'desc' }],
+      select: {
+        id: true,
+        stageName: true,
+        slug: true,
+        avatar: true,
+        city: true,
+        verified: true,
+        genres: true,
+        subscriptionTier: true,
+        totalMixes: true,
+        totalFollowers: true,
+        totalPlays: true,
+        rating: true,
+        user: {
+          select: { username: true },
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      preferredGenres,
+      data: djs.map((d: any) => ({
+        ...d,
+        recommendationReason: preferredGenres.some((g) => d.genres?.includes(g))
+          ? `Plays your favorite genres (${preferredGenres.filter((g) => d.genres?.includes(g)).join(', ')})`
+          : 'Top trending verified DJ in Sierra Leone',
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error fetching recommended DJs:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch DJ recommendations' });
+  }
+});
+
+/* ──────────────────── Smart For-You Dynamic Playlists ──────────────────── */
+// GET /api/discover/playlists/for-you — Algorithmic customized playlist bundles
+router.get('/playlists/for-you', softAuthMiddleware, async (req: any, res: any) => {
+  try {
+    // 1. Fetch public mixes to build taste-based bundles
+    const mixes = await prisma.mix.findMany({
+      where: { isPublic: true },
+      orderBy: [{ plays: 'desc' }, { likes: 'desc' }, { createdAt: 'desc' }],
+      take: 60,
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            verified: true,
+            subscriptionTier: true,
+          },
+        },
+      },
+    });
+
+    const afrobeatsMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('afro') || (m.category || '').toLowerCase().includes('afro'));
+    const amapianoMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('amapiano') || (m.genre || '').toLowerCase().includes('house') || (m.title || '').toLowerCase().includes('3-step'));
+    const saloneMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('salone') || (m.title || '').toLowerCase().includes('salone') || (m.category || '').toLowerCase().includes('salone'));
+    const reggaeMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('reggae') || (m.genre || '').toLowerCase().includes('dancehall') || (m.title || '').toLowerCase().includes('riddim') || (m.title || '').toLowerCase().includes('lovers rock'));
+
+    const smartPlaylists = [
+      {
+        id: 'for-you-daily-1',
+        slug: 'salone-afrobeats-heat',
+        title: 'Daily Mix 1: Salone & Afrobeats Heat',
+        description: 'Your personalized high-energy mix featuring top Afro-fusion and Freetown street anthems.',
+        coverImage: afrobeatsMixes[0]?.coverImage || saloneMixes[0]?.coverImage || '/images/genres/afrobeats.jpg',
+        category: 'Personalized Daily Mix',
+        badge: 'Made For You',
+        trackCount: Math.min(12, (afrobeatsMixes.length + saloneMixes.length) || 6),
+        items: [...afrobeatsMixes.slice(0, 4), ...saloneMixes.slice(0, 4)],
+      },
+      {
+        id: 'for-you-daily-2',
+        slug: 'amapiano-3step-grooves',
+        title: 'Daily Mix 2: Amapiano & 3-Step Lounge',
+        description: 'Smooth log drums, soulful keys, and rhythmic 3-step selections tailored to your listening vibe.',
+        coverImage: amapianoMixes[0]?.coverImage || '/images/genres/amapiano.jpg',
+        category: 'Personalized Daily Mix',
+        badge: 'Made For You',
+        trackCount: Math.min(10, amapianoMixes.length || 5),
+        items: amapianoMixes.slice(0, 6),
+      },
+      {
+        id: 'for-you-daily-3',
+        slug: 'reggae-lovers-rock-sessions',
+        title: 'Daily Mix 3: Reggae & Lovers Rock Sessions',
+        description: 'Conscious roots, timeless Lovers Rock, and dancehall heavyweight tracks.',
+        coverImage: reggaeMixes[0]?.coverImage || '/images/genres/reggae.jpg',
+        category: 'Personalized Daily Mix',
+        badge: 'Made For You',
+        trackCount: Math.min(10, reggaeMixes.length || 5),
+        items: reggaeMixes.slice(0, 6),
+      },
+      {
+        id: 'for-you-weekly-discovery',
+        slug: 'weekly-discovery-rising-talents',
+        title: 'Weekly Discovery: Rising Stars',
+        description: 'Fresh mixtape drops from verified rising DJs across Sierra Leone you haven’t discovered yet.',
+        coverImage: mixes[1]?.coverImage || '/images/genres/salone-mix.jpg',
+        category: 'Weekly Discovery',
+        badge: 'Personalized',
+        trackCount: Math.min(12, mixes.length),
+        items: mixes.slice(4, 12),
+      },
+    ];
+
+    return res.json({
+      success: true,
+      data: smartPlaylists,
+    });
+  } catch (error: any) {
+    console.error('Error generating for-you playlists:', error);
+    return res.status(500).json({ success: false, error: 'Failed to generate for-you playlists' });
+  }
+});
+
+/* ──────────────────── Feed Drop & Unread Notification Stats ──────────────────── */
+// GET /api/discover/feed/stats — Calculate new drops count since last timestamp
+router.get('/feed/stats', softAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const sinceQuery = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const validSince = isNaN(sinceQuery.getTime()) ? new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) : sinceQuery;
+
+    const [newMixesCount, newEventsCount, totalMixes, totalDjs] = await Promise.all([
+      prisma.mix.count({
+        where: {
+          isPublic: true,
+          createdAt: { gt: validSince },
+        },
+      }),
+      prisma.event.count({
+        where: {
+          status: 'UPCOMING',
+          createdAt: { gt: validSince },
+        },
+      }),
+      prisma.mix.count({ where: { isPublic: true } }),
+      prisma.djProfile.count({ where: { user: { status: 'ACTIVE' } } }),
+    ]);
+
+    const totalNewDrops = newMixesCount + newEventsCount;
+
+    return res.json({
+      success: true,
+      data: {
+        since: validSince.toISOString(),
+        newMixesCount,
+        newEventsCount,
+        totalNewDrops,
+        totalMixes,
+        totalDjs,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching feed stats:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch feed stats' });
   }
 });
 

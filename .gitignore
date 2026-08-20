@@ -2,6 +2,10 @@ node_modules
 dist
 .DS_Store
 .env
+.env.*
+!.env.example
 api/uploads/
-.env.bak
-.env.bak2
+uploads/
+*.log
+*.sql
+db_dump.sql

@@ -156,7 +156,7 @@ export default function VerificationDashboard() {
                   onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
                     isActive
-                      ? 'bg-gold/15 text-gold border border-gold/30 shadow-[0_0_15px_rgba(212,162,74,0.15)]'
+                      ? 'bg-gold/15 text-gold border border-gold/30 shadow-[0_0_15px_rgba(244, 224, 89,0.15)]'
                       : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
                   }`}
                 >

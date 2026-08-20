@@ -59,6 +59,8 @@ model User {
   eventRsvps              EventRSVP[]
   submittedReports        ViolationReport[] @relation("SubmittedReports")
   targetedReports         ViolationReport[] @relation("TargetedReports")
+  djFanSubscriptions      DjFanSubscription[]
+  proSubscriptionRequests ProSubscriptionRequest[]
 
   @@index([email])
   @@index([username])
@@ -194,6 +196,9 @@ model DjProfile {
   promoExpiresAt          DateTime?                // when free promo ends
   promoGrantedById        String?                  // admin userId who granted it
   promoGrants             PromoGrant[]
+  promotionPoints         Int                      @default(1000)
+  subscriptionPrice       Float                    @default(100.0)
+  fanSubscriptions        DjFanSubscription[]
   campaigns               AdCampaign[]
   battleEntries           BattleEntry[]
   bookingsAsDj            Booking[]                @relation("DjBookings")
@@ -276,6 +281,9 @@ model Mix {
   originalUrl String?
   hallOfFame  Boolean       @default(false)
   secondaryGenres  String[]      @default([])
+  isExclusive      Boolean       @default(false)
+  promotedUntil    DateTime?
+  promotedPointsSpent Int        @default(0)
   flaggedForReview Boolean       @default(false)
   flaggedReason    String?
   moderatorCurated Boolean       @default(false)
@@ -559,24 +567,27 @@ model Payment {
 }
 
 model ProSubscriptionRequest {
-  id            String    @id @default(cuid())
-  djId          String
-  plan          String    @default("pro")
-  amount        Float     @default(250)
-  currency      String    @default("SLE")
-  paymentMethod String    @default("Orange Money")
-  paymentNumber String    @default("+23272011156")
+  id            String     @id @default(cuid())
+  djId          String?
+  userId        String?
+  plan          String     @default("pro")
+  amount        Float      @default(250)
+  currency      String     @default("SLE")
+  paymentMethod String     @default("Orange Money")
+  paymentNumber String     @default("+23272011156")
   proofUrl      String
   note          String?
-  status        String    @default("pending")
+  status        String     @default("pending")
   reviewedById  String?
   adminNote     String?
   reviewedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  dj            DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  dj            DjProfile? @relation(fields: [djId], references: [id], onDelete: Cascade)
+  user          User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([djId])
+  @@index([userId])
   @@index([status])
   @@index([createdAt])
   @@map("pro_subscription_requests")
@@ -1195,6 +1206,27 @@ model ModeratorAuditLog {
   @@index([targetType])
   @@index([createdAt])
   @@map("moderator_audit_logs")
+}
+
+model DjFanSubscription {
+  id               String    @id @default(cuid())
+  djId             String
+  userId           String
+  status           String    @default("ACTIVE") // ACTIVE, PENDING, EXPIRED
+  amount           Float     @default(100.0)
+  paymentReference String?
+  paymentProofUrl  String?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  dj               DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([djId, userId])
+  @@index([djId])
+  @@index([userId])
+  @@index([status])
+  @@map("dj_fan_subscriptions")
 }
 
 

@@ -1029,4 +1029,178 @@ router.get('/:id/reups', async (req, res) => {
   }
 });
 
+// POST /api/djs/:id/subscribe - Fan subscribes directly to a Pro / Legend DJ
+router.post('/:id/subscribe', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+  try {
+    const djId = req.params.id;
+    const userId = req.user.id;
+    const { amount, paymentReference } = req.body || {};
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { id: djId },
+      select: { id: true, stageName: true, subscriptionTier: true, subscriptionPrice: true, userId: true },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+
+    if (dj.userId === userId) {
+      return res.status(400).json({ success: false, error: 'You cannot subscribe to yourself' });
+    }
+
+    let proofUrl = req.body.paymentProofUrl || '';
+    if (req.file) {
+      const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+      proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
+        ext,
+        contentType: req.file.mimetype,
+      });
+    }
+
+    const subPrice = parseFloat(amount) || dj.subscriptionPrice || 50.0;
+    const durationDays = subPrice >= 100 ? 60 : 30;
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+    const subscription = await prisma.djFanSubscription.upsert({
+      where: { djId_userId: { djId, userId } },
+      create: {
+        djId,
+        userId,
+        status: 'ACTIVE',
+        amount: subPrice,
+        paymentReference: paymentReference || null,
+        paymentProofUrl: proofUrl || null,
+        expiresAt,
+      },
+      update: {
+        status: 'ACTIVE',
+        amount: subPrice,
+        paymentReference: paymentReference || null,
+        paymentProofUrl: proofUrl || undefined,
+        expiresAt,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: `You are now subscribed to ${dj.stageName}! You have unlocked full exclusive mixes and downloads.`,
+      data: subscription,
+    });
+  } catch (error) {
+    console.error('[DJ Fan Subscribe API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/:id/subscription-status - Check if current user is subscribed to DJ
+router.get('/:id/subscription-status', softAuthMiddleware, async (req, res) => {
+  try {
+    const djId = req.params.id;
+    if (!req.user) {
+      return res.json({ success: true, data: { isSubscribed: false } });
+    }
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { id: djId },
+      select: { id: true, userId: true, subscriptionPrice: true, subscriptionTier: true },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+
+    // If current user is the DJ owner, they always have access
+    if (dj.userId === req.user.id) {
+      return res.json({
+        success: true,
+        data: { isSubscribed: true, isOwner: true, subscriptionPrice: dj.subscriptionPrice || 100 },
+      });
+    }
+
+    const sub = await prisma.djFanSubscription.findUnique({
+      where: { djId_userId: { djId, userId: req.user.id } },
+    });
+
+    const isSubscribed = !!sub && sub.status === 'ACTIVE' && new Date(sub.expiresAt) > new Date();
+
+    return res.json({
+      success: true,
+      data: {
+        isSubscribed,
+        subscriptionPrice: dj.subscriptionPrice || 100,
+        subscriptionTier: dj.subscriptionTier,
+        subscription: isSubscribed ? sub : null,
+      },
+    });
+  } catch (error) {
+    console.error('[DJ Fan Subscription Status] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/me/fan-subscribers - DJ view of their fan subscriber community
+router.get('/me/fan-subscribers', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true, subscriptionPrice: true, promotionPoints: true },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const subscribers = await prisma.djFanSubscription.findMany({
+      where: { djId: dj.id, status: 'ACTIVE', expiresAt: { gt: new Date() } },
+      include: {
+        user: { select: { id: true, name: true, username: true, avatar: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalRevenue = subscribers.reduce((acc: number, s: any) => acc + (s.amount || 100), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        subscribers,
+        totalActive: subscribers.length,
+        monthlyRevenue: totalRevenue,
+        subscriptionPrice: dj.subscriptionPrice || 100,
+        promotionPoints: dj.promotionPoints || 0,
+      },
+    });
+  } catch (error) {
+    console.error('[DJ Subscribers API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/me/promotion-points - DJ checks their promotion points
+router.get('/me/promotion-points', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true, promotionPoints: true },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        promotionPoints: dj.promotionPoints || 0,
+        subscriptionTier: dj.subscriptionTier,
+        isEligible: dj.subscriptionTier === 'pro' || dj.subscriptionTier === 'legend',
+      },
+    });
+  } catch (error) {
+    console.error('[DJ Points API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

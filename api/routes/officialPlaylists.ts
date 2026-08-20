@@ -16,6 +16,9 @@ router.get('/', async (req: any, res: any) => {
       orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       include: {
         items: {
+          where: {
+            mix: { isPublic: true },
+          },
           take: 4,
           orderBy: { position: 'asc' },
           include: {
@@ -24,8 +27,12 @@ router.get('/', async (req: any, res: any) => {
                 id: true,
                 title: true,
                 coverImage: true,
+                audioUrl: true,
+                duration: true,
                 genre: true,
                 plays: true,
+                likes: true,
+                isPublic: true,
                 dj: { select: { id: true, stageName: true, avatar: true } },
               },
             },
@@ -53,6 +60,9 @@ router.get('/:slug', async (req: any, res: any) => {
       },
       include: {
         items: {
+          where: {
+            mix: { isPublic: true },
+          },
           orderBy: { position: 'asc' },
           include: {
             mix: {

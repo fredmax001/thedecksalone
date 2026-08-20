@@ -15,6 +15,7 @@ import {
   Ticket,
   CalendarCheck,
   Activity,
+  Crown,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -33,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  { icon: Crown, label: 'Membership & Pro', path: '/user/subscription' },
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings' },
   { icon: Ticket, label: 'My Tickets', path: '/user/tickets' },
   { icon: MessageSquare, label: 'Messages', path: '/user/messages' },

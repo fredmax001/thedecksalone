@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const { getFrontendUrl } = require('./url');
+import logger from './logger';
 
 /**
  * Escape HTML special characters to prevent XSS in email templates.
@@ -22,6 +23,7 @@ interface SendEmailOptions {
 }
 
 let transporter: any = null;
+let hasLoggedMissingSmtpConfig = false;
 
 function getTransporter() {
   if (transporter) return transporter;
@@ -32,18 +34,32 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
   const from = process.env.EMAIL_FROM;
 
-  if (!host || !user || !pass || !from) {
+  const missing: string[] = [];
+  if (!host) missing.push('SMTP_HOST');
+  if (!user) missing.push('SMTP_USER');
+  if (!pass) missing.push('SMTP_PASS');
+  if (!from) missing.push('EMAIL_FROM');
+
+  if (missing.length > 0) {
+    if (!hasLoggedMissingSmtpConfig) {
+      logger.warn(`[Email] SMTP configuration incomplete. Missing variables: ${missing.join(', ')}. Outgoing emails will be simulated in logs.`);
+      hasLoggedMissingSmtpConfig = true;
+    }
     return null;
   }
 
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-
-  return transporter;
+  try {
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+    return transporter;
+  } catch (err: any) {
+    logger.error(`[Email] Failed to create nodemailer transport:`, err);
+    return null;
+  }
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
@@ -51,8 +67,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
   const transport = getTransporter();
 
   if (!transport || !from) {
-    const message = `Email not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and EMAIL_FROM. Would have sent to ${options.to}: ${options.subject}`;
-    console.warn('[Email]', message);
+    const message = `Email not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and EMAIL_FROM. Simulated dispatch to ${options.to}: "${options.subject}"`;
+    logger.warn(`[Email] ${message}`);
     return { success: false, error: message };
   }
 
@@ -64,12 +80,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
       text: options.text,
       html: options.html,
     });
+    logger.info(`[Email] Successfully sent email to ${options.to}: "${options.subject}"`);
     return { success: true };
   } catch (error: any) {
-    console.error('[Email] Failed to send email:', error);
+    logger.error(`[Email] Failed to send email to ${options.to}:`, error);
     return { success: false, error: error.message || 'Failed to send email' };
   }
 }
+
 
 export async function sendWelcomeEmail(options: { to: string; username: string; role?: string }): Promise<{ success: boolean; error?: string }> {
   const frontendUrl = getFrontendUrl();
@@ -376,15 +394,15 @@ export async function sendWeeklyTop3RankingEmail(options: {
   const safeAvatarUrl = escapeHtml(avatarUrl);
 
   const positionTitles: Record<number, { title: string; badgeColor: string; badgeBorder: string; medalEmoji: string }> = {
-    1: { title: '#1 DJ of the Week', badgeColor: '#D4A24A', badgeBorder: '#D4A24A', medalEmoji: '🥇' },
+    1: { title: '#1 DJ of the Week', badgeColor: '#f4e059', badgeBorder: '#f4e059', medalEmoji: '🥇' },
     2: { title: '#2 DJ of the Week', badgeColor: '#C0C0C0', badgeBorder: '#C0C0C0', medalEmoji: '🥈' },
     3: { title: '#3 DJ of the Week', badgeColor: '#CD7F32', badgeBorder: '#CD7F32', medalEmoji: '🥉' },
   };
 
   const posInfo = positionTitles[options.position] || {
     title: `Top 3 DJ of the Week (#${options.position})`,
-    badgeColor: '#D4A24A',
-    badgeBorder: '#D4A24A',
+    badgeColor: '#f4e059',
+    badgeBorder: '#f4e059',
     medalEmoji: '🏆',
   };
 
@@ -422,7 +440,7 @@ View Live Rankings: ${frontendUrl}/rankings
           <tr>
             <td style="background:linear-gradient(180deg, #1f1a0e 0%, #121212 100%);padding:36px 30px 24px;text-align:center;border-bottom:1px solid #222;">
               <img src="${logoUrl}" alt="Deck Salone" style="height:48px;width:auto;display:block;margin:0 auto 16px;" />
-              <div style="display:inline-block;padding:6px 16px;background-color:rgba(212,162,74,0.15);border:1px solid ${posInfo.badgeBorder};border-radius:30px;color:${posInfo.badgeColor};font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
+              <div style="display:inline-block;padding:6px 16px;background-color:rgba(244, 224, 89,0.15);border:1px solid ${posInfo.badgeBorder};border-radius:30px;color:${posInfo.badgeColor};font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
                 ${posInfo.medalEmoji} ${posInfo.title}
               </div>
             </td>
@@ -432,11 +450,11 @@ View Live Rankings: ${frontendUrl}/rankings
           <tr>
             <td style="padding:36px 30px;text-align:center;">
               <div style="position:relative;display:inline-block;margin-bottom:20px;">
-                <img src="${safeAvatarUrl}" alt="${safeStageName}" style="width:110px;height:110px;border-radius:50%;object-fit:cover;border:4px solid ${posInfo.badgeColor};box-shadow:0 0 25px rgba(212,162,74,0.3);display:block;margin:0 auto;" />
+                <img src="${safeAvatarUrl}" alt="${safeStageName}" style="width:110px;height:110px;border-radius:50%;object-fit:cover;border:4px solid ${posInfo.badgeColor};box-shadow:0 0 25px rgba(244, 224, 89,0.3);display:block;margin:0 auto;" />
               </div>
 
               <h1 style="color:#ffffff;margin:0 0 6px;font-size:26px;font-weight:800;letter-spacing:-0.5px;">${safeStageName}</h1>
-              <p style="color:#D4A24A;margin:0 0 24px;font-size:15px;font-weight:600;">
+              <p style="color:#f4e059;margin:0 0 24px;font-size:15px;font-weight:600;">
                 Official Rank #${options.position} DJ of the Week
               </p>
 
@@ -445,7 +463,7 @@ View Live Rankings: ${frontendUrl}/rankings
                 <tr>
                   <td style="padding:20px;text-align:center;border-bottom:1px solid #242424;">
                     <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;font-weight:600;display:block;margin-bottom:4px;">OVERALL RANKING SCORE</span>
-                    <span style="font-size:36px;font-weight:800;color:#D4A24A;font-family:monospace;">${options.score.toFixed(1)} <span style="font-size:16px;">PTS</span></span>
+                    <span style="font-size:36px;font-weight:800;color:#f4e059;font-family:monospace;">${options.score.toFixed(1)} <span style="font-size:16px;">PTS</span></span>
                   </td>
                 </tr>
                 <tr>
@@ -454,7 +472,7 @@ View Live Rankings: ${frontendUrl}/rankings
                       <tr>
                         <td width="33%" style="text-align:center;">
                           <span style="font-size:10px;color:#999;display:block;text-transform:uppercase;margin-bottom:2px;">Digital</span>
-                          <span style="font-size:16px;font-weight:700;color:#D4A24A;font-family:monospace;">${(options.digitalScore || 0).toFixed(1)}</span>
+                          <span style="font-size:16px;font-weight:700;color:#f4e059;font-family:monospace;">${(options.digitalScore || 0).toFixed(1)}</span>
                         </td>
                         <td width="34%" style="text-align:center;border-left:1px solid #282828;border-right:1px solid #282828;">
                           <span style="font-size:10px;color:#999;display:block;text-transform:uppercase;margin-bottom:2px;">Industry</span>
@@ -475,7 +493,7 @@ View Live Rankings: ${frontendUrl}/rankings
               </p>
 
               <!-- CTA Button -->
-              <a href="${frontendUrl}/rankings" style="display:inline-block;background:linear-gradient(135deg,#D4A24A 0%,#F3E0A2 50%,#D4A24A 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 32px;border-radius:30px;text-decoration:none;box-shadow:0 4px 15px rgba(212,162,74,0.4);">
+              <a href="${frontendUrl}/rankings" style="display:inline-block;background:linear-gradient(135deg,#f4e059 0%,#f4e059 50%,#f4e059 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 32px;border-radius:30px;text-decoration:none;box-shadow:0 4px 15px rgba(244, 224, 89,0.4);">
                 View Full Rankings Board &rarr;
               </a>
             </td>
@@ -577,7 +595,7 @@ export async function sendAccountSuspensionEmail(options: {
 
         <p style="color: #aaa; font-size: 14px;">Under the Terms of Service and Sierra Leone Cyber Security & Crimes Act 2021, accounts engaging in prohibited conduct, copyright infringement, fraud, or harassment are subject to administrative suspension or permanent termination.</p>
 
-        <p style="color: #aaa; font-size: 14px; margin-top: 20px;">If you believe this action was taken in error, you may file an appeal by contacting our compliance team at <a href="mailto:support@decksalone.com" style="color: #D4A24A;">support@decksalone.com</a>.</p>
+        <p style="color: #aaa; font-size: 14px; margin-top: 20px;">If you believe this action was taken in error, you may file an appeal by contacting our compliance team at <a href="mailto:support@decksalone.com" style="color: #f4e059;">support@decksalone.com</a>.</p>
       </div>
     </div>
   `;
@@ -624,7 +642,7 @@ ${frontendUrl}`;
         <tr>
           <td style="background:linear-gradient(180deg, #2a1f0a 0%, #121212 100%);padding:40px 30px 24px;text-align:center;border-bottom:1px solid #222;">
             <img src="${logoUrl}" alt="Deck Salone" style="height:48px;width:auto;display:block;margin:0 auto 16px;" />
-            <div style="display:inline-block;padding:6px 18px;background:rgba(212,162,74,0.15);border:1px solid #D4A24A;border-radius:30px;color:#D4A24A;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">
+            <div style="display:inline-block;padding:6px 18px;background:rgba(244, 224, 89,0.15);border:1px solid #f4e059;border-radius:30px;color:#f4e059;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">
               🎂 Birthday Celebration
             </div>
           </td>
@@ -635,7 +653,7 @@ ${frontendUrl}`;
           <td style="padding:40px 32px;text-align:center;">
             <div style="font-size:64px;line-height:1;margin-bottom:20px;">🎉</div>
             <h1 style="color:#ffffff;margin:0 0 10px;font-size:28px;font-weight:800;letter-spacing:-0.5px;">Happy Birthday, ${safeName}!</h1>
-            <p style="color:#D4A24A;margin:0 0 24px;font-size:16px;font-weight:600;">
+            <p style="color:#f4e059;margin:0 0 24px;font-size:16px;font-weight:600;">
               Wishing you an incredible day filled with music, joy, and celebration! 🎵
             </p>
 
@@ -644,13 +662,13 @@ ${frontendUrl}`;
                 Today we celebrate <strong>YOU</strong>! Thank you for bringing your energy, talent, and passion to <strong>Deck Salone</strong>. Whether on the decks or on the dancefloor, you help make Sierra Leone's music community vibrant and unstoppable.
               </p>
               ${options.isDj ? `
-              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #282828;color:#D4A24A;font-size:13px;font-weight:700;">
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #282828;color:#f4e059;font-size:13px;font-weight:700;">
                 🎧 Keep dropping the hottest mixes & climbing the weekly rankings!
               </div>` : ''}
             </div>
 
             <!-- CTA Button -->
-            <a href="${frontendUrl}" style="display:inline-block;background:linear-gradient(135deg,#D4A24A 0%,#F3E0A2 50%,#D4A24A 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 36px;border-radius:30px;text-decoration:none;box-shadow:0 4px 20px rgba(212,162,74,0.4);">
+            <a href="${frontendUrl}" style="display:inline-block;background:linear-gradient(135deg,#f4e059 0%,#f4e059 50%,#f4e059 100%);color:#000000;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:14px 36px;border-radius:30px;text-decoration:none;box-shadow:0 4px 20px rgba(244, 224, 89,0.4);">
               Visit Deck Salone &rarr;
             </a>
           </td>
@@ -671,4 +689,115 @@ ${frontendUrl}`;
 </html>`;
 
   return sendEmail({ to: options.to, subject, text, html });
+}
+
+export async function sendDeveloperApplicationEmails(options: {
+  referenceId: string;
+  name: string;
+  email: string;
+  company?: string;
+  projectName: string;
+  projectType: string;
+  expectedVolume: string;
+  website?: string;
+  useCase: string;
+}): Promise<void> {
+  const frontendUrl = getFrontendUrl();
+  const logoUrl = `${frontendUrl}/logo-web.png`;
+  const adminEmail = process.env.ADMIN_NOTIFY_EMAIL || 'contact@decksalone.com';
+
+  const safeName = escapeHtml(options.name);
+  const safeEmail = escapeHtml(options.email);
+  const safeCompany = escapeHtml(options.company || 'Individual / Independent');
+  const safeProject = escapeHtml(options.projectName);
+  const safeType = escapeHtml(options.projectType);
+  const safeVolume = escapeHtml(options.expectedVolume);
+  const safeWebsite = escapeHtml(options.website || 'N/A');
+  const safeUseCase = escapeHtml(options.useCase);
+  const safeRef = escapeHtml(options.referenceId);
+
+  // 1. Send Acknowledgment to the Applicant
+  const userSubject = `[Deck Salone API] Application Received (${safeRef})`;
+  const userText = `Hello ${options.name},
+
+Thank you for applying for Deck Salone Developer API Access.
+
+Application Reference: ${options.referenceId}
+Project: ${options.projectName} (${options.projectType})
+Expected Monthly Volume: ${options.expectedVolume}
+
+Our developer relations team is reviewing your use case and technical requirements. We typically process developer access requests within 24 to 48 business hours. Once approved, you will receive your API credentials and sandbox access instructions.
+
+Best regards,
+The Deck Salone Developer Team
+https://decksalone.com/developers`;
+
+  const userHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${userSubject}</title></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0a0a0a;padding:40px 10px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#141414;border-radius:16px;border:1px solid #2a2a2a;overflow:hidden;">
+        <tr>
+          <td style="padding:32px 24px;background:linear-gradient(180deg,#201808 0%,#141414 100%);text-align:center;border-bottom:1px solid #222;">
+            <img src="${logoUrl}" alt="Deck Salone" style="height:42px;margin-bottom:12px;" />
+            <div style="display:inline-block;padding:4px 14px;background:rgba(244,224,89,0.15);border:1px solid #f4e059;border-radius:20px;color:#f4e059;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">
+              ⚡ Developer Platform
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 28px;">
+            <h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">Application Received</h2>
+            <p style="color:#aaaaaa;font-size:14px;line-height:1.6;margin:0 0 20px;">
+              Hello <strong>${safeName}</strong>, thank you for applying for Deck Salone REST API access. We are excited to support your integration.
+            </p>
+            <div style="background:#0d0d0d;border:1px solid #262626;border-radius:12px;padding:18px;margin-bottom:24px;">
+              <p style="margin:0 0 8px;font-size:13px;color:#888888;">Application Reference ID:</p>
+              <p style="margin:0 0 16px;font-size:18px;font-family:monospace;font-weight:bold;color:#f4e059;">${safeRef}</p>
+              <table width="100%" style="font-size:13px;color:#cccccc;border-collapse:collapse;">
+                <tr><td style="padding:4px 0;color:#777;">Project:</td><td style="font-weight:600;color:#fff;">${safeProject} (${safeType})</td></tr>
+                <tr><td style="padding:4px 0;color:#777;">Organization:</td><td>${safeCompany}</td></tr>
+                <tr><td style="padding:4px 0;color:#777;">Expected Volume:</td><td>${safeVolume}</td></tr>
+                <tr><td style="padding:4px 0;color:#777;">Status:</td><td style="color:#f4e059;font-weight:700;">Under Review ⏳</td></tr>
+              </table>
+            </div>
+            <p style="color:#999999;font-size:13px;line-height:1.6;margin:0;">
+              Our developer relations team is reviewing your use case. You will receive an email within <strong>24–48 business hours</strong> with your API keys and quickstart instructions.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px;text-align:center;background:#0a0a0a;border-top:1px solid #1f1f1f;font-size:12px;color:#555;">
+            Deck Salone Developer Platform | Freetown, Sierra Leone | support@decksalone.com
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await sendEmail({ to: options.email, subject: userSubject, text: userText, html: userHtml }).catch((err) => {
+    logger.warn('Failed to send applicant developer acknowledgment email', { err });
+  });
+
+  // 2. Send Alert to Admin
+  const adminSubject = `🚨 New Developer API Application: ${options.projectName} (${options.name})`;
+  const adminText = `A new Developer API Application has been submitted on Deck Salone:
+
+Reference: ${options.referenceId}
+Name: ${options.name}
+Email: ${options.email}
+Company: ${options.company || 'N/A'}
+Project: ${options.projectName} (${options.projectType})
+Website/Repo: ${options.website || 'N/A'}
+Expected Volume: ${options.expectedVolume}
+Use Case:
+${options.useCase}`;
+
+  await sendEmail({ to: adminEmail, subject: adminSubject, text: adminText }).catch((err) => {
+    logger.warn('Failed to send admin developer application notification email', { err });
+  });
 }

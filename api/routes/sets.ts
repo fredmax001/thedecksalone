@@ -94,6 +94,9 @@ router.get('/dj/:djId', async (req: any, res: any) => {
       orderBy: { createdAt: 'desc' },
       include: {
         items: {
+          where: {
+            mix: { isPublic: true },
+          },
           orderBy: { sortOrder: 'asc' },
           include: {
             mix: {
@@ -133,6 +136,9 @@ router.get('/:id', async (req: any, res: any) => {
       include: {
         dj: { select: { id: true, stageName: true, avatar: true, username: true } },
         items: {
+          where: {
+            mix: { isPublic: true },
+          },
           orderBy: { sortOrder: 'asc' },
           include: {
             mix: {
@@ -318,6 +324,38 @@ router.delete('/:id/mixes/:mixId', authMiddleware, requireDjProfile, async (req:
     });
 
     return res.json({ success: true, data: { removed: true } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/sets/:id/reorder - Reorder items in a DJ set
+router.put('/:id/reorder', authMiddleware, requireDjProfile, async (req: any, res: any) => {
+  try {
+    const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
+    if (!set) {
+      return res.status(404).json({ success: false, error: 'Set not found' });
+    }
+
+    if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const { itemIds } = req.body; // array of djSetItem IDs in desired order
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'itemIds array required' });
+    }
+
+    const updates = itemIds.map((itemId: string, index: number) =>
+      prisma.djSetItem.update({
+        where: { id: itemId },
+        data: { sortOrder: index },
+      })
+    );
+
+    await prisma.$transaction(updates);
+
+    return res.json({ success: true, message: 'Set reordered successfully' });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }

@@ -9,20 +9,25 @@ router.get('/', async (req: any, res: any) => {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // Fetch active DJs, public mixes, and events
-    const [djs, mixes, events] = await Promise.all([
+    // Fetch active DJs, public mixes, events, and official playlists
+    const [djs, mixes, events, playlists] = await Promise.all([
       prisma.djProfile.findMany({
         where: { isPublic: true },
         select: { stageName: true, user: { select: { username: true } }, updatedAt: true },
         take: 500,
       }).catch(() => []),
       prisma.mix.findMany({
-        where: { isPublished: true },
+        where: { isPublic: true },
         select: { id: true, updatedAt: true },
         take: 500,
       }).catch(() => []),
       prisma.event.findMany({
         select: { id: true, updatedAt: true },
+        take: 500,
+      }).catch(() => []),
+      prisma.officialPlaylist.findMany({
+        where: { isPublished: true },
+        select: { slug: true, updatedAt: true },
         take: 500,
       }).catch(() => []),
     ]);
@@ -32,6 +37,7 @@ router.get('/', async (req: any, res: any) => {
       { url: '/discover', priority: '0.9', changefreq: 'daily' },
       { url: '/rankings', priority: '0.9', changefreq: 'daily' },
       { url: '/mixes', priority: '0.9', changefreq: 'daily' },
+      { url: '/playlists', priority: '0.9', changefreq: 'daily' },
       { url: '/events', priority: '0.8', changefreq: 'daily' },
       { url: '/hall-of-fame', priority: '0.8', changefreq: 'weekly' },
       { url: '/battles', priority: '0.8', changefreq: 'weekly' },
@@ -76,6 +82,17 @@ router.get('/', async (req: any, res: any) => {
       xml += `    <lastmod>${lastMod}</lastmod>\n`;
       xml += `    <changefreq>monthly</changefreq>\n`;
       xml += `    <priority>0.7</priority>\n`;
+      xml += `  </url>\n`;
+    }
+
+    // Dynamic Official Playlist URLs
+    for (const pl of playlists) {
+      const lastMod = pl.updatedAt ? new Date(pl.updatedAt).toISOString().split('T')[0] : today;
+      xml += `  <url>\n`;
+      xml += `    <loc>${DOMAIN}/playlist/${encodeURIComponent(pl.slug)}</loc>\n`;
+      xml += `    <lastmod>${lastMod}</lastmod>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>0.8</priority>\n`;
       xml += `  </url>\n`;
     }
 

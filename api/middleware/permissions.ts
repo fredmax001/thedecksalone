@@ -243,47 +243,73 @@ export const requireLegend = requireSubscriptionTier(SubscriptionTier.LEGEND);
  */
 export const activateSubscriptionFeatures = async (
     userId: string,
-    tier: SubscriptionTier
+    tier: SubscriptionTier | string
 ) => {
-    const updateData: any = {
-        subscriptionTier: tier,
-        subscriptionActivatedAt: new Date(),
-    };
+    const normalizedTier = String(tier).includes('legend') ? SubscriptionTier.LEGEND : SubscriptionTier.PRO;
 
-    if (tier === SubscriptionTier.PRO || tier === SubscriptionTier.LEGEND) {
-        updateData.canReceivePayments = true;
-        updateData.canViewAnalytics = true;
-        updateData.isVerifiedEligible = true;
+    // Update User table
+    await prisma.user.update({
+        where: { id: userId },
+        data: {
+            subscriptionTier: normalizedTier,
+            subscriptionActivatedAt: new Date(),
+        },
+    }).catch((e: any) => console.error('Error updating user subscription:', e));
+
+    // If user has a DJ profile, update DJ features too
+    const dj = await prisma.djProfile.findUnique({ where: { userId } });
+    if (dj) {
+        const updateData: any = {
+            subscriptionTier: normalizedTier,
+            subscriptionActivatedAt: new Date(),
+        };
+
+        if (normalizedTier === SubscriptionTier.PRO || normalizedTier === SubscriptionTier.LEGEND) {
+            updateData.canReceivePayments = true;
+            updateData.canViewAnalytics = true;
+            updateData.isVerifiedEligible = true;
+        }
+
+        if (normalizedTier === SubscriptionTier.LEGEND) {
+            updateData.isLegendFeatured = true;
+            updateData.hasAccountManager = true;
+            updateData.apiAccessEnabled = true;
+        }
+
+        return prisma.djProfile.update({
+            where: { userId },
+            data: updateData,
+        });
     }
-
-    if (tier === SubscriptionTier.LEGEND) {
-        updateData.isLegendFeatured = true;
-        updateData.hasAccountManager = true;
-        updateData.apiAccessEnabled = true;
-    }
-
-    return prisma.djProfile.update({
-        where: { userId },
-        data: updateData,
-    });
 };
 
 /**
  * Reset features when subscription is cancelled
  */
 export const resetSubscriptionFeatures = async (userId: string) => {
-    return prisma.djProfile.update({
-        where: { userId },
+    await prisma.user.update({
+        where: { id: userId },
         data: {
             subscriptionTier: SubscriptionTier.FREE,
             subscriptionActivatedAt: null,
-            canReceivePayments: false,
-            canViewAnalytics: false,
-            isVerifiedEligible: false,
-            isLegendFeatured: false,
-            hasAccountManager: false,
-            apiAccessEnabled: false,
-            hearThisConnected: false,
         },
-    });
+    }).catch(() => {});
+
+    const dj = await prisma.djProfile.findUnique({ where: { userId } });
+    if (dj) {
+        return prisma.djProfile.update({
+            where: { userId },
+            data: {
+                subscriptionTier: SubscriptionTier.FREE,
+                subscriptionActivatedAt: null,
+                canReceivePayments: false,
+                canViewAnalytics: false,
+                isVerifiedEligible: false,
+                isLegendFeatured: false,
+                hasAccountManager: false,
+                apiAccessEnabled: false,
+                hearThisConnected: false,
+            },
+        });
+    }
 };

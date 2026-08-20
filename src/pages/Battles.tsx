@@ -262,9 +262,9 @@ export default function Battles() {
   const themeRight = themeRightRaw;
 
   return (
-    <div className="bg-black min-h-[100dvh]">
+    <div className="bg-bg-page min-h-[100dvh]">
       {/* ═══════════════ SECTION 1: HERO ═══════════════ */}
-      <section className="relative h-[500px] sm:h-[600px] flex items-center justify-center overflow-hidden">
+      <section className="hero-banner relative min-h-[280px] sm:min-h-[320px] py-8 sm:py-10 flex items-center justify-center overflow-hidden border-b border-dark-gray">
         {/* Background */}
         <div className="absolute inset-0 z-0">
           <img
@@ -272,79 +272,80 @@ export default function Battles() {
             alt="Battle arena"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/90" />
+          <div className="battle-hero-overlay absolute inset-0 bg-gradient-to-b from-black/40 to-black/90" />
         </div>
 
         {/* Content */}
-        <div className="relative z-10 max-w-[800px] mx-auto px-6 text-center">
+        <div className="relative z-10 max-w-[650px] mx-auto px-4 sm:px-6 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <span className="text-xs font-semibold uppercase tracking-[0.15em] text-gold">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-gold">
               Weekly Competition
             </span>
           </motion.div>
 
           <motion.h1
-            className="font-display text-4xl sm:text-5xl lg:text-[56px] font-semibold uppercase tracking-tight text-text-primary mt-4"
-            initial={{ opacity: 0, y: 30 }}
+            className="font-display text-2xl sm:text-3xl lg:text-4xl font-extrabold uppercase tracking-tight text-text-primary mt-1.5"
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.5 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
           >
             Battle Arena
           </motion.h1>
 
           {/* VS with pulse glow */}
           <motion.div
-            className="mt-4"
-            initial={{ opacity: 0, scale: 0.5 }}
+            className="mt-1"
+            initial={{ opacity: 0, scale: 0.6 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.7, type: 'spring', stiffness: 200 }}
+            transition={{ duration: 0.4, delay: 0.3, type: 'spring', stiffness: 200 }}
           >
-            <span className="font-mono text-6xl sm:text-8xl lg:text-[120px] font-bold text-gold animate-pulse-glow leading-none">
+            <span className="font-mono text-4xl sm:text-5xl lg:text-6xl font-black text-gold animate-pulse-glow leading-tight">
               VS
             </span>
           </motion.div>
 
           <motion.p
-            className="mt-2 text-lg text-text-secondary max-w-[480px] mx-auto"
-            initial={{ opacity: 0, y: 20 }}
+            className="mt-1 text-xs sm:text-sm text-text-secondary max-w-[420px] mx-auto leading-relaxed"
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.9 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
           >
             DJs go head-to-head. Fans vote. One winner rises.
           </motion.p>
 
-          {/* Live indicator */}
-          <motion.div
-            className="mt-6 flex items-center justify-center gap-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.1 }}
-          >
-            <span className="relative flex h-3 w-3">
-              <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-red opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red" />
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">
-              {weekLabel}
-            </span>
-          </motion.div>
+          {/* Live indicator & Timer */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+            <motion.div
+              className="flex items-center justify-center gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-red opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red" />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-primary">
+                {weekLabel}
+              </span>
+            </motion.div>
 
-          {/* Timer */}
-          <motion.div
-            className="mt-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.3 }}
-          >
-            <span className="text-xs text-text-muted uppercase tracking-wider">
-              Ends in
-            </span>
-            <CountdownTimer targetDate={targetDate} className="mt-1 justify-center" />
-          </motion.div>
+            <motion.div
+              className="flex items-center gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">
+                Ends in:
+              </span>
+              <CountdownTimer targetDate={targetDate} className="justify-center text-xs" />
+            </motion.div>
+          </div>
         </div>
       </section>
 
@@ -489,7 +490,7 @@ export default function Battles() {
                         cy="60"
                         r="52"
                         fill="none"
-                        stroke="#D4A24A"
+                        stroke="#f4e059"
                         strokeWidth="6"
                         strokeLinecap="round"
                         strokeDasharray={`${2 * Math.PI * 52}`}

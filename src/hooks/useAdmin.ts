@@ -19,6 +19,8 @@ export interface AdminStats {
   totalVisitsToday: number;
   totalVisitsMonth: number;
   uniqueVisitorsToday: number;
+  totalPlaylists?: number;
+  totalFeedPosts?: number;
 }
 
 export interface AdminAnalytics {
@@ -283,7 +285,8 @@ export interface UpdateSubscriptionConfigInput {
 
 export interface ProSubscriptionRequest {
   id: string;
-  djId: string;
+  djId?: string | null;
+  userId?: string | null;
   plan: string;
   amount: number;
   currency: string;
@@ -295,14 +298,23 @@ export interface ProSubscriptionRequest {
   adminNote?: string | null;
   reviewedAt?: string | null;
   createdAt: string;
-  dj: {
+  dj?: {
     id: string;
     stageName: string;
     avatar?: string | null;
     isPro: boolean;
     subscriptionTier?: string;
     user: { id: string; email: string; phone?: string | null };
-  };
+  } | null;
+  user?: {
+    id: string;
+    username: string;
+    name?: string | null;
+    avatar?: string | null;
+    email: string;
+    phone?: string | null;
+    subscriptionTier?: string;
+  } | null;
 }
 
 export interface AdCampaign {
@@ -376,11 +388,39 @@ export function useAdminStats() {
   });
 }
 
-export function useAdminAnalytics(range: string = '6m') {
-  return useQuery<AdminAnalytics[]>({
-    queryKey: ['adminAnalytics', range],
+export interface AdminAnalyticsData {
+  timeline: AdminAnalytics[];
+  summary: {
+    totalUsers: number;
+    totalDjs: number;
+    totalMixes: number;
+    totalBookings: number;
+    totalRevenue: number;
+    totalVisits: number;
+  };
+  demographics: {
+    gender: { MALE: number; FEMALE: number; OTHER: number; UNSPECIFIED: number };
+    age: Record<string, number>;
+    devices: { mobile: number; desktop: number; tablet: number };
+  };
+  geography: {
+    countries: { name: string; visits: number }[];
+    cities: { name: string; visits: number }[];
+  };
+  availableMonths: { key: string; label: string; shortLabel: string }[];
+  filteredRange: string;
+  filteredMonth: string | null;
+  isDaily: boolean;
+}
+
+export function useAdminAnalytics(range: string = '6m', month: string = '') {
+  return useQuery<any>({
+    queryKey: ['adminAnalytics', range, month],
     queryFn: async () => {
-      const res = await api.get('/admin/analytics', { params: { range } });
+      const params: Record<string, string> = {};
+      if (range) params.range = range;
+      if (month) params.month = month;
+      const res = await api.get('/admin/analytics', { params });
       return res.data.data;
     },
   });

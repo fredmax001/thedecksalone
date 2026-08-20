@@ -1,13 +1,37 @@
 const { prisma } = require('./prisma');
 const { createNotification } = require('./notifications');
+const { logger } = require('./logger');
 
 /**
  * Calculates 14-day trial status for a user/DJ profile.
+ * - DJ trial starts when the DJ profile was created (or user.createdAt if no DJ profile).
+ * - Admin/Staff users automatically bypass trial restrictions.
+ * - Subscribed DJs (Pro/Legend) have permanent active access.
  */
 function calculateTrialStatus(user: any, djProfile?: any) {
-  const isProSubscriber = djProfile
-    ? (djProfile.subscriptionTier === 'pro' || djProfile.subscriptionTier === 'legend' || djProfile.isPro === true)
-    : false;
+  const isAdminOrStaff = Boolean(
+    user && ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN'].includes(user.role)
+  );
+
+  if (isAdminOrStaff) {
+    return {
+      isSubscribed: true,
+      isTrialActive: false,
+      hasFeatureAccess: true,
+      daysLeft: 999,
+      trialEnd: null,
+      status: 'admin_bypass',
+    };
+  }
+
+  const profile = djProfile || user?.djProfile;
+  const isProSubscriber = Boolean(
+    profile && (
+      profile.subscriptionTier === 'pro' ||
+      profile.subscriptionTier === 'legend' ||
+      profile.isPro === true
+    )
+  );
 
   if (isProSubscriber) {
     return {
@@ -15,11 +39,14 @@ function calculateTrialStatus(user: any, djProfile?: any) {
       isTrialActive: false,
       hasFeatureAccess: true,
       daysLeft: 0,
+      trialEnd: null,
       status: 'active_subscription',
     };
   }
 
-  const createdAt = user?.createdAt ? new Date(user.createdAt).getTime() : Date.now();
+  // Calculate trial from the moment the user became a DJ (djProfile.createdAt) or user registration
+  const trialStartDate = profile?.createdAt || user?.createdAt;
+  const createdAt = trialStartDate ? new Date(trialStartDate).getTime() : Date.now();
   const trialDurationMs = 14 * 24 * 60 * 60 * 1000;
   const trialEndMs = createdAt + trialDurationMs;
   const nowMs = Date.now();
@@ -49,10 +76,24 @@ async function requireTrialOrSubscription(req: any, res: any, next: any) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: { djProfile: true },
-    });
+    if (['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(req.user.role)) {
+      req.trialStatus = {
+        isSubscribed: true,
+        isTrialActive: false,
+        hasFeatureAccess: true,
+        daysLeft: 999,
+        status: 'admin_bypass',
+      };
+      return next();
+    }
+
+    let user = req.user;
+    if (!user.djProfile && user.role === 'DJ') {
+      user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { djProfile: true },
+      });
+    }
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
@@ -63,7 +104,7 @@ async function requireTrialOrSubscription(req: any, res: any, next: any) {
     if (!trial.hasFeatureAccess) {
       return res.status(403).json({
         success: false,
-        error: 'Your 14-day free trial has expired. Upgrade to Pro or Pro+ to access this feature.',
+        error: 'Your 14-day free trial has expired. Upgrade to Pro or Legend to access this feature.',
         requiresSubscription: true,
         trialStatus: trial,
       });
@@ -72,12 +113,13 @@ async function requireTrialOrSubscription(req: any, res: any, next: any) {
     req.trialStatus = trial;
     next();
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    logger.error('Error in requireTrialOrSubscription middleware:', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
   }
 }
 
 /**
- * Checks all free users and sends trial warning (4 days left) and trial expiry notifications.
+ * Checks all free users and sends trial warning (<= 4 days left) and trial expiry notifications.
  */
 async function checkAndSendTrialNotifications() {
   try {
@@ -86,24 +128,27 @@ async function checkAndSendTrialNotifications() {
         role: 'DJ',
         OR: [
           { djProfile: { is: null } },
-          { djProfile: { isPro: false, subscriptionTier: 'free' } },
+          {
+            djProfile: {
+              isPro: false,
+              subscriptionTier: { notIn: ['pro', 'legend'] },
+            },
+          },
         ],
       },
       include: { djProfile: true },
     });
 
-    const now = Date.now();
-
     for (const user of freeUsers) {
       const trial = calculateTrialStatus(user, user.djProfile);
 
-      // Check if 4 days warning notification should be sent (daysLeft === 4)
-      if (trial.isTrialActive && trial.daysLeft === 4) {
+      // Check if 4-day warning notification should be sent (<= 4 days left, active trial)
+      if (trial.isTrialActive && trial.daysLeft <= 4 && trial.daysLeft > 0) {
         const existingWarning = await prisma.notification.findFirst({
           where: {
             userId: user.id,
             type: 'SYSTEM',
-            title: { contains: '4 Days Left' },
+            title: { contains: 'Days Left' },
           },
         });
 
@@ -111,16 +156,16 @@ async function checkAndSendTrialNotifications() {
           await createNotification({
             userId: user.id,
             type: 'SYSTEM',
-            title: '⏰ 4 Days Left in Your Free Trial!',
-            body: 'Your 14-day free trial ends in 4 days. Upgrade to Pro or Legend now to maintain unlimited mix uploads, DJ sets, and booking features!',
+            title: `⏰ ${trial.daysLeft} Days Left in Your Free Trial!`,
+            body: `Your 14-day free trial ends in ${trial.daysLeft} days. Upgrade to Pro or Legend now to maintain unlimited mix uploads, DJ sets, and booking features!`,
             actionUrl: '/dashboard/subscription',
             sendEmail: true,
-            emailSubject: '⏰ 4 Days Left in Your Deck Salone Free Trial',
+            emailSubject: `⏰ ${trial.daysLeft} Days Left in Your Deck Salone Free Trial`,
             emailBody: `
               <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                <h2 style="color: #d4af37;">Your Free Trial Ends in 4 Days!</h2>
+                <h2 style="color: #d4af37;">Your Free Trial Ends in ${trial.daysLeft} Days!</h2>
                 <p>Hello ${user.name || user.username || 'DJ'},</p>
-                <p>Your 14-day free trial on <strong>Deck Salone</strong> ends in <strong>4 days</strong>.</p>
+                <p>Your 14-day free trial on <strong>Deck Salone</strong> ends in <strong>${trial.daysLeft} days</strong>.</p>
                 <p>Upgrade to <strong>Pro</strong> or <strong>Legend (Pro+)</strong> now to keep unlimited access to:</p>
                 <ul>
                   <li>Unlimited Mix Uploads</li>
@@ -132,10 +177,11 @@ async function checkAndSendTrialNotifications() {
               </div>
             `,
           });
+          logger.info(`[TrialNotifier] Sent trial warning notification to user ${user.id} (${trial.daysLeft} days left)`);
         }
       }
 
-      // Check if trial has expired and notification not yet sent
+      // Check if trial has expired and expiry notification not yet sent
       if (!trial.isTrialActive && trial.daysLeft <= 0) {
         const existingExpiry = await prisma.notification.findFirst({
           where: {
@@ -172,11 +218,12 @@ async function checkAndSendTrialNotifications() {
               </div>
             `,
           });
+          logger.info(`[TrialNotifier] Sent trial expiry notification to user ${user.id}`);
         }
       }
     }
   } catch (err: any) {
-    console.error('[TrialNotifier] Error checking trials:', err.message);
+    logger.error('[TrialNotifier] Error checking trials:', { error: err.message });
   }
 }
 
@@ -185,3 +232,4 @@ module.exports = {
   requireTrialOrSubscription,
   checkAndSendTrialNotifications,
 };
+

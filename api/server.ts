@@ -60,6 +60,7 @@ const sitemapRoutes = require('./routes/sitemap');
 const reportRoutes = require('./routes/reports');
 const moderatorRoutes = require('./routes/moderator');
 const officialPlaylistRoutes = require('./routes/officialPlaylists');
+const developerRoutes = require('./routes/developers');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -82,6 +83,16 @@ app.use(helmet({
   xssFilter: true,
   noSniff: true,
 }));
+
+// User & Auth Cache-Control isolation: Prevent any shared, proxy, browser, or SW caching of authenticated or user-specific API data
+app.use((req, res, next) => {
+  if (req.headers.authorization || req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 
 function isAllowedOrigin(origin: string | undefined) {
   if (!origin) return true; // Allow requests without Origin header (mobile apps, curl, etc.)
@@ -203,6 +214,7 @@ app.use('/api/opportunities', authMiddleware, opportunityRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/sets', setRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
+app.use('/api/developers', developerRoutes);
 
 // OG Meta routes for social media sharing (own file)
 app.use('/og', ogRoutes);
@@ -472,6 +484,7 @@ process.on('SIGTERM', shutdown);
 process.on('SIGHUP', () => logger.info('SIGHUP ignored'));
 
 const { checkAndSendTrialNotifications } = require('./utils/trial');
+const { cleanupOldNotifications } = require('./utils/notifications');
 
 if (require.main === module) {
   app.listen(PORT, () => {
@@ -487,8 +500,14 @@ if (require.main === module) {
       checkAndSendDailyBugReport();
     }, 30 * 1000);
     setInterval(checkAndSendDailyBugReport, 24 * 60 * 60 * 1000);
+
+    // Clean up read notifications older than 30 days every 24 hours (and on startup)
+    cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
+    setInterval(() => {
+      cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
+    }, 24 * 60 * 60 * 1000);
   });
 }
 
-
 module.exports = app;
+

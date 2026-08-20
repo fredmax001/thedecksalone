@@ -170,7 +170,7 @@ export default function Earnings() {
                       }}
                       formatter={(value: number) => [`SLE ${value.toLocaleString()}`, 'Earnings']}
                     />
-                    <Bar dataKey="earnings" fill="#D4A24A" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="earnings" fill="#f4e059" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

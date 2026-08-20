@@ -1,18 +1,59 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ListMusic, Play, ArrowLeft, Loader2 } from 'lucide-react';
+import {
+  ListMusic,
+  Play,
+  Pause,
+  ArrowLeft,
+  Loader2,
+  Shuffle,
+} from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ModeratorBadge } from '@/components/ModeratorBadge';
-import { usePlayerStore } from '@/stores/playerStore';
+import ShareButton from '@/components/ShareButton';
+import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+
+function formatDuration(seconds: number): string {
+  if (!seconds) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatCompact(n: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+function PlayingWaveIndicator() {
+  return (
+    <div className="flex items-end gap-[3px] h-3.5">
+      <motion.div
+        className="w-[2.5px] bg-[#f4e059] rounded-full"
+        animate={{ height: ['4px', '14px', '6px', '12px', '4px'] }}
+        transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="w-[2.5px] bg-[#f4e059] rounded-full"
+        animate={{ height: ['12px', '4px', '14px', '6px', '12px'] }}
+        transition={{ duration: 0.7, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
+      />
+      <motion.div
+        className="w-[2.5px] bg-[#f4e059] rounded-full"
+        animate={{ height: ['6px', '14px', '4px', '10px', '6px'] }}
+        transition={{ duration: 0.85, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+      />
+    </div>
+  );
+}
 
 export function OfficialPlaylistDetail() {
   const { slug } = useParams<{ slug: string }>();
   const [loading, setLoading] = useState(true);
   const [playlist, setPlaylist] = useState<any | null>(null);
-  const { play } = usePlayerStore();
+  const { play, pause, setQueue, currentTrack, isPlaying } = usePlayerStore();
 
   useEffect(() => {
     if (slug) fetchPlaylistDetail();
@@ -32,151 +73,286 @@ export function OfficialPlaylistDetail() {
     }
   };
 
-  const handlePlayTrack = (mix: any) => {
-    if (!mix) return;
-    play({
-      id: mix.id,
-      title: mix.title,
-      dj: mix.dj?.stageName || 'DJ',
-      duration: mix.duration || 0,
-      cover: getMediaUrl(mix.coverImage) || '',
-      genre: mix.genre || '',
-      audioUrl: getMediaUrl(mix.audioUrl) || '',
-    });
-  };
+  const tracks: MixTrack[] = useMemo(() => {
+    if (!playlist?.items || playlist.items.length === 0) return [];
+    return playlist.items
+      .filter((item: any) => item.mix)
+      .map((item: any) => {
+        const m = item.mix;
+        return {
+          id: m.id,
+          title: m.title,
+          dj: m.dj?.stageName || 'DJ',
+          duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
+          cover: getMediaUrl(m.coverImage) || '',
+          genre: m.genre || '',
+          plays: m.plays || 0,
+          audioUrl: getMediaUrl(m.audioUrl) || '',
+          djTier: m.dj?.subscriptionTier,
+        };
+      });
+  }, [playlist]);
+
+  const totalDuration = useMemo(() => {
+    return tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+  }, [tracks]);
+
+  const isPlaylistPlaying = useMemo(() => {
+    if (!currentTrack || tracks.length === 0) return false;
+    return isPlaying && tracks.some((t) => t.id === currentTrack.id);
+  }, [currentTrack, isPlaying, tracks]);
 
   const handlePlayAll = () => {
-    if (!playlist?.items || playlist.items.length === 0) return;
-    const firstMix = playlist.items[0]?.mix;
-    if (firstMix) {
-      handlePlayTrack(firstMix);
+    if (tracks.length === 0) return;
+    if (isPlaylistPlaying) {
+      pause();
+    } else {
+      setQueue(tracks);
+      play(tracks[0]);
     }
+  };
+
+  const handleShuffle = () => {
+    if (tracks.length === 0) return;
+    const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+    setQueue(shuffled);
+    play(shuffled[0]);
+  };
+
+  const handleTrackClick = (targetTrack: MixTrack) => {
+    if (currentTrack?.id === targetTrack.id) {
+      if (isPlaying) pause();
+      else play();
+      return;
+    }
+    setQueue(tracks);
+    play(targetTrack);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-gold animate-spin" />
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
       </div>
     );
   }
 
   if (!playlist) {
     return (
-      <div className="max-w-4xl mx-auto py-16 px-4 text-center">
+      <div className="min-h-screen bg-[#080808] max-w-4xl mx-auto py-20 px-4 text-center">
         <h2 className="text-xl font-bold text-white mb-2">Playlist Not Found</h2>
         <Link to="/playlists">
-          <Button variant="outline" className="border-gold text-gold mt-4">
+          <button className="px-6 py-2.5 rounded-full bg-[#f4e059] text-black font-bold text-xs uppercase mt-4">
             Back to Playlists
-          </Button>
+          </button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black-base text-text-primary py-8 px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#080808] text-text-primary py-8 px-4 sm:px-6 max-w-7xl mx-auto space-y-8 pb-32">
       {/* Back Button */}
-      <Link to="/playlists" className="inline-flex items-center gap-1.5 text-xs text-gold hover:underline">
+      <Link
+        to="/playlists"
+        className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted hover:text-[#f4e059] transition-colors"
+      >
         <ArrowLeft className="w-4 h-4" /> Back to Official Playlists
       </Link>
 
-      {/* Playlist Hero */}
-      <div className="bg-black-elevated p-6 sm:p-8 rounded-2xl border border-dark-gray flex flex-col md:flex-row items-start md:items-center gap-6">
-        <div className="w-32 h-32 sm:w-44 sm:h-44 rounded-xl bg-black-surface border border-dark-gray overflow-hidden shrink-0">
-          {playlist.coverImage ? (
-            <img src={getMediaUrl(playlist.coverImage)} alt={playlist.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gold/20 via-black-surface to-black-elevated">
-              <ListMusic className="w-12 h-12 text-gold mb-1" />
-              <span className="text-[10px] text-gold font-bold uppercase tracking-wider">Official Deck Salone</span>
-            </div>
-          )}
-        </div>
+      {/* ─── 🎧 APPLE MUSIC / SPOTIFY ALBUM HERO ─── */}
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#1c1c1c] via-[#121212] to-[#0A0A0A] border border-white/[0.08] p-6 sm:p-10 shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#f4e059]/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="space-y-3 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-gold text-black font-bold text-xs">OFFICIAL PLAYLIST</Badge>
-            <ModeratorBadge showText size="sm" />
-            {playlist.isFeatured && (
-              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">
-                ⭐ Featured Selection
-              </Badge>
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-8">
+          {/* Big Artwork */}
+          <div className="w-44 h-44 sm:w-56 sm:h-56 rounded-2xl bg-black border border-white/[0.1] overflow-hidden shrink-0 shadow-2xl">
+            {playlist.coverImage ? (
+              <img
+                src={getMediaUrl(playlist.coverImage)}
+                alt={playlist.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#f4e059]/20 via-[#111] to-black">
+                <ListMusic className="w-16 h-16 text-[#f4e059] mb-2" />
+                <span className="text-xs text-[#f4e059] font-bold uppercase tracking-widest">
+                  Official Playlist
+                </span>
+              </div>
             )}
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-white">{playlist.title}</h1>
+          {/* Details & Action Controls */}
+          <div className="space-y-4 flex-1">
+            {playlist.isFeatured && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold">
+                  ★ Highlight
+                </span>
+              </div>
+            )}
 
-          {playlist.description && (
-            <p className="text-sm text-text-secondary">{playlist.description}</p>
-          )}
+            <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
+              {playlist.title}
+            </h1>
 
-          <div className="flex items-center gap-4 text-xs text-text-muted pt-2">
-            <span>{playlist.items?.length || 0} Tracks</span>
-            <span>• Curated by Deck Salone Team</span>
+            {playlist.description && (
+              <p className="text-sm text-text-secondary max-w-2xl leading-relaxed">
+                {playlist.description}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-text-muted pt-1">
+              <span className="text-white font-bold">{tracks.length} Mixes</span>
+              <span>•</span>
+              <span>{formatDuration(totalDuration)} Total Runtime</span>
+              <span>•</span>
+              <span className="text-[#f4e059]">Deck Salone Official Editorial</span>
+            </div>
+
+            {/* Play All & Shuffle Buttons */}
+            <div className="flex flex-wrap items-center gap-3 pt-3">
+              {tracks.length > 0 && (
+                <button
+                  onClick={handlePlayAll}
+                  className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-[#f4e059] text-black font-black text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-[#f4e059]/20"
+                >
+                  {isPlaylistPlaying ? (
+                    <>
+                      <Pause className="w-4 h-4 fill-current" /> Pause Playlist
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-current ml-0.5" /> Play All Mixes
+                    </>
+                  )}
+                </button>
+              )}
+
+              {tracks.length > 1 && (
+                <button
+                  onClick={handleShuffle}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-white font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  <Shuffle className="w-4 h-4 text-[#f4e059]" /> Shuffle
+                </button>
+              )}
+
+              <ShareButton
+                url={window.location.href}
+                title={playlist.title}
+                size="md"
+              />
+            </div>
           </div>
-
-          {playlist.items?.length > 0 && (
-            <Button
-              onClick={handlePlayAll}
-              className="bg-gold text-black hover:bg-gold-light font-bold text-xs px-6 py-2.5 rounded-full gap-2 mt-2"
-            >
-              <Play className="w-4 h-4 fill-black" />
-              Play All Mixes
-            </Button>
-          )}
         </div>
       </div>
 
-      {/* Tracklist */}
-      <div className="space-y-3">
-        <h2 className="text-base font-bold text-white px-1">Tracklist ({playlist.items?.length || 0})</h2>
+      {/* ─── 🎼 SPOTIFY / APPLE MUSIC TRACKLIST TABLE ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <h2 className="font-display text-xl font-bold uppercase tracking-tight text-white">
+            Playlist Tracklist ({tracks.length})
+          </h2>
+        </div>
 
-        {playlist.items?.length === 0 ? (
-          <Card className="bg-black-elevated border-dark-gray p-8 text-center text-xs text-text-muted">
-            No mixes added to this playlist yet.
-          </Card>
+        {tracks.length === 0 ? (
+          <div className="rounded-3xl border border-white/[0.06] bg-[#101010] p-12 text-center text-xs text-text-muted">
+            No active mixes in this playlist currently.
+          </div>
         ) : (
-          playlist.items?.map((item: any, index: number) => {
-            const mix = item.mix;
-            if (!mix) return null;
-            return (
-              <Card
-                key={item.id}
-                onClick={() => handlePlayTrack(mix)}
-                className="bg-black-elevated border-dark-gray hover:border-gold/50 p-3.5 sm:p-4 rounded-xl flex items-center justify-between gap-4 cursor-pointer transition group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <span className="text-xs font-bold text-text-muted group-hover:text-gold w-5 text-center shrink-0">
-                    #{index + 1}
-                  </span>
+          <div className="rounded-3xl bg-[#101010] border border-white/[0.06] p-3 sm:p-5 overflow-hidden">
+            {/* Table Column Headers */}
+            <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-muted border-b border-white/[0.06]">
+              <span className="col-span-1 text-center">#</span>
+              <span className="col-span-6">Track & DJ</span>
+              <span className="col-span-2">Genre</span>
+              <span className="col-span-2 text-right">Streams</span>
+              <span className="col-span-1 text-right">Time</span>
+            </div>
 
-                  <img
-                    src={getMediaUrl(mix.coverImage) || '/placeholder-mix.jpg'}
-                    alt={mix.title}
-                    className="w-12 h-12 rounded-lg object-cover border border-dark-gray shrink-0"
-                  />
+            <div className="divide-y divide-white/[0.03] mt-1">
+              {tracks.map((track, index) => {
+                const isCurrent = currentTrack?.id === track.id;
+                const isCurrentPlaying = isCurrent && isPlaying;
 
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-white group-hover:text-gold transition truncate">
-                      {mix.title}
-                    </h3>
-                    <p className="text-xs text-text-secondary truncate">
-                      by <span className="text-white font-medium">{mix.dj?.stageName}</span> •{' '}
-                      <span className="text-gold">{mix.genre}</span>
-                    </p>
+                return (
+                  <div
+                    key={track.id}
+                    onClick={() => handleTrackClick(track)}
+                    className={cn(
+                      'group grid grid-cols-12 gap-3 sm:gap-4 items-center px-3 py-3 rounded-xl transition-all cursor-pointer',
+                      isCurrent
+                        ? 'bg-[#f4e059]/10 text-white'
+                        : 'hover:bg-white/[0.04] text-text-secondary'
+                    )}
+                  >
+                    {/* # Index / Play Trigger */}
+                    <div className="col-span-2 sm:col-span-1 flex items-center justify-center">
+                      {isCurrentPlaying ? (
+                        <PlayingWaveIndicator />
+                      ) : (
+                        <>
+                          <span className="font-mono text-xs text-text-muted group-hover:hidden">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <button className="hidden group-hover:flex w-6 h-6 rounded-full bg-[#f4e059] text-black items-center justify-center">
+                            <Play className="w-3 h-3 fill-current ml-0.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Track info & thumbnail */}
+                    <div className="col-span-8 sm:col-span-6 flex items-center gap-3 min-w-0">
+                      <img
+                        src={track.cover || '/placeholder-mix.jpg'}
+                        alt={track.title}
+                        className="w-11 h-11 rounded-lg object-cover bg-black shrink-0 border border-white/[0.06]"
+                        loading="lazy"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          to={`/mix/${track.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            'font-display text-xs sm:text-sm font-bold uppercase tracking-tight truncate block hover:text-[#f4e059] transition-colors',
+                            isCurrent ? 'text-[#f4e059]' : 'text-text-primary'
+                          )}
+                        >
+                          {track.title}
+                        </Link>
+                        <p className="text-[11px] text-text-muted truncate mt-0.5 flex items-center gap-1">
+                          <span>{track.dj}</span>
+                          {track.djTier === 'legend' && (
+                            <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Genre */}
+                    <div className="hidden sm:block col-span-2">
+                      <span className="text-[10px] font-semibold text-text-secondary px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06]">
+                        {track.genre}
+                      </span>
+                    </div>
+
+                    {/* Stream Plays */}
+                    <div className="hidden sm:block col-span-2 text-right font-mono text-xs text-text-muted">
+                      {formatCompact(track.plays || 0)}
+                    </div>
+
+                    {/* Duration */}
+                    <div className="col-span-2 sm:col-span-1 text-right font-mono text-xs text-text-muted">
+                      {formatDuration(track.duration)}
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-text-muted hidden sm:inline">▶ {mix.plays || 0}</span>
-                  <div className="w-8 h-8 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center text-gold group-hover:bg-gold group-hover:text-black transition">
-                    <Play className="w-4 h-4 fill-current ml-0.5" />
-                  </div>
-                </div>
-              </Card>
-            );
-          })
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -184,3 +360,4 @@ export function OfficialPlaylistDetail() {
 }
 
 export default OfficialPlaylistDetail;
+

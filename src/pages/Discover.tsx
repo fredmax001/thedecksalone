@@ -689,29 +689,29 @@ export default function Discover() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-black">
+    <div className="min-h-[100dvh] bg-bg-page">
       <SEOHead
         title="Discover DJs — Deck Salone"
         description="Browse and discover top Sierra Leonean DJs by genre, city, and performance rating."
       />
       {/* ════════ Section 1: Hero ════════ */}
-      <section className="bg-black-elevated pt-24 pb-12">
+      <section className="hero-banner pt-8 pb-6 sm:pt-10 sm:pb-8 border-b border-dark-gray">
         <div className="container-main">
           <FadeIn delay={0.1}>
-            <p className="section-label text-center mb-3">DISCOVER</p>
+            <p className="section-label text-center mb-1.5">DISCOVER</p>
           </FadeIn>
           <FadeIn delay={0.2}>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-semibold uppercase tracking-tight text-text-primary text-center">
+            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold uppercase tracking-tight text-text-primary text-center">
               FIND YOUR PERFECT DJ
             </h1>
           </FadeIn>
           {/* Tab Switcher */}
           <FadeIn delay={0.3}>
-            <div className="flex justify-center mt-6">
+            <div className="flex justify-center mt-3.5">
               <div className="inline-flex items-center bg-black-surface border border-dark-gray rounded-full p-1">
                 <button
                   onClick={() => { setActiveTab('djs'); setCurrentPage(1); }}
-                  className={`px-6 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                  className={`px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
                     activeTab === 'djs'
                       ? 'bg-gold-gradient text-black'
                       : 'text-text-secondary hover:text-text-primary'
@@ -721,7 +721,7 @@ export default function Discover() {
                 </button>
                 <button
                   onClick={() => { setActiveTab('people'); setCurrentPage(1); }}
-                  className={`px-6 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                  className={`px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
                     activeTab === 'people'
                       ? 'bg-gold-gradient text-black'
                       : 'text-text-secondary hover:text-text-primary'
@@ -734,17 +734,17 @@ export default function Discover() {
           </FadeIn>
           {/* Search Bar */}
           <FadeIn delay={0.4}>
-            <div className="max-w-2xl mx-auto mt-8">
+            <div className="max-w-xl mx-auto mt-4">
               <div className="relative flex items-center">
-                <Search className="absolute left-4 w-5 h-5 text-gold pointer-events-none" />
+                <Search className="absolute left-3.5 w-4 h-4 text-gold pointer-events-none" />
                 <input
                   type="text"
                   placeholder={activeTab === 'djs' ? "Search by DJ name, city, or community..." : "Search people by name or username..."}
                   value={searchQuery}
                   onChange={handleSearch}
-                  className="w-full pl-12 pr-28 py-3.5 bg-black-surface border border-dark-gray rounded-full text-text-primary placeholder:text-text-muted text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
+                  className="w-full pl-10 pr-24 py-2.5 bg-black-surface border border-dark-gray rounded-full text-text-primary placeholder:text-text-muted text-xs sm:text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
                 />
-                <button className="absolute right-2 px-5 py-2 bg-gold-gradient text-black text-sm font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
+                <button className="absolute right-1.5 px-4 py-1.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
                   Search
                 </button>
               </div>
@@ -754,7 +754,7 @@ export default function Discover() {
           {/* Genre Filter Pills — Desktop */}
           {activeTab === 'djs' && (
           <FadeIn delay={0.5}>
-            <div className="hidden md:flex flex-wrap justify-center gap-2 mt-5">
+            <div className="hidden md:flex flex-wrap justify-center gap-1.5 mt-3">
               {genreOptions.map((genre, i) => (
                 <motion.button
                   key={genre}

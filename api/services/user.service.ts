@@ -17,6 +17,13 @@ export class UserService {
         email: true,
         role: true,
         createdAt: true,
+        djProfile: {
+          select: {
+            id: true,
+            isPro: true,
+            subscriptionTier: true,
+          },
+        },
       },
     });
 
@@ -27,10 +34,13 @@ export class UserService {
   }
 
   /**
-   * Check if a user is a pro member
+   * Check if a user is a pro member (via DJ profile subscription)
    */
-  static async isProUser(id: string) {
+  static async isProUser(id: string): Promise<boolean> {
     const user = await this.getUserById(id);
-    return user?.role === 'PRO'; // Assuming PRO is a role or something similar.
+    if (!user || !user.djProfile) return false;
+    const tier = user.djProfile.subscriptionTier?.toLowerCase();
+    return Boolean(user.djProfile.isPro || tier === 'pro' || tier === 'legend');
   }
 }
+

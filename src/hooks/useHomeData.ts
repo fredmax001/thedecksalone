@@ -60,6 +60,15 @@ export function useHomeData() {
     staleTime: 60_000,
   });
 
+  const officialPlaylists = useQuery({
+    queryKey: ['officialPlaylists', 'home'],
+    queryFn: async () => {
+      const res = await api.get('/official-playlists?limit=8');
+      return res.data.data || [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   return {
     featuredDJs,
     rankings,
@@ -68,11 +77,14 @@ export function useHomeData() {
     currentBattle,
     homeAdBoard,
     platformStats,
+    officialPlaylists,
     isLoading:
       featuredDJs.isLoading ||
       rankings.isLoading ||
       mixCategories.isLoading ||
       events.isLoading ||
-      currentBattle.isLoading,
+      currentBattle.isLoading ||
+      homeAdBoard.isLoading ||
+      officialPlaylists.isLoading,
   };
 }

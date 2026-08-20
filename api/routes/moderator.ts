@@ -2,6 +2,8 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { uploadCover } = require('../utils/upload');
+const { uploadBuffer } = require('../utils/storage');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -131,7 +133,7 @@ router.get('/stats', async (req: any, res: any) => {
 router.get('/mixes', async (req: any, res: any) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit as string) || 50));
     const search = (req.query.search as string || '').trim();
     const genre = req.query.genre as string;
     const flagged = req.query.flagged === 'true';
@@ -319,11 +321,18 @@ router.get('/playlists', async (req: any, res: any) => {
   }
 });
 
-router.post('/playlists', async (req: any, res: any) => {
+router.post('/playlists', uploadCover.single('coverImageFile'), async (req: any, res: any) => {
   try {
-    const { title, description, coverImage, isFeatured, isPublished } = req.body;
+    const { title, description, isFeatured, isPublished } = req.body;
+    let coverImage = req.body.coverImage;
+
     if (!title || title.trim() === '') {
       return res.status(400).json({ success: false, error: 'Playlist title is required' });
+    }
+
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
     }
 
     const slug = title
@@ -337,8 +346,8 @@ router.post('/playlists', async (req: any, res: any) => {
         description: description || null,
         coverImage: coverImage || null,
         slug,
-        isFeatured: Boolean(isFeatured),
-        isPublished: isPublished !== undefined ? Boolean(isPublished) : true,
+        isFeatured: isFeatured === true || isFeatured === 'true',
+        isPublished: isPublished !== undefined ? (isPublished === true || isPublished === 'true') : true,
         createdById: req.user.id,
       },
     });
@@ -355,24 +364,31 @@ router.post('/playlists', async (req: any, res: any) => {
 
     return res.json({ success: true, data: playlist });
   } catch (error: any) {
+    logger.error('Error creating official playlist:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.put('/playlists/:id', async (req: any, res: any) => {
+router.put('/playlists/:id', uploadCover.single('coverImageFile'), async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    const { title, description, coverImage, isFeatured, isPublished } = req.body;
+    const { title, description, isFeatured, isPublished } = req.body;
+    let coverImage = req.body.coverImage;
 
     const existing = await prisma.officialPlaylist.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
+    }
 
     const updateData: any = {};
     if (title !== undefined) updateData.title = title.trim();
     if (description !== undefined) updateData.description = description;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
-    if (isFeatured !== undefined) updateData.isFeatured = Boolean(isFeatured);
-    if (isPublished !== undefined) updateData.isPublished = Boolean(isPublished);
+    if (isFeatured !== undefined) updateData.isFeatured = isFeatured === true || isFeatured === 'true';
+    if (isPublished !== undefined) updateData.isPublished = isPublished === true || isPublished === 'true';
 
     const updated = await prisma.officialPlaylist.update({
       where: { id },
@@ -392,6 +408,7 @@ router.put('/playlists/:id', async (req: any, res: any) => {
 
     return res.json({ success: true, data: updated });
   } catch (error: any) {
+    logger.error('Error updating official playlist:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -419,21 +436,25 @@ router.delete('/playlists/:id', async (req: any, res: any) => {
   }
 });
 
-// Add mix to playlist
+// Add single mix to playlist (with duplicate prevention)
 router.post('/playlists/:id/items', async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { mixId } = req.body;
     if (!mixId) return res.status(400).json({ success: false, error: 'mixId required' });
 
-    const [playlist, mix, itemCount] = await Promise.all([
+    const [playlist, mix, existingItem, itemCount] = await Promise.all([
       prisma.officialPlaylist.findUnique({ where: { id } }),
       prisma.mix.findUnique({ where: { id: mixId } }),
+      prisma.officialPlaylistItem.findUnique({ where: { playlistId_mixId: { playlistId: id, mixId } } }),
       prisma.officialPlaylistItem.count({ where: { playlistId: id } }),
     ]);
 
     if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
     if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+    if (existingItem) {
+      return res.status(409).json({ success: false, error: 'Mix is already in this playlist' });
+    }
 
     const item = await prisma.officialPlaylistItem.create({
       data: {
@@ -457,15 +478,121 @@ router.post('/playlists/:id/items', async (req: any, res: any) => {
 
     return res.json({ success: true, data: item });
   } catch (error: any) {
+    logger.error('Error adding mix to playlist:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Remove item from playlist
+// Bulk add mixes to playlist
+router.post('/playlists/:id/items/bulk', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { mixIds } = req.body;
+    if (!Array.isArray(mixIds) || mixIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Array of mixIds is required' });
+    }
+
+    const playlist = await prisma.officialPlaylist.findUnique({ where: { id } });
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    const [existingItems, currentCount] = await Promise.all([
+      prisma.officialPlaylistItem.findMany({
+        where: { playlistId: id },
+        select: { mixId: true },
+      }),
+      prisma.officialPlaylistItem.count({ where: { playlistId: id } }),
+    ]);
+
+    const existingMixIds = new Set(existingItems.map((i: any) => i.mixId));
+    const newMixIds = mixIds.filter((mId: string) => !existingMixIds.has(mId));
+
+    if (newMixIds.length === 0) {
+      return res.json({ success: true, addedCount: 0, message: 'All selected mixes are already in the playlist' });
+    }
+
+    let pos = currentCount;
+    const createData = newMixIds.map((mId: string) => ({
+      playlistId: id,
+      mixId: mId,
+      position: ++pos,
+    }));
+
+    await prisma.officialPlaylistItem.createMany({
+      data: createData,
+      skipDuplicates: true,
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'BULK_ADD_MIXES_TO_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: `${newMixIds.length} mixes -> ${playlist.title}`,
+    });
+
+    return res.json({ success: true, addedCount: newMixIds.length });
+  } catch (error: any) {
+    logger.error('Error bulk adding mixes to playlist:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Reorder playlist items
+router.put('/playlists/:id/reorder', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { itemIds } = req.body; // ordered array of officialPlaylistItem IDs
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'itemIds array required' });
+    }
+
+    const updates = itemIds.map((itemId: string, index: number) =>
+      prisma.officialPlaylistItem.update({
+        where: { id: itemId },
+        data: { position: index + 1 },
+      })
+    );
+
+    await prisma.$transaction(updates);
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'REORDER_OFFICIAL_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      reason: 'Reordered tracklist sequence',
+    });
+
+    return res.json({ success: true, message: 'Playlist reordered successfully' });
+  } catch (error: any) {
+    logger.error('Error reordering playlist:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove item from playlist and re-sequence remaining items
 router.delete('/playlists/:id/items/:itemId', async (req: any, res: any) => {
   try {
     const { id, itemId } = req.params;
     await prisma.officialPlaylistItem.delete({ where: { id: itemId } });
+
+    // Resequence remaining items
+    const remainingItems = await prisma.officialPlaylistItem.findMany({
+      where: { playlistId: id },
+      orderBy: { position: 'asc' },
+    });
+
+    if (remainingItems.length > 0) {
+      const updates = remainingItems.map((item: any, idx: number) =>
+        prisma.officialPlaylistItem.update({
+          where: { id: item.id },
+          data: { position: idx + 1 },
+        })
+      );
+      await prisma.$transaction(updates);
+    }
 
     await createModeratorLog({
       moderatorId: req.user.id,

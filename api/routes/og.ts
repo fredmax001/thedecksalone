@@ -163,4 +163,42 @@ router.get('/user/:username', async (req, res) => {
   }
 });
 
+/**
+ * GET /og/playlist/:slug
+ */
+router.get('/playlist/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const baseUrl = getFrontendUrl();
+
+    const playlist = await prisma.officialPlaylist.findFirst({
+      where: {
+        OR: [{ slug }, { id: slug }],
+        isPublished: true,
+      },
+      include: {
+        _count: { select: { items: true } },
+      },
+    });
+
+    if (!playlist) {
+      return res.status(404).send('<h1>Playlist Not Found</h1>');
+    }
+
+    const playlistUrl = `${baseUrl}/playlist/${playlist.slug}`;
+    const title = `${playlist.title} — Official Deck Salone Playlist`;
+    const trackCount = playlist._count?.items || 0;
+    const description =
+      playlist.description?.slice(0, 200) ||
+      `Listen to "${playlist.title}" (${trackCount} ${trackCount === 1 ? 'mix' : 'mixes'}) curated by Deck Salone Moderators.`;
+    const image = playlist.coverImage || `${baseUrl}/cover-placeholder.jpg`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(renderMetaHtml({ title, description, url: playlistUrl, image, type: 'music.playlist' }));
+  } catch (error) {
+    return res.status(500).send('<h1>Server Error</h1>');
+  }
+});
+
 module.exports = router;

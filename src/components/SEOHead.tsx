@@ -14,7 +14,7 @@ interface SEOHeadProps {
 export default function SEOHead({
   title = "Deck Salone — Sierra Leone's Official DJ Platform",
   description = "Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone.",
-  image = `${DOMAIN}/logo-web.png`,
+  image = `${DOMAIN}/og-image.jpg?v=5`,
   type = 'website',
   noIndex = false,
 }: SEOHeadProps) {

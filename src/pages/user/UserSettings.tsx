@@ -280,7 +280,7 @@ export default function UserSettings() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label className="text-text-secondary">Date of Birth 🎂</Label>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#D4A24A]/10 border border-[#D4A24A]/30 text-[#D4A24A]">16+ Only</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#f4e059]/10 border border-[#f4e059]/30 text-[#f4e059]">16+ Only</span>
             </div>
             <Input
               type="date"

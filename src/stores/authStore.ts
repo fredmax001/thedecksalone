@@ -17,6 +17,8 @@ export interface User {
   dateOfBirth?: string | Date | null;
   referralCode?: string | null;
   referredBy?: string | null;
+  subscriptionTier?: string;
+  subscriptionActivatedAt?: string | Date | null;
 
   djProfile?: {
     id: string;
@@ -50,6 +52,7 @@ interface AuthState {
 }
 
 import { usePlayerStore } from '@/stores/playerStore';
+import { queryClient } from '@/lib/queryClient';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -60,6 +63,8 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
 
       setAuth: (user, token) => {
+        // Clear stale query cache before establishing new user session
+        queryClient.clear();
         set({ user, token, isAuthenticated: true });
         usePlayerStore.getState().setCurrentUserId(user.id);
       },
@@ -69,6 +74,8 @@ export const useAuthStore = create<AuthState>()(
           const res = await api.post('/auth/login', { email, password });
           if (res.data.success) {
             const { user, token } = res.data.data;
+            // Purge any guest or prior user query cache
+            queryClient.clear();
             set({ user, token, isAuthenticated: true });
             usePlayerStore.getState().setCurrentUserId(user.id);
             // Fetch full profile (including djProfile) immediately after login
@@ -86,6 +93,7 @@ export const useAuthStore = create<AuthState>()(
           const res = await api.post('/auth/register', { email, password, role, phone, gender });
           if (res.data.success) {
             const { user, token } = res.data.data;
+            queryClient.clear();
             set({ user, token, isAuthenticated: true });
             usePlayerStore.getState().setCurrentUserId(user.id);
             return { success: true };
@@ -97,14 +105,27 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        usePlayerStore.getState().clearSession();
+        // 1. Reset player state and detach user
+        usePlayerStore.getState().setCurrentUserId(null);
+
+        // 2. Clear all cached API queries from memory to prevent data leakage to other users
+        queryClient.clear();
+
+        // 3. Clear auth tokens
+        try {
+          localStorage.removeItem('decksalone-auth');
+          localStorage.removeItem('soundit-auth');
+        } catch (e) {}
+
+        // 4. Reset auth store state
         set({ user: null, token: null, isAuthenticated: false });
       },
 
       fetchMe: async () => {
         const token = get().token;
         if (!token) {
-          usePlayerStore.getState().clearSession();
+          usePlayerStore.getState().setCurrentUserId(null);
+          queryClient.clear();
           set({ isLoading: false });
           return;
         }
@@ -117,26 +138,39 @@ export const useAuthStore = create<AuthState>()(
             usePlayerStore.getState().setCurrentUserId(userData.id);
           }
         } catch {
-          usePlayerStore.getState().clearSession();
+          usePlayerStore.getState().setCurrentUserId(null);
+          queryClient.clear();
           set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
 
       init: () => {
+        // Migrate legacy soundit-auth token if needed
+        try {
+          const legacy = localStorage.getItem('soundit-auth');
+          const current = localStorage.getItem('decksalone-auth');
+          if (legacy && !current) {
+            localStorage.setItem('decksalone-auth', legacy);
+            localStorage.removeItem('soundit-auth');
+          }
+        } catch (e) {}
+
         const token = get().token;
         if (token) {
           set({ isAuthenticated: true });
           get().fetchMe();
         } else {
-          usePlayerStore.getState().clearSession();
+          usePlayerStore.getState().setCurrentUserId(null);
+          queryClient.clear();
           set({ isLoading: false });
         }
       },
     }),
 
     {
-      name: 'soundit-auth',
+      name: 'decksalone-auth',
       partialize: (state) => ({ token: state.token }),
     }
   )
 );
+

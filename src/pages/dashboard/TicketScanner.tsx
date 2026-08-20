@@ -307,7 +307,7 @@ export default function TicketScanner() {
               <span className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-gold rounded-bl-xl" />
               <span className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-gold rounded-br-xl" />
               <motion.div
-                className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent shadow-[0_0_12px_rgba(212,162,74,0.9)]"
+                className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent shadow-[0_0_12px_rgba(244, 224, 89,0.9)]"
                 animate={{ top: ['12px', '228px', '12px'] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
               />

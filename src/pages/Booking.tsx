@@ -928,7 +928,7 @@ export default function Booking() {
                               className={cn(
                                 "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
                                 filters.eventType.includes(type)
-                                  ? "border border-gold text-gold bg-[rgba(212,162,74,0.1)]"
+                                  ? "border border-gold text-gold bg-[rgba(244,224,89,0.1)]"
                                   : "border border-[#1E1E1E] text-text-muted hover:text-text-primary hover:border-[#2A2A2A]"
                               )}
                             >
@@ -952,7 +952,7 @@ export default function Booking() {
                             className={cn(
                               "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
                               filters.genres.includes(genre)
-                                ? "border border-gold text-gold bg-[rgba(212,162,74,0.1)]"
+                                ? "border border-gold text-gold bg-[rgba(244,224,89,0.1)]"
                                 : "border border-[#1E1E1E] text-text-muted hover:text-text-primary hover:border-[#2A2A2A]"
                             )}
                           >
@@ -1073,7 +1073,7 @@ export default function Booking() {
               {filteredDJs.map((dj: any, i: any) => (
                 <motion.div
                   key={dj.id}
-                  className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
+                  className="group bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden hover:border-[rgba(244,224,89,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -1285,7 +1285,7 @@ export default function Booking() {
             {pricingGuide.map((pricing, i) => (
               <motion.div
                 key={pricing.eventType}
-                className="bg-[#111111] border border-[#1E1E1E] rounded-2xl p-6 hover:border-[rgba(212,162,74,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
+                className="bg-[#111111] border border-[#1E1E1E] rounded-2xl p-6 hover:border-[rgba(244, 224, 89,0.3)] hover:-translate-y-1 hover:shadow-card transition-all duration-300"
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}

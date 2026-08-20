@@ -76,7 +76,7 @@ const GENRE_THEMES: Record<string, GenreTheme> = {
   'wedding-event-essentials': {
     gradient: 'from-amber-600 via-yellow-950 to-gold',
     subtitle: 'Celebration Hits',
-    accentColor: '#d4a24a',
+    accentColor: '#f4e059',
   },
   'old-skool-throwbacks': {
     gradient: 'from-pink-900 via-rose-950 to-amber-600',
@@ -106,7 +106,7 @@ const GENRE_THEMES: Record<string, GenreTheme> = {
   default: {
     gradient: 'from-amber-900 via-black to-yellow-900',
     subtitle: 'Featured Mixes',
-    accentColor: '#d4af37',
+    accentColor: '#f4e059',
   },
 };
 
@@ -115,7 +115,7 @@ export function getGenreTheme(genreName: string): GenreTheme {
   return GENRE_THEMES[slug] || GENRE_THEMES[slug.replace(/-mix$/, '')] || {
     gradient: 'from-amber-950 via-zinc-950 to-yellow-900',
     subtitle: `${genreName} Selection`,
-    accentColor: '#d4af37',
+    accentColor: '#f4e059',
   };
 }
 

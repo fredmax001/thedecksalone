@@ -37,6 +37,40 @@ function isEmbedSource(source?: string, audioUrl?: string): boolean {
   );
 }
 
+function getNormalizedEmbedUrl(audioUrl?: string): string {
+  if (!audioUrl) return '';
+  const url = audioUrl.trim();
+
+  // Audiomack URLs
+  if (url.includes('audiomack.com')) {
+    if (url.includes('audiomack.com/embed/')) return url;
+    const match3 = url.match(/audiomack\.com\/([^/]+)\/(song|album|playlist)\/([^/?#]+)/i);
+    if (match3) {
+      return `https://audiomack.com/embed/${match3[2]}/${encodeURIComponent(match3[1])}/${encodeURIComponent(match3[3])}`;
+    }
+    const match2 = url.match(/audiomack\.com\/([^/]+)\/([^/?#]+)/i);
+    if (match2 && !['embed', 'song', 'album', 'playlist', 'search', 'feed'].includes(match2[1].toLowerCase())) {
+      return `https://audiomack.com/embed/song/${encodeURIComponent(match2[1])}/${encodeURIComponent(match2[2])}`;
+    }
+  }
+
+  // SoundCloud URLs
+  if (url.includes('soundcloud.com') && !url.includes('w.soundcloud.com/player')) {
+    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23f4e059&auto_play=true&show_artwork=true`;
+  }
+
+  // YouTube URLs
+  if (url.includes('youtube.com/watch?v=')) {
+    const v = url.split('watch?v=')[1]?.split('&')[0];
+    if (v) return `https://www.youtube.com/embed/${v}?autoplay=1`;
+  } else if (url.includes('youtu.be/')) {
+    const v = url.split('youtu.be/')[1]?.split('?')[0];
+    if (v) return `https://www.youtube.com/embed/${v}?autoplay=1`;
+  }
+
+  return url;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Modern Progress Bar with Waveform Preview (Desktop)               */
 /* ------------------------------------------------------------------ */
@@ -109,9 +143,9 @@ const ModernProgressBar = memo(function ModernProgressBar({
                 style={{
                   height: `${height * 24}px`,
                   backgroundColor: isPlayed
-                    ? '#D4A24A'
+                    ? '#f4e059'
                     : isHover
-                    ? 'rgba(212,162,74,0.4)'
+                    ? 'rgba(244,224,89,0.4)'
                     : 'rgba(255,255,255,0.08)',
                   opacity: isPlayed ? 1 : 0.5,
                 }}
@@ -128,7 +162,7 @@ const ModernProgressBar = memo(function ModernProgressBar({
             />
             {/* Thumb */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-gold rounded-full shadow-[0_0_8px_rgba(212,162,74,0.6)] transition-all duration-100 group-hover:scale-125"
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-gold rounded-full shadow-[0_0_8px_rgba(244,224,89,0.6)] transition-all duration-100 group-hover:scale-125"
               style={{ left: `${progress * 100}%`, transform: `translate(-50%, -50%)` }}
             />
           </div>
@@ -219,7 +253,7 @@ const ExpandedWaveform = memo(function ExpandedWaveform({
             className="flex-1 rounded-full"
             style={{
               height: `${h}px`,
-              backgroundColor: isPlayed ? '#D4A24A' : 'rgba(255,255,255,0.10)',
+              backgroundColor: isPlayed ? '#f4e059' : 'rgba(255,255,255,0.10)',
               opacity: isPlayed ? 1 : 0.45,
               transition: isPlaying ? 'height 80ms ease, background-color 75ms' : 'none',
             }}
@@ -651,14 +685,14 @@ export default function MixPlayer() {
               <div className="hidden md:flex flex-col items-center flex-1 px-6 min-w-0">
                 {embed ? (
                   <iframe
-                    src={currentTrack.audioUrl}
+                    src={getNormalizedEmbedUrl(currentTrack.audioUrl)}
                     title={`${currentTrack.title} player`}
                     width="100%"
-                    height="60"
+                    height="68"
                     scrolling="no"
                     frameBorder="0"
-                    allow="autoplay"
-                    className="rounded-lg max-w-md"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    className="rounded-xl max-w-md bg-black/40 border border-white/10"
                   />
                 ) : (
                   <div className="w-full max-w-lg flex flex-col items-center gap-1.5">
@@ -680,7 +714,7 @@ export default function MixPlayer() {
                       </button>
                       <button
                         onClick={togglePlayHandler}
-                        className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_12px_rgba(212,162,74,0.3)]"
+                        className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_12px_rgba(244,224,89,0.3)]"
                       >
                         {isPlaying ? (
                           <Pause size={14} className="text-black" />
@@ -785,22 +819,24 @@ export default function MixPlayer() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 30 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full flex flex-col justify-between p-6 md:p-12 relative max-w-xl md:max-w-2xl mx-auto z-[110]"
+                className="h-full flex flex-col justify-between pt-[calc(env(safe-area-inset-top,0px)+1.75rem)] pb-6 px-6 md:p-12 relative max-w-xl md:max-w-2xl mx-auto z-[110]"
               >
-                {/* Header Row */}
-                <div className="flex items-center justify-between">
+                {/* Header Row — Clearance for phone status bar */}
+                <div className="flex items-center justify-between pt-1">
                   <button
                     onClick={() => setIsExpanded(false)}
-                    className="p-2 text-white/40 hover:text-white/80 hover:bg-white/5 rounded-full transition-all"
+                    aria-label="Minimize Player"
+                    className="p-2.5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 rounded-full transition-all active:scale-95 shadow-sm"
                   >
-                    <ChevronDown size={24} />
+                    <ChevronDown size={22} />
                   </button>
-                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.3em]">
+                  <p className="text-[10px] font-extrabold text-gold/80 uppercase tracking-[0.35em] bg-gold/10 border border-gold/20 px-3 py-1 rounded-full">
                     Now Playing
                   </p>
                   <button
                     onClick={close}
-                    className="p-2 text-white/40 hover:text-red hover:bg-white/5 rounded-full transition-all"
+                    aria-label="Close Player"
+                    className="p-2.5 text-white/60 hover:text-red hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 rounded-full transition-all active:scale-95 shadow-sm"
                   >
                     <X size={20} />
                   </button>
@@ -809,7 +845,7 @@ export default function MixPlayer() {
                 {/* Track Album Art / CD Spinner */}
                 <div className="flex flex-col items-center justify-center my-6">
                   <motion.div
-                    className="w-56 h-56 sm:w-72 sm:h-72 rounded-full overflow-hidden shadow-[0_0_80px_rgba(212,162,74,0.15)] border-4 border-white/5 relative"
+                    className="w-56 h-56 sm:w-72 sm:h-72 rounded-full overflow-hidden shadow-[0_0_80px_rgba(244,224,89,0.15)] border-4 border-white/5 relative"
                     animate={isPlaying ? { rotate: 360 } : {}}
                     transition={isPlaying ? { duration: 18, repeat: Infinity, ease: 'linear' } : {}}
                   >
@@ -837,14 +873,14 @@ export default function MixPlayer() {
                 {/* Embedded Players fallback */}
                 {embed ? (
                   <iframe
-                    src={currentTrack.audioUrl}
+                    src={getNormalizedEmbedUrl(currentTrack.audioUrl)}
                     title={`${currentTrack.title} player`}
                     width="100%"
-                    height="180"
+                    height="200"
                     scrolling="no"
                     frameBorder="0"
-                    allow="autoplay"
-                    className="w-full mt-6 rounded-2xl"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    className="w-full mt-6 rounded-2xl border border-white/10 bg-black/40 shadow-2xl"
                   />
                 ) : (
                   <div className="flex flex-col gap-4 mt-6">
@@ -880,7 +916,7 @@ export default function MixPlayer() {
                         </button>
                         <button
                           onClick={togglePlayHandler}
-                          className="w-14 h-14 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_24px_rgba(212,162,74,0.4)]"
+                          className="w-14 h-14 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_24px_rgba(244,224,89,0.4)]"
                         >
                           {isPlaying ? (
                             <Pause size={24} className="text-black" />

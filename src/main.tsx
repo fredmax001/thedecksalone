@@ -11,6 +11,16 @@ import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
 const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.();
 
 if (!isNativeApp) {
+  if ('serviceWorker' in navigator) {
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+  }
+
   import('virtual:pwa-register').then(({ registerSW }) => {
     // Auto-update PWA service worker and reload for fresh deployments
     const updateSW = registerSW({
@@ -21,10 +31,10 @@ if (!isNativeApp) {
       onOfflineReady() {},
     });
 
-    // Check for new deployments every 60 seconds
+    // Check for new deployments every 30 seconds
     setInterval(() => {
       updateSW(true);
-    }, 60 * 1000);
+    }, 30 * 1000);
   });
 }
 

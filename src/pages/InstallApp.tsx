@@ -158,7 +158,7 @@ export default function InstallApp() {
             {deferredPrompt && (
               <Button
                 onClick={handleNativeInstall}
-                className="w-full sm:w-auto px-6 py-3 bg-gold-gradient text-black font-extrabold text-sm uppercase tracking-wide rounded-full shadow-[0_0_20px_rgba(212,162,74,0.3)] hover:scale-105 active:scale-95 transition-all"
+                className="w-full sm:w-auto px-6 py-3 bg-gold-gradient text-black font-extrabold text-sm uppercase tracking-wide rounded-full shadow-[0_0_20px_rgba(244, 224, 89,0.3)] hover:scale-105 active:scale-95 transition-all"
               >
                 <Download className="w-4 h-4 mr-2" /> Install PWA App
               </Button>
@@ -191,7 +191,7 @@ export default function InstallApp() {
             whileHover={{ y: -2 }}
             className={`p-6 rounded-2xl border transition-all ${
               platform === 'ios'
-                ? 'bg-black-surface border-gold shadow-[0_0_20px_rgba(212,162,74,0.15)]'
+                ? 'bg-black-surface border-gold shadow-[0_0_20px_rgba(244, 224, 89,0.15)]'
                 : 'bg-black-surface/60 border-dark-gray'
             }`}
           >
@@ -232,7 +232,7 @@ export default function InstallApp() {
             whileHover={{ y: -2 }}
             className={`p-6 rounded-2xl border transition-all ${
               platform === 'android'
-                ? 'bg-black-surface border-gold shadow-[0_0_20px_rgba(212,162,74,0.15)]'
+                ? 'bg-black-surface border-gold shadow-[0_0_20px_rgba(244, 224, 89,0.15)]'
                 : 'bg-black-surface/60 border-dark-gray'
             }`}
           >

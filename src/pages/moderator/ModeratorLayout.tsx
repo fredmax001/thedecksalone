@@ -6,11 +6,11 @@ import {
   Trophy,
   AlertTriangle,
   FileText,
-  Settings,
   ShieldAlert,
 } from 'lucide-react';
+
 import { useAuthStore } from '@/stores/authStore';
-import { Card } from '@/components/ui/card';
+
 
 export function ModeratorLayout() {
   const { user } = useAuthStore();
@@ -20,20 +20,20 @@ export function ModeratorLayout() {
 
   if (!isModerator) {
     return (
-      <div className="min-h-screen bg-black-base flex items-center justify-center p-4">
-        <Card className="max-w-md w-full bg-black-elevated border-dark-gray p-6 text-center">
-          <ShieldAlert className="w-12 h-12 text-red mx-auto mb-4" />
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#101010] border border-white/5 p-6 text-center rounded-2xl">
+          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
-          <p className="text-sm text-text-secondary mb-6">
+          <p className="text-sm text-text-muted mb-6">
             You must be an official Deck Salone Moderator or Admin to access this panel.
           </p>
           <button
             onClick={() => navigate('/')}
-            className="w-full py-2.5 bg-gold text-black font-semibold rounded-lg hover:bg-gold-light transition"
+            className="w-full py-2.5 bg-[#f4e059] text-black font-semibold rounded-lg hover:bg-[#f4e059]/90 transition"
           >
             Return to Homepage
           </button>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -48,39 +48,37 @@ export function ModeratorLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-black-base text-text-primary">
+    <div className="min-h-screen bg-[#080808] text-text-primary">
       {/* Top Banner Header */}
-      <div className="bg-black-surface border-b border-dark-gray py-4 px-4 sm:px-6">
+      <div className="sticky top-0 z-40 bg-[#080808]/95 backdrop-blur-xl border-b border-white/[0.08] py-3 px-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/30 flex items-center justify-center">
-              <Settings className="w-5 h-5 text-gold animate-spin-slow" />
+            <div className="w-10 h-10 rounded-full bg-[#f4e059] flex items-center justify-center shadow-[0_0_15px_rgba(244,224,89,0.3)]">
+              <ShieldAlert className="w-5 h-5 text-black" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg sm:text-xl font-bold text-white tracking-wide">
                   Moderator Console
                 </h1>
-                <span className="bg-gold/20 text-gold border border-gold/40 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full">
-                  ⚙️ Moderator
-                </span>
               </div>
-              <p className="text-xs text-text-secondary">
-                Content & Community Management Platform
+              <p className="text-xs text-text-muted">
+                Content & Community Management
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-text-muted bg-black-elevated px-3 py-1.5 rounded-lg border border-dark-gray">
-            <span>Logged in as:</span>
-            <span className="text-gold font-medium">{user?.name || user?.username}</span>
+          <div className="flex items-center gap-2">
+            <span className="bg-[#f4e059]/10 border border-[#f4e059]/30 text-[#f4e059] px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide">
+              {user?.name || user?.username || 'Moderator'}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Navigation Sub-bar */}
-      <div className="bg-black-elevated border-b border-dark-gray overflow-x-auto scrollbar-none">
-        <div className="max-w-7xl mx-auto flex items-center px-4">
+      <div className="bg-[#0C0C0C] border-b border-white/[0.06] overflow-x-auto scrollbar-none">
+        <div className="max-w-7xl mx-auto flex items-center px-4 sm:px-6">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -89,15 +87,15 @@ export function ModeratorLayout() {
                 to={item.path}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 py-3 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  `flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
                     isActive
-                      ? 'border-gold text-gold bg-gold/5'
-                      : 'border-transparent text-text-secondary hover:text-white hover:border-dark-gray'
+                      ? 'border-b-2 border-[#f4e059] text-[#f4e059] bg-[#f4e059]/5'
+                      : 'border-b-2 border-transparent text-text-muted hover:text-white hover:border-white/20'
                   }`
                 }
               >
                 <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
+                <span className="uppercase tracking-wider">{item.label}</span>
               </NavLink>
             );
           })}

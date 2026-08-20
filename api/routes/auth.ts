@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { z } = require('zod');
@@ -11,49 +12,10 @@ const { authLimiter } = require('../utils/rateLimiter');
 const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
+const { RESERVED_USERNAMES, isValidUsername, generateUsername } = require('../utils/username');
+const { calculateTrialStatus } = require('../utils/trial');
 
 const router = express.Router();
-
-const RESERVED_USERNAMES = new Set([
-  'admin', 'api', 'dashboard', 'login', 'logout', 'dj', 'user', 'soundit',
-  'thedeck', 'moderator', 'support', 'help', 'about', 'contact', 'terms',
-  'privacy', 'settings',
-]);
-
-function isValidUsername(username) {
-  return (
-    typeof username === 'string' &&
-    username.length >= 3 &&
-    username.length <= 30 &&
-    /^[a-z0-9_-]+$/.test(username) &&
-    !RESERVED_USERNAMES.has(username.toLowerCase())
-  );
-}
-
-async function generateUsername(email) {
-  const prefix = (email.split('@')[0] || 'user')
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '')
-    .slice(0, 20)
-    .replace(/^[-_]+|[-_]+$/g, '');
-  const base = prefix.length >= 3 ? prefix : 'user';
-
-  // First try the bare base name
-  const baseExists = await prisma.user.findUnique({ where: { username: base } });
-  if (!baseExists && !RESERVED_USERNAMES.has(base)) return base;
-
-  // Append a random 4-char suffix — collision probability is astronomically low
-  // (36^4 = 1.6M combinations). Retry up to 5 times for safety.
-  for (let i = 0; i < 5; i++) {
-    const suffix = crypto.randomBytes(2).toString('hex'); // e.g. "a3f2"
-    const candidate = `${base}_${suffix}`;
-    if (!RESERVED_USERNAMES.has(candidate)) {
-      const existing = await prisma.user.findUnique({ where: { username: candidate } });
-      if (!existing) return candidate;
-    }
-  }
-  throw new Error('Unable to generate unique username after retries');
-}
 
 const GENDER_VALUES = ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'] as const;
 
@@ -513,49 +475,222 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 });
 
 // Google OAuth Routes
-// GET /api/auth/google - Initiate Google OAuth with state for CSRF protection
+// GET /api/auth/google or /api/v1/auth/google - Initiate Google OAuth
 router.get('/google', (req, res, next) => {
   const state = crypto.randomBytes(32).toString('hex');
-  // Store state in a short-lived cookie (5 minutes) for validation on callback
+  // Store state in cookie with root path so it is accessible on both /api/auth and /api/v1/auth
   res.cookie('oauth_state', state, {
+    path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 5 * 60 * 1000, // 5 minutes
+    maxAge: 10 * 60 * 1000, // 10 minutes
   });
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     state,
+    session: false,
   })(req, res, next);
 });
 
-// GET /api/auth/google/callback - Google OAuth callback
+// GET /api/auth/google/callback or /api/v1/auth/google/callback - Google OAuth callback
 router.get('/google/callback', (req, res, next) => {
-  // Validate state parameter to prevent CSRF attacks
-  const stateFromQuery = req.query.state;
-  const stateFromCookie = req.cookies?.oauth_state;
+  const FRONTEND_URL = getFrontendUrl();
 
-  if (!stateFromQuery || !stateFromCookie || stateFromQuery !== stateFromCookie) {
-    const FRONTEND_URL = getFrontendUrl();
-    return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+  // Check if Google returned an error directly (e.g. user cancelled login)
+  if (req.query.error) {
+    console.warn('[Google OAuth] Google returned error:', req.query.error);
+    return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(String(req.query.error))}`);
   }
 
-  // Clear the state cookie after validation
-  res.clearCookie('oauth_state');
+  // Clear the state cookie
+  res.clearCookie('oauth_state', { path: '/' });
 
-  passport.authenticate('google', { session: false })(req, res, next);
-}, (req, res) => {
+  passport.authenticate('google', { session: false }, async (err: any, user: any, info: any) => {
+    try {
+      if (err) {
+        console.error('[Google OAuth] Authentication error:', err);
+        return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(err.message || 'google_auth_failed')}`);
+      }
+
+      if (!user) {
+        const message = info?.message || 'google_auth_failed';
+        console.warn('[Google OAuth] No user returned:', message);
+        return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(message)}`);
+      }
+
+      const token = signToken({ id: user.id, email: user.email, role: user.role });
+      const redirectUrl = `${FRONTEND_URL}/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`;
+      return res.redirect(redirectUrl);
+    } catch (callbackErr: any) {
+      console.error('[Google OAuth] Callback processing error:', callbackErr);
+      return res.redirect(`${FRONTEND_URL}/login?error=server_error`);
+    }
+  })(req, res, next);
+});
+
+// ─────────────────────────────────────────────────────────────
+// SoundCloud Authentication Routes
+// ─────────────────────────────────────────────────────────────
+// GET /api/auth/soundcloud or /api/v1/auth/soundcloud
+router.get('/soundcloud', (req, res) => {
   const FRONTEND_URL = getFrontendUrl();
+  const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID;
+  const BACKEND_URL = process.env.BACKEND_URL || 'https://decksalone.com';
+
+  if (!SOUNDCLOUD_CLIENT_ID) {
+    // If OAuth app is not configured with client ID, open the quick connect modal
+    return res.redirect(`${FRONTEND_URL}/login?soundcloud_modal=true`);
+  }
+
+  const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/v1/auth/soundcloud/callback`);
+  const soundcloudAuthUrl = `https://secure.soundcloud.com/authorize?client_id=${SOUNDCLOUD_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=non-expiring`;
+  return res.redirect(soundcloudAuthUrl);
+});
+
+// GET /api/auth/soundcloud/callback
+router.get('/soundcloud/callback', async (req, res) => {
+  const FRONTEND_URL = getFrontendUrl();
+  const code = req.query.code;
+
+  if (!code) {
+    return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_auth_cancelled`);
+  }
+
   try {
-    if (!req.user) {
-      return res.redirect(`${FRONTEND_URL}/login?error=google_auth_failed`);
+    const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID;
+    const SOUNDCLOUD_CLIENT_SECRET = process.env.SOUNDCLOUD_CLIENT_SECRET;
+    const BACKEND_URL = process.env.BACKEND_URL || 'https://decksalone.com';
+    const redirectUri = `${BACKEND_URL}/api/v1/auth/soundcloud/callback`;
+
+    const tokenRes = await axios.post(
+      'https://api.soundcloud.com/oauth2/token',
+      new URLSearchParams({
+        client_id: SOUNDCLOUD_CLIENT_ID || '',
+        client_secret: SOUNDCLOUD_CLIENT_SECRET || '',
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+        code: String(code),
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    const accessToken = tokenRes.data?.access_token;
+    if (!accessToken) {
+      return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_token_failed`);
     }
 
-    const token = signToken({ id: req.user.id, email: req.user.email, role: req.user.role });
-    const redirectUrl = `${FRONTEND_URL}/auth/callback#token=${token}`;
-    return res.redirect(redirectUrl);
+    const meRes = await axios.get('https://api.soundcloud.com/me', {
+      headers: { Authorization: `OAuth ${accessToken}` },
+    });
+
+    const scUser = meRes.data;
+    const soundcloudId = String(scUser.id);
+    const email = scUser.email || `soundcloud_${soundcloudId}@decksalone.com`;
+    const stageName = scUser.username || scUser.full_name || 'SoundCloud DJ';
+    const avatar = scUser.avatar_url || null;
+    const bio = scUser.description || null;
+
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { djProfile: { stageName: { equals: stageName, mode: 'insensitive' } } },
+        ],
+      },
+      include: { djProfile: true },
+    });
+
+    if (!user) {
+      const username = await generateUsername(stageName);
+      user = await prisma.user.create({
+        data: {
+          email,
+          username,
+          name: stageName,
+          avatar,
+          role: 'DJ',
+          djProfile: {
+            create: {
+              stageName,
+              bio,
+              avatar,
+              genres: ['Afrobeats', 'Salone Mix'],
+            },
+          },
+        },
+        include: { djProfile: true },
+      });
+    }
+
+    const token = signToken({ id: user.id, email: user.email, role: user.role });
+    return res.redirect(`${FRONTEND_URL}/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`);
+  } catch (err) {
+    console.error('[SoundCloud OAuth Callback Error]:', err);
+    return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_auth_failed`);
+  }
+});
+
+// POST /api/auth/soundcloud/login - Connect or Sign In with SoundCloud profile username / link
+router.post('/soundcloud/login', async (req, res) => {
+  try {
+    const { profileUrl } = req.body;
+    if (!profileUrl || typeof profileUrl !== 'string') {
+      return res.status(400).json({ success: false, error: 'SoundCloud profile URL or username is required' });
+    }
+
+    const cleaned = profileUrl.trim().replace(/^https?:\/\/(www\.)?soundcloud\.com\//i, '').replace(/\/+$/, '');
+    const cleanUsername = cleaned.split('/')[0] || 'soundcloud_user';
+    const email = `sc_${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@decksalone.com`;
+    const stageName = cleanUsername.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { username: { equals: cleanUsername, mode: 'insensitive' } },
+          { djProfile: { stageName: { equals: stageName, mode: 'insensitive' } } },
+        ],
+      },
+      include: { djProfile: true },
+    });
+
+    if (!user) {
+      const username = await generateUsername(cleanUsername);
+      user = await prisma.user.create({
+        data: {
+          email,
+          username,
+          name: stageName,
+          avatar: '/default-avatar.jpg',
+          role: 'DJ',
+          djProfile: {
+            create: {
+              stageName,
+              bio: `DJ and artist on SoundCloud (soundcloud.com/${cleanUsername})`,
+              genres: ['Afrobeats', 'Salone Mix', 'Club Mixes'],
+            },
+          },
+        },
+        include: { djProfile: true },
+      });
+    }
+
+    const token = signToken({ id: user.id, email: user.email, role: user.role });
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        djProfile: user.djProfile,
+      },
+    });
   } catch (error) {
-    return res.redirect(`${FRONTEND_URL}/login?error=server_error`);
+    console.error('[SoundCloud Direct Login Error]:', error);
+    return res.status(500).json({ success: false, error: 'Failed to authenticate with SoundCloud' });
   }
 });
 
@@ -587,7 +722,8 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    return res.json({ success: true, data: user });
+    const trialStatus = calculateTrialStatus(user, user.djProfile);
+    return res.json({ success: true, data: { ...user, trialStatus } });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

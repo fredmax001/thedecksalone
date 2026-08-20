@@ -221,7 +221,7 @@ export default function FinanceDashboard() {
                   onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
                     isActive
-                      ? 'bg-gold/15 text-gold border border-gold/30 shadow-[0_0_15px_rgba(212,162,74,0.15)]'
+                      ? 'bg-gold/15 text-gold border border-gold/30 shadow-[0_0_15px_rgba(244, 224, 89,0.15)]'
                       : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
                   }`}
                 >
@@ -368,26 +368,29 @@ export default function FinanceDashboard() {
                   <CardContent className="p-0">
                     {analyticsLoading ? (
                       <div className="py-16 text-center"><Loader2 className="w-6 h-6 animate-spin text-gold mx-auto" /></div>
-                    ) : (
-                      <div className="h-56 flex items-end gap-3 pt-6 px-2">
-                        {(analytics || []).map((item: any, i: number) => {
-                          const maxRev = Math.max(...(analytics || []).map((a: any) => a.revenue || 1), 100);
-                          const pct = Math.min(100, Math.max(15, Math.round(((item.revenue || 0) / maxRev) * 100)));
-                          return (
-                            <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                              <span className="text-[10px] font-mono text-gold opacity-0 group-hover:opacity-100 transition-opacity">
-                                {formatCurrency(item.revenue || 0)}
-                              </span>
-                              <div
-                                className="w-full rounded-t-lg bg-gradient-to-t from-gold/30 via-gold/70 to-gold group-hover:brightness-125 transition-all shadow-[0_0_12px_rgba(212,162,74,0.3)]"
-                                style={{ height: `${pct}%` }}
-                              />
-                              <span className="text-[11px] font-semibold text-text-muted">{item.month}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                    ) : (() => {
+                      const timeline = Array.isArray(analytics) ? analytics : (analytics as any)?.timeline || [];
+                      const maxRev = Math.max(...timeline.map((a: any) => a.revenue || 1), 100);
+                      return (
+                        <div className="h-56 flex items-end gap-3 pt-6 px-2">
+                          {timeline.map((item: any, i: number) => {
+                            const pct = Math.min(100, Math.max(15, Math.round(((item.revenue || 0) / maxRev) * 100)));
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                                <span className="text-[10px] font-mono text-gold opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {formatCurrency(item.revenue || 0)}
+                                </span>
+                                <div
+                                  className="w-full rounded-t-lg bg-gradient-to-t from-gold/30 via-gold/70 to-gold group-hover:brightness-125 transition-all shadow-[0_0_12px_rgba(244, 224, 89,0.3)]"
+                                  style={{ height: `${pct}%` }}
+                                />
+                                <span className="text-[11px] font-semibold text-text-muted">{item.month}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -480,7 +483,7 @@ export default function FinanceDashboard() {
                           {proRequests.map((req: any) => (
                             <TableRow key={req.id} className="border-dark-gray">
                               <TableCell className="font-semibold text-white">
-                                {req.dj?.stageName || req.djId}
+                                {req.dj?.stageName || req.user?.name || req.user?.username || 'Fan Member'}
                               </TableCell>
                               <TableCell>
                                 <Badge className={req.plan === 'legend' ? 'bg-gold/20 text-gold border-gold/40' : 'bg-blue-500/20 text-blue-400 border-blue-500/40'}>

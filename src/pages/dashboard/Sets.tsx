@@ -7,7 +7,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { GENRES } from '@/constants/genres';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +29,7 @@ interface MixItem {
   genre: string;
   coverImage?: string;
   audioUrl?: string;
-  duration?: string;
+  duration?: string | number;
   plays: number;
   likes: number;
 }
@@ -228,15 +228,22 @@ export default function Sets() {
       toast.error('This set has no mixes yet!');
       return;
     }
-    const tracks = set.items.map((i) => ({
-      id: i.mix.id,
-      title: i.mix.title,
-      dj: user?.djProfile?.stageName || 'DJ',
-      duration: 0,
-      cover: i.mix.coverImage || set.coverImage || '/default-avatar.jpg',
-      genre: i.mix.genre || set.genre || 'Afrobeats',
-      audioUrl: i.mix.audioUrl,
-    }));
+    const tracks = set.items
+      .filter((i) => i.mix)
+      .map((i) => ({
+        id: i.mix.id,
+        title: i.mix.title,
+        dj: user?.djProfile?.stageName || 'DJ',
+        duration: typeof i.mix.duration === 'number' ? i.mix.duration : parseInt(String(i.mix.duration)) || 0,
+        cover: getMediaUrl(i.mix.coverImage || set.coverImage) || '',
+        genre: i.mix.genre || set.genre || 'Salone Mix',
+        plays: i.mix.plays || 0,
+        audioUrl: getMediaUrl(i.mix.audioUrl) || '',
+      }));
+    if (tracks.length === 0) {
+      toast.error('No playable tracks in this set');
+      return;
+    }
     setQueue(tracks as any);
     play(tracks[0] as any);
     toast.success(`Playing set: ${set.title}`);
@@ -296,7 +303,7 @@ export default function Sets() {
                 {/* Cover & Badges */}
                 <div className="relative aspect-[16/9] rounded-xl overflow-hidden mb-3 bg-black-elevated">
                   <img
-                    src={set.coverImage || set.items[0]?.mix?.coverImage || '/default-avatar.jpg'}
+                    src={getMediaUrl(set.coverImage || set.items[0]?.mix?.coverImage) || '/default-avatar.jpg'}
                     alt={set.title}
                     className="w-full h-full object-cover"
                   />

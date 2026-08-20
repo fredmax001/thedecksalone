@@ -1,5 +1,5 @@
-import { useEffect, Suspense, lazy, useState } from 'react';
-import AppIntroScreen, { shouldShowIntro } from '@/components/AppIntroScreen';
+import { useEffect, Suspense, lazy } from 'react';
+import { hideSplashScreen } from '@/lib/splashScreen';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
@@ -37,6 +37,9 @@ const Blog = lazy(() => import('./pages/Blog'));
 const About = lazy(() => import('./pages/About'));
 const RequestDj = lazy(() => import('./pages/RequestDj'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
+const Feed = lazy(() => import('./pages/Feed'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const Developers = lazy(() => import('./pages/Developers'));
 
 /* ─── Role-Based Admin Dashboards ─── */
 const FinanceDashboard = lazy(() => import('./pages/FinanceDashboard'));
@@ -90,6 +93,8 @@ const UserActivity = lazy(() => import('./pages/user/Activity'));
 const UserNotifications = lazy(() => import('./pages/user/Notifications'));
 const UserProfile = lazy(() => import('./pages/user/UserProfile'));
 const UserSettings = lazy(() => import('./pages/user/UserSettings'));
+const UserSubscription = lazy(() => import('./pages/user/UserSubscription'));
+const Pricing = lazy(() => import('./pages/Pricing'));
 
 function AuthInitializer() {
   const init = useAuthStore((state) => state.init);
@@ -113,7 +118,7 @@ function RequireLegendRoute({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
-  const isLegend = user.djProfile?.subscriptionTier === 'legend';
+  const isLegend = user.djProfile?.subscriptionTier?.toLowerCase() === 'legend';
   const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FINANCE_ADMIN' || user.role === 'VERIFICATION_ADMIN' || user.role === 'SUPPORT_ADMIN' || user.role === 'MODERATOR';
   if (!isLegend && !isAdmin) {
     return <Navigate to="/dashboard/events" replace />;
@@ -137,11 +142,10 @@ function VisitTracker() {
 
 /* ──────────────────────── Router ──────────────────────── */
 export default function App() {
-  const [showIntro, setShowIntro] = useState(() => shouldShowIntro());
-
-  if (showIntro) {
-    return <AppIntroScreen onDone={() => setShowIntro(false)} />;
-  }
+  useEffect(() => {
+    // Gracefully fade out splash screen when the app is initialized and ready
+    hideSplashScreen(250);
+  }, []);
 
   return (
     <BrowserRouter>
@@ -239,6 +243,7 @@ export default function App() {
               <Route path="user/activity" element={<UserActivity />} />
               <Route path="user/notifications" element={<UserNotifications />} />
               <Route path="user/profile" element={<UserProfile />} />
+              <Route path="user/subscription" element={<UserSubscription />} />
               <Route path="user/settings" element={<UserSettings />} />
             </Route>
           </Route>
@@ -260,11 +265,15 @@ export default function App() {
             <Route path="mix/:id" element={<MixDetail />} />
             <Route path="playlists" element={<OfficialPlaylists />} />
             <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
+            <Route path="pricing" element={<Pricing />} />
+            <Route path="subscription" element={<Pricing />} />
             <Route path="user/:username" element={<UserPublicProfile />} />
             <Route path="events" element={<Events />} />
             <Route path="events/:id" element={<EventDetail />} />
             <Route path="hall-of-fame" element={<HallOfFame />} />
             <Route path="battles" element={<Battles />} />
+            <Route path="feed" element={<Feed />} />
+            <Route path="account" element={<AccountPage />} />
             <Route path="terms" element={<Terms />} />
             <Route path="privacy" element={<Privacy />} />
             <Route path="help" element={<Help />} />
@@ -272,6 +281,8 @@ export default function App() {
             <Route path="about" element={<About />} />
             <Route path="request-dj" element={<RequestDj />} />
             <Route path="install" element={<InstallApp />} />
+            <Route path="developers" element={<Developers />} />
+            <Route path="api" element={<Developers />} />
           </Route>
         </Routes>
         <MixPlayer />

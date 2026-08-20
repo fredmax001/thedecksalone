@@ -47,7 +47,7 @@ export function useDJSets(djId: string | undefined) {
     queryKey: ['dj-sets', djId],
     queryFn: async () => {
       if (!djId) return [];
-      const res = await api.get(`/djs/${djId}/sets`);
+      const res = await api.get(`/sets/dj/${djId}`);
       return (res.data.data || []) as SetSummary[];
     },
     enabled: !!djId,
@@ -59,7 +59,7 @@ export function useMySets() {
   return useQuery({
     queryKey: ['my-sets'],
     queryFn: async () => {
-      const res = await api.get('/djs/me/sets');
+      const res = await api.get('/sets/mine');
       return (res.data.data || []) as SetSummary[];
     },
     staleTime: 1000 * 60 * 2,

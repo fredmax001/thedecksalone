@@ -114,7 +114,7 @@ function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
           </span>
           {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
           {dj.rankingPosition === 1 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-gold/20 text-gold border border-gold/40 shadow-[0_0_12px_rgba(212,162,74,0.3)] shrink-0">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-gold/20 text-gold border border-gold/40 shadow-[0_0_12px_rgba(244, 224, 89,0.3)] shrink-0">
               <Trophy className="w-3 h-3 text-gold" />
               #1 DJ OF THE WEEK
             </span>
@@ -443,20 +443,20 @@ export default function Rankings() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-black">
+    <div className="min-h-[100dvh] bg-bg-page">
       {/* Hero */}
-      <section className="pt-24 pb-12">
+      <section className="hero-banner pt-8 pb-6 sm:pt-10 sm:pb-8 border-b border-dark-gray">
         <div className="container-main">
           <FadeIn delay={0.1}>
-            <p className="section-label text-center mb-3">LIVE RANKINGS</p>
+            <p className="section-label text-center mb-1.5">LIVE RANKINGS</p>
           </FadeIn>
           <FadeIn delay={0.2}>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-semibold uppercase tracking-tight text-text-primary text-center">
+            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold uppercase tracking-tight text-text-primary text-center">
               SIERRA LEONE DJ RANKINGS
             </h1>
           </FadeIn>
           <FadeIn delay={0.4}>
-            <div className="flex items-center justify-center gap-2 mt-4 text-text-muted">
+            <div className="flex items-center justify-center gap-2 mt-2.5 text-text-muted">
               <RefreshCw className="w-3.5 h-3.5" />
               <span className="font-mono text-xs">Last updated: {new Date().toLocaleDateString()}</span>
             </div>
@@ -465,10 +465,10 @@ export default function Rankings() {
       </section>
 
       {/* Tabs */}
-      <section className="py-8">
+      <section className="py-4 sm:py-6">
         <div className="container-main">
           <FadeIn>
-            <div className="flex flex-wrap justify-center gap-2 mb-8">
+            <div className="flex flex-wrap justify-center gap-2 mb-6">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat}

@@ -10,13 +10,22 @@ const platformLinks = [
   { label: 'Battle Arena', path: '/battles' },
 ];
 
-const resourceLinks = [
+const resourceLinks: Array<
+  | { label: string; path: string }
+  | { label: string; href: string; download: string }
+> = [
   { label: 'About', path: '/about' },
+  { label: 'Developer API', path: '/developers' },
   { label: 'Hall of Fame', path: '/hall-of-fame' },
   { label: 'Blog', path: '/blog' },
   { label: 'Help Center', path: '/help' },
   { label: 'Privacy Policy', path: '/privacy' },
   { label: 'Terms of Service', path: '/terms' },
+  {
+    label: 'Logo & Images',
+    href: '/downloads/deck-salone-logos-2026.zip',
+    download: 'Deck-Salone-Logos-2026.zip',
+  },
 ];
 
 const socialLinks = [
@@ -88,16 +97,28 @@ export default function Footer() {
               Resources
             </h4>
             <ul className="space-y-3">
-              {resourceLinks.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    to={link.path}
-                    className="text-text-secondary hover:text-gold transition-colors duration-200 text-sm"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              {resourceLinks.map((link) =>
+                'href' in link ? (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      download={link.download}
+                      className="text-text-secondary hover:text-gold transition-colors duration-200 text-sm"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ) : (
+                  <li key={link.label}>
+                    <Link
+                      to={link.path}
+                      className="text-text-secondary hover:text-gold transition-colors duration-200 text-sm"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                )
+              )}
             </ul>
           </div>
 
@@ -169,6 +190,13 @@ export default function Footer() {
               </a>
             ))}
           </div>
+          <a
+            href="/downloads/deck-salone-logos-2026.zip"
+            download="Deck-Salone-Logos-2026.zip"
+            className="text-text-muted hover:text-gold transition-colors duration-200 text-sm"
+          >
+            Logo & Images
+          </a>
           <p className="text-center text-text-muted text-xs">
             &copy; 2026 Deck Salone. A Sound It Entertainment platform.
           </p>

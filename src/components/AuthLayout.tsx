@@ -80,11 +80,11 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         className="flex flex-1 items-center justify-center bg-black-elevated p-4 sm:p-6 lg:p-8"
       >
         <div className="w-full max-w-[440px]">
-          <Link to="/" className="lg:hidden mb-8 text-center hover:opacity-80 transition-opacity block">
+          <Link to="/" className="lg:hidden mb-6 text-center hover:opacity-80 transition-opacity block">
             <img
               src="/logo.png"
               alt="Deck Salone"
-              className="h-32 w-auto object-contain mx-auto"
+              className="h-10 sm:h-12 w-auto object-contain mx-auto"
             />
           </Link>
           {children}

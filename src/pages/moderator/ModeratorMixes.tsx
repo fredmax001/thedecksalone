@@ -47,6 +47,12 @@ export function ModeratorMixes() {
   const [editingMix, setEditingMix] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -63,12 +69,12 @@ export function ModeratorMixes() {
 
   useEffect(() => {
     fetchMixes();
-  }, [search, genreFilter, flaggedOnly, hiddenOnly]);
+  }, [search, genreFilter, flaggedOnly, hiddenOnly, page, limit]);
 
   const fetchMixes = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: any = { page, limit };
       if (search) params.search = search;
       if (genreFilter !== 'ALL') params.genre = genreFilter;
       if (flaggedOnly) params.flagged = 'true';
@@ -76,7 +82,11 @@ export function ModeratorMixes() {
 
       const res = await api.get('/moderator/mixes', { params });
       if (res.data.success) {
-        setMixes(res.data.data);
+        setMixes(res.data.data || []);
+        if (res.data.meta) {
+          setTotal(res.data.meta.total || 0);
+          setTotalPages(res.data.meta.totalPages || 1);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch moderator mixes', err);
@@ -346,6 +356,62 @@ export function ModeratorMixes() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination Bar */}
+      {total > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-black-elevated border border-dark-gray p-3 rounded-xl text-xs text-text-secondary">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong>{(page - 1) * limit + 1}</strong> - <strong>{Math.min(page * limit, total)}</strong> of <strong>{total}</strong> mixes
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span>Per page:</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="bg-black-surface border border-dark-gray rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-gold"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={500}>500</option>
+                <option value={1000}>All (1000)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-7 text-xs border-dark-gray text-white"
+              >
+                Previous
+              </Button>
+              <span className="px-2 font-medium text-white">
+                {page} / {totalPages}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-7 text-xs border-dark-gray text-white"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -248,79 +248,96 @@ router.post('/:id/vote', authMiddleware, voteLimiter, async (req, res) => {
 
     const { entryId } = parsed.data;
 
-    const battle = await prisma.battle.findUnique({
-      where: { id: req.params.id },
-      include: { entries: true },
-    });
-
-    if (!battle || battle.status !== 'ACTIVE') {
-      return res.status(400).json({ success: false, error: 'Battle is not active' });
-    }
-
-    // Check if entry belongs to this battle
-    const entry = battle.entries.find((e) => e.id === entryId);
-    if (!entry) {
-      return res.status(404).json({ success: false, error: 'Entry not found in this battle' });
-    }
-
-    // Check if user already voted
-    const existingVote = await prisma.battleVote.findUnique({
-      where: { entryId_userId: { entryId, userId: req.user.id } },
-    });
-    if (existingVote) {
-      return res.status(409).json({ success: false, error: 'You already voted for this entry' });
-    }
-
-    // Check if user voted for another entry in this battle
-    const otherVotes = await prisma.battleVote.findFirst({
-      where: {
-        userId: req.user.id,
-        entry: { battleId: req.params.id },
-      },
-    });
-    if (otherVotes) {
-      return res.status(409).json({ success: false, error: 'You already voted in this battle' });
-    }
-
-    const vote = await prisma.battleVote.create({
-      data: {
-        entryId,
-        userId: req.user.id,
-      },
-    });
-
-    // Update entry vote count and recalculate final score
-    const updatedEntry = await prisma.battleEntry.update({
-      where: { id: entryId },
-      data: { votes: { increment: 1 } },
-    });
-
-    // Recalculate final score: baseScore (60%) + voteScore (40%)
-    // Vote score = (votes / totalVotesInBattle) * 100 * 0.4
-    const allEntries = await prisma.battleEntry.findMany({
-      where: { battleId: req.params.id },
-      select: { id: true, votes: true, baseScore: true },
-    });
-
-    const totalVotes = allEntries.reduce((sum, e) => sum + e.votes, 0);
-
-    // Recalculate final scores for all entries in this battle
-    for (const e of allEntries) {
-      const voteShare = totalVotes > 0 ? e.votes / totalVotes : 0;
-      const voteScore = voteShare * 40; // 40% weight for votes
-      const finalScore = e.baseScore * 0.6 + voteScore; // 60% weight for base score
-
-      await prisma.battleEntry.update({
-        where: { id: e.id },
-        data: { voteScore, finalScore: Math.round(finalScore * 100) / 100 },
+    const vote = await prisma.$transaction(async (tx: any) => {
+      // 1. Verify battle status
+      const battle = await tx.battle.findUnique({
+        where: { id: req.params.id },
+        include: { entries: true },
       });
-    }
+
+      if (!battle || battle.status !== 'ACTIVE') {
+        throw new Error('BATTLE_NOT_ACTIVE');
+      }
+
+      // 2. Check if entry belongs to this battle
+      const entry = battle.entries.find((e: any) => e.id === entryId);
+      if (!entry) {
+        throw new Error('ENTRY_NOT_FOUND');
+      }
+
+      // 3. Check if user already voted for this entry
+      const existingVote = await tx.battleVote.findUnique({
+        where: { entryId_userId: { entryId, userId: req.user.id } },
+      });
+      if (existingVote) {
+        throw new Error('ALREADY_VOTED_ENTRY');
+      }
+
+      // 4. Check if user voted for another entry in this battle
+      const otherVotes = await tx.battleVote.findFirst({
+        where: {
+          userId: req.user.id,
+          entry: { battleId: req.params.id },
+        },
+      });
+      if (otherVotes) {
+        throw new Error('ALREADY_VOTED_BATTLE');
+      }
+
+      // 5. Create vote
+      const newVote = await tx.battleVote.create({
+        data: {
+          entryId,
+          userId: req.user.id,
+        },
+      });
+
+      // 6. Increment entry vote count
+      await tx.battleEntry.update({
+        where: { id: entryId },
+        data: { votes: { increment: 1 } },
+      });
+
+      // 7. Atomically recalculate final scores: baseScore (60%) + voteScore (40%)
+      const allEntries = await tx.battleEntry.findMany({
+        where: { battleId: req.params.id },
+        select: { id: true, votes: true, baseScore: true },
+      });
+
+      const totalVotes = allEntries.reduce((sum: number, e: any) => sum + e.votes, 0);
+
+      for (const e of allEntries) {
+        const voteShare = totalVotes > 0 ? e.votes / totalVotes : 0;
+        const voteScore = voteShare * 40; // 40% weight for votes
+        const finalScore = e.baseScore * 0.6 + voteScore; // 60% weight for base score
+
+        await tx.battleEntry.update({
+          where: { id: e.id },
+          data: { voteScore, finalScore: Math.round(finalScore * 100) / 100 },
+        });
+      }
+
+      return newVote;
+    });
 
     return res.json({ success: true, data: vote });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'BATTLE_NOT_ACTIVE') {
+      return res.status(400).json({ success: false, error: 'Battle is not active' });
+    }
+    if (error.message === 'ENTRY_NOT_FOUND') {
+      return res.status(404).json({ success: false, error: 'Entry not found in this battle' });
+    }
+    if (error.message === 'ALREADY_VOTED_ENTRY') {
+      return res.status(409).json({ success: false, error: 'You already voted for this entry' });
+    }
+    if (error.message === 'ALREADY_VOTED_BATTLE') {
+      return res.status(409).json({ success: false, error: 'You already voted in this battle' });
+    }
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // POST /api/battles/:id/close - Close a battle and declare winners (admin/moderator)
 router.post('/:id/close', authMiddleware, async (req, res) => {

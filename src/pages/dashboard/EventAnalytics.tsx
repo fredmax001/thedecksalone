@@ -8,7 +8,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts';
 
-const COLORS = ['#D4A24A', '#22C55E', '#3B82F6', '#8B5CF6', '#EF4444', '#F97316', '#06B6D4', '#EC4899'];
+const COLORS = ['#f4e059', '#ceb100', '#22C55E', '#3B82F6', '#8B5CF6', '#EF4444', '#F97316', '#06B6D4', '#EC4899'];
 
 const tooltipStyle = {
   backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#F5F5F5',
@@ -54,7 +54,7 @@ export default function EventAnalytics() {
                   <XAxis dataKey="date" stroke="#6B6B6B" fontSize={10} tickFormatter={(v) => v.slice(5)} />
                   <YAxis stroke="#6B6B6B" fontSize={10} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="tickets" fill="#D4A24A" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="tickets" fill="#f4e059" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

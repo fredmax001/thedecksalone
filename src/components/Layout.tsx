@@ -20,6 +20,8 @@ import {
   Trophy,
   Upload,
   Users,
+  Shield,
+  Rss,
 } from 'lucide-react';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -43,6 +45,8 @@ const browseItems = [
   { label: 'Discover', path: '/discover', icon: Flame },
   { label: 'Ranking', path: '/rankings', icon: BarChart3 },
   { label: 'Mix Hub', path: '/mixes', icon: ListMusic },
+  { label: 'Playlists', path: '/playlists', icon: Library },
+  { label: 'Feed', path: '/feed', icon: Rss },
   { label: 'Events', path: '/events', icon: Calendar },
   { label: 'Battles', path: '/battles', icon: Trophy },
   { label: 'Request DJ', path: '/request-dj', icon: Users },
@@ -95,6 +99,7 @@ export default function Layout() {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const { user, isAuthenticated, logout } = useAuthStore();
   const isDj = user?.role === 'DJ';
+  const isModerator = user?.role === 'MODERATOR';
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
   const shouldShowGetPro = isDj && subscriptionTier === 'free';
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
@@ -128,7 +133,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-black text-text-primary">
+    <div className="min-h-[100dvh] bg-bg-page text-text-primary">
       <PWAInstallPrompt />
       {/* Sidebar — shown on md+ (tablet and desktop) */}
       <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-[260px] lg:w-[300px] flex-col border-r border-gold/10 bg-black/95 backdrop-blur-2xl px-5 py-7 lg:px-7 shadow-[1px_0_30px_rgba(0,0,0,0.6)]">
@@ -143,23 +148,20 @@ export default function Layout() {
         <nav className="mt-12 flex-1 space-y-10 overflow-y-auto pb-6">
           {/* Browse */}
           <div>
-            <p className="mb-4 text-xs font-bold uppercase tracking-wider text-gold">Browse</p>
-            <div className="space-y-1">
+            <p className="mb-4 text-xs font-bold uppercase tracking-wider text-text-muted px-4">Browse</p>
+            <div className="space-y-1.5">
               {browseItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 group relative overflow-hidden',
+                    'flex items-center gap-3.5 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 group relative',
                     isActive(item.path)
-                      ? 'bg-gold/10 text-gold border border-gold/20 shadow-[0_0_16px_rgba(212,162,74,0.1)]'
-                      : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                      ? 'border border-[#f4e059] text-[#f4e059] bg-[#f4e059]/5 shadow-[0_0_12px_rgba(244,224,89,0.15)]'
+                      : 'border border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary'
                   )}
                 >
-                  {isActive(item.path) && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-gold rounded-r-full shadow-[0_0_8px_rgba(212,162,74,0.8)]" />
-                  )}
-                  <item.icon className={cn('h-5 w-5 shrink-0 transition-colors', isActive(item.path) ? 'text-gold' : 'text-gold/60 group-hover:text-gold')} />
+                  <item.icon className={cn('h-5 w-5 shrink-0 transition-colors', isActive(item.path) ? 'text-[#f4e059]' : 'text-text-muted group-hover:text-[#f4e059]')} />
                   {item.label}
                 </Link>
               ))}
@@ -168,24 +170,21 @@ export default function Layout() {
 
           {/* DJ Studio — only for DJ role */}
           {isDj && (
-            <div className="border-t border-gold/10 pt-8">
-              <p className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-gold/70 px-4">DJ Studio</p>
-              <div className="space-y-1">
+            <div className="border-t border-white/10 pt-6">
+              <p className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-text-muted px-4">DJ Studio</p>
+              <div className="space-y-1.5">
                 {studioItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      'flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 group relative overflow-hidden',
+                      'flex items-center gap-3.5 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 group relative',
                       isActive(item.path)
-                        ? 'bg-gold/10 text-gold border border-gold/20'
-                        : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                        ? 'border border-[#f4e059] text-[#f4e059] bg-[#f4e059]/5'
+                        : 'border border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary'
                     )}
                   >
-                    {isActive(item.path) && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-gold rounded-r-full shadow-[0_0_8px_rgba(212,162,74,0.8)]" />
-                    )}
-                    <item.icon className="h-5 w-5 shrink-0 text-gold/60 group-hover:text-gold transition-colors" />
+                    <item.icon className={cn('h-5 w-5 shrink-0 transition-colors', isActive(item.path) ? 'text-[#f4e059]' : 'text-text-muted group-hover:text-[#f4e059]')} />
                     {item.label}
                   </Link>
                 ))}
@@ -220,21 +219,51 @@ export default function Layout() {
               </Link>
             </div>
 
-            {/* Pro Upgrade Banner */}
-            {isAuthenticated && shouldShowGetPro && (
-              <div className="mt-4 mx-2 rounded-xl border border-gold/25 bg-gold/5 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
-                  <p className="text-xs font-extrabold text-gold uppercase tracking-wide">Go Pro</p>
+            {/* ─── SIDEBAR UPGRADE / VIP STATUS BADGE (AFTER HOW TO USE) ─── */}
+            {isDj && (subscriptionTier === 'pro' || subscriptionTier === 'legend' || subscriptionTier === 'pro_plus') ? (
+              /* PRO / PRO+ / LEGEND VIP STATUS */
+              <div className="mt-5 mx-1 rounded-2xl border border-amber-400/30 bg-gradient-to-b from-amber-500/10 via-[#161410] to-[#0d0c0a] p-3.5 shadow-lg shadow-amber-500/5">
+                <div className="flex items-center justify-between gap-1 mb-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-sm">
+                    👑 {subscriptionTier === 'legend' ? 'LEGEND VIP' : subscriptionTier === 'pro_plus' ? 'PRO+ VIP' : 'PRO MEMBER'}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-amber-400">Active</span>
                 </div>
-                <p className="text-[11px] text-text-muted leading-relaxed mb-3">
-                  Unlock Pro tools — analytics, priority bookings & more.
+                <h4 className="font-display text-xs font-bold uppercase text-white tracking-tight">
+                  VIP DJ Status
+                </h4>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-relaxed">
+                  Priority placement, HD 320kbit/s audio & zero booking fees enabled.
                 </p>
                 <Link
-                  to="/dashboard/subscription"
-                  className="block w-full text-center py-2 rounded-lg bg-gold text-black text-xs font-extrabold uppercase tracking-wide hover:bg-gold/90 transition-colors"
+                  to="/dashboard/mixes"
+                  className="mt-2.5 block w-full text-center py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-[11px] font-bold uppercase tracking-wider transition-all"
                 >
-                  Upgrade Now
+                  Upload & Promote
+                </Link>
+              </div>
+            ) : (
+              /* FREE TRIAL / FREE TIER USERS & DJS */
+              <div className="mt-5 mx-1 rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/15 via-[#181610] to-[#0f0e0c] p-3.5 shadow-lg shadow-gold/10">
+                <div className="flex items-center justify-between gap-1 mb-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-sm">
+                    ⚡ Free Trial
+                  </span>
+                  <span className="text-[10px] font-bold text-gold">Subscribe</span>
+                </div>
+                <h4 className="font-display text-xs font-bold uppercase text-white tracking-tight">
+                  {isDj ? 'Upgrade DJ Studio' : 'Unlock VIP Access'}
+                </h4>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-relaxed">
+                  {isDj
+                    ? 'Unlimited mix uploads, priority booking & HD streaming.'
+                    : 'Ad-free listening, offline downloads & VIP event perks.'}
+                </p>
+                <Link
+                  to={isDj ? '/dashboard/subscription' : '/pricing'}
+                  className="mt-2.5 block w-full text-center py-1.5 rounded-xl bg-gold hover:brightness-110 active:scale-95 text-black text-[11px] font-black uppercase tracking-wider transition-all shadow-md shadow-gold/20"
+                >
+                  Upgrade to Pro
                 </Link>
               </div>
             )}
@@ -284,7 +313,7 @@ export default function Layout() {
                 name="q"
                 type="search"
                 placeholder="Search DJs, mixes, events..."
-                className="h-10 w-full rounded-full border border-white/10 bg-black-surface/80 py-2.5 pl-10 pr-5 text-sm font-medium text-text-primary outline-none placeholder:text-text-muted focus:border-gold/40 focus:shadow-[0_0_12px_rgba(212,162,74,0.12)] transition-all"
+                className="h-10 w-full rounded-full border border-dark-gray bg-black-surface py-2.5 pl-10 pr-5 text-sm font-medium text-text-primary outline-none placeholder:text-text-muted focus:border-gold focus:shadow-[0_0_12px_rgba(244,224,89,0.12)] transition-all"
               />
             </form>
 
@@ -322,6 +351,13 @@ export default function Layout() {
                       <DropdownMenuItem asChild>
                         <Link to="/dashboard" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
                           <Radio className="w-3.5 h-3.5" /> DJ Studio
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    {isModerator && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/moderator" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5" /> Moderator Console
                         </Link>
                       </DropdownMenuItem>
                     )}

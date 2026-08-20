@@ -4,9 +4,21 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { searchLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
-const { uploadAvatar } = require('../utils/upload');
+const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+
+function extFromMime(mimetype, fallbackName = '') {
+  const fromMime = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  };
+  if (fromMime[mimetype]) return fromMime[mimetype];
+  const ext = fallbackName.split('.').pop();
+  return ext && ext.length <= 5 ? ext : 'bin';
+}
 
 const router = express.Router();
 
@@ -959,6 +971,91 @@ router.get('/public/:username', async (req, res) => {
       },
     });
   } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/users/my-dj-subscriptions - Active fan-to-DJ subscriptions for logged-in user
+router.get('/my-dj-subscriptions', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const subs = await prisma.djFanSubscription.findMany({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            city: true,
+            subscriptionPrice: true,
+            user: { select: { username: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json({ success: true, data: subs });
+  } catch (error) {
+    console.error('[User DJ Subscriptions API] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/users/subscription/request - Upgrade listener/user/DJ to Pro or Pro+
+router.post('/subscription/request', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { plan, amount, currency = 'SLE', paymentReference } = req.body;
+
+    if (!plan) {
+      return res.status(400).json({ success: false, error: 'Plan is required' });
+    }
+
+    let proofUrl = req.body.paymentProofUrl || '';
+    if (req.file) {
+      proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
+        ext: extFromMime(req.file.mimetype, req.file.originalname),
+        contentType: req.file.mimetype,
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { djProfile: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const djId = user.djProfile?.id || null;
+
+    const subRequest = await prisma.proSubscriptionRequest.create({
+      data: {
+        djId,
+        userId: user.id,
+        plan,
+        amount: parseFloat(amount) || 100,
+        currency,
+        proofUrl: proofUrl || 'manual_reference_attached',
+        status: 'pending',
+        adminNote: paymentReference ? `Reference: ${paymentReference}` : null,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Upgrade request submitted successfully! Your subscription is pending admin confirmation.',
+      data: subRequest,
+    });
+  } catch (error) {
+    console.error('[User Subscription Request API] Error:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

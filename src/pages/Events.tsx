@@ -53,7 +53,7 @@ function formatEventDate(dateStr: string) {
 
 function DJAvatar({ name, size = 24 }: { name: string; size?: number }) {
   const initial = name.charAt(0);
-  const colors = ['#D4A24A', '#8B5CF6', '#22C55E', '#3B82F6', '#EF4444', '#F97316'];
+  const colors = ['#f4e059', '#8B5CF6', '#22C55E', '#3B82F6', '#EF4444', '#F97316'];
   const color = colors[name.length % colors.length];
   return (
     <div
@@ -161,33 +161,33 @@ export default function Events() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-black">
+    <div className="min-h-[100dvh] bg-bg-page">
       {/* Hero */}
-      <section className="relative w-full py-16 lg:py-20">
-        <div className="max-w-container mx-auto px-6">
-          <div className="flex flex-col lg:flex-row items-center gap-10">
+      <section className="hero-banner relative w-full py-8 lg:py-10 border-b border-dark-gray">
+        <div className="max-w-container mx-auto px-4 sm:px-6">
+          <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-10">
             <motion.div className="flex-1" initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}>
-              <motion.span variants={fadeUp} className="text-gold text-xs font-semibold uppercase tracking-widest">EVENTS</motion.span>
-              <motion.h1 variants={fadeUp} className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary uppercase tracking-tight mt-3">
+              <motion.span variants={fadeUp} className="text-gold text-[11px] font-bold uppercase tracking-widest">EVENTS</motion.span>
+              <motion.h1 variants={fadeUp} className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-text-primary uppercase tracking-tight mt-1.5">
                 WHAT&apos;S HAPPENING IN SIERRA LEONE
               </motion.h1>
             </motion.div>
-            <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.3 }} className="relative w-full lg:w-[45%] max-w-md">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }} className="relative">
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="relative w-full lg:w-[40%] max-w-sm">
+              <motion.div animate={{ y: [0, -4, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }} className="relative">
                 {events.length > 0 ? (
                   <img
                     src={events[0].image}
                     alt={events[0].title}
-                    className="w-full rounded-2xl object-cover border-[3px] border-gold cursor-pointer"
-                    style={{ aspectRatio: '16/10' }}
+                    className="w-full rounded-xl object-cover border-2 border-gold/50 cursor-pointer shadow-lg"
+                    style={{ aspectRatio: '16/9' }}
                     onClick={() => navigate(`/events/${events[0].id}`)}
                   />
                 ) : (
-                  <div className="w-full rounded-2xl border-[3px] border-gold bg-gradient-to-br from-gold/20 to-black flex items-center justify-center" style={{ aspectRatio: '16/10' }}>
-                    <Music size={48} className="text-gold/40" />
+                  <div className="w-full rounded-xl border-2 border-gold/30 bg-gradient-to-br from-gold/15 to-black/80 flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
+                    <Music size={36} className="text-gold/40" />
                   </div>
                 )}
-                <div className="absolute top-4 left-4 px-3 py-1.5 bg-gold text-black text-xs font-bold uppercase rounded-lg">
+                <div className="absolute top-2.5 left-2.5 px-2.5 py-1 bg-gold text-black text-[10px] font-extrabold uppercase rounded-md shadow">
                   UPCOMING
                 </div>
               </motion.div>

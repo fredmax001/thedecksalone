@@ -66,12 +66,12 @@ const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   paymentMethod: 'Orange Money',
   paymentNumber: '+23272011156',
   whatsappNumber: '+23272011156',
-  proPrice: 200,
-  legendPrice: 350,
+  proPrice: 100,
+  legendPrice: 150,
   currency: 'SLE',
   plans: [
-    { id: 'pro', name: 'Pro', price: 200 },
-    { id: 'legend', name: 'Pro+', price: 350 },
+    { id: 'pro', name: 'Pro', price: 100 },
+    { id: 'legend', name: 'Pro+', price: 150 },
   ],
 };
 
@@ -99,8 +99,8 @@ const PLANS: Plan[] = [
     id: 'pro',
     annualId: 'pro_annual',
     name: 'Pro',
-    monthlyPrice: 200,
-    annualPrice: 2000,
+    monthlyPrice: 100,
+    annualPrice: 1000,
     period: 'month',
     description: 'For working DJs who want to grow their brand and bookings.',
     icon: Zap,
@@ -119,8 +119,8 @@ const PLANS: Plan[] = [
     id: 'legend',
     annualId: 'legend_annual',
     name: 'Pro+',
-    monthlyPrice: 350,
-    annualPrice: 4000,
+    monthlyPrice: 150,
+    annualPrice: 1500,
     period: 'month',
     description: 'For top-tier DJs who demand the full platform experience.',
     icon: Crown,
@@ -588,7 +588,7 @@ export default function Subscription() {
             >
               <Card
                 className={`h-full bg-black-surface border transition-all duration-300 ${plan.highlighted
-                  ? 'border-gold/40 shadow-[0_0_30px_rgba(212,162,74,0.08)]'
+                  ? 'border-gold/40 shadow-[0_0_30px_rgba(244, 224, 89,0.08)]'
                   : 'border-dark-gray hover:border-gold/20'
                   }`}
               >

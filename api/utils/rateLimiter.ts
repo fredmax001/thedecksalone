@@ -16,14 +16,15 @@ const storeOptions = RedisStore && redisClient
   ? { store: new RedisStore({ sendCommand: (...args) => redisClient.call(...args) }) }
   : {};
 
-// General API rate limiter
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
-  skip: (req: any) => {
-    if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
-    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  max: 2000, // Generous limit for multi-query SPA frontend
+  keyGenerator: (req: any) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      return (typeof forwarded === 'string' ? forwarded : forwarded[0]).split(',')[0].trim();
+    }
+    return req.ip || req.socket?.remoteAddress || 'unknown';
   },
   message: {
     success: false,
@@ -84,19 +85,20 @@ const bookingLimiter = rateLimit({
   ...storeOptions,
 });
 
-// Vote limiter
+// Dedicated Battle Vote limiter: Max 20 votes per 15 minutes per authenticated user
 const voteLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
   message: {
     success: false,
-    error: 'Too many votes. Please try again in an hour.',
+    error: 'Too many votes submitted. Please try again in 15 minutes.',
   },
-  keyGenerator: (req: any) => req.user?.id || req.ip,
+  keyGenerator: (req: any) => (req.user?.id ? `user_${req.user.id}` : (req.ip || req.socket?.remoteAddress || 'unknown')),
   standardHeaders: true,
   legacyHeaders: false,
   ...storeOptions,
 });
+
 
 // Mix play limiter — cap play-count inflation per mix per IP/user
 const playLimiter = rateLimit({

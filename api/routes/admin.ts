@@ -127,6 +127,8 @@ router.get('/stats', async (req, res) => {
         totalFollowers,
         pendingBookings,
         pendingVerifications,
+        totalPlaylists,
+        totalFeedPosts,
       ] = await Promise.all([
         prisma.user.count(),
         prisma.djProfile.count(),
@@ -138,6 +140,8 @@ router.get('/stats', async (req, res) => {
         prisma.follow.count(),
         prisma.booking.count({ where: { status: 'PENDING' } }),
         prisma.djProfile.count({ where: { verificationStatus: 'pending' } }),
+        prisma.officialPlaylist.count(),
+        prisma.mix.count({ where: { isPublic: true } }),
       ]);
 
       const bookingRevenue = await prisma.booking.aggregate({
@@ -177,6 +181,8 @@ router.get('/stats', async (req, res) => {
         totalFollowers,
         pendingBookings,
         pendingVerifications,
+        totalPlaylists,
+        totalFeedPosts,
         estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
         totalPayments: totalPayments._sum.amount || 0,
         activeBattles,
@@ -754,54 +760,226 @@ router.post('/rankings/recalculate', async (req, res) => {
   }
 });
 
-// GET /api/admin/analytics - Monthly platform analytics (cached 60s)
+// GET /api/admin/analytics - Platform analytics with full breakdown, demographics, geography, age, gender & month filtering
 router.get('/analytics', async (req, res) => {
   try {
     const range = (req.query.range as string) || '6m';
-    const cacheKey = `admin:analytics:${range}`;
-    const data = await withCache(cacheKey, 60000, async () => {
-      const now = new Date();
-      let numMonths = 6;
-      if (range === '1m') numMonths = 1;
-      else if (range === '3m') numMonths = 3;
-      else if (range === '6m') numMonths = 6;
-      else if (range === '12m') numMonths = 12;
-      else if (range === 'all') numMonths = 24;
+    const month = (req.query.month as string) || '';
+    const cacheKey = `admin:analytics:${range}:${month}`;
 
-      const months = [];
-      for (let i = numMonths - 1; i >= 0; i--) {
-        const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-        const label = start.toLocaleString('en-US', { month: 'short', year: numMonths > 12 ? '2-digit' : undefined });
-        const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
-          prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
-          prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
-          prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
-          prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
-          prisma.booking.aggregate({
-            where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-            _sum: { finalPrice: true },
-          }),
-          prisma.siteVisit.count({ where: { createdAt: { gte: start, lt: end } } }),
-        ]);
-        months.push({
-          month: label,
-          users,
-          djs,
-          mixes,
-          bookings,
-          revenue: Math.round(revenue._sum.finalPrice || 0),
-          visits,
-        });
+    const data = await withCache(cacheKey, 30000, async () => {
+      const now = new Date();
+      let start: Date;
+      let end: Date = new Date();
+      let isDaily = false;
+      const timeline: any[] = [];
+
+      if (month && /^\d{4}-\d{2}$/.test(month)) {
+        const [yearStr, monthStr] = month.split('-');
+        const y = parseInt(yearStr, 10);
+        const m = parseInt(monthStr, 10) - 1;
+        start = new Date(y, m, 1);
+        end = new Date(y, m + 1, 1);
+        isDaily = true;
+      } else if (range === '1m') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        isDaily = true;
+      } else {
+        let numMonths = 6;
+        if (range === '3m') numMonths = 3;
+        else if (range === '6m') numMonths = 6;
+        else if (range === '12m') numMonths = 12;
+        else if (range === 'all') numMonths = 24;
+        start = new Date(now.getFullYear(), now.getMonth() - numMonths + 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       }
-      return months;
+
+      if (isDaily) {
+        const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dStart = new Date(start.getFullYear(), start.getMonth(), d);
+          const dEnd = new Date(start.getFullYear(), start.getMonth(), d + 1);
+          if (dStart > now) break;
+
+          const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
+            prisma.user.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+            prisma.djProfile.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+            prisma.mix.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+            prisma.booking.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+            prisma.booking.aggregate({
+              where: { createdAt: { gte: dStart, lt: dEnd }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
+              _sum: { finalPrice: true },
+            }),
+            prisma.siteVisit.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+          ]);
+
+          timeline.push({
+            month: `${start.toLocaleString('en-US', { month: 'short' })} ${d}`,
+            date: dStart.toISOString().split('T')[0],
+            users,
+            djs,
+            mixes,
+            bookings,
+            revenue: Math.round(revenue._sum.finalPrice || 0),
+            visits,
+          });
+        }
+      } else {
+        const curStart = new Date(start);
+        while (curStart < end) {
+          const mStart = new Date(curStart.getFullYear(), curStart.getMonth(), 1);
+          const mEnd = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 1);
+          const label = mStart.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+
+          const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
+            prisma.user.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+            prisma.djProfile.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+            prisma.mix.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+            prisma.booking.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+            prisma.booking.aggregate({
+              where: { createdAt: { gte: mStart, lt: mEnd }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
+              _sum: { finalPrice: true },
+            }),
+            prisma.siteVisit.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+          ]);
+
+          timeline.push({
+            month: label,
+            date: mStart.toISOString().slice(0, 7),
+            users,
+            djs,
+            mixes,
+            bookings,
+            revenue: Math.round(revenue._sum.finalPrice || 0),
+            visits,
+          });
+
+          curStart.setMonth(curStart.getMonth() + 1);
+        }
+      }
+
+      const [totalUsers, totalDjs, totalMixes, totalBookings, totalRevenueAgg, totalVisits] = await Promise.all([
+        prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
+        prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
+        prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
+        prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
+        prisma.booking.aggregate({
+          where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
+          _sum: { finalPrice: true },
+        }),
+        prisma.siteVisit.count({ where: { createdAt: { gte: start, lt: end } } }),
+      ]);
+
+      const genderGroups = await prisma.user.groupBy({
+        by: ['gender'],
+        where: { createdAt: { gte: start, lt: end } },
+        _count: { id: true },
+      });
+      const genderMap: Record<string, number> = { MALE: 0, FEMALE: 0, OTHER: 0, UNSPECIFIED: 0 };
+      genderGroups.forEach((g: any) => {
+        if (g.gender === 'MALE') genderMap.MALE = g._count.id;
+        else if (g.gender === 'FEMALE') genderMap.FEMALE = g._count.id;
+        else if (g.gender === 'OTHER') genderMap.OTHER = g._count.id;
+        else genderMap.UNSPECIFIED += g._count.id;
+      });
+
+      const usersWithDob = await prisma.user.findMany({
+        where: { createdAt: { gte: start, lt: end }, dateOfBirth: { not: null } },
+        select: { dateOfBirth: true },
+      });
+      const ageBrackets: Record<string, number> = { '18-24': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55+': 0, 'Unknown': 0 };
+      usersWithDob.forEach((u: any) => {
+        if (!u.dateOfBirth) {
+          ageBrackets['Unknown']++;
+          return;
+        }
+        const age = Math.floor((now.getTime() - new Date(u.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000));
+        if (age >= 18 && age <= 24) ageBrackets['18-24']++;
+        else if (age >= 25 && age <= 34) ageBrackets['25-34']++;
+        else if (age >= 35 && age <= 44) ageBrackets['35-44']++;
+        else if (age >= 45 && age <= 54) ageBrackets['45-54']++;
+        else if (age >= 55) ageBrackets['55+']++;
+        else ageBrackets['18-24']++;
+      });
+
+      const recentVisits = await prisma.siteVisit.findMany({
+        where: { createdAt: { gte: start, lt: end }, userAgent: { not: null } },
+        select: { userAgent: true },
+        take: 500,
+      });
+      let mobileCount = 0;
+      let desktopCount = 0;
+      let tabletCount = 0;
+      recentVisits.forEach((v: any) => {
+        const ua = (v.userAgent || '').toLowerCase();
+        if (/ipad|tablet|(android(?!.*mobile))/i.test(ua)) tabletCount++;
+        else if (/mobile|iphone|ipod|android/i.test(ua)) mobileCount++;
+        else desktopCount++;
+      });
+
+      const [topCountries, topCities] = await Promise.all([
+        prisma.siteVisit.groupBy({
+          by: ['country'],
+          where: { createdAt: { gte: start, lt: end }, country: { not: null } },
+          _count: { country: true },
+          orderBy: { _count: { country: 'desc' } },
+          take: 8,
+        }),
+        prisma.siteVisit.groupBy({
+          by: ['city'],
+          where: { createdAt: { gte: start, lt: end }, city: { not: null } },
+          _count: { city: true },
+          orderBy: { _count: { city: 'desc' } },
+          take: 8,
+        }),
+      ]);
+
+      const availableMonths: { key: string; label: string; shortLabel: string }[] = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        availableMonths.push({ key, label, shortLabel: d.toLocaleString('en-US', { month: 'short', year: '2-digit' }) });
+      }
+
+      return {
+        timeline,
+        summary: {
+          totalUsers,
+          totalDjs,
+          totalMixes,
+          totalBookings,
+          totalRevenue: Math.round(totalRevenueAgg._sum.finalPrice || 0),
+          totalVisits,
+        },
+        demographics: {
+          gender: genderMap,
+          age: ageBrackets,
+          devices: {
+            mobile: mobileCount,
+            desktop: desktopCount,
+            tablet: tabletCount,
+          },
+        },
+        geography: {
+          countries: topCountries.map((r: any) => ({ name: r.country, visits: r._count.country })),
+          cities: topCities.map((r: any) => ({ name: r.city, visits: r._count.city })),
+        },
+        availableMonths,
+        filteredRange: range,
+        filteredMonth: month || null,
+        isDaily,
+      };
     });
+
     return res.json({ success: true, data });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
+
 
 // GET /api/admin/geography - Top visitor countries & cities
 router.get('/geography', async (req, res) => {
@@ -888,6 +1066,17 @@ router.get('/pro-subscription-requests', requireRole('ADMIN', 'FINANCE_ADMIN'), 
             user: { select: { id: true, email: true, phone: true } },
           },
         },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            avatar: true,
+            email: true,
+            phone: true,
+            subscriptionTier: true,
+          },
+        },
       },
     });
 
@@ -908,53 +1097,66 @@ router.post('/pro-subscription-requests/:id/approve', requireRole('ADMIN', 'FINA
 
     const request = await prisma.proSubscriptionRequest.findUnique({
       where: { id: req.params.id },
-      include: { dj: true },
+      include: { dj: true, user: true },
     });
 
     if (!request) {
       return res.status(404).json({ success: false, error: 'Subscription request not found' });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      // Activate all subscription features based on tier
-      await activateSubscriptionFeatures(request.dj.userId, request.plan);
+    const targetUserId = request.userId || request.dj?.userId;
+    if (targetUserId) {
+      await activateSubscriptionFeatures(targetUserId, request.plan);
+    }
 
-      return tx.proSubscriptionRequest.update({
-        where: { id: request.id },
-        data: {
-          status: 'approved',
-          reviewedById: req.user.id,
-          adminNote: parsed.data.note || null,
-          reviewedAt: new Date(),
-        },
-        include: {
-          dj: {
-            select: {
-              id: true,
-              stageName: true,
-              avatar: true,
-              isPro: true,
-              subscriptionTier: true,
-              canReceivePayments: true,
-              canViewAnalytics: true,
-              isVerifiedEligible: true,
-              isLegendFeatured: true,
-              user: { select: { id: true, email: true, phone: true } },
-            },
+    const updated = await prisma.proSubscriptionRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'approved',
+        reviewedById: req.user.id,
+        adminNote: parsed.data.note || null,
+        reviewedAt: new Date(),
+      },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            isPro: true,
+            subscriptionTier: true,
+            canReceivePayments: true,
+            canViewAnalytics: true,
+            isVerifiedEligible: true,
+            isLegendFeatured: true,
+            user: { select: { id: true, email: true, phone: true } },
           },
         },
-      });
+        user: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            avatar: true,
+            email: true,
+            phone: true,
+            subscriptionTier: true,
+          },
+        },
+      },
     });
 
-    await createAuditLog({
-      actorId: req.user.id,
-      targetId: request.dj.userId,
-      action: 'PRO_APPROVE',
-      entity: 'PRO_SUBSCRIPTION_REQUEST',
-      entityId: request.id,
-      metadata: { plan: request.plan, note: parsed.data.note || null, stageName: request.dj.stageName },
-      req,
-    });
+    if (targetUserId) {
+      await createAuditLog({
+        actorId: req.user.id,
+        targetId: targetUserId,
+        action: 'PRO_APPROVE',
+        entity: 'PRO_SUBSCRIPTION_REQUEST',
+        entityId: request.id,
+        metadata: { plan: request.plan, note: parsed.data.note || null, stageName: request.dj?.stageName || request.user?.username || 'Fan' },
+        req,
+      });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {
@@ -971,7 +1173,10 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
       return res.status(400).json({ success: false, error: 'Invalid input' });
     }
 
-    const request = await prisma.proSubscriptionRequest.findUnique({ where: { id: req.params.id } });
+    const request = await prisma.proSubscriptionRequest.findUnique({
+      where: { id: req.params.id },
+      include: { dj: true, user: true },
+    });
     if (!request) {
       return res.status(404).json({ success: false, error: 'Subscription request not found' });
     }
@@ -995,18 +1200,32 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
             user: { select: { id: true, email: true, phone: true } },
           },
         },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            avatar: true,
+            email: true,
+            phone: true,
+            subscriptionTier: true,
+          },
+        },
       },
     });
 
-    await createAuditLog({
-      actorId: req.user.id,
-      targetId: updated.dj.user?.id || null,
-      action: 'PRO_REJECT',
-      entity: 'PRO_SUBSCRIPTION_REQUEST',
-      entityId: request.id,
-      metadata: { plan: request.plan, note: parsed.data.note || null, stageName: updated.dj.stageName },
-      req,
-    });
+    const targetUserId = request.userId || request.dj?.userId;
+    if (targetUserId) {
+      await createAuditLog({
+        actorId: req.user.id,
+        targetId: targetUserId,
+        action: 'PRO_REJECT',
+        entity: 'PRO_SUBSCRIPTION_REQUEST',
+        entityId: request.id,
+        metadata: { note: parsed.data.note || null, stageName: request.dj?.stageName || request.user?.username || 'Fan' },
+        req,
+      });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {
@@ -1959,7 +2178,7 @@ router.post('/notifications', async (req, res) => {
   <tr><td align="center">
     <table width="580" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;padding:36px;border:1px solid #222;max-width:580px">
       <tr><td style="text-align:center;padding-bottom:24px;border-bottom:1px solid #222">
-        <h1 style="color:#D4A24A;margin:0;font-size:28px;font-weight:700;letter-spacing:-0.5px">DECK SALONE</h1>
+        <h1 style="color:#f4e059;margin:0;font-size:28px;font-weight:700;letter-spacing:-0.5px">DECK SALONE</h1>
         <p style="color:#666;font-size:12px;margin:4px 0 0">Sierra Leone's Premier DJ Platform</p>
       </td></tr>
       <tr><td style="padding:24px 0">
@@ -1968,8 +2187,8 @@ router.post('/notifications', async (req, res) => {
         <div style="color:#ccc;font-size:15px;line-height:1.75">${String(message).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>')}</div>
       </td></tr>
       <tr><td style="text-align:center;padding-top:24px;border-top:1px solid #222">
-        <a href="${frontendUrl}" style="display:inline-block;background:#D4A24A;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px">Visit Deck Salone</a>
-        <p style="color:#444;font-size:11px;margin:16px 0 0">If you no longer wish to receive these emails, contact <a href="mailto:support@decksalone.com" style="color:#D4A24A">support@decksalone.com</a></p>
+        <a href="${frontendUrl}" style="display:inline-block;background:#f4e059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px">Visit Deck Salone</a>
+        <p style="color:#444;font-size:11px;margin:16px 0 0">If you no longer wish to receive these emails, contact <a href="mailto:support@decksalone.com" style="color:#f4e059">support@decksalone.com</a></p>
       </td></tr>
     </table>
   </td></tr>
@@ -2255,15 +2474,15 @@ router.post('/broadcast-email', requireRole('ADMIN'), async (req, res) => {
     const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#111;background:#fff">
       <div style="text-align:center;margin-bottom:24px">
         <img src="${logoUrl}" alt="Deck Salone" width="80" height="80" style="border-radius:50%;object-fit:cover;margin-bottom:12px" />
-        <h1 style="color:#d4a24a;margin:0;font-size:24px">Deck Salone</h1>
+        <h1 style="color:#f4e059;margin:0;font-size:24px">Deck Salone</h1>
       </div>
       <div style="line-height:1.6;color:#333">
         ${message.replace(/\n/g, '<br>')}
       </div>
       <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center;color:#666;font-size:12px">
         <p>Deck Salone — The Premier DJ Platform</p>
-        <p><a href="${frontendUrl}" style="color:#d4a24a">${frontendUrl}</a></p>
-        <p style="margin-top:8px">If you no longer wish to receive these emails, please contact <a href="mailto:support@decksalone.com" style="color:#d4a24a">support@decksalone.com</a></p>
+        <p><a href="${frontendUrl}" style="color:#f4e059">${frontendUrl}</a></p>
+        <p style="margin-top:8px">If you no longer wish to receive these emails, please contact <a href="mailto:support@decksalone.com" style="color:#f4e059">support@decksalone.com</a></p>
       </div>
     </div>`;
 
@@ -2653,7 +2872,7 @@ router.post('/test-email', async (req: any, res: any) => {
       to,
       subject: '✅ Deck Salone — Hostinger SMTP Test Email',
       text: `This is an instant test email from Deck Salone Admin Dashboard sent to ${to}. Your Hostinger SMTP configuration (support@decksalone.com) is active and delivering correctly!`,
-      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:32px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#D4A24A;margin:0;">DECK SALONE</h1><p style="color:#22c55e;font-size:18px;font-weight:bold;margin:16px 0 8px;">✅ Hostinger SMTP is Working!</p><p style="color:#aaa;font-size:14px;">This test email was successfully dispatched via support@decksalone.com to <strong>${to}</strong> at ${new Date().toUTCString()}.</p></td></tr></table></td></tr></table></body></html>`
+      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:32px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#f4e059;margin:0;">DECK SALONE</h1><p style="color:#22c55e;font-size:18px;font-weight:bold;margin:16px 0 8px;">✅ Hostinger SMTP is Working!</p><p style="color:#aaa;font-size:14px;">This test email was successfully dispatched via support@decksalone.com to <strong>${to}</strong> at ${new Date().toUTCString()}.</p></td></tr></table></td></tr></table></body></html>`
     });
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error || 'Failed to send test email' });
@@ -2680,7 +2899,7 @@ router.post('/send-email', async (req: any, res: any) => {
       to,
       subject,
       text: body,
-      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="580" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;"><tr style="text-align:center;"><td><h1 style="color:#D4A24A;margin:0 0 16px;">DECK SALONE</h1></td></tr><tr><td style="color:#ddd;font-size:15px;line-height:1.7;">${String(body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</td></tr><tr style="text-align:center;"><td><hr style="border:0;border-top:1px solid #222;margin:24px 0;"/><p style="color:#666;font-size:12px;margin:0;">Deck Salone — Sierra Leone's #1 Official DJ Platform</p></td></tr></table></td></tr></table></body></html>`
+      html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="580" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;"><tr style="text-align:center;"><td><h1 style="color:#f4e059;margin:0 0 16px;">DECK SALONE</h1></td></tr><tr><td style="color:#ddd;font-size:15px;line-height:1.7;">${String(body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</td></tr><tr style="text-align:center;"><td><hr style="border:0;border-top:1px solid #222;margin:24px 0;"/><p style="color:#666;font-size:12px;margin:0;">Deck Salone — Sierra Leone's #1 Official DJ Platform</p></td></tr></table></td></tr></table></body></html>`
     });
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error || 'Failed to send custom email' });
@@ -2747,7 +2966,7 @@ router.post('/trigger-birthday-emails', async (req: any, res: any) => {
         to: u.email,
         subject: `🎉 Happy Birthday from Deck Salone, ${name}!`,
         text: `Happy Birthday ${name}! Wishing you maximum success and great vibes from the entire Deck Salone team!`,
-        html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#D4A24A;margin:0 0 16px;">DECK SALONE</h1><div style="font-size:48px;">🎂🎉</div><h2 style="color:#fff;margin:16px 0 8px;">Happy Birthday, ${name}!</h2><p style="color:#aaa;font-size:14px;line-height:1.6;">Wishing you an incredible birthday filled with music, joy, and success!</p></td></tr></table></td></tr></table></body></html>`
+        html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#0a0a0a;font-family:sans-serif;color:#fff;"><table width="100%" style="padding:40px 20px;"><tr><td align="center"><table width="560" style="background:#111;border-radius:16px;padding:36px;border:1px solid #333;text-align:center;"><tr><td><h1 style="color:#f4e059;margin:0 0 16px;">DECK SALONE</h1><div style="font-size:48px;">🎂🎉</div><h2 style="color:#fff;margin:16px 0 8px;">Happy Birthday, ${name}!</h2><p style="color:#aaa;font-size:14px;line-height:1.6;">Wishing you an incredible birthday filled with music, joy, and success!</p></td></tr></table></td></tr></table></body></html>`
       }).catch(() => {});
       sent++;
     }

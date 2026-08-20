@@ -104,7 +104,7 @@ export const FeatureLock: React.FC<FeatureLockProps> = ({
                     <Button
                         onClick={() => openUpgradeModal(feature || message || 'Premium Feature', tier)}
                         className={cn(
-                            "rounded-full px-8 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0)] hover:shadow-[0_0_20px_rgba(212,162,74,0.3)]",
+                            "rounded-full px-8 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0)] hover:shadow-[0_0_20px_rgba(244,224,89,0.3)]",
                             tier === 'pro' ? 'bg-gold-gradient text-black' : 'bg-gradient-to-r from-yellow-400 to-amber-300 text-black'
                         )}
                     >

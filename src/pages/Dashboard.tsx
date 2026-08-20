@@ -229,9 +229,9 @@ export default function Dashboard() {
                     <Line
                       type="monotone"
                       dataKey="position"
-                      stroke="#D4A24A"
+                      stroke="#f4e059"
                       strokeWidth={2}
-                      dot={{ r: 3, fill: '#D4A24A' }}
+                      dot={{ r: 3, fill: '#f4e059' }}
                     />
                   </LineChart>
                 </ResponsiveContainer>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, LogOut, Menu, Sparkles, Smartphone } from 'lucide-react';
+import { Search, LogOut, Menu, Sparkles, Smartphone, Crown } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import NotificationBell from '@/components/NotificationBell';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -21,13 +21,17 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 
+import { useFeedStats } from '@/hooks/useRecommendations';
+
 const navLinks = [
+  { label: 'Feed', path: '/feed', showBadge: true },
   { label: 'Discover', path: '/discover' },
   { label: 'Rankings', path: '/rankings' },
   { label: 'Mixes', path: '/mixes' },
   { label: 'Playlists', path: '/playlists' },
   { label: 'Events', path: '/events' },
   { label: 'Battles', path: '/battles' },
+  { label: 'Pricing', path: '/pricing' },
   { label: 'Request DJ', path: '/request-dj' },
 ];
 
@@ -62,6 +66,8 @@ export default function Navbar() {
   const displayName = user?.djProfile?.stageName || user?.name || user?.email?.split('@')[0] || (isModerator ? 'Moderator' : isAdmin ? 'Admin' : 'User');
   const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
   const initials = displayName.slice(0, 2).toUpperCase();
+  const { data: feedStats } = useFeedStats();
+  const newDropsCount = feedStats?.totalNewDrops || 0;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -113,7 +119,7 @@ export default function Navbar() {
             <Link
               to="/register"
               className="lg:hidden flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-gradient text-black text-[10px] font-extrabold uppercase tracking-wide shrink-0 ml-1"
-              style={{ boxShadow: '0 0 10px rgba(212,162,74,0.3)' }}
+              style={{ boxShadow: '0 0 10px rgba(244,224,89,0.3)' }}
             >
               <Sparkles className="w-3 h-3" />
               Join
@@ -121,28 +127,43 @@ export default function Navbar() {
           )}
 
           {/* Desktop Nav Links */}
-          <div className="hidden lg:flex items-center gap-7">
+          <div className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
+              const hasBadge = link.showBadge && newDropsCount > 0;
               return (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`relative text-xs font-bold uppercase tracking-[0.08em] transition-colors duration-300 py-1 flex flex-col items-center ${
+                  className={`relative text-xs font-bold uppercase tracking-[0.08em] transition-colors duration-300 py-1 flex items-center gap-1.5 ${
                     isActive ? 'text-gold' : 'text-text-secondary hover:text-text-primary'
                   }`}
                 >
                   <span>{link.label}</span>
+                  {hasBadge && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-gold text-black text-[9px] font-black tracking-tighter shadow-sm animate-pulse">
+                      +{newDropsCount > 99 ? '99+' : newDropsCount}
+                    </span>
+                  )}
                   {isActive && (
-                    <span className="absolute -bottom-1 w-full h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent rounded-full shadow-[0_0_8px_rgba(212,162,74,0.8)]" />
+                    <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent rounded-full shadow-[0_0_8px_rgba(244,224,89,0.8)]" />
                   )}
                 </Link>
               );
             })}
           </div>
 
+          {/* Mobile Search Bar in Center */}
+          <div
+            onClick={() => navigate('/discover')}
+            className="lg:hidden flex-1 mx-2 flex items-center justify-between px-3 py-1.5 rounded-full bg-[#141414] border border-[#2a2a2a] text-text-muted text-xs cursor-pointer shadow-inner hover:border-gold/40 transition-colors"
+          >
+            <span className="truncate text-[11px] font-medium">Search DJs, mixes, events...</span>
+            <Search className="w-3.5 h-3.5 text-text-muted shrink-0 ml-1" />
+          </div>
+
           {/* Right Actions — Desktop & Mobile */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Desktop Inline Quick Search Trigger */}
             <button
               onClick={() => navigate('/discover')}
@@ -156,7 +177,7 @@ export default function Navbar() {
             {isModerator && (
               <Link
                 to="/moderator"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-amber-500/25 transition-all shadow-[0_0_12px_rgba(212,162,74,0.2)]"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-amber-500/25 transition-all shadow-[0_0_12px_rgba(244,224,89,0.2)]"
               >
                 ⚙️ Moderator Console
               </Link>
@@ -165,92 +186,87 @@ export default function Navbar() {
             {(isSuperAdmin || isFinanceAdmin || isSupportAdmin || isVerificationAdmin) && (
               <Link
                 to={dashboardPath}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-gold/25 transition-all shadow-[0_0_12px_rgba(212,162,74,0.2)]"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-extrabold uppercase tracking-wider hover:bg-gold/25 transition-all shadow-[0_0_12px_rgba(244,224,89,0.2)]"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 {isSuperAdmin ? 'Admin Console' : isFinanceAdmin ? 'Finance Console' : isSupportAdmin ? 'Support Console' : 'Verification Console'}
               </Link>
             )}
 
-            <button
-              onClick={() => navigate('/discover')}
-              className="lg:hidden text-text-secondary hover:text-gold transition-colors p-2 flex items-center justify-center rounded-full"
-              aria-label="Search"
-            >
-              <Search className="w-5 h-5" />
-            </button>
+            {/* Theme Toggle (Always visible) */}
+            <ThemeToggle className="flex" />
 
-            <ThemeToggle className="hidden sm:flex" />
+            {/* Notification Bell (Always accessible) */}
+            <NotificationBell />
 
+            {/* Profile Avatar Dropdown */}
             {isAuthenticated && user ? (
-              <>
-                <NotificationBell />
-
-                {/* Profile avatar dropdown (mobile & desktop) */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
-                      <Avatar className="w-8 h-8 sm:w-9 sm:h-9 border border-gold/40">
-                        <AvatarImage src={avatarUrl} alt={displayName} />
-                        <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-52 shadow-2xl z-50">
-                    <div className="px-3 py-2 border-b border-dark-gray">
-                      <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
-                      <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
-                    </div>
-                    {user?.role === 'MODERATOR' && (
-                      <DropdownMenuItem asChild>
-                        <Link to="/moderator" className="cursor-pointer font-bold text-gold text-xs flex items-center">
-                          ⚙️ Moderator Console
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    {isAdmin && (
-                      <DropdownMenuItem asChild>
-                        <Link to={dashboardPath} className="cursor-pointer text-xs font-bold text-gold">
-                          {isSuperAdmin ? 'Admin Dashboard' : isFinanceAdmin ? 'Finance Dashboard' : isSupportAdmin ? 'Support Dashboard' : 'Verification Dashboard'}
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    {!isAdmin && (
-                      <>
-                        <DropdownMenuItem asChild>
-                          <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={settingsPath} className="cursor-pointer text-xs">Settings</Link>
-                        </DropdownMenuItem>
-                      </>
-                    )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
+                    <Avatar className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-gold/50">
+                      <AvatarImage src={avatarUrl} alt={displayName} />
+                      <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-52 shadow-2xl z-50">
+                  <div className="px-3 py-2 border-b border-dark-gray">
+                    <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
+                    <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
+                  </div>
+                  {user?.role === 'MODERATOR' && (
                     <DropdownMenuItem asChild>
-                      <Link to="/install" className="cursor-pointer font-semibold text-gold text-xs flex items-center">
-                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                      <Link to="/moderator" className="cursor-pointer font-bold text-gold text-xs flex items-center">
+                        ⚙️ Moderator Console
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-dark-gray" />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
-                      <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
+                  )}
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to={dashboardPath} className="cursor-pointer text-xs font-bold text-gold">
+                        {isSuperAdmin ? 'Admin Dashboard' : isFinanceAdmin ? 'Finance Dashboard' : isSupportAdmin ? 'Support Dashboard' : 'Verification Dashboard'}
+                      </Link>
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+                  )}
+                  {!isAdmin && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={isDj ? '/dashboard/subscription' : '/user/subscription'} className="cursor-pointer text-xs font-bold text-gold flex items-center">
+                          <Crown className="w-3.5 h-3.5 mr-2" /> Membership & Pro
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={settingsPath} className="cursor-pointer text-xs">Settings</Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link to="/install" className="cursor-pointer font-semibold text-gold text-xs flex items-center">
+                      <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-dark-gray" />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
+                    <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="hidden lg:inline-flex items-center px-6 py-2.5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
-                >
-                  Join as DJ
-                </Link>
-              </>
+              <Link
+                to="/login"
+                className="hidden lg:inline-flex items-center px-6 py-2.5 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
+              >
+                Join as DJ
+              </Link>
             )}
 
             {/* Mobile menu sheet for navigation links */}
@@ -268,20 +284,29 @@ export default function Navbar() {
                   <SheetTitle className="text-text-primary text-sm font-semibold uppercase tracking-wider">Menu</SheetTitle>
                 </SheetHeader>
                 <nav className="flex flex-col gap-1">
-                  {navLinks.map((link) => (
-                    <SheetClose asChild key={link.path}>
-                      <Link
-                        to={link.path}
-                        className={`rounded-lg px-4 py-3 text-sm font-medium uppercase tracking-wide transition-colors ${
-                          location.pathname === link.path
-                            ? 'bg-white/10 text-gold'
-                            : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
-                        }`}
-                      >
-                        {link.label}
-                      </Link>
-                    </SheetClose>
-                  ))}
+                  {navLinks.map((link) => {
+                    const isActive = location.pathname === link.path;
+                    const hasBadge = link.showBadge && newDropsCount > 0;
+                    return (
+                      <SheetClose asChild key={link.path}>
+                        <Link
+                          to={link.path}
+                          className={`rounded-lg px-4 py-3 text-sm font-medium uppercase tracking-wide transition-colors flex items-center justify-between ${
+                            isActive
+                              ? 'bg-white/10 text-gold font-bold'
+                              : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                          }`}
+                        >
+                          <span>{link.label}</span>
+                          {hasBadge && (
+                            <span className="px-2 py-0.5 rounded-full bg-gold text-black text-[10px] font-black tracking-wider">
+                              +{newDropsCount > 99 ? '99+' : newDropsCount} NEW
+                            </span>
+                          )}
+                        </Link>
+                      </SheetClose>
+                    );
+                  })}
 
                   <div className="my-3 border-t border-dark-gray" />
 

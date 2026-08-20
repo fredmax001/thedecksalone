@@ -116,10 +116,10 @@ export async function sendProfileNudgeEmail(user: any, djProfile?: any, mixCount
   const stepsHtml = completion.steps.map(step => `
     <div style="background:${step.completed ? '#112211' : '#1a1a1a'}; border:1px solid ${step.completed ? '#22c55e44' : '#333'}; border-radius:10px; padding:14px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-weight:700; color:${step.completed ? '#22c55e' : '#D4A24A'}; font-size:14px;">
+        <span style="font-weight:700; color:${step.completed ? '#22c55e' : '#f4e059'}; font-size:14px;">
           ${step.completed ? '✅' : '⏳'} ${step.title}
         </span>
-        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:${step.completed ? '#22c55e22' : '#D4A24A22'}; color:${step.completed ? '#22c55e' : '#D4A24A'};">
+        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:${step.completed ? '#22c55e22' : '#f4e05922'}; color:${step.completed ? '#22c55e' : '#f4e059'};">
           ${step.completed ? 'Completed' : 'Pending'}
         </span>
       </div>
@@ -139,7 +139,7 @@ export async function sendProfileNudgeEmail(user: any, djProfile?: any, mixCount
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#111;border-radius:16px;overflow:hidden;border:1px solid #222;">
         <tr><td style="background:linear-gradient(135deg,#1f1a0a,#0a0a0a);padding:32px;text-align:center;border-bottom:1px solid #333;">
-          <h1 style="color:#D4A24A;margin:0;font-size:24px;font-weight:800;letter-spacing:1px;">DECK SALONE</h1>
+          <h1 style="color:#f4e059;margin:0;font-size:24px;font-weight:800;letter-spacing:1px;">DECK SALONE</h1>
           <p style="color:#888;margin:6px 0 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Sierra Leone's #1 DJ Platform</p>
         </td></tr>
         <tr><td style="padding:32px;">
@@ -152,10 +152,10 @@ export async function sendProfileNudgeEmail(user: any, djProfile?: any, mixCount
           <div style="background:#1a1a1a;border-radius:12px;padding:16px;border:1px solid #2a2a2a;margin-bottom:24px;text-align:center;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
               <span style="color:#fff;font-weight:700;font-size:13px;">Profile Strength</span>
-              <span style="color:#D4A24A;font-weight:800;font-size:16px;">${completion.percentage}%</span>
+              <span style="color:#f4e059;font-weight:800;font-size:16px;">${completion.percentage}%</span>
             </div>
             <div style="background:#222;border-radius:6px;height:10px;overflow:hidden;width:100%;">
-              <div style="background:linear-gradient(90deg,#D4A24A,#E5C158);height:100%;width:${completion.percentage}%;border-radius:6px;"></div>
+              <div style="background:linear-gradient(90deg,#f4e059,#ceb100);height:100%;width:${completion.percentage}%;border-radius:6px;"></div>
             </div>
             <p style="color:#888;font-size:11px;margin:8px 0 0;">${completion.completedCount} of ${completion.totalSteps} steps completed</p>
           </div>
@@ -165,7 +165,7 @@ export async function sendProfileNudgeEmail(user: any, djProfile?: any, mixCount
           ${stepsHtml}
 
           <div style="text-align:center;margin-top:28px;">
-            <a href="${frontendUrl}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#D4A24A,#B38234);color:#000;font-weight:800;font-size:14px;padding:14px 32px;border-radius:30px;text-decoration:none;">
+            <a href="${frontendUrl}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#f4e059,#ceb100);color:#000;font-weight:800;font-size:14px;padding:14px 32px;border-radius:30px;text-decoration:none;">
               Complete My Profile Now →
             </a>
           </div>

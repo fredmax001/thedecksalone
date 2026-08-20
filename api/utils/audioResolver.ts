@@ -306,6 +306,51 @@ export async function resolveHearthisSet(
   }
 }
 
+async function resolveSoundcloud(url: string): Promise<ResolvedAudio | null> {
+  const normalized = normalizeUrl(url);
+  const result: ResolvedAudio = {
+    audioUrl: normalized,
+    audioSource: 'soundcloud',
+  };
+
+  const key = RAPIDAPI_KEY || process.env.RAPIDAPI_KEY || '0fd107f3f0msh020bac55db1ffd6p1669c7jsn6b14b4e028cc';
+
+  if (key) {
+    try {
+      const { data } = await axios.get('https://soundcloud4.p.rapidapi.com/song/info', {
+        params: { track_url: normalized },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rapidapi-host': 'soundcloud4.p.rapidapi.com',
+          'x-rapidapi-key': key,
+        },
+        timeout: 10000,
+      });
+
+      if (data && typeof data === 'object') {
+        if (data.title && typeof data.title === 'string') {
+          result.title = data.title;
+        }
+        if (data.duration) {
+          const parsed = parseInt(data.duration, 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            result.duration = Math.round(parsed / 1000);
+          }
+        }
+        if (data.thumbnail && typeof data.thumbnail === 'string') {
+          result.coverImage = data.thumbnail;
+        } else if (data.author?.avatarURL && typeof data.author.avatarURL === 'string') {
+          result.coverImage = data.author.avatarURL;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[audioResolver] SoundCloud enrichment failed:', err.message);
+    }
+  }
+
+  return result;
+}
+
 function resolveDirect(url: string): ResolvedAudio | null {
   const platform = detectPlatform(url);
   if (platform === 'upload' || platform === 'direct') {
@@ -331,6 +376,9 @@ export async function resolveAudioUrl(
   if (platform === 'hearthis') {
     return resolveHearthis(url);
   }
+  if (platform === 'soundcloud') {
+    return resolveSoundcloud(url);
+  }
 
   const direct = resolveDirect(url);
   if (direct) return direct;
@@ -341,6 +389,7 @@ export async function resolveAudioUrl(
 module.exports = {
   detectPlatform,
   resolveAudioUrl,
+  resolveSoundcloud,
   parseAudiomackUrl,
   buildAudiomackEmbedUrl,
   parseHearthisUrl,

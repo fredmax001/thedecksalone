@@ -141,7 +141,7 @@ export default function PWAInstallPrompt() {
               </div>
 
               {/* Browser note */}
-              <div className="mx-5 mb-3 px-3 py-2 rounded-xl bg-[rgba(212,162,74,0.08)] border border-gold/20 flex items-center gap-2">
+              <div className="mx-5 mb-3 px-3 py-2 rounded-xl bg-[rgba(244,224,89,0.08)] border border-gold/20 flex items-center gap-2">
                 <span className="text-gold text-base">{tab === 'ios' ? '🧭' : '🌐'}</span>
                 <p className="text-[11px] text-text-muted leading-tight">
                   {tab === 'ios'

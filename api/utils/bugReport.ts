@@ -68,7 +68,7 @@ export async function checkAndSendDailyBugReport() {
         </td>
         <td style="padding:10px; border-bottom:1px solid #2a2a2a; color:#ccc; font-size:12px;">
           <div style="font-family:monospace; word-break:break-all;">${err.message}</div>
-          ${err.userEmail ? `<div style="color:#D4A24A; font-size:10px; margin-top:4px;">User: ${err.userEmail}</div>` : ''}
+          ${err.userEmail ? `<div style="color:#f4e059; font-size:10px; margin-top:4px;">User: ${err.userEmail}</div>` : ''}
         </td>
         <td style="padding:10px; border-bottom:1px solid #2a2a2a; color:#888; font-size:11px;">
           ${new Date(err.createdAt).toLocaleTimeString()}
@@ -116,7 +116,7 @@ export async function checkAndSendDailyBugReport() {
           </div>
 
           <div style="text-align:center;margin-top:28px;">
-            <a href="${frontendUrl}/admin" style="display:inline-block;background:#D4A24A;color:#000;font-weight:800;font-size:13px;padding:12px 28px;border-radius:24px;text-decoration:none;">
+            <a href="${frontendUrl}/admin" style="display:inline-block;background:#f4e059;color:#000;font-weight:800;font-size:13px;padding:12px 28px;border-radius:24px;text-decoration:none;">
               Inspect Bug Logs in Admin Dashboard →
             </a>
           </div>
