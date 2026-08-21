@@ -48,7 +48,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { useImportHearthis, useImportSoundcloud } from '@/hooks/useMixes';
+import { useImportHearthis } from '@/hooks/useMixes';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { Progress } from '@/components/ui/progress';
 
@@ -126,17 +126,6 @@ export default function Mixes() {
     errors: Array<{ url: string; error: string }>;
   } | null>(null);
   const { mutate: importHearthis, isPending: importLoading } = useImportHearthis();
-
-  // SoundCloud import state
-  const [isSoundcloudImportOpen, setIsSoundcloudImportOpen] = useState(false);
-  const [importSoundcloudUrls, setImportSoundcloudUrls] = useState('');
-  const [importSoundcloudGenre, setImportSoundcloudGenre] = useState('Salone Mix');
-  const [importSoundcloudResult, setImportSoundcloudResult] = useState<{
-    count: number;
-    errorCount: number;
-    errors: Array<{ url: string; error: string }>;
-  } | null>(null);
-  const { mutate: importSoundcloud, isPending: importSoundcloudLoading } = useImportSoundcloud();
 
   useEffect(() => {
     if (!isDj || !djId) {
@@ -419,21 +408,6 @@ export default function Mixes() {
             className="border-gold/50 text-gold hover:bg-gold/10"
             onClick={() => {
               if (isFree) {
-                openUpgradeModal('SoundCloud Import', 'pro');
-              } else {
-                setImportSoundcloudResult(null);
-                setIsSoundcloudImportOpen(true);
-              }
-            }}
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Import from SoundCloud
-          </Button>
-          <Button
-            variant="outline"
-            className="border-gold/50 text-gold hover:bg-gold/10"
-            onClick={() => {
-              if (isFree) {
                 openUpgradeModal('HearThis.at Import', 'pro');
               } else {
                 setImportResult(null);
@@ -471,7 +445,7 @@ export default function Mixes() {
                 <Music className="w-12 h-12 text-text-muted mx-auto mb-3" />
                 <p className="text-text-secondary mb-2">No mixes uploaded yet</p>
                 <p className="text-sm text-text-muted mb-4">
-                  Upload your mixes or import them directly from SoundCloud or Hearthis.at.
+                  Upload your mixes or import them directly from Hearthis.at.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Button
@@ -480,14 +454,6 @@ export default function Mixes() {
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Upload Your First Mix
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-gold/50 text-gold hover:bg-gold/10"
-                    onClick={() => { setImportSoundcloudResult(null); setIsSoundcloudImportOpen(true); }}
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Import from SoundCloud
                   </Button>
                   <Button
                     variant="outline"
@@ -1072,150 +1038,6 @@ export default function Mixes() {
                     <ExternalLink className="w-4 h-4 mr-2" />
                   )}
                   {importLoading ? 'Importing...' : 'Import Mixes'}
-                </Button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* SoundCloud Import Modal */}
-      <AnimatePresence>
-        {isSoundcloudImportOpen && (
-          <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSoundcloudImportOpen(false)}
-          >
-            <motion.div
-              className="relative w-full max-w-lg bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setIsSoundcloudImportOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors"
-              >
-                <X size={20} className="text-text-muted" />
-              </button>
-
-              <h2 className="font-display text-xl font-semibold text-text-primary uppercase tracking-tight">
-                Import from SoundCloud
-              </h2>
-              <p className="mt-2 text-sm text-text-secondary">
-                Paste your SoundCloud track or mix links below (one per line). Titles, artwork, and mix metadata will be automatically imported to your profile.
-              </p>
-
-              <form
-                className="mt-6 space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setImportSoundcloudResult(null);
-                  if (!importSoundcloudUrls.trim()) {
-                    toast.error('Please paste at least one SoundCloud URL');
-                    return;
-                  }
-                  importSoundcloud(
-                    {
-                      urls: importSoundcloudUrls,
-                      defaultGenre: importSoundcloudGenre,
-                      defaultCategory: importSoundcloudGenre,
-                    },
-                    {
-                      onSuccess: (res) => {
-                        const result = res.data || {};
-                        const { count = 0, errorCount = 0, errors = [] } = result;
-                        setImportSoundcloudResult({ count, errorCount, errors });
-                        if (count > 0) {
-                          toast.success(`🎉 Imported ${count} SoundCloud mix(es)!`);
-                          setMixes((prev) => [
-                            ...(result.imported || []),
-                            ...prev,
-                          ]);
-                        }
-                        if (errorCount > 0) {
-                          toast.error(`${errorCount} URL(s) could not be imported`);
-                        }
-                        if (errorCount === 0 && count > 0) {
-                          setTimeout(() => {
-                            setIsSoundcloudImportOpen(false);
-                            setImportSoundcloudUrls('');
-                            setImportSoundcloudResult(null);
-                          }, 1200);
-                        }
-                      },
-                      onError: (err: any) => {
-                        const message = err?.response?.data?.error || err?.message || 'Import failed';
-                        toast.error(message);
-                        setImportSoundcloudResult({ count: 0, errorCount: 1, errors: [{ url: 'Request', error: message }] });
-                      },
-                    }
-                  );
-                }}
-              >
-                <div>
-                  <Label className="text-text-secondary mb-2 block">SoundCloud URLs</Label>
-                  <Textarea
-                    value={importSoundcloudUrls}
-                    onChange={(e) => { setImportSoundcloudUrls(e.target.value); setImportSoundcloudResult(null); }}
-                    placeholder="https://soundcloud.com/dj-name/afrobeats-mix&#10;https://soundcloud.com/dj-name/summer-vibes"
-                    rows={6}
-                    className="bg-black-elevated border-dark-gray text-text-primary resize-none"
-                    required
-                    disabled={importSoundcloudLoading}
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-text-secondary mb-2 block">Default Genre</Label>
-                  <select
-                    value={importSoundcloudGenre}
-                    onChange={(e) => setImportSoundcloudGenre(e.target.value)}
-                    disabled={importSoundcloudLoading}
-                    className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none disabled:opacity-50"
-                  >
-                    {GENRES.map((g) => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {importSoundcloudResult && (
-                  <div className={`rounded-lg border p-3 text-sm ${importSoundcloudResult.errorCount === 0 ? 'bg-green/10 border-green/30 text-green' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
-                    <p className="font-semibold">
-                      Imported {importSoundcloudResult.count} mix{importSoundcloudResult.count === 1 ? '' : 'es'}
-                      {importSoundcloudResult.errorCount > 0 ? ` • ${importSoundcloudResult.errorCount} failed` : ''}
-                    </p>
-                    {importSoundcloudResult.errors.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-xs max-h-32 overflow-y-auto">
-                        {importSoundcloudResult.errors.slice(0, 10).map((err, i) => (
-                          <li key={i} className="break-all">
-                            <span className="text-text-secondary">{err.url}:</span> {err.error}
-                          </li>
-                        ))}
-                        {importSoundcloudResult.errors.length > 10 && (
-                          <li className="text-text-muted">...and {importSoundcloudResult.errors.length - 10} more</li>
-                        )}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={importSoundcloudLoading || !importSoundcloudUrls.trim()}
-                  className="w-full bg-gold-gradient text-black font-semibold uppercase hover:opacity-90 disabled:opacity-50"
-                >
-                  {importSoundcloudLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                  )}
-                  {importSoundcloudLoading ? 'Importing...' : 'Import from SoundCloud'}
                 </Button>
               </form>
             </motion.div>

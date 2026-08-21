@@ -11,31 +11,15 @@ import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
 const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.();
 
 if (!isNativeApp) {
-  if ('serviceWorker' in navigator) {
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
-  }
-
   import('virtual:pwa-register').then(({ registerSW }) => {
-    // Auto-update PWA service worker and reload for fresh deployments
-    const updateSW = registerSW({
+    registerSW({
       immediate: true,
       onNeedRefresh() {
-        updateSW(true);
+        // Prepare SW in background without disrupting current audio/session
       },
       onOfflineReady() {},
     });
-
-    // Check for new deployments every 30 seconds
-    setInterval(() => {
-      updateSW(true);
-    }, 30 * 1000);
-  });
+  }).catch(() => {});
 }
 
 useAuthStore.getState().init();
@@ -47,4 +31,3 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </ErrorBoundary>
 );
-

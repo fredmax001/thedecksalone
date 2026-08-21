@@ -38,6 +38,7 @@ import { computeGenreRanks } from '@/utils/mixRanking';
 import WaveformPlayer from '@/components/WaveformPlayer';
 import ReachListenersModal from '@/components/ReachListenersModal';
 import DjFanSubscribeModal from '@/components/DjFanSubscribeModal';
+import MixDownloadModal from '@/components/MixDownloadModal';
 import EmbedMixModal from '@/components/EmbedMixModal';
 import { toast } from 'sonner';
 
@@ -71,6 +72,7 @@ function toMixTrack(mix: any): MixTrack {
     dj: mix.dj?.stageName || 'Unknown DJ',
     djId: mix.dj?.id || mix.djId,
     djAvatar: mix.dj?.avatar,
+    djUsername: mix.dj?.user?.username || mix.dj?.username,
     duration: mix.duration || 0,
     cover: mix.coverImage || mix.dj?.avatar || '/mix-placeholder.jpg',
     genre: mix.genre || mix.category || 'Mix',
@@ -124,6 +126,8 @@ function MixReleaseWaveformCard({
   onOpenPromote,
   onOpenSubscribe,
   onOpenEmbed,
+  onOpenDownloadAuth,
+  onOpenDownloadSubscribe,
   isOwner,
 }: {
   mix: MixTrack;
@@ -136,6 +140,8 @@ function MixReleaseWaveformCard({
   onOpenPromote: (mix: MixTrack) => void;
   onOpenSubscribe: (mix: MixTrack) => void;
   onOpenEmbed: (mix: MixTrack) => void;
+  onOpenDownloadAuth?: (mix: MixTrack) => void;
+  onOpenDownloadSubscribe?: (mix: MixTrack) => void;
   isOwner?: boolean;
 }) {
   const { isAuthenticated } = useAuthStore();
@@ -212,16 +218,19 @@ function MixReleaseWaveformCard({
   // Direct Audio Download
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (mix.isExclusive) {
-      onOpenSubscribe(mix);
+    if (!isAuthenticated) {
+      if (onOpenDownloadAuth) onOpenDownloadAuth(mix);
+      else onOpenSubscribe(mix);
       return;
     }
+
     try {
       setDownloading(true);
       toast.info(`Preparing download for "${mix.title}"...`);
 
-      // Trigger direct file download from backend streaming endpoint
-      const downloadEndpoint = `/api/mixes/${mix.id}/download-file`;
+      // Verify subscription and permissions via backend API
+      const res = await api.post(`/mixes/${mix.id}/download`);
+      const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
 
       const link = document.createElement('a');
       link.href = downloadEndpoint;
@@ -235,9 +244,13 @@ function MixReleaseWaveformCard({
       toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
       if (err.response?.status === 403 && err.response?.data?.requiresSubscription) {
-        onOpenSubscribe(mix);
+        if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
+        else onOpenSubscribe(mix);
+      } else if (err.response?.status === 401) {
+        if (onOpenDownloadAuth) onOpenDownloadAuth(mix);
+        else onOpenSubscribe(mix);
       } else {
-        toast.error('Download failed', { description: 'Please check your connection and try again.' });
+        toast.error('Download failed', { description: err.response?.data?.error || 'Please check your subscription and connection.' });
       }
     } finally {
       setDownloading(false);
@@ -332,9 +345,13 @@ function MixReleaseWaveformCard({
               {/* DJ & Title */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <span className="font-semibold text-white hover:underline cursor-pointer">
+                  <Link
+                    to={`/dj/${mix.djUsername || mix.djId || mix.dj}`}
+                    className="font-semibold text-white hover:text-[#f4e059] hover:underline transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {mix.dj}
-                  </span>
+                  </Link>
                   <span className="inline-flex items-center text-[#f4e059]" title="Verified DJ">
                     ✓
                   </span>
@@ -645,7 +662,13 @@ function MixGridCard({
             </h4>
           </Link>
           <p className="text-xs text-text-secondary truncate flex items-center gap-1">
-            <span className="hover:text-white transition-colors">{mix.dj}</span>
+            <Link
+              to={`/dj/${mix.djUsername || mix.djId || mix.dj}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-[#f4e059] hover:underline transition-colors"
+            >
+              {mix.dj}
+            </Link>
             {mix.djTier === 'legend' && (
               <span className="text-[9px] px-1 py-0.2 rounded bg-[#f4e059]/15 text-[#f4e059] font-bold border border-[#f4e059]/30">PRO</span>
             )}
@@ -763,7 +786,13 @@ function MixTracklistRow({
           {mix.title}
         </Link>
         <p className="text-[11px] text-text-secondary truncate mt-0.5 flex items-center gap-1">
-          <span>{mix.dj}</span>
+          <Link
+            to={`/dj/${mix.djUsername || mix.djId || mix.dj}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-[#f4e059] hover:underline transition-colors"
+          >
+            {mix.dj}
+          </Link>
           {mix.djTier === 'legend' && (
             <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO</span>
           )}
@@ -813,6 +842,7 @@ export default function MixHub() {
   const [promoteModalMix, setPromoteModalMix] = useState<MixTrack | null>(null);
   const [subscribeModalDj, setSubscribeModalDj] = useState<any | null>(null);
   const [embedModalMix, setEmbedModalMix] = useState<MixTrack | null>(null);
+  const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' } | null>(null);
 
   const [officialPlaylists, setOfficialPlaylists] = useState<any[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
@@ -1315,6 +1345,8 @@ export default function MixHub() {
                     })
                   }
                   onOpenEmbed={(m) => setEmbedModalMix(m)}
+                  onOpenDownloadAuth={(m) => setDownloadModalData({ mix: m, mode: 'auth' })}
+                  onOpenDownloadSubscribe={(m) => setDownloadModalData({ mix: m, mode: 'subscribe' })}
                   isOwner={!!isOwner}
                 />
               );
@@ -1444,6 +1476,29 @@ export default function MixHub() {
           mix={embedModalMix}
         />
       )}
+
+      {/* ─── 📥 MIX DOWNLOAD MODAL (AUTH & SUBSCRIBE) ─── */}
+      <MixDownloadModal
+        isOpen={!!downloadModalData}
+        onClose={() => setDownloadModalData(null)}
+        mode={downloadModalData?.mode || 'auth'}
+        mix={
+          downloadModalData?.mix
+            ? {
+                id: downloadModalData.mix.id,
+                title: downloadModalData.mix.title,
+                djName: downloadModalData.mix.dj,
+                dj: {
+                  id: downloadModalData.mix.djId,
+                  stageName: downloadModalData.mix.dj,
+                  avatar: downloadModalData.mix.djAvatar || downloadModalData.mix.cover,
+                  subscriptionPrice: downloadModalData.mix.subscriptionPrice || 100,
+                },
+              }
+            : null
+        }
+        onOpenDjSubscribe={(dj) => setSubscribeModalDj(dj)}
+      />
     </div>
   );
 }

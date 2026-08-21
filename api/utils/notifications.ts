@@ -35,12 +35,33 @@ async function createNotification({
 
     // Respect notification preferences
     const prefs = user.notificationPreferences || {};
-    const emailPrefKey = `email${type.split('_').map(w => w[0] + w.slice(1).toLowerCase()).join('')}`;
-    const pushPrefKey = `push${type.split('_').map(w => w[0] + w.slice(1).toLowerCase()).join('')}`;
 
-    // Default to enabled if not set
-    const emailEnabled = prefs[emailPrefKey] !== false;
-    const pushEnabled = prefs[pushPrefKey] !== false;
+    // Map notification types to the stored preference keys used by the frontend
+    const EMAIL_PREF_MAP = {
+      BOOKING_CREATED: 'emailBookings',
+      BOOKING_STATUS_CHANGED: 'emailBookings',
+      COUNTER_OFFER: 'emailBookings',
+      PAYMENT_RECEIVED: 'emailBookings',
+      PAYMENT_FAILED: 'emailBookings',
+      NEW_MESSAGE: 'emailMessages',
+      SYSTEM: 'emailMessages',
+    };
+    const PUSH_PREF_MAP = {
+      BOOKING_CREATED: 'pushBookings',
+      BOOKING_STATUS_CHANGED: 'pushBookings',
+      COUNTER_OFFER: 'pushBookings',
+      PAYMENT_RECEIVED: 'pushBookings',
+      PAYMENT_FAILED: 'pushBookings',
+      NEW_MESSAGE: 'pushBookings',
+      SYSTEM: 'pushBookings',
+    };
+
+    const emailPrefKey = EMAIL_PREF_MAP[type] || null;
+    const pushPrefKey = PUSH_PREF_MAP[type] || null;
+
+    // Default to enabled if not set (or if no specific preference key exists)
+    const emailEnabled = emailPrefKey ? prefs[emailPrefKey] !== false : true;
+    const pushEnabled = pushPrefKey ? prefs[pushPrefKey] !== false : true;
 
     let notification = null;
 

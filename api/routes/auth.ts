@@ -1,14 +1,14 @@
 const express = require('express');
 const axios = require('axios');
-const bcrypt = require('bcryptjs');
+const { checkAccountLockout, recordFailedAttempt, recordSuccessfulLogin, verifyAndMigratePassword, hashPassword } = require('../utils/authSecurity');
 const crypto = require('crypto');
 const { z } = require('zod');
 const passport = require('passport');
 const { prisma } = require('../utils/prisma');
 const { signToken } = require('../utils/jwt');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
-const { authLimiter } = require('../utils/rateLimiter');
+const { authLimiter, loginRateLimiter } = require('../utils/rateLimiter');
 const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
@@ -72,8 +72,10 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const { email, password, phone, role, gender } = parsed.data;
+    let { email, password, phone, role, gender } = parsed.data;
     let { username } = parsed.data;
+
+    email = email.toLowerCase();
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -100,7 +102,7 @@ router.post('/register', authLimiter, async (req, res) => {
       username = await generateUsername(email);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const userRole = role === 'DJ' ? 'DJ' : 'USER';
     const user = await prisma.user.create({
       data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined },
@@ -131,7 +133,7 @@ router.post('/register', authLimiter, async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', loginRateLimiter, async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -139,16 +141,34 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const { email, password } = parsed.data;
+    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Check account lockout / progressive delay
+    const { isLocked, delayMs } = checkAccountLockout(email, clientIp);
+    if (isLocked) {
+      return res.status(429).json({ success: false, error: 'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.' });
+    }
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user || !user.password) {
+      await recordFailedAttempt(email, clientIp);
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    const valid = await verifyAndMigratePassword(password, user);
     if (!valid) {
+      await recordFailedAttempt(email, clientIp);
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
+
+    if (user.status === 'SUSPENDED') {
+      return res.status(403).json({ success: false, error: 'Account suspended. Contact support.' });
+    }
+
+    recordSuccessfulLogin(email, clientIp);
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
     return res.json({
@@ -455,7 +475,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await hashPassword(newPassword);
 
     // Update password and immediately invalidate the reset token (single-use)
     await prisma.user.update({
@@ -503,6 +523,15 @@ router.get('/google/callback', (req, res, next) => {
     return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(String(req.query.error))}`);
   }
 
+  // Validate OAuth state parameter to prevent CSRF / session fixation
+  const cookieState = req.cookies?.oauth_state;
+  const queryState = req.query.state;
+  if (!cookieState || !queryState || cookieState !== queryState) {
+    console.warn('[Google OAuth] Invalid or missing state parameter');
+    res.clearCookie('oauth_state', { path: '/' });
+    return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+  }
+
   // Clear the state cookie
   res.clearCookie('oauth_state', { path: '/' });
 
@@ -529,170 +558,7 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 });
 
-// ─────────────────────────────────────────────────────────────
-// SoundCloud Authentication Routes
-// ─────────────────────────────────────────────────────────────
-// GET /api/auth/soundcloud or /api/v1/auth/soundcloud
-router.get('/soundcloud', (req, res) => {
-  const FRONTEND_URL = getFrontendUrl();
-  const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID;
-  const BACKEND_URL = process.env.BACKEND_URL || 'https://decksalone.com';
-
-  if (!SOUNDCLOUD_CLIENT_ID) {
-    // If OAuth app is not configured with client ID, open the quick connect modal
-    return res.redirect(`${FRONTEND_URL}/login?soundcloud_modal=true`);
-  }
-
-  const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/v1/auth/soundcloud/callback`);
-  const soundcloudAuthUrl = `https://secure.soundcloud.com/authorize?client_id=${SOUNDCLOUD_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=non-expiring`;
-  return res.redirect(soundcloudAuthUrl);
-});
-
-// GET /api/auth/soundcloud/callback
-router.get('/soundcloud/callback', async (req, res) => {
-  const FRONTEND_URL = getFrontendUrl();
-  const code = req.query.code;
-
-  if (!code) {
-    return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_auth_cancelled`);
-  }
-
-  try {
-    const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID;
-    const SOUNDCLOUD_CLIENT_SECRET = process.env.SOUNDCLOUD_CLIENT_SECRET;
-    const BACKEND_URL = process.env.BACKEND_URL || 'https://decksalone.com';
-    const redirectUri = `${BACKEND_URL}/api/v1/auth/soundcloud/callback`;
-
-    const tokenRes = await axios.post(
-      'https://api.soundcloud.com/oauth2/token',
-      new URLSearchParams({
-        client_id: SOUNDCLOUD_CLIENT_ID || '',
-        client_secret: SOUNDCLOUD_CLIENT_SECRET || '',
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-        code: String(code),
-      }).toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const accessToken = tokenRes.data?.access_token;
-    if (!accessToken) {
-      return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_token_failed`);
-    }
-
-    const meRes = await axios.get('https://api.soundcloud.com/me', {
-      headers: { Authorization: `OAuth ${accessToken}` },
-    });
-
-    const scUser = meRes.data;
-    const soundcloudId = String(scUser.id);
-    const email = scUser.email || `soundcloud_${soundcloudId}@decksalone.com`;
-    const stageName = scUser.username || scUser.full_name || 'SoundCloud DJ';
-    const avatar = scUser.avatar_url || null;
-    const bio = scUser.description || null;
-
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email },
-          { djProfile: { stageName: { equals: stageName, mode: 'insensitive' } } },
-        ],
-      },
-      include: { djProfile: true },
-    });
-
-    if (!user) {
-      const username = await generateUsername(stageName);
-      user = await prisma.user.create({
-        data: {
-          email,
-          username,
-          name: stageName,
-          avatar,
-          role: 'DJ',
-          djProfile: {
-            create: {
-              stageName,
-              bio,
-              avatar,
-              genres: ['Afrobeats', 'Salone Mix'],
-            },
-          },
-        },
-        include: { djProfile: true },
-      });
-    }
-
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return res.redirect(`${FRONTEND_URL}/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`);
-  } catch (err) {
-    console.error('[SoundCloud OAuth Callback Error]:', err);
-    return res.redirect(`${FRONTEND_URL}/login?error=soundcloud_auth_failed`);
-  }
-});
-
-// POST /api/auth/soundcloud/login - Connect or Sign In with SoundCloud profile username / link
-router.post('/soundcloud/login', async (req, res) => {
-  try {
-    const { profileUrl } = req.body;
-    if (!profileUrl || typeof profileUrl !== 'string') {
-      return res.status(400).json({ success: false, error: 'SoundCloud profile URL or username is required' });
-    }
-
-    const cleaned = profileUrl.trim().replace(/^https?:\/\/(www\.)?soundcloud\.com\//i, '').replace(/\/+$/, '');
-    const cleanUsername = cleaned.split('/')[0] || 'soundcloud_user';
-    const email = `sc_${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@decksalone.com`;
-    const stageName = cleanUsername.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email },
-          { username: { equals: cleanUsername, mode: 'insensitive' } },
-          { djProfile: { stageName: { equals: stageName, mode: 'insensitive' } } },
-        ],
-      },
-      include: { djProfile: true },
-    });
-
-    if (!user) {
-      const username = await generateUsername(cleanUsername);
-      user = await prisma.user.create({
-        data: {
-          email,
-          username,
-          name: stageName,
-          avatar: '/default-avatar.jpg',
-          role: 'DJ',
-          djProfile: {
-            create: {
-              stageName,
-              bio: `DJ and artist on SoundCloud (soundcloud.com/${cleanUsername})`,
-              genres: ['Afrobeats', 'Salone Mix', 'Club Mixes'],
-            },
-          },
-        },
-        include: { djProfile: true },
-      });
-    }
-
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return res.json({
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        role: user.role,
-        djProfile: user.djProfile,
-      },
-    });
-  } catch (error) {
-    console.error('[SoundCloud Direct Login Error]:', error);
-    return res.status(500).json({ success: false, error: 'Failed to authenticate with SoundCloud' });
-  }
-});
+// GET /api/auth/me
 
 // GET /api/auth/me
 router.get('/me', authMiddleware, async (req, res) => {
@@ -714,9 +580,43 @@ router.get('/me', authMiddleware, async (req, res) => {
         dateOfBirth: true,
         favoriteGenres: true,
         createdAt: true,
+        subscriptionTier: true,
+        subscriptionActivatedAt: true,
         notificationPreferences: true,
         privacyPreferences: true,
-        djProfile: true,
+        djProfile: {
+          select: {
+            id: true,
+            stageName: true,
+            fullName: true,
+            avatar: true,
+            coverBanner: true,
+            bio: true,
+            city: true,
+            community: true,
+            country: true,
+            genres: true,
+            verified: true,
+            isPublic: true,
+            isPro: true,
+            subscriptionTier: true,
+            subscriptionActivatedAt: true,
+            totalFollowers: true,
+            totalStreams: true,
+            totalMixes: true,
+            totalEvents: true,
+            totalBookings: true,
+            averageRating: true,
+            rankingPosition: true,
+            rankingScore: true,
+            monthlyListeners: true,
+            canReceivePayments: true,
+            canViewAnalytics: true,
+            subscriptionPrice: true,
+            whatsappNumber: true,
+            user: { select: { username: true } },
+          },
+        },
       },
     });
     if (!user) {
@@ -749,6 +649,10 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
     message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
   }),
+});
+
+const confirmEmailChangeSchema = z.object({
+  code: z.string().length(6),
 });
 
 // PUT /api/auth/me - Update current user's profile (username, email, gender, phone, dateOfBirth)
@@ -799,7 +703,25 @@ router.put('/me', authMiddleware, async (req, res) => {
       if (existing && existing.id !== req.user.id) {
         return res.status(409).json({ success: false, error: 'Email already in use' });
       }
-      updateData.email = normalizedEmail;
+
+      // Email changes must be verified before the new address is saved.
+      // Send a one-time code to the new address and store the pending change.
+      const code = crypto.randomInt(100000, 999999).toString();
+      await setCache(`email_change:${req.user.id}`, { newEmail: normalizedEmail, code, expiry: Date.now() + 10 * 60 * 1000 }, 10 * 60);
+
+      sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        username: req.user.email?.split('@')[0] || 'User',
+      }).catch((err) => console.error('[Auth] Failed to send email change OTP:', err));
+
+      return res.status(202).json({
+        success: true,
+        data: {
+          message: 'A verification code has been sent to the new email address. Use /confirm-email-change to apply the update.',
+          pendingEmail: normalizedEmail,
+        },
+      });
     }
 
     const user = await prisma.user.update({
@@ -811,6 +733,44 @@ router.put('/me', authMiddleware, async (req, res) => {
         dateOfBirth: true, createdAt: true, djProfile: true,
       },
     });
+
+    return res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/confirm-email-change - Verify and apply a pending email change
+router.post('/confirm-email-change', authMiddleware, async (req, res) => {
+  try {
+    const parsed = confirmEmailChangeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input' });
+    }
+
+    const { code } = parsed.data;
+    const cacheKey = `email_change:${req.user.id}`;
+    const pending = await getCache(cacheKey);
+
+    if (!pending || pending.code !== code || Date.now() > pending.expiry) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email: pending.newEmail } });
+    if (existing && existing.id !== req.user.id) {
+      await clearCache(cacheKey);
+      return res.status(409).json({ success: false, error: 'Email already in use' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { email: pending.newEmail, emailVerified: true },
+      select: { id: true, email: true, username: true, role: true, emailVerified: true },
+    });
+
+    await clearCache(cacheKey);
+    invalidateUserAuthCache(req.user.id);
 
     return res.json({ success: true, data: user });
   } catch (error) {
@@ -838,12 +798,12 @@ router.post('/change-password', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'User not found or no password set' });
     }
 
-    const valid = await bcrypt.compare(currentPassword, user.password);
+    const valid = await verifyAndMigratePassword(currentPassword, user);
     if (!valid) {
       return res.status(401).json({ success: false, error: 'Current password is incorrect' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await hashPassword(newPassword);
     await prisma.user.update({
       where: { id: req.user.id },
       data: { password: hashedPassword },

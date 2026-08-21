@@ -379,12 +379,12 @@ export default function Register() {
             <div className="h-px flex-1 bg-dark-gray" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
             <a
               href="/api/v1/auth/google"
-              className="w-full h-[46px] rounded-xl bg-white hover:bg-gray-100 text-black text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+              className="w-full h-[48px] rounded-xl bg-white hover:bg-gray-100 text-black text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-md active:scale-95 border border-white/20"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -399,21 +399,11 @@ export default function Register() {
                 />
                 <path
                   fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Google
+              <span>Continue with Google</span>
             </a>
-
-            <Link
-              to="/login?soundcloud_modal=true"
-              className="w-full h-[46px] rounded-xl bg-[#FF5500] hover:bg-[#ff6a1f] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 shadow-[#FF5500]/20"
-            >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="currentColor">
-                <path d="M11.56 8.87V17h8.55c1.59 0 2.89-1.29 2.89-2.89 0-1.57-1.25-2.84-2.81-2.88-.23-2.14-2.03-3.8-4.22-3.8-.95 0-1.84.32-2.55.87-.51-.97-1.12-1.84-1.86-2.5v3.07zM1.01 13.91c-.01.12-.01.24-.01.36 0 1.5 1.05 2.73 2.45 2.73h.14v-5.63c-.11.02-.21.05-.31.08-1.27.38-2.21 1.34-2.27 2.46zm2.34-3.56v6.65h1.16v-6.93c-.41.07-.8.17-1.16.28zm2.33-.42v7.07h1.17v-7.3c-.41.05-.8.13-1.17.23zm2.33-.29v7.36h1.17V9.37c-.4.07-.79.16-1.17.27zm2.33-.14v7.5h1.17V9.1c-.4.06-.79.14-1.17.22z" />
-              </svg>
-              SoundCloud
-            </Link>
           </div>
 
           <p className="mt-6 text-center text-sm text-text-secondary">

@@ -1007,14 +1007,92 @@ router.get('/my-dj-subscriptions', authMiddleware, async (req, res) => {
   }
 });
 
+// Valid platform subscription plan identifiers sent by the frontend
+const VALID_PLANS = ['pro', 'pro_annual', 'legend', 'legend_annual'];
+const EXPECTED_MONTHLY_PRICE = { pro: 100, legend: 150 };
+const EXPECTED_ANNUAL_PRICE = { pro: 1000, legend: 1500 };
+
+// GET /api/users/subscription/status - Current user's platform subscription status
+router.get('/subscription/status', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [user, latestRequest] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          subscriptionTier: true,
+          subscriptionActivatedAt: true,
+        },
+      }),
+      prisma.proSubscriptionRequest.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          plan: true,
+          amount: true,
+          currency: true,
+          status: true,
+          adminNote: true,
+          reviewedAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        tier: user.subscriptionTier || 'free',
+        activatedAt: user.subscriptionActivatedAt,
+        latestRequest,
+      },
+    });
+  } catch (error) {
+    console.error('[User Subscription Status API] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // POST /api/users/subscription/request - Upgrade listener/user/DJ to Pro or Pro+
 router.post('/subscription/request', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { plan, amount, currency = 'SLE', paymentReference } = req.body;
 
-    if (!plan) {
-      return res.status(400).json({ success: false, error: 'Plan is required' });
+    if (!plan || !VALID_PLANS.includes(plan)) {
+      return res.status(400).json({
+        success: false,
+        error: `Plan is required and must be one of: ${VALID_PLANS.join(', ')}`,
+      });
+    }
+
+    const isAnnual = plan.includes('annual');
+    const basePlan = plan.includes('legend') ? 'legend' : 'pro';
+    const expectedAmount = isAnnual ? EXPECTED_ANNUAL_PRICE[basePlan] : EXPECTED_MONTHLY_PRICE[basePlan];
+
+    const parsedAmount = parseFloat(amount);
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Valid amount is required' });
+    }
+
+    if (parsedAmount !== expectedAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Amount does not match selected plan. Expected SLE ${expectedAmount} for ${plan}`,
+      });
+    }
+
+    if (!paymentReference && !req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a payment screenshot or transaction reference',
+      });
     }
 
     let proofUrl = req.body.paymentProofUrl || '';
@@ -1036,12 +1114,24 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
 
     const djId = user.djProfile?.id || null;
 
+    // Prevent duplicate pending requests for the same user
+    const existingPending = await prisma.proSubscriptionRequest.findFirst({
+      where: { userId: user.id, status: 'pending' },
+    });
+    if (existingPending) {
+      return res.status(409).json({
+        success: false,
+        error: 'You already have a pending subscription request. Please wait for admin approval.',
+        data: existingPending,
+      });
+    }
+
     const subRequest = await prisma.proSubscriptionRequest.create({
       data: {
         djId,
         userId: user.id,
         plan,
-        amount: parseFloat(amount) || 100,
+        amount: parsedAmount,
         currency,
         proofUrl: proofUrl || 'manual_reference_attached',
         status: 'pending',

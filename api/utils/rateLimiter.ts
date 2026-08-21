@@ -12,18 +12,19 @@ try {
   // Redis store not available — falling back to in-memory store
 }
 
-const storeOptions = RedisStore && redisClient
-  ? { store: new RedisStore({ sendCommand: (...args) => redisClient.call(...args) }) }
-  : {};
+// express-rate-limit requires each limiter to have its own Store instance.
+function getRedisStore() {
+  return RedisStore && redisClient
+    ? { store: new RedisStore({ sendCommand: (...args) => redisClient.call(...args) }) }
+    : {};
+}
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 2000, // Generous limit for multi-query SPA frontend
   keyGenerator: (req: any) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      return (typeof forwarded === 'string' ? forwarded : forwarded[0]).split(',')[0].trim();
-    }
+    // Use Express' req.ip (respects trust proxy) instead of trusting the first
+    // IP in X-Forwarded-For, which clients can spoof.
     return req.ip || req.socket?.remoteAddress || 'unknown';
   },
   message: {
@@ -32,25 +33,30 @@ const generalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
-// Dedicated login rate limiter: Max 10 requests per IP per 1 minute
+// Dedicated login rate limiter: Max 10 requests per email/IP per 1 minute
 const loginRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // Max 10 login attempts per IP per minute
+  max: 10, // Max 10 login attempts per email/IP per minute
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
     const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
+  keyGenerator: (req: any) => {
+    // Key by email when available so users behind shared/NAT IPs don't
+    // consume each other's limits. Body parsing runs before route handlers.
+    return req.body?.email || req.ip || req.socket?.remoteAddress || 'unknown';
+  },
   message: {
     success: false,
-    error: 'Incorrect email or password', // Generic error message
+    error: 'Too many login attempts. Please try again later.', // Clear, non-generic error
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 // General auth rate limiter (signup, otp, password reset)
@@ -68,7 +74,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 // Booking creation limiter
@@ -82,7 +88,7 @@ const bookingLimiter = rateLimit({
   keyGenerator: (req: any) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 // Dedicated Battle Vote limiter: Max 20 votes per 15 minutes per authenticated user
@@ -96,7 +102,7 @@ const voteLimiter = rateLimit({
   keyGenerator: (req: any) => (req.user?.id ? `user_${req.user.id}` : (req.ip || req.socket?.remoteAddress || 'unknown')),
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 
@@ -109,14 +115,14 @@ const playLimiter = rateLimit({
     const ip = req.ip || req.socket?.remoteAddress || '';
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
-  keyGenerator: (req: any) => `${req.ip || 'unknown'}:${req.params.id || req.params.id}`,
+  keyGenerator: (req: any) => `${req.user?.id || req.ip || 'unknown'}:${req.params.id}`, 
   message: {
     success: false,
     error: 'Too many plays. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 // Ticket purchase limiter — prevent spam pending orders
@@ -135,7 +141,7 @@ const purchaseLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 // Search / discovery limiter — cap expensive text-search queries
@@ -154,7 +160,7 @@ const searchLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...storeOptions,
+  ...getRedisStore(),
 });
 
 function conditionalSearchLimiter(req: any, res: any, next: any) {

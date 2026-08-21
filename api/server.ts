@@ -63,7 +63,10 @@ const officialPlaylistRoutes = require('./routes/officialPlaylists');
 const developerRoutes = require('./routes/developers');
 
 const app = express();
-app.set('trust proxy', 1);
+// Two reverse proxies sit in front of the API in production:
+// the host edge proxy (ports 80/443) and the in-compose nginx container.
+// Trust exactly those two hops so req.ip resolves to the real client IP.
+app.set('trust proxy', 2);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean);
@@ -97,7 +100,8 @@ app.use((req, res, next) => {
 function isAllowedOrigin(origin: string | undefined) {
   if (!origin) return true; // Allow requests without Origin header (mobile apps, curl, etc.)
   if (ALLOWED_ORIGINS.includes(origin)) return true;
-  if (/^https?:\/\/([a-z0-9-]+\.)*decksalone\.com$/i.test(origin)) return true;
+  // In production, only explicitly-listed origins are allowed. Do NOT use wildcard
+  // subdomain regex — a compromised subdomain could make credentialed requests.
   return process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 }
 
@@ -372,7 +376,7 @@ async function serveAppWithMeta(req, res) {
           description = event.description
             ? event.description.slice(0, 160)
             : `Get tickets and details for ${event.title} at ${event.venue || event.city || 'Sierra Leone'} on Deck Salone.`;
-          image = makeAbsoluteUrl(event.coverImage || event.dj?.avatar);
+          image = makeAbsoluteUrl(event.image || event.banner || event.poster || event.dj?.avatar);
         }
       }
 
@@ -486,28 +490,42 @@ process.on('SIGHUP', () => logger.info('SIGHUP ignored'));
 const { checkAndSendTrialNotifications } = require('./utils/trial');
 const { cleanupOldNotifications } = require('./utils/notifications');
 
+function startBackgroundJobs() {
+  logger.info('[BackgroundJobs] Starting scheduled background tasks');
+
+  // Run 14-day trial notifications check on startup and every 6 hours
+  checkAndSendTrialNotifications();
+  setInterval(checkAndSendTrialNotifications, 6 * 60 * 60 * 1000);
+
+  // Run daily bug report check every 24 hours (and 30 seconds after startup)
+  setTimeout(() => {
+    checkAndSendDailyBugReport();
+  }, 30 * 1000);
+  setInterval(checkAndSendDailyBugReport, 24 * 60 * 60 * 1000);
+
+  // Clean up read notifications older than 30 days every 24 hours (and on startup)
+  cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
+  setInterval(() => {
+    cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
+  }, 24 * 60 * 60 * 1000);
+
+  // Purge any Daily System Bug Report notifications mistakenly sent to non-admin users (MODERATOR, etc.)
+  prisma.notification.deleteMany({
+    where: {
+      title: '🚨 Daily System Bug Report',
+      user: { role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } },
+    },
+  }).catch(() => {});
+}
+
 if (require.main === module) {
   app.listen(PORT, () => {
     logger.info(`Deck Salone API running on port ${PORT}`);
     logger.info(`Health check: http://localhost:${PORT}/health`);
-
-    // Run 14-day trial notifications check on startup and every 6 hours
-    checkAndSendTrialNotifications();
-    setInterval(checkAndSendTrialNotifications, 6 * 60 * 60 * 1000);
-
-    // Run daily bug report check every 24 hours (and 30 seconds after startup)
-    setTimeout(() => {
-      checkAndSendDailyBugReport();
-    }, 30 * 1000);
-    setInterval(checkAndSendDailyBugReport, 24 * 60 * 60 * 1000);
-
-    // Clean up read notifications older than 30 days every 24 hours (and on startup)
-    cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
-    setInterval(() => {
-      cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
-    }, 24 * 60 * 60 * 1000);
+    startBackgroundJobs();
   });
 }
 
+app.startBackgroundJobs = startBackgroundJobs;
 module.exports = app;
 

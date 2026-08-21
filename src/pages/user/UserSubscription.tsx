@@ -9,37 +9,76 @@ import {
   Sparkles,
   Loader2,
   ExternalLink,
+  Clock,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import SEOHead from '@/components/SEOHead';
 
+interface SubscriptionRequest {
+  id: string;
+  plan: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+interface SubscriptionStatus {
+  tier: string;
+  activatedAt?: string;
+  latestRequest?: SubscriptionRequest | null;
+}
+
 export default function UserSubscription() {
-  const { user } = useAuthStore();
+  const { user, fetchMe } = useAuthStore();
   const [subscribedDjs, setSubscribedDjs] = useState<any[]>([]);
   const [loadingDjs, setLoadingDjs] = useState(true);
+  const [status, setStatus] = useState<SubscriptionStatus | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
 
   useEffect(() => {
-    const fetchSubscribedDjs = async () => {
+    // Refresh the auth user so subscriptionTier from /auth/me is up to date
+    fetchMe().catch(() => {});
+
+    const fetchData = async () => {
       try {
         setLoadingDjs(true);
-        const res = await api.get('/users/my-dj-subscriptions');
-        if (res.data.success) {
-          setSubscribedDjs(res.data.data || []);
+        setLoadingStatus(true);
+
+        const [subsRes, statusRes] = await Promise.all([
+          api.get('/users/my-dj-subscriptions').catch(() => ({ data: { success: false } })),
+          api.get('/users/subscription/status').catch(() => ({ data: { success: false } })),
+        ]);
+
+        if (subsRes.data.success) {
+          setSubscribedDjs(subsRes.data.data || []);
+        } else {
+          setSubscribedDjs([]);
+        }
+
+        if (statusRes.data.success) {
+          setStatus(statusRes.data.data);
         }
       } catch (err) {
-        // Fallback or empty if none yet
         setSubscribedDjs([]);
       } finally {
         setLoadingDjs(false);
+        setLoadingStatus(false);
       }
     };
-    fetchSubscribedDjs();
-  }, []);
 
-  const userTier = user?.subscriptionTier?.toLowerCase() || 'free';
+    fetchData();
+  }, [fetchMe]);
+
+  const userTier = (status?.tier || user?.subscriptionTier || 'free').toLowerCase();
   const isPro = userTier === 'pro' || userTier === 'legend';
   const isLegend = userTier === 'legend';
+  const latestRequest = status?.latestRequest;
 
   return (
     <div className="space-y-8 pb-16">
@@ -80,6 +119,59 @@ export default function UserSubscription() {
           </div>
         </div>
       </div>
+
+      {/* ─── STATUS / PENDING REQUEST BANNER ─── */}
+      {loadingStatus ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="w-5 h-5 text-[#f4e059] animate-spin" />
+        </div>
+      ) : latestRequest ? (
+        <div
+          className={`rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center gap-4 ${
+            latestRequest.status === 'pending'
+              ? 'bg-amber-500/5 border-amber-500/30'
+              : latestRequest.status === 'approved'
+              ? 'bg-green-500/5 border-green-500/30'
+              : 'bg-red-500/5 border-red-500/30'
+          }`}
+        >
+          <div className="shrink-0">
+            {latestRequest.status === 'pending' ? (
+              <Clock className="w-8 h-8 text-amber-400" />
+            ) : latestRequest.status === 'approved' ? (
+              <CheckCircle2 className="w-8 h-8 text-green-400" />
+            ) : (
+              <XCircle className="w-8 h-8 text-red-400" />
+            )}
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold uppercase text-white">
+              {latestRequest.status === 'pending'
+                ? 'Subscription Request Pending'
+                : latestRequest.status === 'approved'
+                ? 'Subscription Approved'
+                : 'Subscription Request Rejected'}
+            </h3>
+            <p className="text-xs text-text-secondary mt-1">
+              {latestRequest.status === 'pending'
+                ? `Your ${latestRequest.plan.replace('_', ' ')} upgrade request (SLE ${latestRequest.amount}) is being reviewed by our team. This usually takes a few hours.`
+                : latestRequest.status === 'approved'
+                ? `Your ${latestRequest.plan.replace('_', ' ')} subscription has been activated. Enjoy your perks!`
+                : `Your ${latestRequest.plan.replace('_', ' ')} request was not approved. ${
+                    latestRequest.adminNote ? `Note: ${latestRequest.adminNote}` : 'Please contact support for more information.'
+                  }`}
+            </p>
+          </div>
+          {latestRequest.status === 'rejected' && (
+            <Link
+              to="/pricing"
+              className="px-5 py-2.5 rounded-full bg-[#f4e059] text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 transition-all shrink-0 text-center"
+            >
+              Try Again
+            </Link>
+          )}
+        </div>
+      ) : null}
 
       {/* ─── ACTIVE PERKS OVERVIEW ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

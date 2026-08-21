@@ -8,7 +8,6 @@ import {
   Volume2,
   VolumeX,
   Heart,
-  Share2,
   ListMusic,
   X,
   Maximize2,
@@ -16,9 +15,10 @@ import {
   Shuffle,
   ChevronDown,
 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import ShareButton from '@/components/ShareButton';
 
 function isEmbedSource(source?: string, audioUrl?: string): boolean {
   const sourceLower = (source || '').toLowerCase();
@@ -362,6 +362,10 @@ export default function MixPlayer() {
     if (!currentTrack?.audioUrl || embed) return;
     const audio = new Audio(currentTrack.audioUrl);
     audioRef.current = audio;
+    audio.muted = isMuted || volume === 0;
+    try {
+      audio.volume = isMuted ? 0 : volume;
+    } catch (_) {}
 
     const onTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
@@ -449,8 +453,10 @@ export default function MixPlayer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || embed) return;
-    audio.muted = isMuted || volume === 0;
-    audio.volume = isMuted ? 0 : volume;
+    try {
+      audio.muted = isMuted || volume === 0;
+      audio.volume = isMuted ? 0 : volume;
+    } catch (_) {}
   }, [volume, isMuted, embed]);
 
   // Fallback timer for mock audio streams (in case of embeds/no direct stream)
@@ -793,6 +799,26 @@ export default function MixPlayer() {
                   </div>
                 </div>
 
+                {currentTrack && (
+                  <ShareButton
+                    url={`${window.location.origin}/mix/${currentTrack.id}`}
+                    title={`${currentTrack.title} by ${currentTrack.dj} — Deck Salone`}
+                    description={`Listen to ${currentTrack.title} on Deck Salone.`}
+                    size="sm"
+                    menuPosition="top"
+                    preview={{
+                      type: 'mix',
+                      coverImage: currentTrack.cover ? getMediaUrl(currentTrack.cover) : undefined,
+                      title: currentTrack.title,
+                      djName: currentTrack.dj,
+                      djAvatar: currentTrack.djAvatar ? getMediaUrl(currentTrack.djAvatar) : undefined,
+                      artist: currentTrack.dj,
+                      genre: currentTrack.genre,
+                      plays: currentTrack.plays,
+                      duration: currentTrack.duration,
+                    }}
+                  />
+                )}
                 <button
                   onClick={() => setIsExpanded(true)}
                   className="p-1.5 text-white/30 hover:text-white/60 transition-colors hidden md:block"
@@ -990,24 +1016,26 @@ export default function MixPlayer() {
                     <Heart size={14} className={liked ? 'fill-red' : ''} />
                     <span>{liked ? 'Liked' : 'Like'}</span>
                   </button>
-                  <button
-                    onClick={async () => {
-                      if (!currentTrack) return;
-                      const url = `${window.location.origin}/mixes`;
-                      try {
-                        if (navigator.share) {
-                          await navigator.share({ title: `${currentTrack.title} by ${currentTrack.dj}`, url });
-                        } else {
-                          await navigator.clipboard.writeText(url);
-                          alert('Share link copied to clipboard!');
-                        }
-                      } catch {}
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider"
-                  >
-                    <Share2 size={14} />
-                    <span>Share</span>
-                  </button>
+                  {currentTrack && (
+                    <ShareButton
+                      url={`${window.location.origin}/mix/${currentTrack.id}`}
+                      title={`${currentTrack.title} by ${currentTrack.dj} — Deck Salone`}
+                      description={`Listen to ${currentTrack.title} on Deck Salone.`}
+                      size="md"
+                      menuPosition="top"
+                      preview={{
+                        type: 'mix',
+                        coverImage: currentTrack.cover ? getMediaUrl(currentTrack.cover) : undefined,
+                        title: currentTrack.title,
+                        djName: currentTrack.dj,
+                        djAvatar: currentTrack.djAvatar ? getMediaUrl(currentTrack.djAvatar) : undefined,
+                        artist: currentTrack.dj,
+                        genre: currentTrack.genre,
+                        plays: currentTrack.plays,
+                        duration: currentTrack.duration,
+                      }}
+                    />
+                  )}
                   <button className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider">
                     <ListMusic size={14} />
                     <span>Queue</span>

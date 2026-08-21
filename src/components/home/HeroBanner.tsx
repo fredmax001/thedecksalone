@@ -62,7 +62,7 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
         subtitle: `${mix.dj?.stageName || 'Deck Salone'} • ${mix.plays || 0} plays`,
         image: mix.coverImage || mix.dj?.avatar || '/mix-placeholder.jpg',
         cta: 'Listen Now',
-        link: `/mixes/${mix.id}`,
+        link: `/mix/${mix.id}`,
         type: 'mix',
         raw: mix,
       });

@@ -1,13 +1,19 @@
 require('dotenv').config({ path: '../.env' });
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const prisma = new PrismaClient();
+
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD || crypto.randomBytes(20).toString('hex');
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  throw new Error('SEED_ADMIN_PASSWORD environment variable is required to seed the admin user.');
+}
 
 const djData = [
   {
     email: 'fredmax@soundit.sl',
-    password: 'password123',
     stageName: 'Fred Max',
     fullName: 'Abdul Conteh',
     city: 'Freetown',
@@ -31,7 +37,6 @@ const djData = [
   },
   {
     email: 'rampage@soundit.sl',
-    password: 'password123',
     stageName: 'Rampage',
     fullName: 'Fred Max',
     city: 'Freetown',
@@ -55,7 +60,6 @@ const djData = [
   },
   {
     email: 'cess@soundit.sl',
-    password: 'password123',
     stageName: 'Cess',
     fullName: 'Lamin Kamara',
     city: 'Freetown',
@@ -79,7 +83,6 @@ const djData = [
   },
   {
     email: 'ditofreaky@soundit.sl',
-    password: 'password123',
     stageName: 'Dito Freaky',
     fullName: 'Mohamed Conteh',
     city: 'Freetown',
@@ -103,7 +106,6 @@ const djData = [
   },
   {
     email: 'busy@soundit.sl',
-    password: 'password123',
     stageName: 'Busy',
     fullName: 'Abdul Turay',
     city: 'Freetown',
@@ -127,7 +129,6 @@ const djData = [
   },
   {
     email: 'kaywizesalone@soundit.sl',
-    password: 'password123',
     stageName: 'Kaywize Salone',
     fullName: 'Ibrahim Bangura',
     city: 'Freetown',
@@ -151,7 +152,6 @@ const djData = [
   },
   {
     email: 'djmaggie@soundit.sl',
-    password: 'password123',
     stageName: 'DJ Maggie',
     fullName: 'DJ Maggie',
     city: 'Bo',
@@ -175,7 +175,6 @@ const djData = [
   },
   {
     email: 'switch@soundit.sl',
-    password: 'password123',
     stageName: 'Switch',
     fullName: 'Kelvin Doe',
     city: 'Kenema',
@@ -199,7 +198,6 @@ const djData = [
   },
   {
     email: 'bow@soundit.sl',
-    password: 'password123',
     stageName: 'Bow',
     fullName: 'Alie Hassan Nasralla',
     city: 'Makeni',
@@ -223,7 +221,6 @@ const djData = [
   },
   {
     email: 'min1@soundit.sl',
-    password: 'password123',
     stageName: 'Min-1',
     fullName: 'Mamaja Jalloh',
     city: 'Bo',
@@ -247,7 +244,6 @@ const djData = [
   },
   {
     email: 'flex@soundit.sl',
-    password: 'password123',
     stageName: 'Flex',
     fullName: 'Wilmot Faulkner',
     city: 'Freetown',
@@ -406,7 +402,7 @@ async function seed() {
       data: {
         email: `user${i + 1}@example.com`,
         username: `user${i + 1}`,
-        password: await bcrypt.hash('password123', 10),
+        password: await bcrypt.hash(DEMO_PASSWORD, 12),
         role: 'USER',
       },
     });
@@ -423,7 +419,7 @@ async function seed() {
       data: {
         email: dj.email,
         username: dj.email.split('@')[0],
-        password: await bcrypt.hash(dj.password, 10),
+        password: await bcrypt.hash(DEMO_PASSWORD, 12),
         role: 'DJ',
       },
     });
@@ -709,7 +705,7 @@ async function seed() {
     data: {
       email: 'admin@soundit.sl',
       username: 'admin',
-      password: await bcrypt.hash('admin123', 10),
+      password: await bcrypt.hash(ADMIN_PASSWORD, 12),
       role: 'ADMIN',
     },
   });
@@ -719,11 +715,11 @@ async function seed() {
   console.log('\nSeed completed successfully!');
   console.log(`Summary:`);
   console.log(`- ${regularUsers.length} regular users`);
-  console.log(`- ${djProfiles.length} DJ profiles`);
+  console.log(`- ${djProfiles.length} demo DJ/user accounts (password from SEED_DEMO_PASSWORD env)`);
   console.log(`- ${mixData.length} mixes`);
   console.log(`- ${eventData.length + 3} events`);
   console.log(`- ${reviewData.length} reviews`);
-  console.log(`- 1 admin user (admin@soundit.sl / admin123)`);
+  console.log(`- 1 admin user (password from SEED_ADMIN_PASSWORD env)`);
   console.log(`- 1 active metric-based battle with entries`);
   console.log(`- 1 sample booking with deposit and pending payment`);
 }

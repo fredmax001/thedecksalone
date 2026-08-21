@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, invalidateUserAuthCache } = require('../middleware/auth');
 const { recalculateAllRankings, calculateBattleBaseScore } = require('../utils/ranking');
 const { activateSubscriptionFeatures, resetSubscriptionFeatures } = require('../middleware/permissions');
 const { sendEmail } = require('../utils/email');
@@ -326,6 +326,8 @@ router.put('/users/:id/role', requireRole('ADMIN'), async (req, res) => {
       req,
     });
 
+    invalidateUserAuthCache(targetId);
+
     return res.json({ success: true, data: updatedUser });
   } catch (error) {
     console.error('Internal server error:', error);
@@ -365,6 +367,8 @@ router.put('/users/:id/status', requireRole('ADMIN'), async (req, res) => {
       metadata: { newStatus: status },
       req,
     });
+
+    invalidateUserAuthCache(targetId);
 
     return res.json({ success: true, data: user });
   } catch (error) {
@@ -1226,6 +1230,75 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
         req,
       });
     }
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/dj-fan-subscriptions/:id/approve - Approve a pending fan-to-DJ subscription
+router.post('/dj-fan-subscriptions/:id/approve', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
+  try {
+    const subscription = await prisma.djFanSubscription.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true, userId: true } }, user: { select: { id: true, username: true, email: true } } },
+    });
+    if (!subscription) {
+      return res.status(404).json({ success: false, error: 'Subscription not found' });
+    }
+
+    const durationDays = subscription.amount >= 100 ? 60 : 30;
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+    const updated = await prisma.djFanSubscription.update({
+      where: { id: subscription.id },
+      data: { status: 'ACTIVE', expiresAt },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: subscription.userId,
+      action: 'DJ_FAN_SUBSCRIPTION_APPROVE',
+      entity: 'DJ_FAN_SUBSCRIPTION',
+      entityId: subscription.id,
+      metadata: { djId: subscription.djId, amount: subscription.amount },
+      req,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/dj-fan-subscriptions/:id/reject - Reject a pending fan-to-DJ subscription
+router.post('/dj-fan-subscriptions/:id/reject', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
+  try {
+    const subscription = await prisma.djFanSubscription.findUnique({
+      where: { id: req.params.id },
+      include: { dj: { select: { id: true, stageName: true, userId: true } }, user: { select: { id: true, username: true, email: true } } },
+    });
+    if (!subscription) {
+      return res.status(404).json({ success: false, error: 'Subscription not found' });
+    }
+
+    const updated = await prisma.djFanSubscription.update({
+      where: { id: subscription.id },
+      data: { status: 'REJECTED' },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: subscription.userId,
+      action: 'DJ_FAN_SUBSCRIPTION_REJECT',
+      entity: 'DJ_FAN_SUBSCRIPTION',
+      entityId: subscription.id,
+      metadata: { djId: subscription.djId, amount: subscription.amount },
+      req,
+    });
 
     return res.json({ success: true, data: updated });
   } catch (error) {

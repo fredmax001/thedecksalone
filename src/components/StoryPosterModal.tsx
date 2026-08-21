@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -8,10 +8,16 @@ import {
   Loader2,
   Check,
   Smartphone,
+  Palette,
+  ImageIcon,
+  Square,
+  RectangleHorizontal,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import type { SharePreview } from "./ShareButton";
+import { cn } from "@/lib/utils";
+import { getMediaUrl } from "@/lib/api";
 
 interface StoryPosterModalProps {
   isOpen: boolean;
@@ -20,13 +26,43 @@ interface StoryPosterModalProps {
   title: string;
   description?: string;
   preview?: SharePreview;
+  initialFormat?: CardFormat;
 }
+
+type CardFormat = "story" | "square" | "wide";
+
+interface ColorTheme {
+  name: string;
+  accent: string;
+  accentLight: string;
+  accentDark: string;
+}
+
+const PRESET_THEMES: ColorTheme[] = [
+  { name: "Deck Gold", accent: "#f4e059", accentLight: "#fdf186", accentDark: "#ceb100" },
+  { name: "Salone Red", accent: "#ef4444", accentLight: "#f87171", accentDark: "#b91c1c" },
+  { name: "Ocean Blue", accent: "#3b82f6", accentLight: "#60a5fa", accentDark: "#1d4ed8" },
+  { name: "Violet", accent: "#8b5cf6", accentLight: "#a78bfa", accentDark: "#6d28d9" },
+  { name: "Emerald", accent: "#10b981", accentLight: "#34d399", accentDark: "#047857" },
+  { name: "Orange", accent: "#f97316", accentLight: "#fb923c", accentDark: "#c2410c" },
+  { name: "Pink", accent: "#ec4899", accentLight: "#f472b6", accentDark: "#be185d" },
+  { name: "Cyan", accent: "#06b6d4", accentLight: "#22d3ee", accentDark: "#0891b2" },
+];
 
 function formatCompact(n: number) {
   return new Intl.NumberFormat("en-US", {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds) return "0:00";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 function formatEventDate(dateStr: string) {
@@ -41,27 +77,53 @@ function formatEventDate(dateStr: string) {
   }
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const sanitized = hex.replace("#", "");
+  const r = parseInt(sanitized.substring(0, 2), 16);
+  const g = parseInt(sanitized.substring(2, 4), 16);
+  const b = parseInt(sanitized.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getCanvasDimensions(format: CardFormat): { width: number; height: number } {
+  if (format === "story") return { width: 1080, height: 1920 };
+  if (format === "square") return { width: 1080, height: 1080 };
+  return { width: 1200, height: 630 };
+}
+
 export default function StoryPosterModal({
   isOpen,
   onClose,
   url,
   title,
   preview,
+  initialFormat = "story",
 }: StoryPosterModalProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [format, setFormat] = useState<CardFormat>(initialFormat);
+  const [theme, setTheme] = useState<ColorTheme>(PRESET_THEMES[0]);
+  const [customAccent, setCustomAccent] = useState("#f4e059");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
-  // Extract poster details based on preview type
+  // When modal opens, reset to the requested initial format
+  useEffect(() => {
+    if (isOpen) setFormat(initialFormat);
+  }, [isOpen, initialFormat]);
+
+  const activeAccent = theme.name === "Custom" ? customAccent : theme.accent;
+
   const getImage = () => {
     if (!preview) return "/default-avatar.jpg";
-    if (preview.type === "dj") return preview.avatar || "/default-avatar.jpg";
-    if (preview.type === "mix") return preview.coverImage || preview.djAvatar || "/placeholder.jpg";
-    if (preview.type === "event") return preview.image || preview.djAvatar || "/placeholder.jpg";
-    if (preview.type === "user") return preview.avatar || "/default-avatar.jpg";
-    if (preview.type === "hall_of_fame") return preview.avatar || preview.coverImage || "/default-avatar.jpg";
-    return "/default-avatar.jpg";
+    let raw = "";
+    if (preview.type === "dj") raw = preview.avatar || "";
+    else if (preview.type === "mix") raw = preview.coverImage || preview.djAvatar || "";
+    else if (preview.type === "event") raw = preview.image || preview.djAvatar || "";
+    else if (preview.type === "user") raw = preview.avatar || "";
+    else if (preview.type === "hall_of_fame") raw = preview.avatar || preview.coverImage || "";
+    if (!raw) return "/default-avatar.jpg";
+    return raw.startsWith("http") || raw.startsWith("data:") || raw.startsWith("blob:") ? raw : getMediaUrl(raw);
   };
 
   const getCategoryTag = () => {
@@ -94,8 +156,32 @@ export default function StoryPosterModal({
     return "Sierra Leone's Official DJ Platform";
   };
 
-  // Build 4 rich details pills for the poster (addressing "with more details not empty like this one above")
+  const getMixDetails = () => {
+    if (preview?.type !== "mix") return [];
+    const details: { label: string; icon: string }[] = [];
+    details.push({ label: "Now Playing on Deck Salone", icon: "🔥" });
+    if (preview.duration) details.push({ label: `Duration: ${formatDuration(preview.duration)}`, icon: "⏱️" });
+    if (preview.genre) details.push({ label: preview.genre, icon: "🎵" });
+    if (preview.plays) details.push({ label: `${formatCompact(preview.plays)} Plays`, icon: "▶️" });
+    if (preview.artist) details.push({ label: preview.artist, icon: "🎤" });
+    return details.slice(0, 4);
+  };
+
+  const getDjDetails = () => {
+    if (preview?.type !== "dj") return [];
+    const details: { label: string; icon: string }[] = [];
+    if (preview.rankingPosition) details.push({ label: `#${preview.rankingPosition} Ranked DJ`, icon: "🏆" });
+    if (preview.city) details.push({ label: preview.city, icon: "📍" });
+    if (preview.genres?.length) details.push({ label: preview.genres.slice(0, 2).join(" • "), icon: "🎵" });
+    if (preview.followers) details.push({ label: `${formatCompact(preview.followers)} Followers`, icon: "⭐" });
+    if (details.length < 4) details.push({ label: "Verified DJ", icon: "✅" });
+    return details.slice(0, 4);
+  };
+
   const getDetails = () => {
+    if (preview?.type === "mix") return getMixDetails();
+    if (preview?.type === "dj") return getDjDetails();
+
     const details: { label: string; icon: string }[] = [];
     if (!preview) {
       return [
@@ -106,18 +192,7 @@ export default function StoryPosterModal({
       ];
     }
 
-    if (preview.type === "dj") {
-      if (preview.rankingPosition) details.push({ label: `#${preview.rankingPosition} Ranked DJ`, icon: "🏆" });
-      if (preview.city) details.push({ label: preview.city, icon: "📍" });
-      if (preview.genres?.length) details.push({ label: preview.genres.slice(0, 2).join(" • "), icon: "🎵" });
-      if (preview.followers) details.push({ label: `${formatCompact(preview.followers)} Followers`, icon: "⭐" });
-      if (details.length < 4) details.push({ label: "Verified DJ", icon: "✅" });
-    } else if (preview.type === "mix") {
-      if (preview.genre) details.push({ label: `Genre: ${preview.genre}`, icon: "🎵" });
-      if (preview.djName) details.push({ label: `DJ: ${preview.djName}`, icon: "🎧" });
-      if (preview.plays) details.push({ label: `${formatCompact(preview.plays)} Plays`, icon: "🔥" });
-      details.push({ label: "Deck Salone Exclusive", icon: "⭐" });
-    } else if (preview.type === "event") {
+    if (preview.type === "event") {
       if (preview.date) details.push({ label: formatEventDate(preview.date), icon: "📅" });
       if (preview.venue || preview.city) details.push({ label: [preview.venue, preview.city].filter(Boolean).join(", "), icon: "📍" });
       if (preview.djName) details.push({ label: `DJ: ${preview.djName}`, icon: "🎧" });
@@ -137,206 +212,485 @@ export default function StoryPosterModal({
     return details.slice(0, 4);
   };
 
-  // High Resolution 1080x1920 Canvas Poster Generator
+  const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let current = "";
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word;
+      if (ctx.measureText(test).width <= maxWidth) {
+        current = test;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+    if (current) lines.push(current);
+    return lines.length ? lines : [text];
+  };
+
+  const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+    bgGrad.addColorStop(0, "#08080a");
+    bgGrad.addColorStop(0.35, "#0d0d12");
+    bgGrad.addColorStop(0.7, "#111118");
+    bgGrad.addColorStop(1, "#050508");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle accent radial glow near top/center
+    const glowGrad = ctx.createRadialGradient(width / 2, height * 0.25, 40, width / 2, height * 0.25, height * 0.55);
+    glowGrad.addColorStop(0, hexToRgba(activeAccent, 0.16));
+    glowGrad.addColorStop(0.5, hexToRgba(activeAccent, 0.05));
+    glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, 0, width, height);
+  };
+
+  const drawHeader = (ctx: CanvasRenderingContext2D, width: number, padding: number) => {
+    ctx.font = `900 ${width > 1100 ? 38 : 34}px sans-serif`;
+    ctx.fillStyle = activeAccent;
+    ctx.textAlign = "left";
+    ctx.fillText("DECK SALONE", padding, padding + 30);
+
+    ctx.font = `600 ${width > 1100 ? 24 : 20}px sans-serif`;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillText("• SIERRA LEONE'S OFFICIAL DJ PLATFORM", padding + (width > 1100 ? 390 : 330), padding + 30);
+
+    ctx.strokeStyle = hexToRgba(activeAccent, 0.35);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding + 55);
+    ctx.lineTo(width - padding, padding + 55);
+    ctx.stroke();
+  };
+
+  const drawRoundedImage = async (
+    ctx: CanvasRenderingContext2D,
+    src: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radius: number,
+    borderColor: string,
+    borderWidth: number
+  ) => {
+    const fullSrc = src.startsWith("http") || src.startsWith("data:") || src.startsWith("blob:") ? src : getMediaUrl(src);
+
+    const loadImage = (url: string, useCors = true): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        if (useCors) img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+    };
+
+    let loadedImg: HTMLImageElement | null = null;
+    try {
+      loadedImg = await loadImage(fullSrc, true);
+    } catch {
+      try {
+        loadedImg = await loadImage(fullSrc, false);
+      } catch {
+        try {
+          loadedImg = await loadImage("/default-avatar.jpg", false);
+        } catch {}
+      }
+    }
+
+    if (loadedImg && loadedImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, radius);
+      ctx.clip();
+
+      // Object-fit: cover aspect ratio calculation
+      const imgRatio = loadedImg.naturalWidth / (loadedImg.naturalHeight || 1);
+      const targetRatio = w / (h || 1);
+      let sWidth = loadedImg.naturalWidth;
+      let sHeight = loadedImg.naturalHeight;
+      let sx = 0;
+      let sy = 0;
+      if (imgRatio > targetRatio) {
+        sWidth = loadedImg.naturalHeight * targetRatio;
+        sx = (loadedImg.naturalWidth - sWidth) / 2;
+      } else {
+        sHeight = loadedImg.naturalWidth / targetRatio;
+        sy = (loadedImg.naturalHeight - sHeight) / 2;
+      }
+
+      ctx.drawImage(loadedImg, sx, sy, sWidth, sHeight, x, y, w, h);
+      ctx.restore();
+
+      if (borderWidth > 0) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = borderWidth;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        ctx.stroke();
+      }
+    }
+  };
+
+  const drawBadge = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number) => {
+    ctx.font = "bold 22px sans-serif";
+    const badgeWidth = ctx.measureText(text).width + 44;
+
+    ctx.fillStyle = hexToRgba(activeAccent, 0.14);
+    ctx.strokeStyle = hexToRgba(activeAccent, 0.55);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, badgeWidth, 50, 25);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = activeAccent;
+    ctx.textAlign = "left";
+    ctx.fillText(text, x + 22, y + 34);
+  };
+
+  const drawPills = (
+    ctx: CanvasRenderingContext2D,
+    details: { label: string; icon: string }[],
+    startX: number,
+    startY: number,
+    maxWidth: number,
+    columns: number
+  ) => {
+    ctx.font = "600 24px sans-serif";
+    const colWidth = (maxWidth - (columns - 1) * 24) / columns;
+    const rowHeight = 78;
+
+    details.forEach((item, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      const px = startX + col * (colWidth + 24);
+      const py = startY + row * rowHeight;
+
+      const itemText = `${item.icon}  ${item.label}`;
+      const textWidth = Math.min(ctx.measureText(itemText).width + 36, colWidth - 12);
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(px, py, textWidth, 60, 30);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#E2E8F0";
+      ctx.textAlign = "left";
+      ctx.fillText(itemText, px + 18, py + 39);
+    });
+  };
+
+  const drawQr = async (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+    const qrSvg = qrContainerRef.current?.querySelector("svg");
+    if (!qrSvg) return;
+    const xml = new XMLSerializer().serializeToString(qrSvg);
+    const svg64 = btoa(xml);
+    const image64 = "data:image/svg+xml;base64," + svg64;
+
+    const qrImg = new Image();
+    qrImg.src = image64;
+    await new Promise((resolve) => {
+      qrImg.onload = resolve;
+      qrImg.onerror = resolve;
+    });
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 24);
+    ctx.fill();
+    ctx.drawImage(qrImg, x + 12, y + 12, size - 24, size - 24);
+  };
+
+  const drawStory = async (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const padding = 90;
+    const details = getDetails();
+
+    drawBackground(ctx, width, height);
+    drawHeader(ctx, width, padding);
+
+    const imgSize = 720;
+    const imgX = (width - imgSize) / 2;
+    const imgY = 210;
+    await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 40, activeAccent, 6);
+
+    const badgeY = imgY + imgSize + 55;
+    drawBadge(ctx, getCategoryTag(), padding, badgeY);
+
+    const titleY = badgeY + 120;
+    ctx.font = "900 66px sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    const mainTitle = getMainTitle();
+    const titleLines = wrapText(ctx, mainTitle.length > 28 ? `${mainTitle.slice(0, 26)}...` : mainTitle, width - padding * 2);
+    titleLines.forEach((line, i) => ctx.fillText(line, padding, titleY + i * 80));
+
+    const subY = titleY + titleLines.length * 80 + 30;
+    ctx.font = "600 32px sans-serif";
+    ctx.fillStyle = activeAccent;
+    ctx.fillText(getSubtitle(), padding, subY);
+
+    drawPills(ctx, details, padding, subY + 60, width - padding * 2, 2);
+
+    const qrY = height - 320;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, qrY - 40);
+    ctx.lineTo(width - padding, qrY - 40);
+    ctx.stroke();
+
+    await drawQr(ctx, padding, qrY, 220);
+
+    const textX = padding + 260;
+    ctx.textAlign = "left";
+    ctx.font = "900 40px sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText("Scan to Listen", textX, qrY + 75);
+
+    ctx.font = "600 26px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.fillText("Available live on decksalone.com", textX, qrY + 125);
+
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillStyle = activeAccent;
+    ctx.fillText(url.replace(/^https?:\/\//, ""), textX, qrY + 170);
+  };
+
+  const drawSquare = async (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const padding = 80;
+    const details = getDetails();
+
+    drawBackground(ctx, width, height);
+    drawHeader(ctx, width, padding);
+
+    const isMix = preview?.type === "mix";
+    const isDj = preview?.type === "dj";
+
+    if (isMix) {
+      // Mix square layout: cover left, info right
+      const imgSize = 520;
+      const imgX = padding;
+      const imgY = 200;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 32, activeAccent, 5);
+
+      const infoX = imgX + imgSize + 60;
+      const infoW = width - infoX - padding;
+
+      drawBadge(ctx, getCategoryTag(), infoX, imgY + 20);
+
+      ctx.font = "900 52px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, infoW);
+      titleLines.slice(0, 3).forEach((line, i) => ctx.fillText(line, infoX, imgY + 120 + i * 66));
+
+      const subY = imgY + 120 + Math.min(titleLines.length, 3) * 66 + 30;
+      ctx.font = "600 28px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), infoX, subY);
+
+      drawPills(ctx, details, infoX, subY + 50, infoW, 1);
+
+      const qrY = height - 220;
+      await drawQr(ctx, padding, qrY, 170);
+
+      ctx.textAlign = "left";
+      ctx.font = "900 34px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to Listen", padding + 200, qrY + 75);
+      ctx.font = "600 22px sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillText("decksalone.com", padding + 200, qrY + 115);
+    } else if (isDj) {
+      // DJ square layout: large avatar top center, details below
+      const avatarSize = 360;
+      const imgX = (width - avatarSize) / 2;
+      const imgY = 180;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, avatarSize, avatarSize, avatarSize / 2, activeAccent, 6);
+
+      drawBadge(ctx, getCategoryTag(), padding, imgY + avatarSize + 40);
+
+      ctx.font = "900 64px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "center";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, width - padding * 2);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, width / 2, imgY + avatarSize + 140 + i * 74));
+
+      ctx.font = "600 30px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), width / 2, imgY + avatarSize + 140 + Math.min(titleLines.length, 2) * 74 + 30);
+
+      ctx.textAlign = "left";
+      drawPills(ctx, details, padding, imgY + avatarSize + 300, width - padding * 2, 2);
+
+      const qrY = height - 200;
+      await drawQr(ctx, padding, qrY, 150);
+      ctx.textAlign = "left";
+      ctx.font = "900 30px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to Book", padding + 180, qrY + 70);
+      ctx.font = "600 20px sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillText("decksalone.com", padding + 180, qrY + 105);
+    } else {
+      // Generic square layout
+      const imgSize = 520;
+      const imgX = (width - imgSize) / 2;
+      const imgY = 200;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 36, activeAccent, 5);
+
+      ctx.textAlign = "center";
+      ctx.font = "900 56px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, width - padding * 2);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, width / 2, imgY + imgSize + 100 + i * 70));
+
+      ctx.font = "600 28px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), width / 2, imgY + imgSize + 100 + Math.min(titleLines.length, 2) * 70 + 30);
+
+      drawPills(ctx, details, padding, imgY + imgSize + 240, width - padding * 2, 2);
+
+      const qrY = height - 200;
+      await drawQr(ctx, padding, qrY, 150);
+      ctx.textAlign = "left";
+      ctx.font = "900 30px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to View", padding + 180, qrY + 70);
+    }
+  };
+
+  const drawWide = async (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const padding = 70;
+    const details = getDetails();
+
+    drawBackground(ctx, width, height);
+    drawHeader(ctx, width, padding);
+
+    const isMix = preview?.type === "mix";
+    const isDj = preview?.type === "dj";
+
+    if (isMix) {
+      // Wide mix layout: square cover left, info right
+      const imgSize = 400;
+      const imgX = padding;
+      const imgY = 150;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 28, activeAccent, 5);
+
+      const contentX = imgX + imgSize + 50;
+      const contentW = width - contentX - padding;
+
+      drawBadge(ctx, getCategoryTag(), contentX, imgY + 10);
+
+      ctx.font = "900 48px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, contentW);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, contentX, imgY + 95 + i * 58));
+
+      const subY = imgY + 95 + Math.min(titleLines.length, 2) * 58 + 20;
+      ctx.font = "600 26px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), contentX, subY);
+
+      drawPills(ctx, details, contentX, subY + 40, contentW, 2);
+
+      await drawQr(ctx, contentX, height - 170, 120);
+      ctx.textAlign = "left";
+      ctx.font = "900 26px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to Listen", contentX + 145, height - 118);
+      ctx.font = "600 18px sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillText("decksalone.com", contentX + 145, height - 88);
+    } else if (isDj) {
+      // Wide DJ layout: avatar left, content right
+      const avatarSize = 360;
+      const imgX = padding;
+      const imgY = 150;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, avatarSize, avatarSize, avatarSize / 2, activeAccent, 6);
+
+      const contentX = imgX + avatarSize + 55;
+      const contentW = width - contentX - padding;
+
+      drawBadge(ctx, getCategoryTag(), contentX, imgY + 10);
+
+      ctx.font = "900 52px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, contentW);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, contentX, imgY + 95 + i * 64));
+
+      const subY = imgY + 95 + Math.min(titleLines.length, 2) * 64 + 20;
+      ctx.font = "600 26px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), contentX, subY);
+
+      drawPills(ctx, details, contentX, subY + 40, contentW, 2);
+
+      await drawQr(ctx, contentX, height - 170, 120);
+      ctx.textAlign = "left";
+      ctx.font = "900 26px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to Book", contentX + 145, height - 118);
+      ctx.font = "600 18px sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillText("decksalone.com", contentX + 145, height - 88);
+    } else {
+      // Generic wide layout
+      const imgSize = 380;
+      const imgX = padding;
+      const imgY = 150;
+      await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 28, activeAccent, 5);
+
+      const contentX = imgX + imgSize + 50;
+      const contentW = width - contentX - padding;
+
+      ctx.font = "900 48px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      const mainTitle = getMainTitle();
+      const titleLines = wrapText(ctx, mainTitle, contentW);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, contentX, imgY + 80 + i * 58));
+
+      const subY = imgY + 80 + Math.min(titleLines.length, 2) * 58 + 20;
+      ctx.font = "600 26px sans-serif";
+      ctx.fillStyle = activeAccent;
+      ctx.fillText(getSubtitle(), contentX, subY);
+
+      drawPills(ctx, details, contentX, subY + 40, contentW, 2);
+
+      await drawQr(ctx, contentX, height - 170, 120);
+      ctx.textAlign = "left";
+      ctx.font = "900 26px sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText("Scan to View", contentX + 145, height - 118);
+    }
+  };
+
   const drawCanvasPoster = useCallback(async (): Promise<string | null> => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    const width = 1080;
-    const height = 1920;
+    const { width, height } = getCanvasDimensions(format);
     canvas.width = width;
     canvas.height = height;
 
-    // 1. Dark Gradient Background
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-    bgGrad.addColorStop(0, "#08080a");
-    bgGrad.addColorStop(0.3, "#121217");
-    bgGrad.addColorStop(0.7, "#181820");
-    bgGrad.addColorStop(1, "#0a0a0d");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Subtle Gold Radial Glow in top center
-    const glowGrad = ctx.createRadialGradient(width / 2, 450, 50, width / 2, 450, 700);
-    glowGrad.addColorStop(0, "rgba(234, 179, 8, 0.15)");
-    glowGrad.addColorStop(0.5, "rgba(202, 138, 4, 0.05)");
-    glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = glowGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // 2. Top Header Branding
-    ctx.font = "900 36px sans-serif";
-    ctx.fillStyle = "#EAB308"; // Gold
-    ctx.textAlign = "left";
-    ctx.fillText("DECK SALONE", 90, 110);
-
-    ctx.font = "600 24px sans-serif";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-    ctx.fillText("• SIERRA LEONE'S OFFICIAL DJ PLATFORM", 370, 110);
-
-    // Top border line
-    ctx.strokeStyle = "rgba(234, 179, 8, 0.3)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(90, 145);
-    ctx.lineTo(width - 90, 145);
-    ctx.stroke();
-
-    // 3. Main Center Media Image Box (Rounded with Gold Border)
-    const imgSize = 720;
-    const imgX = (width - imgSize) / 2;
-    const imgY = 200;
-    const radius = 40;
-
-    // Load and draw center image
-    const mainImg = new Image();
-    mainImg.crossOrigin = "anonymous";
-    mainImg.src = getImage();
-
-    await new Promise((resolve) => {
-      mainImg.onload = resolve;
-      mainImg.onerror = () => {
-        mainImg.src = "/default-avatar.jpg";
-        mainImg.onload = resolve;
-        mainImg.onerror = resolve;
-      };
-    });
-
-    // Draw Image Shadow & Border Box
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(imgX, imgY, imgSize, imgSize, radius);
-    ctx.clip();
-    ctx.drawImage(mainImg, imgX, imgY, imgSize, imgSize);
-    ctx.restore();
-
-    // Gold Image Border
-    ctx.strokeStyle = "#EAB308";
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(imgX, imgY, imgSize, imgSize, radius);
-    ctx.stroke();
-
-    // 4. Category Tag Badge
-    const badgeY = imgY + imgSize + 55;
-    const badgeText = getCategoryTag();
-    ctx.font = "bold 24px sans-serif";
-    const badgeWidth = ctx.measureText(badgeText).width + 48;
-    const badgeX = 90;
-
-    ctx.fillStyle = "rgba(234, 179, 8, 0.15)";
-    ctx.strokeStyle = "rgba(234, 179, 8, 0.5)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeWidth, 54, 27);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#EAB308";
-    ctx.textAlign = "left";
-    ctx.fillText(badgeText, badgeX + 24, badgeY + 36);
-
-    // 5. Main Title & Subtitle
-    const titleY = badgeY + 130;
-    ctx.font = "900 68px sans-serif";
-    ctx.fillStyle = "#FFFFFF";
-    const mainTitle = getMainTitle();
-    // Truncate if too long
-    const truncatedTitle = mainTitle.length > 24 ? `${mainTitle.slice(0, 22)}...` : mainTitle;
-    ctx.fillText(truncatedTitle, 90, titleY);
-
-    const subY = titleY + 55;
-    ctx.font = "600 32px sans-serif";
-    ctx.fillStyle = "#EAB308";
-    ctx.fillText(getSubtitle(), 90, subY);
-
-    // 6. Rich Details Grid (2x2 Pill Grid)
-    const details = getDetails();
-    let detailY = subY + 70;
-
-    ctx.font = "600 26px sans-serif";
-    details.forEach((item, index) => {
-      const col = index % 2;
-      const row = Math.floor(index / 2);
-      const px = 90 + col * 460;
-      const py = detailY + row * 85;
-
-      // Draw Detail Pill
-      const itemText = `${item.icon}  ${item.label}`;
-      const textWidth = ctx.measureText(itemText).width;
-
-      ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(px, py, Math.min(textWidth + 40, 430), 65, 32);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#E2E8F0";
-      ctx.textAlign = "left";
-      ctx.fillText(itemText, px + 20, py + 43);
-    });
-
-    // 7. Divider Line before QR Code
-    const qrSectionY = height - 320;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(90, qrSectionY - 40);
-    ctx.lineTo(width - 90, qrSectionY - 40);
-    ctx.stroke();
-
-    // 8. Scannable QR Code Box
-    const qrSvg = qrContainerRef.current?.querySelector("svg");
-    if (qrSvg) {
-      const xml = new XMLSerializer().serializeToString(qrSvg);
-      const svg64 = btoa(xml);
-      const b64Start = "data:image/svg+xml;base64,";
-      const image64 = b64Start + svg64;
-
-      const qrImg = new Image();
-      qrImg.src = image64;
-
-      await new Promise((resolve) => {
-        qrImg.onload = resolve;
-        qrImg.onerror = resolve;
-      });
-
-      // Draw QR Code White Rounded Card Background
-      const qrBoxX = 90;
-      const qrBoxY = qrSectionY;
-      const qrBoxSize = 220;
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.beginPath();
-      ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 28);
-      ctx.fill();
-
-      // Draw QR Code inside
-      ctx.drawImage(qrImg, qrBoxX + 15, qrBoxY + 15, 190, 190);
-
-      // QR Code Side Captions
-      const textX = qrBoxX + qrBoxSize + 40;
-      ctx.textAlign = "left";
-
-      ctx.font = "900 42px sans-serif";
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText("Scan QR Code to View", textX, qrBoxY + 75);
-
-      ctx.font = "600 28px sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-      ctx.fillText("Available live on decksalone.com", textX, qrBoxY + 130);
-
-      ctx.font = "bold 26px sans-serif";
-      ctx.fillStyle = "#EAB308";
-      ctx.fillText(url.replace(/^https?:\/\//, ""), textX, qrBoxY + 180);
-    }
+    if (format === "story") await drawStory(ctx, width, height);
+    else if (format === "square") await drawSquare(ctx, width, height);
+    else await drawWide(ctx, width, height);
 
     return canvas.toDataURL("image/png");
-  }, [preview, title, url]);
+  }, [preview, title, url, format, activeAccent]);
 
   // Handle Download PNG
   const handleDownload = async () => {
@@ -344,18 +698,18 @@ export default function StoryPosterModal({
     try {
       const dataUrl = await drawCanvasPoster();
       if (!dataUrl) {
-        toast.error("Failed to generate story poster");
+        toast.error("Failed to generate share card");
         return;
       }
       const link = document.createElement("a");
-      link.download = `DeckSalone_Story_${getMainTitle().replace(/\s+/g, "_")}.png`;
+      link.download = `DeckSalone_${format}_${getMainTitle().replace(/\s+/g, "_")}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success("HD Story Poster downloaded! 📸 Share to Instagram or Snapchat!");
+      toast.success(`HD ${format} card downloaded! 📸`);
     } catch {
-      toast.error("Error generating poster");
+      toast.error("Error generating share card");
     } finally {
       setIsGenerating(false);
     }
@@ -369,7 +723,7 @@ export default function StoryPosterModal({
       if (!dataUrl) return;
 
       const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], `DeckSalone_${getMainTitle()}.png`, { type: "image/png" });
+      const file = new File([blob], `DeckSalone_${format}_${getMainTitle().replace(/\s+/g, "_")}.png`, { type: "image/png" });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -383,7 +737,7 @@ export default function StoryPosterModal({
         await navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2500);
-        toast.info("Story poster & link ready! Paste link sticker on Instagram Story 📎", { duration: 5000 });
+        toast.info("Share card ready! Paste link on your story 📎", { duration: 5000 });
       }
     } catch {
       // User cancelled share
@@ -396,10 +750,16 @@ export default function StoryPosterModal({
 
   const details = getDetails();
 
+  const formatLabels: Record<CardFormat, { label: string; icon: React.ReactNode; desc: string }> = {
+    story: { label: "Story", icon: <RectangleHorizontal size={14} />, desc: "9:16 • Instagram / Snapchat" },
+    square: { label: "Post", icon: <Square size={14} />, desc: "1:1 • Feed / Twitter" },
+    wide: { label: "Wide", icon: <ImageIcon size={14} />, desc: "1200×630 • Facebook / X" },
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto pb-28 sm:pb-6">
           {/* Hidden Canvas & SVG QR container used for high-res PNG rendering */}
           <div className="hidden">
             <canvas ref={canvasRef} />
@@ -409,10 +769,10 @@ export default function StoryPosterModal({
           </div>
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-sm rounded-3xl bg-black-surface border border-gold/30 shadow-2xl p-5 my-8 text-left"
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="relative w-full max-w-sm sm:max-w-md sm:rounded-3xl rounded-t-3xl bg-[#121110] border border-gold/40 shadow-2xl p-4 sm:p-5 text-left max-h-[82vh] overflow-y-auto mb-safe"
           >
             {/* Close button */}
             <button
@@ -425,109 +785,229 @@ export default function StoryPosterModal({
             {/* Poster Header */}
             <div className="text-center mb-4">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gold/15 border border-gold/40 rounded-full text-gold text-[10px] font-bold uppercase tracking-wider">
-                <Sparkles size={12} /> Instagram & Snapchat Story Card
+                <Sparkles size={12} /> Create Share Card
               </span>
             </div>
 
-            {/* 9:16 Aspect Ratio Visual Poster Box */}
-            <div className="relative aspect-[9/16] w-full rounded-2xl bg-gradient-to-b from-[#0b0c10] via-[#14151c] to-[#0a0a0d] border border-gold/30 p-4 flex flex-col justify-between overflow-hidden shadow-card">
-              {/* Gold Top Light Glow Overlay */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-gold/20 blur-3xl pointer-events-none" />
-
-              {/* Branding Top */}
-              <div className="relative z-10 flex items-center justify-between border-b border-gold/20 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-display font-black text-xs text-gold uppercase tracking-wider">
-                    DECK SALONE
-                  </span>
-                  <span className="text-[9px] text-text-muted">
-                    • OFFICIAL PLATFORM
-                  </span>
-                </div>
+            {/* Format Selector */}
+            <div className="mb-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">Format</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.keys(formatLabels) as CardFormat[]).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFormat(f)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 px-2 py-2 rounded-xl border text-[10px] font-semibold transition-all",
+                      format === f
+                        ? "bg-gold/15 border-gold text-gold"
+                        : "bg-white/5 border-white/10 text-text-secondary hover:border-white/20"
+                    )}
+                  >
+                    {formatLabels[f].icon}
+                    <span>{formatLabels[f].label}</span>
+                    <span className="text-[8px] font-normal opacity-70 leading-tight text-center">
+                      {formatLabels[f].desc}
+                    </span>
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Center Image */}
-              <div className="relative z-10 my-2 flex justify-center">
-                <div className="relative w-44 h-44 rounded-2xl overflow-hidden border-2 border-gold shadow-lg">
-                  <img
-                    src={getImage()}
-                    alt={getMainTitle()}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/default-avatar.jpg";
-                    }}
+            {/* Color Theme Selector */}
+            <div className="mb-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2 flex items-center gap-1">
+                <Palette size={10} /> Accent Color
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                {PRESET_THEMES.map((t) => (
+                  <button
+                    key={t.name}
+                    onClick={() => setTheme(t)}
+                    title={t.name}
+                    className={cn(
+                      "w-7 h-7 rounded-full border-2 transition-transform",
+                      theme.name === t.name ? "border-white scale-110" : "border-transparent hover:scale-105"
+                    )}
+                    style={{ backgroundColor: t.accent }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                </div>
-              </div>
-
-              {/* Title & Category Badge */}
-              <div className="relative z-10 space-y-1.5">
-                <span className="inline-block px-2.5 py-0.5 bg-gold/20 border border-gold/50 text-gold text-[9px] font-bold uppercase tracking-wider rounded-full">
-                  {getCategoryTag()}
-                </span>
-                <h3 className="font-display text-lg font-black text-white uppercase tracking-tight truncate">
-                  {getMainTitle()}
-                </h3>
-                <p className="text-xs text-gold font-medium truncate">
-                  {getSubtitle()}
-                </p>
-
-                {/* 2x2 Details Grid */}
-                <div className="grid grid-cols-2 gap-1.5 pt-2">
-                  {details.map((d, idx) => (
-                    <div
-                      key={idx}
-                      className="px-2 py-1 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1 min-w-0"
-                    >
-                      <span className="text-xs shrink-0">{d.icon}</span>
-                      <span className="text-[9px] font-medium text-text-secondary truncate">
-                        {d.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Scannable Bottom QR Code Box */}
-              <div className="relative z-10 pt-3 border-t border-white/10 flex items-center gap-3">
-                <div className="p-1.5 bg-white rounded-xl shrink-0 shadow-md">
-                  <QRCodeSVG value={url} size={54} level="H" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <p className="text-xs font-bold text-white leading-tight">
-                    Scan QR Code to View
-                  </p>
-                  <p className="text-[10px] text-text-muted leading-tight mt-0.5 truncate">
-                    Available live on decksalone.com
-                  </p>
+                ))}
+                <div className="flex items-center gap-2 ml-1">
+                  <input
+                    type="color"
+                    value={customAccent}
+                    onChange={(e) => {
+                      setCustomAccent(e.target.value);
+                      setTheme({ name: "Custom", accent: e.target.value, accentLight: e.target.value, accentDark: e.target.value });
+                    }}
+                    className="w-7 h-7 rounded-full overflow-hidden border-0 p-0 cursor-pointer"
+                    title="Custom color"
+                  />
+                  <span className="text-[10px] text-text-muted">Custom</span>
                 </div>
               </div>
             </div>
 
+            {/* Live Visual Preview */}
+            <div
+              className={cn(
+                "relative w-full rounded-2xl bg-gradient-to-b from-[#0b0c10] via-[#14151c] to-[#0a0a0d] border border-gold/30 overflow-hidden shadow-card mx-auto",
+                format === "story"
+                  ? "max-w-[220px] aspect-[9/16]"
+                  : format === "square"
+                  ? "max-w-[240px] aspect-square"
+                  : "max-w-[320px] aspect-[120/63]"
+              )}
+            >
+              {/* Gold Top Light Glow Overlay */}
+              <div
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 blur-3xl pointer-events-none"
+                style={{ backgroundColor: hexToRgba(activeAccent, 0.2) }}
+              />
+
+              {/* Branding Top */}
+              <div className="relative z-10 flex items-center justify-between border-b border-gold/20 px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="font-display font-black text-[9px] uppercase tracking-wider"
+                    style={{ color: activeAccent }}
+                  >
+                    DECK SALONE
+                  </span>
+                  <span className="text-[7px] text-text-muted">• OFFICIAL PLATFORM</span>
+                </div>
+              </div>
+
+              {/* Center Content */}
+              {format === "wide" ? (
+                // Horizontal Layout for Wide Cards
+                <div className="relative z-10 p-2.5 flex items-center gap-3 h-[calc(100%-34px)]">
+                  <div
+                    className={cn(
+                      "relative overflow-hidden border-2 shadow-lg shrink-0 aspect-square w-20 h-20",
+                      preview?.type === "dj" ? "rounded-full" : "rounded-xl"
+                    )}
+                    style={{ borderColor: activeAccent }}
+                  >
+                    <img
+                      src={getImage()}
+                      alt={getMainTitle()}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/default-avatar.jpg";
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+                    <span
+                      className="px-1.5 py-0.2 border rounded-full text-[7px] font-bold uppercase tracking-wider inline-block self-start"
+                      style={{ backgroundColor: hexToRgba(activeAccent, 0.2), borderColor: hexToRgba(activeAccent, 0.5), color: activeAccent }}
+                    >
+                      {getCategoryTag()}
+                    </span>
+                    <h3 className="font-display text-xs font-black text-white uppercase tracking-tight truncate">
+                      {getMainTitle()}
+                    </h3>
+                    <p className="text-[9px] font-medium truncate" style={{ color: activeAccent }}>
+                      {getSubtitle()}
+                    </p>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <div className="p-0.5 bg-white rounded shrink-0 shadow">
+                        <QRCodeSVG value={url} size={28} level="H" />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <p className="text-[8px] font-bold text-white leading-tight">Scan to Listen</p>
+                        <p className="text-[7px] text-text-muted leading-tight truncate">decksalone.com</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Vertical Layout for Story & Square Cards
+                <div className="relative z-10 p-3 flex flex-col items-center justify-center h-[calc(100%-38px)] gap-2">
+                  <div
+                    className={cn(
+                      "relative overflow-hidden border-2 shadow-lg shrink-0",
+                      format === "square" ? "w-20 h-20" : "w-24 h-24",
+                      preview?.type === "dj" ? "rounded-full" : "rounded-2xl"
+                    )}
+                    style={{ borderColor: activeAccent }}
+                  >
+                    <img
+                      src={getImage()}
+                      alt={getMainTitle()}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/default-avatar.jpg";
+                      }}
+                    />
+                  </div>
+
+                  <span
+                    className="px-2 py-0.5 border rounded-full text-[8px] font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: hexToRgba(activeAccent, 0.2), borderColor: hexToRgba(activeAccent, 0.5), color: activeAccent }}
+                  >
+                    {getCategoryTag()}
+                  </span>
+
+                  <div className="text-center min-w-0 w-full">
+                    <h3 className="font-display text-xs font-black text-white uppercase tracking-tight truncate px-2">
+                      {getMainTitle()}
+                    </h3>
+                    <p className="text-[9px] font-medium truncate px-2" style={{ color: activeAccent }}>
+                      {getSubtitle()}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1 w-full px-1">
+                    {details.slice(0, 4).map((d, idx) => (
+                      <div
+                        key={idx}
+                        className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded flex items-center gap-1 min-w-0"
+                      >
+                        <span className="text-[8px] shrink-0">{d.icon}</span>
+                        <span className="text-[7px] font-medium text-text-secondary truncate">{d.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <div className="p-1 bg-white rounded-lg shrink-0 shadow-md">
+                      <QRCodeSVG value={url} size={format === "square" ? 36 : 42} level="H" />
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <p className="text-[9px] font-bold text-white leading-tight">Scan to {preview?.type === "mix" ? "Listen" : preview?.type === "dj" ? "Book" : "View"}</p>
+                      <p className="text-[7px] text-text-muted leading-tight truncate">decksalone.com</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Action Buttons */}
-            <div className="mt-5 space-y-2">
+            <div className="mt-4 space-y-2">
               <button
                 onClick={handleDownload}
                 disabled={isGenerating}
-                className="w-full py-2.5 bg-gold-gradient text-black font-bold text-xs uppercase tracking-wide rounded-xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                className="w-full py-2.5 bg-gold-gradient text-black font-bold text-xs uppercase tracking-wide rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-transform disabled:opacity-50 shadow-lg shadow-gold/20"
               >
                 {isGenerating ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <Download size={14} />
                 )}
-                Download HD Story Poster (PNG)
+                Download HD {formatLabels[format].label} Card (PNG)
               </button>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleNativeShare}
                   disabled={isGenerating}
-                  className="flex-1 py-2 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <Share2 size={13} />
-                  Share to Instagram / Snapchat
+                  Share Image
                 </button>
 
                 <button
@@ -537,7 +1017,7 @@ export default function StoryPosterModal({
                     setTimeout(() => setCopied(false), 2000);
                     toast.success("Link copied!");
                   }}
-                  className="px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                 >
                   {copied ? <Check size={13} className="text-green" /> : <Smartphone size={13} />}
                   {copied ? "Copied" : "Copy Link"}

@@ -30,8 +30,10 @@ export interface MixPreview {
   title: string;
   djName?: string;
   djAvatar?: string;
+  artist?: string;
   genre?: string;
   plays?: number;
+  duration?: number;
 }
 
 export interface EventPreview {
@@ -390,6 +392,7 @@ interface ShareButtonProps {
   preview?: SharePreview;
   className?: string;
   size?: "sm" | "md" | "lg";
+  menuPosition?: "top" | "bottom";
 }
 
 export default function ShareButton({
@@ -399,10 +402,12 @@ export default function ShareButton({
   preview,
   className,
   size = "md",
+  menuPosition = "bottom",
 }: ShareButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [posterOpen, setPosterOpen] = useState(false);
+  const [posterInitialFormat, setPosterInitialFormat] = useState<"story" | "square" | "wide">("story");
 
   const sizeClasses = {
     sm: "w-8 h-8",
@@ -436,6 +441,24 @@ export default function ShareButton({
   };
 
   const shareOptions = [
+    {
+      key: "native_share",
+      label: "Share Link",
+      icon: Share2,
+      action: async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ title, text: getWhatsAppShareMsg(), url });
+            return;
+          } catch {
+            // User cancelled or share failed
+          }
+        }
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied!");
+      },
+      className: "text-text-primary font-medium",
+    },
     {
       key: "copy",
       label: copied ? "Copied!" : "Copy Link",
@@ -503,32 +526,16 @@ export default function ShareButton({
       key: "instagram",
       label: "Instagram Story",
       icon: InstagramIcon,
-      action: async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          toast.success("Link copied for Instagram Story!", { duration: 3000 });
-        } catch {
-          // fallback
-        }
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if (isMobile) {
-          window.location.href = "instagram://story-camera";
-          setTimeout(() => {
-            toast.info("Link copied! Open Instagram → Stories → Add Link Sticker 📎", {
-              duration: 6000,
-            });
-          }, 1200);
-        } else {
-          toast.info("Link copied! Open Instagram on your phone → Stories → Add Link Sticker 📎", {
-            duration: 6000,
-          });
-        }
+      action: () => {
+        setIsOpen(false);
+        setPosterInitialFormat("story");
+        setPosterOpen(true);
       },
       className: "text-text-primary font-medium",
     },
     {
       key: "story_poster",
-      label: "Story Poster",
+      label: "Create Share Card",
       icon: () => (
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -537,29 +544,22 @@ export default function ShareButton({
       ),
       action: () => {
         setIsOpen(false);
+        setPosterInitialFormat("story");
         setPosterOpen(true);
       },
       className: "text-text-primary font-medium",
     },
   ];
 
-  // Native Web Share API (mobile)
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text: getWhatsAppShareMsg(), url });
-        return;
-      } catch {
-        // User cancelled or share failed, fall through to open menu
-      }
-    }
+  // Open the share menu so the user can pick the right destination
+  const handleOpenMenu = () => {
     setIsOpen(!isOpen);
   };
 
   return (
     <div className={cn("relative", className)}>
       <button
-        onClick={handleNativeShare}
+        onClick={handleOpenMenu}
         className={cn(
           "rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2",
           sizeClasses[size]
@@ -584,7 +584,10 @@ export default function ShareButton({
 
             {/* Share Menu */}
             <motion.div
-              className="absolute right-0 top-full mt-2 z-50 w-[270px] bg-[#111111] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-card overflow-hidden"
+              className={cn(
+                "absolute right-0 z-[110] w-[270px] bg-[#111111] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-card overflow-hidden",
+                menuPosition === "top" ? "bottom-full mb-2" : "top-full mt-2"
+              )}
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -659,6 +662,7 @@ export default function ShareButton({
         title={title}
         description={description}
         preview={preview}
+        initialFormat={posterInitialFormat}
       />
     </div>
   );

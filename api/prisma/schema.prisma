@@ -38,6 +38,8 @@ model User {
   lastBirthdayEmailSentAt DateTime?
   lastProfileNudgeSentAt  DateTime?
   username                String       @unique @db.VarChar(30)
+  subscriptionTier        String       @default("free")
+  subscriptionActivatedAt DateTime?
 
 
   notificationPreferences Json?
@@ -72,6 +74,7 @@ model User {
   @@index([status, role, createdAt])
   @@index([dateOfBirth])
   @@index([referredBy])
+  @@index([subscriptionTier])
   @@index([createdAt])
   @@map("users")
 }
@@ -267,6 +270,7 @@ model Mix {
   description String?
   coverImage  String?
   audioUrl    String?
+  audioSource String?
   duration    Int?
   genre       String
   tags        String[]
@@ -1038,6 +1042,7 @@ enum Role {
   MODERATOR
   FINANCE_ADMIN
   VERIFICATION_ADMIN
+  SUPER_ADMIN
 }
 
 enum BookingStatus {

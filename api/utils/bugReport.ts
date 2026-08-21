@@ -131,12 +131,11 @@ export async function checkAndSendDailyBugReport() {
 </html>`,
     });
 
-    // Notify all admin users via Bell Icon notification
+    // Notify ONLY full admin users (ADMIN, SUPER_ADMIN) via Bell Icon notification
     const adminUsers = await prisma.user.findMany({
-      where: { role: { in: ['ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN'] } },
+      where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
       select: { id: true },
     });
-
 
     if (adminUsers.length > 0) {
       await prisma.notification.createMany({

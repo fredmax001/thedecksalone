@@ -1,11 +1,14 @@
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('BOOKING_CREATED', 'BOOKING_STATUS_CHANGED', 'COUNTER_OFFER', 'NEW_MESSAGE', 'NEW_FOLLOWER', 'MIX_LIKED', 'MIX_REUPPED', 'NEW_MIX', 'EVENT_REMINDER', 'SYSTEM', 'PAYMENT_RECEIVED', 'PAYMENT_FAILED', 'REVIEW_RECEIVED', 'VERIFICATION_STATUS', 'SUBSCRIPTION_STATUS');
+CREATE TYPE "NotificationType" AS ENUM ('BOOKING_CREATED', 'BOOKING_STATUS_CHANGED', 'COUNTER_OFFER', 'NEW_MESSAGE', 'NEW_FOLLOWER', 'MIX_LIKED', 'MIX_REUPPED', 'NEW_MIX', 'EVENT_REMINDER', 'SYSTEM', 'PAYMENT_RECEIVED', 'PAYMENT_FAILED', 'REVIEW_RECEIVED', 'VERIFICATION_STATUS', 'SUBSCRIPTION_STATUS', 'TICKET_PURCHASED', 'TICKET_APPROVED', 'TICKET_DECLINED');
+
+-- CreateEnum
+CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY');
 
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'BANNED');
 
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('USER', 'DJ', 'ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN');
+CREATE TYPE "Role" AS ENUM ('USER', 'DJ', 'ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN', 'SUPER_ADMIN');
 
 -- CreateEnum
 CREATE TYPE "BookingStatus" AS ENUM ('PENDING', 'NEGOTIATING', 'CONFIRMED', 'DEPOSIT_PAID', 'COMPLETED', 'CANCELLED', 'REFUNDED');
@@ -15,6 +18,9 @@ CREATE TYPE "PaymentType" AS ENUM ('DEPOSIT', 'FULL_PAYMENT', 'REFUND', 'PLATFOR
 
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REFUNDED');
+
+-- CreateEnum
+CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'INVESTIGATING', 'RESOLVED', 'DISMISSED');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -35,12 +41,20 @@ CREATE TABLE "users" (
     "favoriteGenres" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "lastLoginAt" TIMESTAMP(3),
     "location" TEXT,
+    "gender" "Gender",
     "name" TEXT,
     "passwordResetExpiry" TIMESTAMP(3),
     "passwordResetToken" TEXT,
     "socialLinks" JSONB,
     "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
+    "referralCode" TEXT,
+    "referredBy" TEXT,
+    "dateOfBirth" TIMESTAMP(3),
+    "lastBirthdayEmailSentAt" TIMESTAMP(3),
+    "lastProfileNudgeSentAt" TIMESTAMP(3),
     "username" VARCHAR(30) NOT NULL,
+    "subscriptionTier" TEXT NOT NULL DEFAULT 'free',
+    "subscriptionActivatedAt" TIMESTAMP(3),
     "notificationPreferences" JSONB,
     "privacyPreferences" JSONB,
 
@@ -92,6 +106,7 @@ CREATE TABLE "dj_profiles" (
     "coverBanner" TEXT,
     "country" TEXT NOT NULL DEFAULT 'Sierra Leone',
     "city" TEXT,
+    "community" TEXT,
     "genres" TEXT[],
     "awards" TEXT[],
     "equipment" TEXT[],
@@ -131,6 +146,8 @@ CREATE TABLE "dj_profiles" (
     "idDocumentType" TEXT,
     "idDocumentUrl" TEXT,
     "isLegendFeatured" BOOLEAN NOT NULL DEFAULT false,
+    "isModeratorFeatured" BOOLEAN NOT NULL DEFAULT false,
+    "isRisingDj" BOOLEAN NOT NULL DEFAULT false,
     "isPro" BOOLEAN NOT NULL DEFAULT false,
     "isVerifiedEligible" BOOLEAN NOT NULL DEFAULT false,
     "legalName" TEXT,
@@ -147,10 +164,17 @@ CREATE TABLE "dj_profiles" (
     "verificationNotes" TEXT,
     "verificationReason" TEXT,
     "verificationStatus" TEXT NOT NULL DEFAULT 'unverified',
+    "verificationBadgeType" TEXT,
     "verifiedAt" TIMESTAMP(3),
     "willTravel" BOOLEAN NOT NULL DEFAULT false,
     "monthlyListeners" INTEGER NOT NULL DEFAULT 0,
     "hallOfFame" BOOLEAN NOT NULL DEFAULT false,
+    "referralCount" INTEGER NOT NULL DEFAULT 0,
+    "promoGrantedAt" TIMESTAMP(3),
+    "promoExpiresAt" TIMESTAMP(3),
+    "promoGrantedById" TEXT,
+    "promotionPoints" INTEGER NOT NULL DEFAULT 1000,
+    "subscriptionPrice" DOUBLE PRECISION NOT NULL DEFAULT 100.0,
 
     CONSTRAINT "dj_profiles_pkey" PRIMARY KEY ("id")
 );
@@ -186,6 +210,7 @@ CREATE TABLE "mixes" (
     "description" TEXT,
     "coverImage" TEXT,
     "audioUrl" TEXT,
+    "audioSource" TEXT,
     "duration" INTEGER,
     "genre" TEXT NOT NULL,
     "tags" TEXT[],
@@ -197,11 +222,31 @@ CREATE TABLE "mixes" (
     "featured" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "audioSource" TEXT,
     "originalUrl" TEXT,
     "hallOfFame" BOOLEAN NOT NULL DEFAULT false,
+    "secondaryGenres" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "isExclusive" BOOLEAN NOT NULL DEFAULT false,
+    "promotedUntil" TIMESTAMP(3),
+    "promotedPointsSpent" INTEGER NOT NULL DEFAULT 0,
+    "flaggedForReview" BOOLEAN NOT NULL DEFAULT false,
+    "flaggedReason" TEXT,
+    "moderatorCurated" BOOLEAN NOT NULL DEFAULT false,
+    "moderatorNotes" TEXT,
 
     CONSTRAINT "mixes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "mix_comments" (
+    "id" TEXT NOT NULL,
+    "mixId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "parentId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "mix_comments_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -383,7 +428,8 @@ CREATE TABLE "payments" (
 -- CreateTable
 CREATE TABLE "pro_subscription_requests" (
     "id" TEXT NOT NULL,
-    "djId" TEXT NOT NULL,
+    "djId" TEXT,
+    "userId" TEXT,
     "plan" TEXT NOT NULL DEFAULT 'pro',
     "amount" DOUBLE PRECISION NOT NULL DEFAULT 250,
     "currency" TEXT NOT NULL DEFAULT 'SLE',
@@ -413,20 +459,137 @@ CREATE TABLE "events" (
     "city" TEXT NOT NULL,
     "venue" TEXT,
     "image" TEXT,
+    "banner" TEXT,
+    "poster" TEXT,
+    "endDate" TIMESTAMP(3),
+    "googleMapsUrl" TEXT,
+    "organizerName" TEXT,
+    "organizerContact" TEXT,
+    "category" TEXT,
+    "musicGenre" TEXT,
+    "ageRestriction" TEXT,
+    "capacity" INTEGER,
+    "refundPolicy" TEXT,
+    "termsConditions" TEXT,
+    "ticketSaleStartsAt" TIMESTAMP(3),
+    "ticketSaleEndsAt" TIMESTAMP(3),
     "isOpenSlot" BOOLEAN NOT NULL DEFAULT false,
     "slots" INTEGER NOT NULL DEFAULT 0,
     "filledSlots" INTEGER NOT NULL DEFAULT 0,
     "compensation" DOUBLE PRECISION,
     "requirements" TEXT,
     "status" TEXT NOT NULL DEFAULT 'upcoming',
+    "publishStatus" TEXT NOT NULL DEFAULT 'draft',
+    "publishedAt" TIMESTAMP(3),
+    "approvalMode" TEXT NOT NULL DEFAULT 'automatic',
     "soundItSaloneEventId" TEXT,
     "soundItSaloneUrl" TEXT,
     "isSyncedToSalone" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "ticketUrl" TEXT,
+    "isTicketed" BOOLEAN NOT NULL DEFAULT false,
+    "ticketPrice" DOUBLE PRECISION,
+    "ticketCurrency" TEXT NOT NULL DEFAULT 'SLE',
+    "mobileMoneyNumber" TEXT,
+    "mobileMoneyProvider" TEXT,
+    "totalTickets" INTEGER,
+    "totalRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "ticketsSold" INTEGER NOT NULL DEFAULT 0,
+    "ticketsCheckedIn" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_ticket_types" (
+    "id" TEXT NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "price" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'SLE',
+    "quantity" INTEGER,
+    "sold" INTEGER NOT NULL DEFAULT 0,
+    "maxPerOrder" INTEGER NOT NULL DEFAULT 10,
+    "saleStartsAt" TIMESTAMP(3),
+    "saleEndsAt" TIMESTAMP(3),
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "event_ticket_types_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_tickets" (
+    "id" TEXT NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "ticketTypeId" TEXT,
+    "userId" TEXT NOT NULL,
+    "qrPayload" TEXT,
+    "qrCode" TEXT,
+    "ticketNumber" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "paymentStatus" TEXT NOT NULL DEFAULT 'pending',
+    "paymentMethod" TEXT,
+    "paymentScreenshot" TEXT,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'SLE',
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "buyerName" TEXT,
+    "buyerEmail" TEXT,
+    "buyerPhone" TEXT,
+    "notes" TEXT,
+    "internalNotes" TEXT,
+    "approvedAt" TIMESTAMP(3),
+    "rejectedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "scannedAt" TIMESTAMP(3),
+    "checkedInBy" TEXT,
+    "declineReason" TEXT,
+    "transferredFrom" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "event_tickets_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_scan_logs" (
+    "id" TEXT NOT NULL,
+    "ticketId" TEXT,
+    "eventId" TEXT NOT NULL,
+    "scannedBy" TEXT NOT NULL,
+    "scannerRole" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "event_scan_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_rsvps" (
+    "id" TEXT NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "event_rsvps_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_photos" (
+    "id" TEXT NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "caption" TEXT,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "event_photos_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -525,6 +688,7 @@ CREATE TABLE "ad_campaigns" (
     "ctr" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "creativeImageUrl" TEXT,
     "ctaUrl" TEXT,
+    "description" TEXT,
     "startDate" TIMESTAMP(3),
     "endDate" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -587,6 +751,21 @@ CREATE TABLE "opp_applications" (
 );
 
 -- CreateTable
+CREATE TABLE "promo_grants" (
+    "id" TEXT NOT NULL,
+    "djId" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'manual',
+    "plan" TEXT NOT NULL DEFAULT 'legend',
+    "months" INTEGER NOT NULL DEFAULT 1,
+    "activatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "grantedById" TEXT,
+    "reason" TEXT,
+
+    CONSTRAINT "promo_grants_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "system_config" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -597,6 +776,120 @@ CREATE TABLE "system_config" (
     CONSTRAINT "system_config_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "site_visits" (
+    "id" TEXT NOT NULL,
+    "path" TEXT,
+    "userId" TEXT,
+    "ipHash" TEXT,
+    "city" TEXT,
+    "country" TEXT,
+    "userAgent" TEXT,
+    "referrer" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "site_visits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "violation_reports" (
+    "id" TEXT NOT NULL,
+    "reporterId" TEXT,
+    "targetUserId" TEXT,
+    "mixId" TEXT,
+    "eventId" TEXT,
+    "commentId" TEXT,
+    "reason" TEXT NOT NULL,
+    "details" TEXT NOT NULL,
+    "status" "ReportStatus" NOT NULL DEFAULT 'PENDING',
+    "actionTaken" TEXT,
+    "resolvedBy" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "violation_reports_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "system_error_logs" (
+    "id" TEXT NOT NULL,
+    "level" TEXT NOT NULL DEFAULT 'ERROR',
+    "source" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "stackTrace" TEXT,
+    "path" TEXT,
+    "method" TEXT,
+    "userId" TEXT,
+    "userEmail" TEXT,
+    "ipAddress" TEXT,
+    "metadata" JSONB,
+    "reported" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "system_error_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "official_playlists" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "coverImage" TEXT,
+    "slug" TEXT NOT NULL,
+    "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+    "isPublished" BOOLEAN NOT NULL DEFAULT true,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "official_playlists_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "official_playlist_items" (
+    "id" TEXT NOT NULL,
+    "playlistId" TEXT NOT NULL,
+    "mixId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL DEFAULT 0,
+    "addedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "official_playlist_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "moderator_audit_logs" (
+    "id" TEXT NOT NULL,
+    "moderatorId" TEXT NOT NULL,
+    "moderatorName" TEXT,
+    "action" TEXT NOT NULL,
+    "targetType" TEXT NOT NULL,
+    "targetId" TEXT,
+    "targetName" TEXT,
+    "previousData" JSONB,
+    "newData" JSONB,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "moderator_audit_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dj_fan_subscriptions" (
+    "id" TEXT NOT NULL,
+    "djId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "amount" DOUBLE PRECISION NOT NULL DEFAULT 100.0,
+    "paymentReference" TEXT,
+    "paymentProofUrl" TEXT,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dj_fan_subscriptions_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
@@ -605,6 +898,9 @@ CREATE UNIQUE INDEX "users_googleId_key" ON "users"("googleId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_phone_key" ON "users"("phone");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_referralCode_key" ON "users"("referralCode");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
@@ -625,10 +921,31 @@ CREATE INDEX "users_googleId_idx" ON "users"("googleId");
 CREATE INDEX "users_role_idx" ON "users"("role");
 
 -- CreateIndex
+CREATE INDEX "users_role_createdAt_idx" ON "users"("role", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "users_status_createdAt_idx" ON "users"("status", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "users_status_role_createdAt_idx" ON "users"("status", "role", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "users_dateOfBirth_idx" ON "users"("dateOfBirth");
+
+-- CreateIndex
+CREATE INDEX "users_referredBy_idx" ON "users"("referredBy");
+
+-- CreateIndex
+CREATE INDEX "users_subscriptionTier_idx" ON "users"("subscriptionTier");
+
+-- CreateIndex
+CREATE INDEX "users_createdAt_idx" ON "users"("createdAt");
+
+-- CreateIndex
 CREATE INDEX "notifications_userId_read_idx" ON "notifications"("userId", "read");
+
+-- CreateIndex
+CREATE INDEX "notifications_userId_read_createdAt_idx" ON "notifications"("userId", "read", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "notifications_userId_createdAt_idx" ON "notifications"("userId", "createdAt");
@@ -655,16 +972,31 @@ CREATE INDEX "dj_profiles_userId_idx" ON "dj_profiles"("userId");
 CREATE INDEX "dj_profiles_city_idx" ON "dj_profiles"("city");
 
 -- CreateIndex
+CREATE INDEX "dj_profiles_community_idx" ON "dj_profiles"("community");
+
+-- CreateIndex
 CREATE INDEX "dj_profiles_verified_idx" ON "dj_profiles"("verified");
 
 -- CreateIndex
 CREATE INDEX "dj_profiles_verificationStatus_idx" ON "dj_profiles"("verificationStatus");
 
 -- CreateIndex
+CREATE INDEX "dj_profiles_subscriptionTier_idx" ON "dj_profiles"("subscriptionTier");
+
+-- CreateIndex
 CREATE INDEX "dj_profiles_rankingScore_idx" ON "dj_profiles"("rankingScore");
 
 -- CreateIndex
 CREATE INDEX "dj_profiles_isPublic_idx" ON "dj_profiles"("isPublic");
+
+-- CreateIndex
+CREATE INDEX "dj_profiles_isPublic_createdAt_idx" ON "dj_profiles"("isPublic", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "dj_profiles_isPublic_verified_rankingScore_idx" ON "dj_profiles"("isPublic", "verified", "rankingScore");
+
+-- CreateIndex
+CREATE INDEX "dj_profiles_updatedAt_idx" ON "dj_profiles"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX "follows_userId_idx" ON "follows"("userId");
@@ -692,6 +1024,45 @@ CREATE INDEX "mixes_featured_idx" ON "mixes"("featured");
 
 -- CreateIndex
 CREATE INDEX "mixes_createdAt_idx" ON "mixes"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_plays_idx" ON "mixes"("plays");
+
+-- CreateIndex
+CREATE INDEX "mixes_likes_idx" ON "mixes"("likes");
+
+-- CreateIndex
+CREATE INDEX "mixes_title_idx" ON "mixes"("title");
+
+-- CreateIndex
+CREATE INDEX "mixes_isPublic_createdAt_idx" ON "mixes"("isPublic", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_isPublic_featured_createdAt_idx" ON "mixes"("isPublic", "featured", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_isPublic_genre_createdAt_idx" ON "mixes"("isPublic", "genre", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_isPublic_category_createdAt_idx" ON "mixes"("isPublic", "category", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_hallOfFame_isPublic_createdAt_idx" ON "mixes"("hallOfFame", "isPublic", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mixes_djId_isPublic_idx" ON "mixes"("djId", "isPublic");
+
+-- CreateIndex
+CREATE INDEX "mix_comments_mixId_createdAt_idx" ON "mix_comments"("mixId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mix_comments_mixId_parentId_createdAt_idx" ON "mix_comments"("mixId", "parentId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "mix_comments_userId_idx" ON "mix_comments"("userId");
+
+-- CreateIndex
+CREATE INDEX "mix_comments_parentId_idx" ON "mix_comments"("parentId");
 
 -- CreateIndex
 CREATE INDEX "mix_likes_mixId_idx" ON "mix_likes"("mixId");
@@ -727,6 +1098,12 @@ CREATE UNIQUE INDEX "dj_highlights_djId_mixId_key" ON "dj_highlights"("djId", "m
 CREATE INDEX "dj_sets_djId_createdAt_idx" ON "dj_sets"("djId", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "dj_sets_djId_isPublic_createdAt_idx" ON "dj_sets"("djId", "isPublic", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "dj_sets_isPublic_createdAt_idx" ON "dj_sets"("isPublic", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "dj_set_items_setId_sortOrder_idx" ON "dj_set_items"("setId", "sortOrder");
 
 -- CreateIndex
@@ -736,10 +1113,19 @@ CREATE UNIQUE INDEX "dj_set_items_setId_mixId_key" ON "dj_set_items"("setId", "m
 CREATE INDEX "bookings_clientId_idx" ON "bookings"("clientId");
 
 -- CreateIndex
+CREATE INDEX "bookings_clientId_createdAt_idx" ON "bookings"("clientId", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "bookings_djId_idx" ON "bookings"("djId");
 
 -- CreateIndex
+CREATE INDEX "bookings_djId_status_idx" ON "bookings"("djId", "status");
+
+-- CreateIndex
 CREATE INDEX "bookings_status_idx" ON "bookings"("status");
+
+-- CreateIndex
+CREATE INDEX "bookings_status_createdAt_idx" ON "bookings"("status", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "bookings_eventDate_idx" ON "bookings"("eventDate");
@@ -778,6 +1164,12 @@ CREATE INDEX "messages_senderId_idx" ON "messages"("senderId");
 CREATE INDEX "messages_receiverId_idx" ON "messages"("receiverId");
 
 -- CreateIndex
+CREATE INDEX "messages_receiverId_createdAt_idx" ON "messages"("receiverId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "messages_senderId_receiverId_createdAt_idx" ON "messages"("senderId", "receiverId", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "messages_bookingId_idx" ON "messages"("bookingId");
 
 -- CreateIndex
@@ -790,13 +1182,22 @@ CREATE INDEX "payments_bookingId_idx" ON "payments"("bookingId");
 CREATE INDEX "payments_clientId_idx" ON "payments"("clientId");
 
 -- CreateIndex
+CREATE INDEX "payments_djId_idx" ON "payments"("djId");
+
+-- CreateIndex
 CREATE INDEX "payments_status_idx" ON "payments"("status");
+
+-- CreateIndex
+CREATE INDEX "payments_status_createdAt_idx" ON "payments"("status", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "payments_providerRef_idx" ON "payments"("providerRef");
 
 -- CreateIndex
 CREATE INDEX "pro_subscription_requests_djId_idx" ON "pro_subscription_requests"("djId");
+
+-- CreateIndex
+CREATE INDEX "pro_subscription_requests_userId_idx" ON "pro_subscription_requests"("userId");
 
 -- CreateIndex
 CREATE INDEX "pro_subscription_requests_status_idx" ON "pro_subscription_requests"("status");
@@ -814,10 +1215,106 @@ CREATE INDEX "events_city_idx" ON "events"("city");
 CREATE INDEX "events_date_idx" ON "events"("date");
 
 -- CreateIndex
+CREATE INDEX "events_status_date_idx" ON "events"("status", "date");
+
+-- CreateIndex
+CREATE INDEX "events_publishStatus_idx" ON "events"("publishStatus");
+
+-- CreateIndex
+CREATE INDEX "events_publishStatus_status_date_idx" ON "events"("publishStatus", "status", "date");
+
+-- CreateIndex
+CREATE INDEX "events_city_date_idx" ON "events"("city", "date");
+
+-- CreateIndex
+CREATE INDEX "events_isTicketed_idx" ON "events"("isTicketed");
+
+-- CreateIndex
 CREATE INDEX "events_soundItSaloneEventId_idx" ON "events"("soundItSaloneEventId");
 
 -- CreateIndex
 CREATE INDEX "events_isSyncedToSalone_idx" ON "events"("isSyncedToSalone");
+
+-- CreateIndex
+CREATE INDEX "events_publishStatus_date_idx" ON "events"("publishStatus", "date");
+
+-- CreateIndex
+CREATE INDEX "event_ticket_types_eventId_idx" ON "event_ticket_types"("eventId");
+
+-- CreateIndex
+CREATE INDEX "event_ticket_types_isActive_idx" ON "event_ticket_types"("isActive");
+
+-- CreateIndex
+CREATE INDEX "event_ticket_types_eventId_isActive_idx" ON "event_ticket_types"("eventId", "isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_tickets_qrPayload_key" ON "event_tickets"("qrPayload");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_tickets_qrCode_key" ON "event_tickets"("qrCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_tickets_ticketNumber_key" ON "event_tickets"("ticketNumber");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_eventId_idx" ON "event_tickets"("eventId");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_userId_idx" ON "event_tickets"("userId");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_status_idx" ON "event_tickets"("status");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_ticketTypeId_idx" ON "event_tickets"("ticketTypeId");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_qrPayload_idx" ON "event_tickets"("qrPayload");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_ticketNumber_idx" ON "event_tickets"("ticketNumber");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_eventId_status_idx" ON "event_tickets"("eventId", "status");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_eventId_ticketTypeId_idx" ON "event_tickets"("eventId", "ticketTypeId");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_eventId_createdAt_idx" ON "event_tickets"("eventId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_eventId_userId_idx" ON "event_tickets"("eventId", "userId");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_userId_status_idx" ON "event_tickets"("userId", "status");
+
+-- CreateIndex
+CREATE INDEX "event_tickets_status_paymentStatus_idx" ON "event_tickets"("status", "paymentStatus");
+
+-- CreateIndex
+CREATE INDEX "event_scan_logs_ticketId_idx" ON "event_scan_logs"("ticketId");
+
+-- CreateIndex
+CREATE INDEX "event_scan_logs_eventId_idx" ON "event_scan_logs"("eventId");
+
+-- CreateIndex
+CREATE INDEX "event_scan_logs_scannedBy_idx" ON "event_scan_logs"("scannedBy");
+
+-- CreateIndex
+CREATE INDEX "event_scan_logs_createdAt_idx" ON "event_scan_logs"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "event_rsvps_eventId_idx" ON "event_rsvps"("eventId");
+
+-- CreateIndex
+CREATE INDEX "event_rsvps_userId_idx" ON "event_rsvps"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_rsvps_eventId_userId_key" ON "event_rsvps"("eventId", "userId");
+
+-- CreateIndex
+CREATE INDEX "event_photos_eventId_idx" ON "event_photos"("eventId");
 
 -- CreateIndex
 CREATE INDEX "event_applications_eventId_idx" ON "event_applications"("eventId");
@@ -883,6 +1380,9 @@ CREATE INDEX "ad_campaigns_advertiserId_idx" ON "ad_campaigns"("advertiserId");
 CREATE INDEX "ad_campaigns_targetType_status_idx" ON "ad_campaigns"("targetType", "status");
 
 -- CreateIndex
+CREATE INDEX "ad_campaigns_targetId_idx" ON "ad_campaigns"("targetId");
+
+-- CreateIndex
 CREATE INDEX "dj_photos_djId_idx" ON "dj_photos"("djId");
 
 -- CreateIndex
@@ -890,6 +1390,9 @@ CREATE INDEX "opportunities_eventDate_idx" ON "opportunities"("eventDate");
 
 -- CreateIndex
 CREATE INDEX "opportunities_status_idx" ON "opportunities"("status");
+
+-- CreateIndex
+CREATE INDEX "opportunities_status_eventDate_idx" ON "opportunities"("status", "eventDate");
 
 -- CreateIndex
 CREATE INDEX "opportunities_requiredTier_idx" ON "opportunities"("requiredTier");
@@ -907,7 +1410,97 @@ CREATE INDEX "opp_applications_djId_idx" ON "opp_applications"("djId");
 CREATE UNIQUE INDEX "opp_applications_opportunityId_djId_key" ON "opp_applications"("opportunityId", "djId");
 
 -- CreateIndex
+CREATE INDEX "promo_grants_djId_idx" ON "promo_grants"("djId");
+
+-- CreateIndex
+CREATE INDEX "promo_grants_expiresAt_idx" ON "promo_grants"("expiresAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "system_config_key_key" ON "system_config"("key");
+
+-- CreateIndex
+CREATE INDEX "site_visits_createdAt_idx" ON "site_visits"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "site_visits_userId_createdAt_idx" ON "site_visits"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "site_visits_country_createdAt_idx" ON "site_visits"("country", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "site_visits_city_createdAt_idx" ON "site_visits"("city", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_status_idx" ON "violation_reports"("status");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_status_createdAt_idx" ON "violation_reports"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_reporterId_idx" ON "violation_reports"("reporterId");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_targetUserId_idx" ON "violation_reports"("targetUserId");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_mixId_idx" ON "violation_reports"("mixId");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_eventId_idx" ON "violation_reports"("eventId");
+
+-- CreateIndex
+CREATE INDEX "violation_reports_createdAt_idx" ON "violation_reports"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "system_error_logs_level_idx" ON "system_error_logs"("level");
+
+-- CreateIndex
+CREATE INDEX "system_error_logs_reported_idx" ON "system_error_logs"("reported");
+
+-- CreateIndex
+CREATE INDEX "system_error_logs_createdAt_idx" ON "system_error_logs"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "official_playlists_slug_key" ON "official_playlists"("slug");
+
+-- CreateIndex
+CREATE INDEX "official_playlists_isPublished_idx" ON "official_playlists"("isPublished");
+
+-- CreateIndex
+CREATE INDEX "official_playlists_isFeatured_idx" ON "official_playlists"("isFeatured");
+
+-- CreateIndex
+CREATE INDEX "official_playlists_createdAt_idx" ON "official_playlists"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "official_playlist_items_playlistId_position_idx" ON "official_playlist_items"("playlistId", "position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "official_playlist_items_playlistId_mixId_key" ON "official_playlist_items"("playlistId", "mixId");
+
+-- CreateIndex
+CREATE INDEX "moderator_audit_logs_moderatorId_idx" ON "moderator_audit_logs"("moderatorId");
+
+-- CreateIndex
+CREATE INDEX "moderator_audit_logs_action_idx" ON "moderator_audit_logs"("action");
+
+-- CreateIndex
+CREATE INDEX "moderator_audit_logs_targetType_idx" ON "moderator_audit_logs"("targetType");
+
+-- CreateIndex
+CREATE INDEX "moderator_audit_logs_createdAt_idx" ON "moderator_audit_logs"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "dj_fan_subscriptions_djId_idx" ON "dj_fan_subscriptions"("djId");
+
+-- CreateIndex
+CREATE INDEX "dj_fan_subscriptions_userId_idx" ON "dj_fan_subscriptions"("userId");
+
+-- CreateIndex
+CREATE INDEX "dj_fan_subscriptions_status_idx" ON "dj_fan_subscriptions"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dj_fan_subscriptions_djId_userId_key" ON "dj_fan_subscriptions"("djId", "userId");
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -932,6 +1525,15 @@ ALTER TABLE "streaming_platforms" ADD CONSTRAINT "streaming_platforms_djId_fkey"
 
 -- AddForeignKey
 ALTER TABLE "mixes" ADD CONSTRAINT "mixes_djId_fkey" FOREIGN KEY ("djId") REFERENCES "dj_profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mix_comments" ADD CONSTRAINT "mix_comments_mixId_fkey" FOREIGN KEY ("mixId") REFERENCES "mixes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mix_comments" ADD CONSTRAINT "mix_comments_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mix_comments" ADD CONSTRAINT "mix_comments_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "mix_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "mix_likes" ADD CONSTRAINT "mix_likes_mixId_fkey" FOREIGN KEY ("mixId") REFERENCES "mixes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -994,7 +1596,34 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_clientId_fkey" FOREIGN KEY ("cli
 ALTER TABLE "pro_subscription_requests" ADD CONSTRAINT "pro_subscription_requests_djId_fkey" FOREIGN KEY ("djId") REFERENCES "dj_profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "pro_subscription_requests" ADD CONSTRAINT "pro_subscription_requests_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "events" ADD CONSTRAINT "events_djId_fkey" FOREIGN KEY ("djId") REFERENCES "dj_profiles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_ticket_types" ADD CONSTRAINT "event_ticket_types_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_tickets" ADD CONSTRAINT "event_tickets_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_tickets" ADD CONSTRAINT "event_tickets_ticketTypeId_fkey" FOREIGN KEY ("ticketTypeId") REFERENCES "event_ticket_types"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_tickets" ADD CONSTRAINT "event_tickets_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_scan_logs" ADD CONSTRAINT "event_scan_logs_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "event_tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_rsvps" ADD CONSTRAINT "event_rsvps_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_rsvps" ADD CONSTRAINT "event_rsvps_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_photos" ADD CONSTRAINT "event_photos_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "event_applications" ADD CONSTRAINT "event_applications_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1034,3 +1663,34 @@ ALTER TABLE "opp_applications" ADD CONSTRAINT "opp_applications_djId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "opp_applications" ADD CONSTRAINT "opp_applications_opportunityId_fkey" FOREIGN KEY ("opportunityId") REFERENCES "opportunities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "promo_grants" ADD CONSTRAINT "promo_grants_djId_fkey" FOREIGN KEY ("djId") REFERENCES "dj_profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "violation_reports" ADD CONSTRAINT "violation_reports_reporterId_fkey" FOREIGN KEY ("reporterId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "violation_reports" ADD CONSTRAINT "violation_reports_targetUserId_fkey" FOREIGN KEY ("targetUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "violation_reports" ADD CONSTRAINT "violation_reports_mixId_fkey" FOREIGN KEY ("mixId") REFERENCES "mixes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "violation_reports" ADD CONSTRAINT "violation_reports_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "violation_reports" ADD CONSTRAINT "violation_reports_commentId_fkey" FOREIGN KEY ("commentId") REFERENCES "mix_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "official_playlist_items" ADD CONSTRAINT "official_playlist_items_playlistId_fkey" FOREIGN KEY ("playlistId") REFERENCES "official_playlists"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "official_playlist_items" ADD CONSTRAINT "official_playlist_items_mixId_fkey" FOREIGN KEY ("mixId") REFERENCES "mixes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dj_fan_subscriptions" ADD CONSTRAINT "dj_fan_subscriptions_djId_fkey" FOREIGN KEY ("djId") REFERENCES "dj_profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dj_fan_subscriptions" ADD CONSTRAINT "dj_fan_subscriptions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

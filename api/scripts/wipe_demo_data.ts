@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL || 'admin@soundit.sl';
+
 async function main() {
   console.log('Starting total wipe of demo data...');
 
@@ -45,7 +47,7 @@ async function main() {
     const result = await prisma.user.deleteMany({
       where: {
         email: {
-          not: 'admin@soundit.sl'
+          not: ADMIN_EMAIL
         }
       }
     });

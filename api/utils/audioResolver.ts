@@ -313,7 +313,11 @@ async function resolveSoundcloud(url: string): Promise<ResolvedAudio | null> {
     audioSource: 'soundcloud',
   };
 
-  const key = RAPIDAPI_KEY || process.env.RAPIDAPI_KEY || '0fd107f3f0msh020bac55db1ffd6p1669c7jsn6b14b4e028cc';
+  const key = RAPIDAPI_KEY || process.env.RAPIDAPI_KEY;
+  if (!key) {
+    console.warn('[audioResolver] RAPIDAPI_KEY is not set; skipping SoundCloud metadata enrichment');
+    return result;
+  }
 
   if (key) {
     try {

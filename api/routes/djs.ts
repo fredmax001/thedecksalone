@@ -498,6 +498,28 @@ router.get('/:identifier', async (req, res) => {
     }
 
     if (!dj) {
+      dj = await prisma.djProfile.findFirst({
+        where: { userId: identifier },
+        include: commonInclude,
+      });
+    }
+
+    if (!dj) {
+      const decoded = decodeURIComponent(identifier);
+      dj = await prisma.djProfile.findFirst({
+        where: {
+          OR: [
+            { stageName: { equals: identifier, mode: 'insensitive' } },
+            { stageName: { equals: identifier.replace(/-/g, ' '), mode: 'insensitive' } },
+            { stageName: { equals: decoded, mode: 'insensitive' } },
+            { stageName: { equals: decoded.replace(/-/g, ' '), mode: 'insensitive' } },
+          ],
+        },
+        include: commonInclude,
+      });
+    }
+
+    if (!dj) {
       return res.status(404).json({ success: false, error: 'DJ not found' });
     }
 
@@ -1062,29 +1084,43 @@ router.post('/:id/subscribe', authMiddleware, uploadDocument.single('proof'), as
     const durationDays = subPrice >= 100 ? 60 : 30;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
-    const subscription = await prisma.djFanSubscription.upsert({
+    // Do not auto-activate: payment proof must be reviewed by the DJ or an admin.
+    // Existing active subscriptions are extended, but new/reactivated ones start as PENDING.
+    const existing = await prisma.djFanSubscription.findUnique({
       where: { djId_userId: { djId, userId } },
-      create: {
-        djId,
-        userId,
-        status: 'ACTIVE',
-        amount: subPrice,
-        paymentReference: paymentReference || null,
-        paymentProofUrl: proofUrl || null,
-        expiresAt,
-      },
-      update: {
-        status: 'ACTIVE',
-        amount: subPrice,
-        paymentReference: paymentReference || null,
-        paymentProofUrl: proofUrl || undefined,
-        expiresAt,
-      },
     });
+
+    let subscription;
+    if (existing) {
+      subscription = await prisma.djFanSubscription.update({
+        where: { djId_userId: { djId, userId } },
+        data: {
+          status: existing.status === 'ACTIVE' ? 'ACTIVE' : 'PENDING',
+          amount: subPrice,
+          paymentReference: paymentReference || existing.paymentReference,
+          paymentProofUrl: proofUrl || existing.paymentProofUrl,
+          expiresAt: existing.status === 'ACTIVE' ? expiresAt : existing.expiresAt,
+        },
+      });
+    } else {
+      subscription = await prisma.djFanSubscription.create({
+        data: {
+          djId,
+          userId,
+          status: 'PENDING',
+          amount: subPrice,
+          paymentReference: paymentReference || null,
+          paymentProofUrl: proofUrl || null,
+          expiresAt,
+        },
+      });
+    }
 
     return res.json({
       success: true,
-      message: `You are now subscribed to ${dj.stageName}! You have unlocked full exclusive mixes and downloads.`,
+      message: existing?.status === 'ACTIVE'
+        ? `Your subscription to ${dj.stageName} has been extended.`
+        : `Subscription request sent to ${dj.stageName}. Your access will unlock once payment is verified.`,
       data: subscription,
     });
   } catch (error) {

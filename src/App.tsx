@@ -263,6 +263,7 @@ export default function App() {
             <Route path="booking" element={<Booking />} />
             <Route path="mixes" element={<MixHub />} />
             <Route path="mix/:id" element={<MixDetail />} />
+            <Route path="mixes/:id" element={<MixDetail />} />
             <Route path="playlists" element={<OfficialPlaylists />} />
             <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
             <Route path="pricing" element={<Pricing />} />

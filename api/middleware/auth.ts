@@ -11,7 +11,7 @@ async function getActiveUserFromToken(token) {
 
   const cacheKey = `auth_user:${userId}`;
   const cached = await getCache(cacheKey);
-  if (cached && cached.id && cached.role) {
+  if (cached && cached.id && cached.role && cached.status === 'ACTIVE') {
     return cached;
   }
 
@@ -25,10 +25,11 @@ async function getActiveUserFromToken(token) {
     id: user.id,
     email: user.email,
     role: user.role,
+    status: user.status,
   };
 
-  // Cache user auth session for 5 minutes (300s) to avoid repetitive DB SELECTs
-  await setCache(cacheKey, authUser, 300);
+  // Cache user auth session for 30 seconds to limit stale role/status windows
+  await setCache(cacheKey, authUser, 30);
 
   return authUser;
 }

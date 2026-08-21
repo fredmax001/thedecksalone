@@ -23,6 +23,8 @@ import { useLikeMix } from '@/hooks/useMixes';
 import { WaveformPlayer } from '@/components/WaveformPlayer';
 import { cn } from '@/lib/utils';
 import api, { getMediaUrl } from '@/lib/api';
+import { toast } from 'sonner';
+import MixDownloadModal from '@/components/MixDownloadModal';
 import type { FeedMix } from './types';
 
 interface MixFeedRowProps {
@@ -38,8 +40,10 @@ interface MixFeedRowProps {
 function formatDuration(seconds = 0) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const s = Math.floor(seconds % 60);
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
@@ -77,6 +81,7 @@ export default function MixFeedRow({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [userReactions, setUserReactions] = useState<{ pos: number; emoji: string }[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | null>(null);
 
   const cover = getMediaUrl(mix.coverImage || mix.cover || mix.dj?.avatar) || '/mix-placeholder.jpg';
   const djName = mix.dj?.stageName || mix.djName || 'Unknown DJ';
@@ -146,20 +151,36 @@ export default function MixFeedRow({
     api.post(`/mixes/${mix.id}/reactions`, { emoji, timestamp: currentTime, position: pos }).catch(() => {});
   };
 
-  const handleDownload = (e: React.MouseEvent) => {
+  const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (mix.isExclusive && !isOwner) {
-      if (onOpenSubscribe) onOpenSubscribe(mix);
+    if (!isAuthenticated) {
+      setDownloadModalMode('auth');
       return;
     }
-    setDownloadsCount((c: number) => c + 1);
-    const link = document.createElement('a');
-    link.href = `/api/mixes/${mix.id}/download-file`;
-    link.setAttribute('download', `${mix.title}.mp3`);
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    try {
+      toast.info(`Preparing download for "${mix.title}"...`);
+      const res = await api.post(`/mixes/${mix.id}/download`);
+      if (res.data.success) {
+        setDownloadsCount((c: number) => c + 1);
+        const link = document.createElement('a');
+        link.href = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
+        link.setAttribute('download', `${mix.title}.mp3`);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success(`Download started! Enjoy the mix.`);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 403 && err.response?.data?.requiresSubscription) {
+        setDownloadModalMode('subscribe');
+      } else if (err.response?.status === 401) {
+        setDownloadModalMode('auth');
+      } else {
+        toast.error(err.response?.data?.error || 'Download failed. Please check your subscription.');
+      }
+    }
   };
 
   const handleShare = (e: React.MouseEvent) => {
@@ -337,9 +358,19 @@ export default function MixFeedRow({
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <span className="font-semibold text-white hover:underline cursor-pointer">
-                    {djName}
-                  </span>
+                  {mix.dj?.id || (mix as any).djId || djName ? (
+                    <Link
+                      to={`/dj/${(mix.dj as any)?.username || mix.dj?.id || (mix as any).djId || mix.dj?.stageName || djName}`}
+                      className="font-semibold text-white hover:text-gold hover:underline transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {djName}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold text-white">
+                      {djName}
+                    </span>
+                  )}
                   <span className="inline-flex items-center text-gold" title="Verified DJ">
                     ✓
                   </span>
@@ -517,6 +548,15 @@ export default function MixFeedRow({
           </div>
         </div>
       </div>
+
+      {/* Download Modal (Auth / Subscribe) */}
+      <MixDownloadModal
+        isOpen={!!downloadModalMode}
+        onClose={() => setDownloadModalMode(null)}
+        mode={downloadModalMode || 'auth'}
+        mix={mix}
+        onOpenDjSubscribe={onOpenSubscribe}
+      />
     </motion.div>
   );
 }

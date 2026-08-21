@@ -18,6 +18,7 @@ export interface MixTrack {
   djTier?: 'free' | 'pro' | 'legend' | string;
   djId?: string;
   djAvatar?: string;
+  djUsername?: string;
   isExclusive?: boolean;
   promotedUntil?: string | null;
   subscriptionPrice?: number;

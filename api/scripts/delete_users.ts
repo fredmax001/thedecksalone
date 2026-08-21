@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const KEEP_EMAILS = [
-  'admin@soundit.sl',
-  'maxrick221@gmail.com'
+  process.env.ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL || 'admin@soundit.sl',
+  process.env.KEEP_EMAIL || 'maxrick221@gmail.com'
 ];
 
 async function main() {

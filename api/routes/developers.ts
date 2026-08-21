@@ -70,7 +70,7 @@ router.post('/apply', softAuthMiddleware, async (req: any, res: any) => {
             action: 'DEVELOPER_API_APPLIED',
             entity: 'DeveloperApplication',
             entityId: referenceId,
-            details: {
+            metadata: {
               referenceId,
               name,
               email,

@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios');
+const path = require('path');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
@@ -63,13 +63,6 @@ const updateMixSchema = z.object({
 });
 
 const importHearthisSchema = z.object({
-  urls: z.array(z.string()).min(1).max(50),
-  defaultGenre: z.string().max(100).optional(),
-  defaultCategory: z.string().max(100).optional(),
-  isPublic: parseBooleanOptional,
-});
-
-const importSoundcloudSchema = z.object({
   urls: z.array(z.string()).min(1).max(50),
   defaultGenre: z.string().max(100).optional(),
   defaultCategory: z.string().max(100).optional(),
@@ -500,96 +493,6 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/mixes/import-soundcloud - Bulk import SoundCloud track URLs for the authenticated DJ
-router.post('/import-soundcloud', authMiddleware, async (req, res) => {
-  try {
-    const parsed = importSoundcloudSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Must be a DJ to import mixes' });
-    }
-
-    const djId = dj ? dj.id : req.body.djId;
-    if (!djId) {
-      return res.status(400).json({ success: false, error: 'DJ ID required' });
-    }
-
-    const rawUrls = parsed.data.urls;
-    const urls = rawUrls
-      .map((u) => String(u).trim())
-      .filter(Boolean);
-
-    const defaultGenre = parsed.data.defaultGenre || 'Open Format';
-    const defaultCategory = parsed.data.defaultCategory || 'Salone Mix';
-    const isPublic = parsed.data.isPublic !== false;
-
-    const imported = [];
-    const errors = [];
-
-    for (const url of urls) {
-      try {
-        const resolved = await resolveAudioUrl(url);
-        if (!resolved) {
-          errors.push({ url, error: 'Unable to resolve SoundCloud URL' });
-          continue;
-        }
-
-        // Avoid duplicates by originalUrl or audioUrl
-        const existing = await prisma.mix.findFirst({
-          where: {
-            djId,
-            OR: [
-              { originalUrl: url },
-              { audioUrl: resolved.audioUrl },
-            ],
-          },
-        });
-        if (existing) {
-          errors.push({ url, error: 'Already imported' });
-          continue;
-        }
-
-        const mix = await prisma.mix.create({
-          data: {
-            title: resolved.title || 'Imported SoundCloud Mix',
-            description: `Imported from SoundCloud`,
-            genre: defaultGenre,
-            category: defaultCategory,
-            djId,
-            audioUrl: resolved.audioUrl,
-            audioSource: resolved.audioSource,
-            originalUrl: url,
-            coverImage: resolved.coverImage,
-            duration: resolved.duration,
-            isPublic,
-          },
-        });
-
-        await prisma.djProfile.update({
-          where: { id: djId },
-          data: { totalMixes: { increment: 1 } },
-        });
-
-        imported.push(mix);
-      } catch (err: any) {
-        errors.push({ url, error: err.message || 'Import failed' });
-      }
-    }
-
-    return res.json({
-      success: true,
-      data: { imported, count: imported.length, errors, errorCount: errors.length },
-    });
-  } catch (error: any) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
 // GET /api/mixes/:id - Get single mix
 router.get('/:id', softAuthMiddleware, async (req, res) => {
   try {
@@ -920,26 +823,34 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    // Check for existing like
-    const existing = await prisma.mixLike.findUnique({
-      where: { mixId_userId: { mixId, userId } },
-    });
-
-    if (existing) {
-      // Unlike: remove the record and decrement
+    // Optimistically try to create the like. If a concurrent request already
+    // created it (unique constraint), fall back to unliking. This removes the
+    // read-then-write race that could create duplicate likes.
+    try {
       await prisma.$transaction([
-        prisma.mixLike.delete({ where: { mixId_userId: { mixId, userId } } }),
-        prisma.mix.update({ where: { id: mixId }, data: { likes: { decrement: 1 } } }),
+        prisma.mixLike.create({ data: { mixId, userId } }),
+        prisma.mix.update({ where: { id: mixId }, data: { likes: { increment: 1 } } }),
       ]);
-      return res.json({ success: true, data: { liked: false, message: 'Mix unliked' } });
+      return res.json({ success: true, data: { liked: true, message: 'Mix liked' } });
+    } catch (createErr: any) {
+      // P2002 = unique constraint violation -> already liked, so unlike instead
+      if (createErr?.code === 'P2002') {
+        try {
+          await prisma.$transaction([
+            prisma.mixLike.delete({ where: { mixId_userId: { mixId, userId } } }),
+            prisma.mix.update({ where: { id: mixId }, data: { likes: { decrement: 1 } } }),
+          ]);
+          return res.json({ success: true, data: { liked: false, message: 'Mix unliked' } });
+        } catch (deleteErr: any) {
+          // Record may have been deleted by another concurrent request
+          if (deleteErr?.code === 'P2025') {
+            return res.json({ success: true, data: { liked: false, message: 'Mix unliked' } });
+          }
+          throw deleteErr;
+        }
+      }
+      throw createErr;
     }
-
-    // Like: create the record and increment atomically
-    await prisma.$transaction([
-      prisma.mixLike.create({ data: { mixId, userId } }),
-      prisma.mix.update({ where: { id: mixId }, data: { likes: { increment: 1 } } }),
-    ]);
-    return res.json({ success: true, data: { liked: true, message: 'Mix liked' } });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -1208,22 +1119,30 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
       return res.status(404).send('Audio file not found.');
     }
 
-    // Check exclusivity
-    if (mix.isExclusive) {
-      if (!req.user) {
-        return res.status(401).send('Please log in to download this exclusive mix.');
-      }
-      const isOwner = mix.dj?.userId === req.user.id;
-      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+    // Require authentication and active subscription for all mix downloads
+    if (!req.user) {
+      return res.status(401).send('Please log in to download mixes.');
+    }
 
-      if (!isOwner && !isAdmin) {
-        const sub = await prisma.djFanSubscription.findUnique({
-          where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
-        });
-        const isSubscribed = !!sub && sub.status === 'ACTIVE' && new Date(sub.expiresAt) > new Date();
-        if (!isSubscribed) {
-          return res.status(403).send(`This mix is exclusive to ${mix.dj?.stageName || 'DJ'} subscribers.`);
-        }
+    const isOwner = mix.dj?.userId === req.user.id;
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MODERATOR';
+
+    if (!isOwner && !isAdmin) {
+      const userWithDj = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { djProfile: true },
+      });
+
+      const userTier = (userWithDj?.djProfile?.subscriptionTier || (userWithDj as any)?.subscriptionTier || 'free').toLowerCase();
+      const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
+
+      const fanSub = await prisma.djFanSubscription.findUnique({
+        where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
+      });
+      const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
+
+      if (!hasProPlan && !hasActiveFanSub) {
+        return res.status(403).send('Downloading mixes requires an active PRO subscription or DJ Fan Pass.');
       }
     }
 
@@ -1235,34 +1154,24 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
 
     const filename = `${sanitizeFilename(mix.title)}.mp3`;
 
-    // If audio is an external URL, stream it with proper download headers
+    // Local uploads are served directly; external URLs are redirected (never proxied)
+    // to prevent SSRF against internal services.
     if (/^https?:\/\//i.test(mix.audioUrl)) {
-      try {
-        const response = await axios({
-          method: 'get',
-          url: mix.audioUrl,
-          responseType: 'stream',
-          timeout: 45000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        });
-
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
-        if (response.headers['content-length']) {
-          res.setHeader('Content-Length', response.headers['content-length']);
-        }
-
-        return response.data.pipe(res);
-      } catch (streamErr) {
-        console.error('[Download Stream] Proxy redirect fallback:', streamErr.message);
-        return res.redirect(mix.audioUrl);
-      }
+      return res.redirect(mix.audioUrl);
     }
 
     // If audio is a local file
-    return res.download(mix.audioUrl, filename, (err) => {
+    const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
+    const relativeMatch = mix.audioUrl.match(/^\/uploads\/(.*)$/);
+    if (!relativeMatch) {
+      return res.status(400).send('Invalid audio file path.');
+    }
+    const safeSuffix = path.normalize(relativeMatch[1]).replace(/^(\.\.(\/|\\|$))+/, '');
+    const filePath = path.join(uploadsDir, safeSuffix);
+    if (!filePath.startsWith(uploadsDir)) {
+      return res.status(400).send('Invalid audio file path.');
+    }
+    return res.download(filePath, filename, (err) => {
       if (err && !res.headersSent) {
         return res.status(500).send('Error streaming file');
       }
@@ -1297,36 +1206,42 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    // Check if mix is exclusive to subscribers
-    if (mix.isExclusive) {
-      if (!req.user) {
-        return res.status(401).json({
+    // Require authentication and active subscription for all mix downloads
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Please log in to download mixes.',
+        requiresAuth: true,
+      });
+    }
+
+    const isOwner = mix.dj?.userId === req.user.id;
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MODERATOR';
+
+    if (!isOwner && !isAdmin) {
+      const userWithDj = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { djProfile: true },
+      });
+
+      const userTier = (userWithDj?.djProfile?.subscriptionTier || (userWithDj as any)?.subscriptionTier || 'free').toLowerCase();
+      const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
+
+      const fanSub = await prisma.djFanSubscription.findUnique({
+        where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
+      });
+
+      const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
+
+      if (!hasProPlan && !hasActiveFanSub) {
+        return res.status(403).json({
           success: false,
-          error: 'Please log in to download this exclusive mix.',
-          requiresAuth: true,
+          error: 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.',
+          requiresSubscription: true,
+          djId: mix.djId,
+          djName: mix.dj?.stageName,
+          subscriptionPrice: mix.dj?.subscriptionPrice || 100,
         });
-      }
-
-      const isOwner = mix.dj?.userId === req.user.id;
-      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
-
-      if (!isOwner && !isAdmin) {
-        const sub = await prisma.djFanSubscription.findUnique({
-          where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
-        });
-
-        const isSubscribed = !!sub && sub.status === 'ACTIVE' && new Date(sub.expiresAt) > new Date();
-
-        if (!isSubscribed) {
-          return res.status(403).json({
-            success: false,
-            error: `This mix is exclusive to ${mix.dj?.stageName || 'DJ'} subscribers.`,
-            requiresSubscription: true,
-            djId: mix.djId,
-            djName: mix.dj?.stageName,
-            subscriptionPrice: mix.dj?.subscriptionPrice || 100,
-          });
-        }
       }
     }
 

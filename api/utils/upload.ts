@@ -131,7 +131,21 @@ const uploadMix = multer({
 
 // Serve uploads statically (local fallback)
 function serveUploads(app) {
-  app.use('/uploads', require('express').static(getUploadsDir()));
+  const express = require('express');
+  app.use(
+    '/uploads',
+    (req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    },
+    express.static(getUploadsDir(), {
+      setHeaders: (res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      },
+    })
+  );
 }
 
 module.exports = {

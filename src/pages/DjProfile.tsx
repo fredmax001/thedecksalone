@@ -2049,7 +2049,7 @@ export default function DjProfile() {
                 size="md"
                 preview={{
                   type: "dj",
-                  avatar: dj.avatar,
+                  avatar: dj.avatar ? getMediaUrl(dj.avatar) : undefined,
                   stageName: dj.stageName,
                   city: formatDjLocation(dj.city, dj.community),
                   genres: dj.genres,

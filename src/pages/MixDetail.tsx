@@ -7,6 +7,7 @@ import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
 import ShareButton from '@/components/ShareButton';
 import ReportModal from '@/components/ReportModal';
+import { getMediaUrl } from '@/lib/api';
 import MixComments from '@/components/MixComments';
 import MixRecommendations from '@/components/MixRecommendations';
 import { Button } from '@/components/ui/button';
@@ -103,7 +104,13 @@ export default function MixDetail() {
   }
 
   const djProfile = mix.dj;
-  const djIdentifier = djProfile?.user?.username || djProfile?.id || '';
+  const djIdentifier =
+    djProfile?.user?.username ||
+    (djProfile as any)?.username ||
+    djProfile?.id ||
+    djProfile?.stageName ||
+    mix.djId ||
+    '';
 
   return (
     <div className="min-h-screen bg-black pb-28">
@@ -159,6 +166,27 @@ export default function MixDetail() {
                 <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold uppercase tracking-tight text-text-primary leading-tight">
                   {mix.title}
                 </h1>
+                {mix.dj && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-xs text-text-muted">By</span>
+                    <Link
+                      to={`/dj/${djIdentifier}`}
+                      className="text-sm sm:text-base font-semibold text-gold hover:underline inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      {mix.dj.avatar && (
+                        <img
+                          src={mix.dj.avatar ? getMediaUrl(mix.dj.avatar) : '/default-avatar.jpg'}
+                          alt={mix.dj.stageName}
+                          className="w-5 h-5 rounded-full object-cover border border-gold/40"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/default-avatar.jpg';
+                          }}
+                        />
+                      )}
+                      <span>{mix.dj.stageName || 'DJ'}</span>
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* Stats Bar */}
@@ -201,6 +229,17 @@ export default function MixDetail() {
                   title={title}
                   description={description}
                   size="md"
+                  preview={{
+                    type: 'mix',
+                    coverImage: mix.coverImage ? getMediaUrl(mix.coverImage) : undefined,
+                    title: mix.title,
+                    djName: mix.dj?.stageName,
+                    djAvatar: mix.dj?.avatar ? getMediaUrl(mix.dj.avatar) : undefined,
+                    artist: mix.dj?.stageName,
+                    genre: mix.genre || mix.category,
+                    plays: mix.plays,
+                    duration: mix.duration,
+                  }}
                 />
                 <Button
                   variant="outline"

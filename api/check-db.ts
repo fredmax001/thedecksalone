@@ -3,7 +3,8 @@ require('dotenv').config({ path: '.env' });
 const { prisma } = require('./utils/prisma');
 
 async function main() {
-  const user = await prisma.user.findUnique({ where: { email: 'admin@soundit.sl' } });
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL || 'admin@soundit.sl';
+  const user = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!user) {
     console.log('USER NOT FOUND');
     const all = await prisma.user.findMany({ where: { role: 'ADMIN' } });

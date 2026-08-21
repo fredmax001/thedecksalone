@@ -3,11 +3,13 @@ require('dotenv').config({ path: '../.env' });
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL || 'admin@soundit.sl';
+
 async function wipeAllExceptAdmin() {
   try {
     console.log('Finding admin user...');
     const admin = await prisma.user.findFirst({
-      where: { email: 'admin@soundit.sl' }
+      where: { email: ADMIN_EMAIL }
     });
 
     if (!admin) {

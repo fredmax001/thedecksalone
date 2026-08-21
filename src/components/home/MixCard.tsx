@@ -35,15 +35,18 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
     );
   };
 
+  const djIdentifier = (mix.dj as any)?.username || mix.dj?.id || (mix as any).djId || mix.dj?.stageName || '';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
+      className="group block"
     >
-      <Link to={`/mixes/${mix.id}`} className="group block">
-        <div className="relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-black-surface border border-dark-gray group-hover:border-gold/50 transition-all duration-300 shadow-card">
+      <div className="relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-black-surface border border-dark-gray group-hover:border-gold/50 transition-all duration-300 shadow-card">
+        <Link to={`/mix/${mix.id}`} className="block w-full h-full">
           <img
             src={mix.coverImage ? getMediaUrl(mix.coverImage) : '/mix-placeholder.jpg'}
             alt={mix.title}
@@ -53,26 +56,39 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
             }}
           />
           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+        </Link>
 
-          <button
-            type="button"
-            onClick={handlePlay}
-            className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gold text-black flex items-center justify-center shadow-2xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hover:scale-110 active:scale-95"
-            aria-label={`Play ${mix.title}`}
-          >
-            <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-black ml-0.5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handlePlay}
+          className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gold text-black flex items-center justify-center shadow-2xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hover:scale-110 active:scale-95 z-10"
+          aria-label={`Play ${mix.title}`}
+        >
+          <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-black ml-0.5" />
+        </button>
+      </div>
 
-        <div className="mt-2.5 sm:mt-3 min-w-0">
+      <div className="mt-2.5 sm:mt-3 min-w-0">
+        <Link to={`/mix/${mix.id}`}>
           <h3 className="font-display font-bold text-xs sm:text-sm text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
             {mix.title}
           </h3>
-          <p className="text-[10px] sm:text-xs text-text-secondary truncate mt-0.5">
-            {mix.dj?.stageName || 'Deck Salone'} • {formatCompact(mix.plays || 0)} plays
-          </p>
-        </div>
-      </Link>
+        </Link>
+        <p className="text-[10px] sm:text-xs text-text-secondary truncate mt-0.5">
+          {djIdentifier ? (
+            <Link
+              to={`/dj/${djIdentifier}`}
+              className="hover:text-gold hover:underline transition-colors font-medium"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {mix.dj?.stageName || 'Deck Salone'}
+            </Link>
+          ) : (
+            <span>{mix.dj?.stageName || 'Deck Salone'}</span>
+          )}
+          {' '}• {formatCompact(mix.plays || 0)} plays
+        </p>
+      </div>
     </motion.div>
   );
 }

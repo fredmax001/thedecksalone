@@ -8,4 +8,5 @@ api/uploads/
 uploads/
 *.log
 *.sql
+!api/prisma/migrations/**/*.sql
 db_dump.sql
