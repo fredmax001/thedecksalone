@@ -54,6 +54,7 @@ model User {
   receivedMessages        Message[]    @relation("ReceivedMessages")
   sentMessages            Message[]    @relation("SentMessages")
   mixLikes                MixLike[]
+  mixReposts              MixRepost[]
   mixComments             MixComment[]
   payments                Payment[]    @relation("ClientPayments")
   reviews                 Review[]
@@ -290,23 +291,29 @@ model Mix {
   hallOfFame  Boolean       @default(false)
   secondaryGenres  String[]      @default([])
   isExclusive      Boolean       @default(false)
+  allowPublicDownloads Boolean   @default(false)
+  repostToDownload Boolean       @default(false)
+  followToDownload Boolean       @default(false)
   promotedUntil    DateTime?
   promotedPointsSpent Int        @default(0)
   flaggedForReview Boolean       @default(false)
   flaggedReason    String?
   moderatorCurated Boolean       @default(false)
   moderatorNotes   String?
+  sortOrder        Int           @default(0)
   highlights  DjHighlight[]
   setItems    DjSetItem[]
   mixLikes    MixLike[]
   mixComments MixComment[]
   mixPlays    MixPlay[]
+  reposts     MixRepost[]
   reups       MixReup[]
   violationReports ViolationReport[]
   officialItems OfficialPlaylistItem[]
   dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
 
   @@index([djId])
+  @@index([djId, sortOrder])
   @@index([category])
   @@index([genre])
   @@index([featured])
@@ -384,6 +391,20 @@ model MixReup {
   @@index([djId, createdAt])
   @@index([mixId])
   @@map("mix_reups")
+}
+
+model MixRepost {
+  id        String   @id @default(cuid())
+  mixId     String
+  userId    String
+  createdAt DateTime @default(now())
+  mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([mixId, userId])
+  @@index([mixId])
+  @@index([userId])
+  @@map("mix_reposts")
 }
 
 model DjHighlight {

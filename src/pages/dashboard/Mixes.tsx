@@ -16,6 +16,14 @@ import {
   Share2,
   Trash2,
   AlertTriangle,
+  Repeat,
+  UserPlus,
+  Globe,
+  Star,
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -50,6 +58,7 @@ import {
 import { toast } from 'sonner';
 import { useImportHearthis } from '@/hooks/useMixes';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { useMyHighlights, useAddHighlight, useRemoveHighlight } from '@/hooks/useHighlights';
 import { Progress } from '@/components/ui/progress';
 
 
@@ -66,11 +75,57 @@ interface Mix {
   plays: number;
   likes: number;
   isPublic: boolean;
+  allowPublicDownloads?: boolean;
+  repostToDownload?: boolean;
+  followToDownload?: boolean;
+  sortOrder?: number;
   createdAt: string;
   duration?: string;
 }
 
 import { GENRES } from '@/constants/genres';
+
+function ToggleRow({
+  icon,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5 text-gold">{icon}</div>
+      <div className="flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-text-primary font-medium">{label}</span>
+          <button
+            type="button"
+            onClick={() => onChange(!checked)}
+            className={cn(
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+              checked ? 'bg-gold' : 'bg-dark-gray'
+            )}
+            aria-pressed={checked}
+          >
+            <span
+              className={cn(
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform',
+                checked ? 'translate-x-5' : 'translate-x-1'
+              )}
+            />
+          </button>
+        </div>
+        <p className="text-[11px] text-text-muted mt-0.5">{description}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Mixes() {
   const { user } = useAuthStore();
@@ -78,6 +133,7 @@ export default function Mixes() {
   const { isFree, openUpgradeModal } = useFeatureAccess();
   const [mixes, setMixes] = useState<Mix[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -87,6 +143,9 @@ export default function Mixes() {
     genre: '',
     description: '',
     isPublic: true,
+    allowPublicDownloads: false,
+    repostToDownload: false,
+    followToDownload: false,
     audioUrl: '',
   });
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -98,6 +157,12 @@ export default function Mixes() {
   const isDj = user?.role === 'DJ';
   const djId = user?.djProfile?.id;
 
+  // Highlights
+  const { data: myHighlights = [] } = useMyHighlights();
+  const addHighlight = useAddHighlight();
+  const removeHighlight = useRemoveHighlight();
+  const highlightedMixIds = new Set(myHighlights.map((h) => h.mixId));
+
   // Edit state
   const [editingMix, setEditingMix] = useState<Mix | null>(null);
   const [editForm, setEditForm] = useState({
@@ -105,6 +170,9 @@ export default function Mixes() {
     genre: '',
     description: '',
     isPublic: true,
+    allowPublicDownloads: false,
+    repostToDownload: false,
+    followToDownload: false,
   });
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [editCoverUrl, setEditCoverUrl] = useState('');
@@ -135,7 +203,7 @@ export default function Mixes() {
 
     const fetchMixes = async () => {
       try {
-        const res = await api.get(`/mixes?djId=${djId}`);
+        const res = await api.get('/mixes/my-mixes');
         if (res.data.success) {
           setMixes(res.data.data || []);
         }
@@ -182,6 +250,9 @@ export default function Mixes() {
     formData.append('category', uploadForm.genre);
     formData.append('description', uploadForm.description);
     formData.append('isPublic', String(uploadForm.isPublic));
+    formData.append('allowPublicDownloads', String(uploadForm.allowPublicDownloads));
+    formData.append('repostToDownload', String(uploadForm.repostToDownload));
+    formData.append('followToDownload', String(uploadForm.followToDownload));
     if (audioSource === 'file' && audioFile) {
       formData.append('audio', audioFile);
     } else if (audioSource === 'url' && uploadForm.audioUrl) {
@@ -217,7 +288,16 @@ export default function Mixes() {
         toast.success('🎉 Mix uploaded successfully!');
         setMixes((prev) => [res.data.data, ...prev]);
         setIsUploadOpen(false);
-        setUploadForm({ title: '', genre: '', description: '', isPublic: true, audioUrl: '' });
+        setUploadForm({
+          title: '',
+          genre: '',
+          description: '',
+          isPublic: true,
+          allowPublicDownloads: false,
+          repostToDownload: false,
+          followToDownload: false,
+          audioUrl: '',
+        });
         setAudioFile(null);
         setCoverFile(null);
         setCoverUrl('');
@@ -241,6 +321,9 @@ export default function Mixes() {
       genre: mix.genre,
       description: mix.description || '',
       isPublic: mix.isPublic,
+      allowPublicDownloads: mix.allowPublicDownloads || false,
+      repostToDownload: mix.repostToDownload || false,
+      followToDownload: mix.followToDownload || false,
     });
     setEditCoverFile(null);
     setEditCoverUrl(mix.coverImage || '');
@@ -262,6 +345,9 @@ export default function Mixes() {
       formData.append('category', editForm.genre);
       formData.append('description', editForm.description);
       formData.append('isPublic', String(editForm.isPublic));
+      formData.append('allowPublicDownloads', String(editForm.allowPublicDownloads));
+      formData.append('repostToDownload', String(editForm.repostToDownload));
+      formData.append('followToDownload', String(editForm.followToDownload));
 
       if (editCoverFile) {
         formData.append('coverImage', editCoverFile);
@@ -327,6 +413,31 @@ export default function Mixes() {
       // User cancelled or share not supported — open inline share sheet
     }
     setShareMixId(mix.id);
+  };
+
+  const handleReorder = async (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= mixes.length) return;
+
+    const previousMixes = mixes;
+    const newMixes = [...mixes];
+    [newMixes[index], newMixes[newIndex]] = [newMixes[newIndex], newMixes[index]];
+
+    // Assign descending sortOrder so the array order matches backend sortOrder desc
+    const items = newMixes.map((mix, i) => ({
+      id: mix.id,
+      sortOrder: Math.max(0, newMixes.length - 1 - i),
+    }));
+
+    setMixes(newMixes.map((mix, i) => ({ ...mix, sortOrder: items[i].sortOrder })));
+
+    try {
+      await api.put('/mixes/reorder', { items });
+      toast.success('Mix order updated');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to update order');
+      setMixes(previousMixes);
+    }
   };
 
   const handlePlay = (mix: Mix) => {
@@ -429,14 +540,41 @@ export default function Mixes() {
       </div>
 
       <Tabs defaultValue="my-mixes" className="w-full">
-        <TabsList className="bg-black-elevated border border-dark-gray">
-          <TabsTrigger value="my-mixes" className="data-[state=active]:bg-gold data-[state=active]:text-black">
-            My Mixes ({mixes.length})
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="data-[state=active]:bg-gold data-[state=active]:text-black">
-            Mix Analytics
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-4">
+          <TabsList className="bg-black-elevated border border-dark-gray">
+            <TabsTrigger value="my-mixes" className="data-[state=active]:bg-gold data-[state=active]:text-black">
+              My Mixes ({mixes.length})
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="data-[state=active]:bg-gold data-[state=active]:text-black">
+              Mix Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex items-center bg-black-elevated border border-dark-gray rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                viewMode === 'grid' ? 'bg-gold text-black' : 'text-text-secondary hover:text-text-primary'
+              )}
+              title="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                viewMode === 'list' ? 'bg-gold text-black' : 'text-text-secondary hover:text-text-primary'
+              )}
+              title="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
         <TabsContent value="my-mixes" className="mt-4">
           {mixes.length === 0 ? (
@@ -466,9 +604,9 @@ export default function Mixes() {
                 </div>
               </CardContent>
             </Card>
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {mixes.map((mix) => (
+              {mixes.map((mix, index) => (
                 <motion.div
                   key={mix.id}
                   initial={{ opacity: 0, y: 8 }}
@@ -489,6 +627,28 @@ export default function Mixes() {
                           <Music className="w-12 h-12 text-text-muted" />
                         </div>
                       )}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 bg-black/50 text-text-primary hover:bg-black/70 hover:text-gold"
+                          disabled={index === 0}
+                          onClick={() => handleReorder(index, 'up')}
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 bg-black/50 text-text-primary hover:bg-black/70 hover:text-gold"
+                          disabled={index === mixes.length - 1}
+                          onClick={() => handleReorder(index, 'down')}
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button
                           size="icon"
@@ -531,6 +691,42 @@ export default function Mixes() {
                               <Share2 className="w-4 h-4 mr-2" />
                               Share
                             </DropdownMenuItem>
+                            {highlightedMixIds.has(mix.id) ? (
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={async () => {
+                                  try {
+                                    await removeHighlight.mutateAsync(mix.id);
+                                    toast.success('Removed from highlights');
+                                  } catch (err: any) {
+                                    toast.error(err.message || 'Failed to remove highlight');
+                                  }
+                                }}
+                              >
+                                <Star className="w-4 h-4 mr-2 text-gold fill-gold" />
+                                Remove Highlight
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                disabled={highlightedMixIds.size >= 4}
+                                onClick={async () => {
+                                  if (highlightedMixIds.size >= 4) {
+                                    toast.error('You can only highlight up to 4 mixes.');
+                                    return;
+                                  }
+                                  try {
+                                    await addHighlight.mutateAsync({ mixId: mix.id, sortOrder: myHighlights.length });
+                                    toast.success('Mix highlighted on your profile');
+                                  } catch (err: any) {
+                                    toast.error(err.message || 'Failed to highlight mix');
+                                  }
+                                }}
+                              >
+                                <Star className="w-4 h-4 mr-2" />
+                                Highlight on Profile
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               className="cursor-pointer text-red"
                               onClick={() => confirmDelete(mix.id)}
@@ -541,14 +737,36 @@ export default function Mixes() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                      <Badge
-                        className={cn(
-                          'absolute bottom-2 left-2 border-0 text-xs',
-                          mix.isPublic ? 'bg-green/10 text-green' : 'bg-yellow-500/10 text-yellow-500'
+                      <div className="absolute bottom-2 left-2 flex flex-col gap-1">
+                        <Badge
+                          className={cn(
+                            'border-0 text-xs w-fit',
+                            mix.isPublic ? 'bg-green/10 text-green' : 'bg-yellow-500/10 text-yellow-500'
+                          )}
+                        >
+                          {mix.isPublic ? 'Public' : 'Draft'}
+                        </Badge>
+                        {mix.allowPublicDownloads && (
+                          <Badge className="border-0 text-xs w-fit bg-blue-500/10 text-blue-400">
+                            <Globe className="w-3 h-3 mr-1" /> Public DL
+                          </Badge>
                         )}
-                      >
-                        {mix.isPublic ? 'Public' : 'Draft'}
-                      </Badge>
+                        {mix.repostToDownload && (
+                          <Badge className="border-0 text-xs w-fit bg-purple-500/10 text-purple-400">
+                            <Repeat className="w-3 h-3 mr-1" /> Repost DL
+                          </Badge>
+                        )}
+                        {mix.followToDownload && (
+                          <Badge className="border-0 text-xs w-fit bg-pink-500/10 text-pink-400">
+                            <UserPlus className="w-3 h-3 mr-1" /> Follow DL
+                          </Badge>
+                        )}
+                        {highlightedMixIds.has(mix.id) && (
+                          <Badge className="border-0 text-xs w-fit bg-gold/10 text-gold">
+                            <Star className="w-3 h-3 mr-1 fill-gold" /> Highlighted
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <CardContent className="p-4">
                       <h3 className="font-medium text-text-primary truncate mb-1">{mix.title}</h3>
@@ -564,6 +782,188 @@ export default function Mixes() {
                         </span>
                       </div>
                     </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {mixes.map((mix, index) => (
+                <motion.div
+                  key={mix.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="bg-black-surface border-dark-gray hover:border-gold/30 transition-colors">
+                    <div className="flex items-center gap-3 p-3">
+                      {/* Reorder */}
+                      <div className="flex flex-col">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-text-secondary hover:text-gold"
+                          disabled={index === 0}
+                          onClick={() => handleReorder(index, 'up')}
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-text-secondary hover:text-gold"
+                          disabled={index === mixes.length - 1}
+                          onClick={() => handleReorder(index, 'down')}
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                      </div>
+
+                      {/* Thumbnail */}
+                      <button
+                        type="button"
+                        onClick={() => handlePlay(mix)}
+                        className="relative w-14 h-14 rounded-lg bg-black-elevated flex-shrink-0 overflow-hidden group/play"
+                      >
+                        {mix.coverImage ? (
+                          <img
+                            src={mix.coverImage || '/mix-placeholder.jpg'}
+                            alt={mix.title}
+                            onError={imageFallback}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Music className="w-6 h-6 text-text-muted" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/play:opacity-100 transition-opacity flex items-center justify-center">
+                          <Play className="w-5 h-5 text-white ml-0.5" />
+                        </div>
+                      </button>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-text-primary truncate">{mix.title}</h3>
+                        <p className="text-xs text-text-secondary capitalize">{mix.genre}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          <Badge
+                            className={cn(
+                              'border-0 text-[10px] px-1.5 py-0',
+                              mix.isPublic ? 'bg-green/10 text-green' : 'bg-yellow-500/10 text-yellow-500'
+                            )}
+                          >
+                            {mix.isPublic ? 'Public' : 'Draft'}
+                          </Badge>
+                          {mix.allowPublicDownloads && (
+                            <Badge className="border-0 text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-400">
+                              DL
+                            </Badge>
+                          )}
+                          {mix.repostToDownload && (
+                            <Badge className="border-0 text-[10px] px-1.5 py-0 bg-purple-500/10 text-purple-400">
+                              Repost
+                            </Badge>
+                          )}
+                          {mix.followToDownload && (
+                            <Badge className="border-0 text-[10px] px-1.5 py-0 bg-pink-500/10 text-pink-400">
+                              Follow
+                            </Badge>
+                          )}
+                          {highlightedMixIds.has(mix.id) && (
+                            <Badge className="border-0 text-[10px] px-1.5 py-0 bg-gold/10 text-gold">
+                              <Star className="w-2.5 h-2.5 mr-0.5 fill-gold" /> Highlight
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="hidden sm:flex items-center gap-4 text-xs text-text-muted min-w-[120px]">
+                        <span className="flex items-center gap-1" title="Plays">
+                          <Play className="w-3 h-3" />
+                          {mix.plays.toLocaleString()}
+                        </span>
+                        <span className="flex items-center gap-1" title="Likes">
+                          <Heart className="w-3 h-3" />
+                          {mix.likes.toLocaleString()}
+                        </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-text-secondary hover:text-gold"
+                          onClick={() => handlePlay(mix)}
+                          title="Play"
+                        >
+                          <Play className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-text-secondary hover:text-text-primary"
+                          onClick={() => openEditModal(mix)}
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-text-secondary hover:text-text-primary"
+                          onClick={() => handleShare(mix)}
+                          title="Share"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            'h-8 w-8',
+                            highlightedMixIds.has(mix.id) ? 'text-gold' : 'text-text-secondary hover:text-gold'
+                          )}
+                          onClick={async () => {
+                            if (highlightedMixIds.has(mix.id)) {
+                              try {
+                                await removeHighlight.mutateAsync(mix.id);
+                                toast.success('Removed from highlights');
+                              } catch (err: any) {
+                                toast.error(err.message || 'Failed to remove highlight');
+                              }
+                            } else {
+                              if (highlightedMixIds.size >= 4) {
+                                toast.error('You can only highlight up to 4 mixes.');
+                                return;
+                              }
+                              try {
+                                await addHighlight.mutateAsync({ mixId: mix.id, sortOrder: myHighlights.length });
+                                toast.success('Mix highlighted on your profile');
+                              } catch (err: any) {
+                                toast.error(err.message || 'Failed to highlight mix');
+                              }
+                            }
+                          }}
+                          title={highlightedMixIds.has(mix.id) ? 'Remove highlight' : 'Highlight on profile'}
+                        >
+                          <Star className={cn('w-4 h-4', highlightedMixIds.has(mix.id) && 'fill-gold')} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-text-secondary hover:text-red"
+                          onClick={() => confirmDelete(mix.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </Card>
                 </motion.div>
               ))}
@@ -872,6 +1272,53 @@ export default function Mixes() {
                   </Label>
                 </div>
 
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray space-y-3">
+                  <Label className="text-text-secondary block text-xs uppercase tracking-wider">Downloads</Label>
+
+                  <ToggleRow
+                    icon={<Globe className="w-4 h-4" />}
+                    label="Allow public downloads"
+                    description="Anyone logged in can download this mix."
+                    checked={uploadForm.allowPublicDownloads}
+                    onChange={(checked) =>
+                      setUploadForm({
+                        ...uploadForm,
+                        allowPublicDownloads: checked,
+                        repostToDownload: checked ? false : uploadForm.repostToDownload,
+                        followToDownload: checked ? false : uploadForm.followToDownload,
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    icon={<Repeat className="w-4 h-4" />}
+                    label="Repost to Download"
+                    description="Download is only active for users who reposted your upload."
+                    checked={uploadForm.repostToDownload}
+                    onChange={(checked) =>
+                      setUploadForm({
+                        ...uploadForm,
+                        repostToDownload: checked,
+                        allowPublicDownloads: checked ? false : uploadForm.allowPublicDownloads,
+                        followToDownload: checked ? false : uploadForm.followToDownload,
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    icon={<UserPlus className="w-4 h-4" />}
+                    label="Follow to Download"
+                    description="Download is only active for users who are following you."
+                    checked={uploadForm.followToDownload}
+                    onChange={(checked) =>
+                      setUploadForm({
+                        ...uploadForm,
+                        followToDownload: checked,
+                        allowPublicDownloads: checked ? false : uploadForm.allowPublicDownloads,
+                        repostToDownload: checked ? false : uploadForm.repostToDownload,
+                      })
+                    }
+                  />
+                </div>
+
                 {uploadLoading && (
                   <div className="p-4 rounded-xl bg-black border border-gold/30 space-y-2">
                     <div className="flex items-center justify-between text-xs text-text-primary">
@@ -1176,6 +1623,53 @@ export default function Mixes() {
                   <Label htmlFor="editIsPublic" className="text-sm text-text-secondary cursor-pointer">
                     Make this mix public
                   </Label>
+                </div>
+
+                <div className="p-4 rounded-xl bg-black-elevated border border-dark-gray space-y-3">
+                  <Label className="text-text-secondary block text-xs uppercase tracking-wider">Downloads</Label>
+
+                  <ToggleRow
+                    icon={<Globe className="w-4 h-4" />}
+                    label="Allow public downloads"
+                    description="Anyone logged in can download this mix."
+                    checked={editForm.allowPublicDownloads}
+                    onChange={(checked) =>
+                      setEditForm({
+                        ...editForm,
+                        allowPublicDownloads: checked,
+                        repostToDownload: checked ? false : editForm.repostToDownload,
+                        followToDownload: checked ? false : editForm.followToDownload,
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    icon={<Repeat className="w-4 h-4" />}
+                    label="Repost to Download"
+                    description="Download is only active for users who reposted your upload."
+                    checked={editForm.repostToDownload}
+                    onChange={(checked) =>
+                      setEditForm({
+                        ...editForm,
+                        repostToDownload: checked,
+                        allowPublicDownloads: checked ? false : editForm.allowPublicDownloads,
+                        followToDownload: checked ? false : editForm.followToDownload,
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    icon={<UserPlus className="w-4 h-4" />}
+                    label="Follow to Download"
+                    description="Download is only active for users who are following you."
+                    checked={editForm.followToDownload}
+                    onChange={(checked) =>
+                      setEditForm({
+                        ...editForm,
+                        followToDownload: checked,
+                        allowPublicDownloads: checked ? false : editForm.allowPublicDownloads,
+                        repostToDownload: checked ? false : editForm.repostToDownload,
+                      })
+                    }
+                  />
                 </div>
 
                 <Button

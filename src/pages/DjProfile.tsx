@@ -38,6 +38,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
+import { HighlightsTab } from "@/components/profile/HighlightsTab";
 import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
@@ -1968,6 +1969,7 @@ export default function DjProfile() {
   const tabs = useMemo(
     () => [
       { key: "overview", label: "Overview" },
+      { key: "highlights", label: "Highlights", count: dj?.highlights?.length },
       { key: "mixes", label: "Mixes", count: dj?.totalMixes },
       { key: "sets", label: "Sets & Playlists" },
       { key: "photos", label: "Photos", count: dj?.photos?.length },
@@ -2169,7 +2171,7 @@ export default function DjProfile() {
                 className="flex-1 sm:flex-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-[#f4e059] to-yellow-300 text-black text-xs font-black uppercase hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f4e059]/20"
               >
                 <Crown size={15} />
-                <span>Subscribe (from SLE {dj.subscriptionPrice || 50})</span>
+                <span>Subscribe (from SLE 50)</span>
               </button>
             )}
 
@@ -2303,6 +2305,7 @@ export default function DjProfile() {
             transition={{ duration: 0.2 }}
           >
             {activeTab === "overview" && <OverviewTab dj={dj} onBookClick={() => setIsBookingOpen(true)} />}
+            {activeTab === "highlights" && <HighlightsTab highlights={dj.highlights || []} />}
             {activeTab === "mixes" && <MixesTab dj={dj} />}
             {activeTab === "sets" && <SetsTab djId={dj.id} />}
             {activeTab === "photos" && <PhotosTab dj={dj} />}
@@ -2328,7 +2331,7 @@ export default function DjProfile() {
             id: dj.id,
             stageName: dj.stageName,
             avatar: dj.avatar,
-            subscriptionPrice: dj.subscriptionPrice || 100,
+            subscriptionPrice: 50,
           }}
           onSuccess={() => setIsSubscribedToDj(true)}
         />

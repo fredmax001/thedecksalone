@@ -482,6 +482,24 @@ router.get('/:identifier', async (req, res) => {
       },
       photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
       events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
+      highlights: {
+        orderBy: { sortOrder: 'asc' },
+        take: 4,
+        include: {
+          mix: {
+            select: {
+              id: true,
+              title: true,
+              coverImage: true,
+              audioUrl: true,
+              duration: true,
+              genre: true,
+              plays: true,
+              likes: true,
+            },
+          },
+        },
+      },
       _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
     };
 
@@ -538,7 +556,7 @@ router.get('/:identifier', async (req, res) => {
         totalStreams: computeTotalStreams(dj.streamingPlatforms),
         monthlyListeners: dj.monthlyListeners,
         sets: [],
-        highlights: [],
+        highlights: dj.highlights || [],
         reups: [],
       },
     });
@@ -828,9 +846,13 @@ const highlightSchema = z.object({
 });
 
 // GET /api/djs/me/highlights - Current DJ's highlights
-router.get('/me/highlights', authMiddleware, requirePro, async (req, res) => {
+router.get('/me/highlights', authMiddleware, async (req, res) => {
   try {
-    const djId = req.djProfile.id;
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+    const djId = dj.id;
     const highlights = await prisma.djHighlight.findMany({
       where: { djId },
       orderBy: { sortOrder: 'asc' },
@@ -871,14 +893,18 @@ router.get('/:id/highlights', async (req, res) => {
 });
 
 // POST /api/djs/me/highlights - Add a mix to highlights
-router.post('/me/highlights', authMiddleware, requirePro, async (req, res) => {
+router.post('/me/highlights', authMiddleware, async (req, res) => {
   try {
     const parsed = highlightSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
-    const djId = req.djProfile.id;
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+    const djId = dj.id;
     const { mixId, sortOrder = 0 } = parsed.data;
 
     const mix = await prisma.mix.findUnique({ where: { id: mixId } });
@@ -923,9 +949,13 @@ router.post('/me/highlights', authMiddleware, requirePro, async (req, res) => {
 });
 
 // PUT /api/djs/me/highlights/reorder - Reorder highlights
-router.put('/me/highlights/reorder', authMiddleware, requirePro, async (req, res) => {
+router.put('/me/highlights/reorder', authMiddleware, async (req, res) => {
   try {
-    const djId = req.djProfile.id;
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+    const djId = dj.id;
     const items = req.body.items;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -961,9 +991,13 @@ router.put('/me/highlights/reorder', authMiddleware, requirePro, async (req, res
 });
 
 // DELETE /api/djs/me/highlights/:mixId - Remove a highlight
-router.delete('/me/highlights/:mixId', authMiddleware, requirePro, async (req, res) => {
+router.delete('/me/highlights/:mixId', authMiddleware, async (req, res) => {
   try {
-    const djId = req.djProfile.id;
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+    const djId = dj.id;
     const mixId = req.params.mixId;
 
     const existing = await prisma.djHighlight.findUnique({
@@ -1080,8 +1114,9 @@ router.post('/:id/subscribe', authMiddleware, uploadDocument.single('proof'), as
       });
     }
 
-    const subPrice = parseFloat(amount) || dj.subscriptionPrice || 50.0;
-    const durationDays = subPrice >= 100 ? 60 : 30;
+    const tier = req.body.tier === 'vip' ? 'vip' : 'standard';
+    const subPrice = tier === 'vip' ? 100.0 : 50.0;
+    const durationDays = tier === 'vip' ? 60 : 30;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
     // Do not auto-activate: payment proof must be reviewed by the DJ or an admin.
@@ -1379,7 +1414,8 @@ router.put('/me/fan-subscriptions/:id/approve', authMiddleware, async (req, res)
       return res.status(404).json({ success: false, error: 'Fan subscription request not found' });
     }
 
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const durationDays = sub.amount >= 100 ? 60 : 30;
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
     const updated = await prisma.djFanSubscription.update({
       where: { id: sub.id },
@@ -1397,7 +1433,7 @@ router.put('/me/fan-subscriptions/:id/approve', authMiddleware, async (req, res)
       userId: sub.userId,
       type: 'SYSTEM',
       title: 'Fan Club Access Approved! 🎉',
-      body: `${dj.stageName} has approved your Fan Club VIP access. Enjoy exclusive mixes and VIP perks for the next 30 days!`,
+      body: `${dj.stageName} has approved your Fan Club VIP access. Enjoy exclusive mixes and VIP perks for the next ${durationDays} days!`,
       actionUrl: `/dj/${dj.id}`,
     });
 

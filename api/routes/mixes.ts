@@ -47,6 +47,9 @@ const createMixSchema = z.object({
   duration: z.number().int().min(1).optional(),
   isPublic: parseBooleanOptional,
   isExclusive: parseBooleanOptional,
+  allowPublicDownloads: parseBooleanOptional,
+  repostToDownload: parseBooleanOptional,
+  followToDownload: parseBooleanOptional,
   audioUrl: z.string().optional(),
 });
 
@@ -59,6 +62,9 @@ const updateMixSchema = z.object({
   duration: z.number().int().min(1).optional(),
   isPublic: parseBooleanOptional,
   isExclusive: parseBooleanOptional,
+  allowPublicDownloads: parseBooleanOptional,
+  repostToDownload: parseBooleanOptional,
+  followToDownload: parseBooleanOptional,
   audioUrl: z.string().optional(),
 });
 
@@ -68,6 +74,64 @@ const importHearthisSchema = z.object({
   defaultCategory: z.string().max(100).optional(),
   isPublic: parseBooleanOptional,
 });
+
+/**
+ * Check whether a user is allowed to download a mix.
+ * Returns an object describing the gate and whether access is granted.
+ */
+async function checkDownloadAccess(mix, user) {
+  const isOwner = mix.dj?.userId === user.id;
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'MODERATOR';
+
+  if (isOwner || isAdmin) {
+    return { allowed: true, gate: 'owner' };
+  }
+
+  // Per-mix download gates (mutually exclusive in UI, checked in priority order)
+  if (mix.allowPublicDownloads) {
+    return { allowed: true, gate: 'public' };
+  }
+
+  if (mix.repostToDownload) {
+    const repost = await prisma.mixRepost.findUnique({
+      where: { mixId_userId: { mixId: mix.id, userId: user.id } },
+    });
+    if (repost) {
+      return { allowed: true, gate: 'repost' };
+    }
+    return { allowed: false, gate: 'repost' };
+  }
+
+  if (mix.followToDownload) {
+    const follow = await prisma.follow.findUnique({
+      where: { userId_djId: { userId: user.id, djId: mix.djId } },
+    });
+    if (follow) {
+      return { allowed: true, gate: 'follow' };
+    }
+    return { allowed: false, gate: 'follow' };
+  }
+
+  // Fall back to platform subscription / DJ fan pass gating
+  const userWithDj = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { djProfile: true },
+  });
+
+  const userTier = (userWithDj?.djProfile?.subscriptionTier || userWithDj?.subscriptionTier || 'free').toLowerCase();
+  const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
+
+  const fanSub = await prisma.djFanSubscription.findUnique({
+    where: { djId_userId: { djId: mix.djId, userId: user.id } },
+  });
+  const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
+
+  if (hasProPlan || hasActiveFanSub) {
+    return { allowed: true, gate: 'subscription' };
+  }
+
+  return { allowed: false, gate: 'subscription' };
+}
 
 // GET /api/mixes - List mixes with filtering
 router.get('/', conditionalSearchLimiter, async (req, res) => {
@@ -220,6 +284,92 @@ router.get('/all', authMiddleware, requireRole('ADMIN', 'MODERATOR'), async (req
     });
   } catch (error) {
     console.error('[Mixes API] Error:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Helper middleware: Ensure user is a DJ and attach djProfile
+async function requireDjProfile(req, res, next) {
+  if (!req.user || req.user.role !== 'DJ') {
+    return res.status(403).json({ success: false, error: 'Only DJ accounts can perform this action' });
+  }
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return res.status(404).json({ success: false, error: 'DJ Profile not found' });
+  }
+  req.djProfile = dj;
+  next();
+}
+
+// GET /api/mixes/my-mixes - List ALL mixes for the authenticated DJ (including private drafts)
+router.get('/my-mixes', authMiddleware, requireDjProfile, async (req, res) => {
+  try {
+    const djId = req.djProfile.id;
+    const mixes = await prisma.mix.findMany({
+      where: { djId },
+      orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
+      include: {
+        _count: {
+          select: {
+            mixLikes: true,
+            reups: true,
+            mixComments: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: mixes,
+    });
+  } catch (error) {
+    console.error('[Mixes API] Error fetching my mixes:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/mixes/reorder - Update sortOrder for a DJ's mixes
+const reorderMixesSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().min(1),
+    sortOrder: z.number().int().min(0),
+  })).min(1),
+});
+
+router.put('/reorder', authMiddleware, requireDjProfile, async (req, res) => {
+  try {
+    const parsed = reorderMixesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const djId = req.djProfile.id;
+    const { items } = parsed.data;
+
+    // Verify all mixes belong to this DJ
+    const mixIds = items.map((item) => item.id);
+    const mixes = await prisma.mix.findMany({
+      where: { id: { in: mixIds }, djId },
+      select: { id: true },
+    });
+    const ownedIds = new Set(mixes.map((m) => m.id));
+    if (mixes.length !== mixIds.length) {
+      return res.status(403).json({ success: false, error: 'You can only reorder your own mixes' });
+    }
+
+    await prisma.$transaction(
+      items.map((item) =>
+        prisma.mix.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        })
+      )
+    );
+
+    return res.json({ success: true, message: 'Mix order updated' });
+  } catch (error) {
+    console.error('[Mixes API] Error reordering mixes:', error.message);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -390,6 +540,12 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
     const imported = [];
     const errors = [];
 
+    const maxOrder = await prisma.mix.aggregate({
+      where: { djId },
+      _max: { sortOrder: true },
+    });
+    let nextSortOrder = (maxOrder._max.sortOrder || 0) + 1;
+
     for (const url of urls) {
       try {
         const parts = require('../utils/audioResolver').parseHearthisUrl(url);
@@ -425,6 +581,7 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
                 coverImage: resolved.coverImage,
                 duration: resolved.duration,
                 isPublic,
+                sortOrder: nextSortOrder++,
               },
             });
 
@@ -469,6 +626,7 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
             coverImage: resolved.coverImage,
             duration: resolved.duration,
             isPublic,
+            sortOrder: nextSortOrder++,
           },
         });
 
@@ -690,6 +848,12 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, async (r
       coverUrl = await uploadBuffer(buffer, 'covers', { contentType, ext });
     }
 
+    const maxOrder = await prisma.mix.aggregate({
+      where: { djId },
+      _max: { sortOrder: true },
+    });
+    const nextSortOrder = (maxOrder._max.sortOrder || 0) + 1;
+
     const mix = await prisma.mix.create({
       data: {
         ...data,
@@ -698,6 +862,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, async (r
         audioSource,
         originalUrl,
         coverImage: coverUrl,
+        sortOrder: nextSortOrder,
       },
     });
 
@@ -1001,6 +1166,82 @@ router.get('/:id/reup-status', softAuthMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/mixes/:id/repost - User reposts a mix
+router.post('/:id/repost', authMiddleware, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+    const userId = req.user.id;
+
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      select: { id: true, isPublic: true },
+    });
+
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    if (!mix.isPublic) {
+      return res.status(400).json({ success: false, error: 'Cannot repost a private mix' });
+    }
+
+    await prisma.mixRepost.upsert({
+      where: { mixId_userId: { mixId, userId } },
+      create: { mixId, userId },
+      update: {},
+    });
+
+    return res.json({ success: true, message: 'Mix reposted' });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/mixes/:id/repost - Remove a repost
+router.delete('/:id/repost', authMiddleware, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+    const userId = req.user.id;
+
+    await prisma.mixRepost.deleteMany({
+      where: { mixId, userId },
+    });
+
+    return res.json({ success: true, message: 'Repost removed' });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/mixes/:id/repost-status - Check if current user reposted a mix
+router.get('/:id/repost-status', softAuthMiddleware, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+
+    if (!req.user) {
+      const count = await prisma.mixRepost.count({ where: { mixId } });
+      return res.json({ success: true, data: { reposted: false, count } });
+    }
+
+    const [repost, count] = await Promise.all([
+      prisma.mixRepost.findUnique({
+        where: { mixId_userId: { mixId, userId: req.user.id } },
+      }),
+      prisma.mixRepost.count({ where: { mixId } }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: { reposted: !!repost, count },
+    });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // POST /api/mixes/:id/promote - Promote mix using DJ Promotion Points (Pro / Pro+ DJs only)
 router.post('/:id/promote', authMiddleware, async (req, res) => {
   try {
@@ -1119,31 +1360,21 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
       return res.status(404).send('Audio file not found.');
     }
 
-    // Require authentication and active subscription for all mix downloads
+    // Require authentication and check download permissions
     if (!req.user) {
       return res.status(401).send('Please log in to download mixes.');
     }
 
-    const isOwner = mix.dj?.userId === req.user.id;
-    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MODERATOR';
+    const access = await checkDownloadAccess(mix, req.user);
 
-    if (!isOwner && !isAdmin) {
-      const userWithDj = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        include: { djProfile: true },
-      });
-
-      const userTier = (userWithDj?.djProfile?.subscriptionTier || (userWithDj as any)?.subscriptionTier || 'free').toLowerCase();
-      const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
-
-      const fanSub = await prisma.djFanSubscription.findUnique({
-        where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
-      });
-      const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
-
-      if (!hasProPlan && !hasActiveFanSub) {
-        return res.status(403).send('Downloading mixes requires an active PRO subscription or DJ Fan Pass.');
+    if (!access.allowed) {
+      let message = 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.';
+      if (access.gate === 'repost') {
+        message = 'Download is only active for users who reposted this mix.';
+      } else if (access.gate === 'follow') {
+        message = 'Download is only active for users who are following this DJ.';
       }
+      return res.status(403).send(message);
     }
 
     // Increment download counter
@@ -1206,7 +1437,7 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
 
-    // Require authentication and active subscription for all mix downloads
+    // Require authentication and check download permissions
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -1215,34 +1446,28 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
       });
     }
 
-    const isOwner = mix.dj?.userId === req.user.id;
-    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.role === 'MODERATOR';
+    const access = await checkDownloadAccess(mix, req.user);
 
-    if (!isOwner && !isAdmin) {
-      const userWithDj = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        include: { djProfile: true },
-      });
+    if (!access.allowed) {
+      const errorResponse: any = {
+        success: false,
+        error: 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.',
+        djId: mix.djId,
+        djName: mix.dj?.stageName,
+      };
 
-      const userTier = (userWithDj?.djProfile?.subscriptionTier || (userWithDj as any)?.subscriptionTier || 'free').toLowerCase();
-      const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
-
-      const fanSub = await prisma.djFanSubscription.findUnique({
-        where: { djId_userId: { djId: mix.djId, userId: req.user.id } },
-      });
-
-      const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
-
-      if (!hasProPlan && !hasActiveFanSub) {
-        return res.status(403).json({
-          success: false,
-          error: 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.',
-          requiresSubscription: true,
-          djId: mix.djId,
-          djName: mix.dj?.stageName,
-          subscriptionPrice: mix.dj?.subscriptionPrice || 100,
-        });
+      if (access.gate === 'repost') {
+        errorResponse.error = 'Download is only active for users who reposted this mix.';
+        errorResponse.requiresRepost = true;
+      } else if (access.gate === 'follow') {
+        errorResponse.error = 'Download is only active for users who are following this DJ.';
+        errorResponse.requiresFollow = true;
+      } else {
+        errorResponse.requiresSubscription = true;
+        errorResponse.subscriptionPrice = 50;
       }
+
+      return res.status(403).json(errorResponse);
     }
 
     // Increment download counter

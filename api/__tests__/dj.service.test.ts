@@ -6,7 +6,7 @@ import { getCache, setCache } from '../utils/redis';
 jest.mock('../utils/prisma', () => ({
   prisma: {
     djProfile: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
     },
     mix: {
@@ -31,23 +31,23 @@ describe('DjService', () => {
       (getCache as jest.Mock).mockResolvedValueOnce(mockDj);
 
       const result = await DjService.getDjByStageName('DJ Test');
-      
+
       expect(result).toEqual(mockDj);
       expect(getCache).toHaveBeenCalledWith('dj_profile_dj test');
-      expect(prisma.djProfile.findUnique).not.toHaveBeenCalled();
+      expect(prisma.djProfile.findFirst).not.toHaveBeenCalled();
     });
 
     it('should query db and set cache if not in cache', async () => {
       const mockDj = { id: '1', stageName: 'DJ DB' };
       (getCache as jest.Mock).mockResolvedValueOnce(null);
-      (prisma.djProfile.findUnique as jest.Mock).mockResolvedValueOnce(mockDj);
+      (prisma.djProfile.findFirst as jest.Mock).mockResolvedValueOnce(mockDj);
 
       const result = await DjService.getDjByStageName('DJ DB');
-      
+
       expect(result).toEqual(mockDj);
-      expect(prisma.djProfile.findUnique).toHaveBeenCalledWith({
+      expect(prisma.djProfile.findFirst).toHaveBeenCalledWith({
         where: { stageName: 'DJ DB' },
-        include: { user: { select: { isPro: true } } },
+        include: { user: { select: { role: true } } },
       });
       expect(setCache).toHaveBeenCalledWith('dj_profile_dj db', mockDj, 900);
     });
@@ -60,7 +60,7 @@ describe('DjService', () => {
       (prisma.djProfile.findMany as jest.Mock).mockResolvedValueOnce(mockDjs);
 
       const result = await DjService.getTopDjs(5);
-      
+
       expect(result).toEqual(mockDjs);
       expect(prisma.djProfile.findMany).toHaveBeenCalledWith({
         where: { isPublic: true, rankingPosition: { not: null } },

@@ -81,7 +81,7 @@ export default function MixFeedRow({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [userReactions, setUserReactions] = useState<{ pos: number; emoji: string }[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | null>(null);
+  const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
 
   const cover = getMediaUrl(mix.coverImage || mix.cover || mix.dj?.avatar) || '/mix-placeholder.jpg';
   const djName = mix.dj?.stageName || mix.djName || 'Unknown DJ';
@@ -173,8 +173,16 @@ export default function MixFeedRow({
         toast.success(`Download started! Enjoy the mix.`);
       }
     } catch (err: any) {
-      if (err.response?.status === 403 && err.response?.data?.requiresSubscription) {
-        setDownloadModalMode('subscribe');
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresRepost) {
+          setDownloadModalMode('repost');
+        } else if (err.response?.data?.requiresFollow) {
+          setDownloadModalMode('follow');
+        } else if (err.response?.data?.requiresSubscription) {
+          setDownloadModalMode('subscribe');
+        } else {
+          toast.error(err.response?.data?.error || 'Download failed. Please check your subscription.');
+        }
       } else if (err.response?.status === 401) {
         setDownloadModalMode('auth');
       } else {
@@ -556,6 +564,7 @@ export default function MixFeedRow({
         mode={downloadModalMode || 'auth'}
         mix={mix}
         onOpenDjSubscribe={onOpenSubscribe}
+        onActionComplete={() => handleDownload({ stopPropagation: () => {} } as React.MouseEvent)}
       />
     </motion.div>
   );

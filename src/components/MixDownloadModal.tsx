@@ -9,15 +9,18 @@ import {
   Sparkles,
   Headphones,
   ShieldCheck,
+  Repeat,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/authStore';
+import api from '@/lib/api';
+import { toast } from 'sonner';
 
 interface MixDownloadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'auth' | 'subscribe';
+  mode: 'auth' | 'subscribe' | 'repost' | 'follow';
   mix?: {
     id: string;
     title: string;
@@ -30,6 +33,7 @@ interface MixDownloadModalProps {
     } | null;
   } | null;
   onOpenDjSubscribe?: (dj: any) => void;
+  onActionComplete?: () => void;
 }
 
 export function MixDownloadModal({
@@ -38,6 +42,7 @@ export function MixDownloadModal({
   mode,
   mix,
   onOpenDjSubscribe,
+  onActionComplete,
 }: MixDownloadModalProps) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -46,6 +51,30 @@ export function MixDownloadModal({
   if (!isOpen) return null;
 
   const djName = mix?.dj?.stageName || mix?.djName || 'DJ';
+
+  const handleRepost = async () => {
+    if (!mix?.id) return;
+    try {
+      await api.post(`/mixes/${mix.id}/repost`);
+      toast.success('Mix reposted! Retrying download...');
+      onActionComplete?.();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to repost mix');
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!mix?.dj?.id) return;
+    try {
+      await api.post(`/djs/${mix.dj.id}/follow`);
+      toast.success(`You are now following ${djName}! Retrying download...`);
+      onActionComplete?.();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to follow DJ');
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -124,6 +153,72 @@ export function MixDownloadModal({
                 >
                   <LogIn className="w-4 h-4 mr-2" />
                   Already have an account? Sign In
+                </Button>
+              </div>
+            </div>
+          ) : mode === 'repost' ? (
+            /* MODE: REPOST TO DOWNLOAD */
+            <div>
+              <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center mx-auto mb-4 text-purple-400 shadow-lg shadow-purple-500/10">
+                <Repeat size={28} />
+              </div>
+
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white tracking-tight uppercase">
+                Repost to Download
+              </h2>
+
+              <p className="mt-2 text-sm text-text-secondary leading-relaxed">
+                Download <span className="text-white font-medium">"{mix?.title || 'this mix'}"</span> is unlocked when you repost it to your profile.
+              </p>
+
+              <div className="mt-6 space-y-2.5">
+                <Button
+                  className="w-full bg-purple-500 hover:bg-purple-400 text-white font-semibold h-11 uppercase tracking-wider text-xs shadow-lg transition-opacity"
+                  onClick={handleRepost}
+                >
+                  <Repeat className="w-4 h-4 mr-2" />
+                  Repost & Download
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="w-full border-dark-gray text-text-secondary hover:text-white hover:bg-white/5 h-10 text-xs"
+                  onClick={onClose}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : mode === 'follow' ? (
+            /* MODE: FOLLOW TO DOWNLOAD */
+            <div>
+              <div className="w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center mx-auto mb-4 text-pink-400 shadow-lg shadow-pink-500/10">
+                <UserPlus size={28} />
+              </div>
+
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white tracking-tight uppercase">
+                Follow to Download
+              </h2>
+
+              <p className="mt-2 text-sm text-text-secondary leading-relaxed">
+                Download <span className="text-white font-medium">"{mix?.title || 'this mix'}"</span> is unlocked when you follow {djName}.
+              </p>
+
+              <div className="mt-6 space-y-2.5">
+                <Button
+                  className="w-full bg-pink-500 hover:bg-pink-400 text-white font-semibold h-11 uppercase tracking-wider text-xs shadow-lg transition-opacity"
+                  onClick={handleFollow}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Follow {djName} & Download
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="w-full border-dark-gray text-text-secondary hover:text-white hover:bg-white/5 h-10 text-xs"
+                  onClick={onClose}
+                >
+                  Cancel
                 </Button>
               </div>
             </div>

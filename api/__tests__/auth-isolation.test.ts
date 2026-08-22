@@ -1,22 +1,62 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { prisma } from '../utils/prisma';
-import { signToken } from '../utils/jwt';
-import authRoutes from '../routes/auth';
-import userRoutes from '../routes/users';
-import bookingRoutes from '../routes/bookings';
-import messageRoutes from '../routes/messages';
-import notificationRoutes from '../routes/notifications';
+
+jest.mock('../utils/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
+    notification: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+  },
+}));
 
 describe('Authentication & Session Isolation Security Audit', () => {
   let app: express.Application;
   let userAToken: string;
-  let userBToken: string;
   let userAId: string;
   let userBId: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
+    process.env.JWT_SECRET = 'test-secret-that-is-at-least-32-characters-long';
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { prisma } = require('../utils/prisma');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { signToken } = require('../utils/jwt');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const authRoutes = require('../routes/auth');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const userRoutes = require('../routes/users');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bookingRoutes = require('../routes/bookings');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const messageRoutes = require('../routes/messages');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const notificationRoutes = require('../routes/notifications');
+
+    // Create test User A and User B mock JWTs
+    userAId = 'test-user-a-' + Date.now();
+    userBId = 'test-user-b-' + Date.now();
+
+    userAToken = signToken({ id: userAId, email: 'userA@example.com', role: 'USER' });
+
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+      if (where.id === userAId) {
+        return Promise.resolve({
+          id: userAId,
+          email: 'userA@example.com',
+          role: 'USER',
+          status: 'ACTIVE',
+        });
+      }
+      return Promise.resolve(null);
+    });
+
     app = express();
     app.use(express.json());
 
@@ -35,13 +75,6 @@ describe('Authentication & Session Isolation Security Audit', () => {
     app.use('/api/bookings', bookingRoutes);
     app.use('/api/messages', messageRoutes);
     app.use('/api/notifications', notificationRoutes);
-
-    // Create test User A and User B mock JWTs
-    userAId = 'test-user-a-' + Date.now();
-    userBId = 'test-user-b-' + Date.now();
-
-    userAToken = signToken({ id: userAId, email: 'userA@example.com', role: 'USER' });
-    userBToken = signToken({ id: userBId, email: 'userB@example.com', role: 'USER' });
   });
 
   describe('1. Guest Isolation (Unauthenticated Access)', () => {

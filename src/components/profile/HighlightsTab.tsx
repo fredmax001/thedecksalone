@@ -40,7 +40,7 @@ export function HighlightsTab({ highlights }: HighlightsTabProps) {
       >
         <Sparkles size={48} className="mx-auto mb-4 opacity-50" />
         <p className="text-lg font-medium">No highlights yet</p>
-        <p className="text-sm mt-2">Pro DJs can pin up to 4 mixes here.</p>
+        <p className="text-sm mt-2">DJs can highlight up to 4 mixes here.</p>
       </motion.div>
     );
   }

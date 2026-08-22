@@ -128,6 +128,8 @@ function MixReleaseWaveformCard({
   onOpenEmbed,
   onOpenDownloadAuth,
   onOpenDownloadSubscribe,
+  onOpenDownloadRepost,
+  onOpenDownloadFollow,
   isOwner,
 }: {
   mix: MixTrack;
@@ -142,6 +144,8 @@ function MixReleaseWaveformCard({
   onOpenEmbed: (mix: MixTrack) => void;
   onOpenDownloadAuth?: (mix: MixTrack) => void;
   onOpenDownloadSubscribe?: (mix: MixTrack) => void;
+  onOpenDownloadRepost?: (mix: MixTrack) => void;
+  onOpenDownloadFollow?: (mix: MixTrack) => void;
   isOwner?: boolean;
 }) {
   const { isAuthenticated } = useAuthStore();
@@ -243,9 +247,21 @@ function MixReleaseWaveformCard({
       setDownloadsCount((c) => c + 1);
       toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
-      if (err.response?.status === 403 && err.response?.data?.requiresSubscription) {
-        if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
-        else onOpenSubscribe(mix);
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresRepost) {
+          if (onOpenDownloadRepost) onOpenDownloadRepost(mix);
+          else if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
+          else onOpenSubscribe(mix);
+        } else if (err.response?.data?.requiresFollow) {
+          if (onOpenDownloadFollow) onOpenDownloadFollow(mix);
+          else if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
+          else onOpenSubscribe(mix);
+        } else if (err.response?.data?.requiresSubscription) {
+          if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
+          else onOpenSubscribe(mix);
+        } else {
+          toast.error('Download failed', { description: err.response?.data?.error || 'Please check your subscription and connection.' });
+        }
       } else if (err.response?.status === 401) {
         if (onOpenDownloadAuth) onOpenDownloadAuth(mix);
         else onOpenSubscribe(mix);
@@ -842,7 +858,7 @@ export default function MixHub() {
   const [promoteModalMix, setPromoteModalMix] = useState<MixTrack | null>(null);
   const [subscribeModalDj, setSubscribeModalDj] = useState<any | null>(null);
   const [embedModalMix, setEmbedModalMix] = useState<MixTrack | null>(null);
-  const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' } | null>(null);
+  const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' | 'repost' | 'follow' } | null>(null);
 
   const [officialPlaylists, setOfficialPlaylists] = useState<any[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
@@ -1347,6 +1363,8 @@ export default function MixHub() {
                   onOpenEmbed={(m) => setEmbedModalMix(m)}
                   onOpenDownloadAuth={(m) => setDownloadModalData({ mix: m, mode: 'auth' })}
                   onOpenDownloadSubscribe={(m) => setDownloadModalData({ mix: m, mode: 'subscribe' })}
+                  onOpenDownloadRepost={(m) => setDownloadModalData({ mix: m, mode: 'repost' })}
+                  onOpenDownloadFollow={(m) => setDownloadModalData({ mix: m, mode: 'follow' })}
                   isOwner={!!isOwner}
                 />
               );
@@ -1492,7 +1510,7 @@ export default function MixHub() {
                   id: downloadModalData.mix.djId,
                   stageName: downloadModalData.mix.dj,
                   avatar: downloadModalData.mix.djAvatar || downloadModalData.mix.cover,
-                  subscriptionPrice: downloadModalData.mix.subscriptionPrice || 100,
+                  subscriptionPrice: 50,
                 },
               }
             : null

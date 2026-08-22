@@ -44,7 +44,7 @@ export function DjFanSubscribeModal({
 
   if (!isOpen) return null;
 
-  const standardPrice = dj.subscriptionPrice || 50;
+  const standardPrice = 50;
   const vipPrice = 100;
   const currentPrice = selectedTier === 'standard' ? standardPrice : vipPrice;
 
