@@ -72,6 +72,7 @@ const DashboardEarnings = lazy(() => import('./pages/dashboard/Earnings'));
 const DashboardProfile = lazy(() => import('./pages/dashboard/Profile'));
 const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
+const DashboardFanSubscriptions = lazy(() => import('./pages/dashboard/FanSubscriptions'));
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
 const TicketScanner = lazy(() => import('./pages/dashboard/TicketScanner'));
 const ScannerLanding = lazy(() => import('./pages/dashboard/ScannerLanding'));
@@ -209,6 +210,7 @@ export default function App() {
               <Route path="dashboard/followers" element={<DashboardFollowers />} />
               <Route path="dashboard/profile" element={<DashboardProfile />} />
               <Route path="dashboard/subscription" element={<DashboardSubscription />} />
+              <Route path="dashboard/fan-subscriptions" element={<DashboardFanSubscriptions />} />
               <Route path="dashboard/opportunities" element={<DashboardOpportunities />} />
               <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
               <Route path="dashboard/settings" element={<DashboardSettings />} />

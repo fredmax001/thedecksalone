@@ -4,8 +4,14 @@ import {
   Loader2,
   Clock,
   ArrowUpRight,
-  Download,
   TrendingUp,
+  CreditCard,
+  Smartphone,
+  Building2,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+  History,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -22,6 +28,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { PayoutMethodModal } from '@/components/PayoutMethodModal';
+import { RequestPayoutModal } from '@/components/RequestPayoutModal';
 
 interface Payment {
   id: string;
@@ -32,38 +40,69 @@ interface Payment {
   booking?: { eventType: string; eventDate: string };
 }
 
-
+interface PayoutRequestItem {
+  id: string;
+  amount: number;
+  currency: string;
+  status: 'PENDING' | 'PROCESSED' | 'REJECTED';
+  payoutMethod: any;
+  notes?: string;
+  createdAt: string;
+  processedAt?: string;
+}
 
 export default function Earnings() {
   const { user } = useAuthStore();
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payoutMethod, setPayoutMethod] = useState<any>(null);
+  const [payoutRequests, setPayoutRequests] = useState<PayoutRequestItem[]>([]);
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const isDj = user?.role === 'DJ';
+
+  const loadData = async () => {
+    try {
+      const [dashRes, methodRes, requestsRes] = await Promise.all([
+        api.get('/dashboard'),
+        api.get('/djs/me/payout-method').catch(() => ({ data: { success: false } })),
+        api.get('/djs/me/payout-requests').catch(() => ({ data: { success: false } })),
+      ]);
+
+      if (dashRes.data.success) {
+        setPayments(dashRes.data.data.payments || []);
+      }
+      if (methodRes.data.success) {
+        setPayoutMethod(methodRes.data.data);
+      }
+      if (requestsRes.data.success) {
+        setPayoutRequests(requestsRes.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load earnings', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isDj) {
       setLoading(false);
       return;
     }
-
-    const fetchPayments = async () => {
-      try {
-        const res = await api.get('/dashboard');
-        if (res.data.success) {
-          setPayments(res.data.data.payments || []);
-        }
-      } catch (err) {
-        console.error('Failed to load earnings', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPayments();
+    loadData();
   }, [isDj]);
 
   const totalEarnings = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const pendingPayout = payments.filter((p) => p.status === 'PENDING').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const completedEarnings = payments.filter((p) => p.status === 'COMPLETED').reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  // Total amount already requested or processed
+  const requestedTotal = payoutRequests
+    .filter((r) => r.status === 'PENDING' || r.status === 'PROCESSED')
+    .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  const availableBalance = Math.max(0, (user?.djProfile?.isPro ? completedEarnings : totalEarnings) - requestedTotal);
 
   // Generate real monthly earnings chart data (last 6 months)
   const realMonthlyEarnings = Array.from({ length: 6 }, (_, i) => {
@@ -78,7 +117,7 @@ export default function Earnings() {
   });
 
   payments.forEach((p) => {
-    if (p.status !== 'COMPLETED') return; // Only count completed earnings in chart if needed, or all. We'll count all for now to match old behavior but typically only completed.
+    if (p.status !== 'COMPLETED') return;
     const pDate = new Date(p.createdAt);
     const match = realMonthlyEarnings.find(m => m.monthNum === pDate.getMonth() && m.year === pDate.getFullYear());
     if (match) {
@@ -101,8 +140,21 @@ export default function Earnings() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
-            Earnings
+            Earnings & Payouts
           </h1>
+          <p className="text-xs text-text-muted mt-1">
+            Track revenue from gig bookings, VIP fan passes & request balance withdrawals
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setIsRequestModalOpen(true)}
+            className="bg-gold-gradient text-black font-bold hover:opacity-90 text-xs px-4 py-2"
+          >
+            <ArrowUpRight className="w-4 h-4 mr-1.5" />
+            Request Payout
+          </Button>
         </div>
       </div>
 
@@ -140,13 +192,154 @@ export default function Earnings() {
             <Card className="bg-black-surface border-dark-gray">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <ArrowUpRight className="w-4 h-4 text-blue" />
-                  <span className="text-xs text-text-secondary">Next Payout</span>
+                  <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs text-text-secondary">Available to Withdraw</span>
                 </div>
-                <p className="text-2xl font-bold text-text-primary font-display">Jul 1</p>
+                <p className="text-2xl font-bold text-emerald-400 font-display">SLE {availableBalance.toLocaleString()}</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Payout Method & Withdrawal Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Payout Method Card */}
+            <Card className="bg-black-surface border-dark-gray">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-base font-semibold text-text-primary flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-gold" />
+                  Active Payout Destination
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsPayoutModalOpen(true)}
+                  className="border-dark-gray text-gold hover:text-white text-xs h-8"
+                >
+                  {payoutMethod ? 'Edit' : 'Configure'}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {payoutMethod && payoutMethod.accountNumber ? (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-black-elevated border border-white/10 flex items-center gap-3">
+                      {payoutMethod.type === 'BANK_TRANSFER' ? (
+                        <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold shrink-0">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-[#FF6600]/10 border border-[#FF6600]/20 flex items-center justify-center text-[#FF8533] shrink-0">
+                          <Smartphone className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{payoutMethod.accountName}</p>
+                        <p className="text-xs text-text-muted font-mono">
+                          {payoutMethod.bankName ? `${payoutMethod.bankName} • ` : `${payoutMethod.type} • `}
+                          {payoutMethod.accountNumber}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-green">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Ready to receive automatic & manual withdrawals</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+                    <p className="text-xs text-text-secondary mb-3">
+                      No payout method configured yet. Add your Orange Money, Afrimoney, or Bank account.
+                    </p>
+                    <Button
+                      onClick={() => setIsPayoutModalOpen(true)}
+                      className="bg-gold-gradient text-black font-semibold text-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Set Up Payout Method
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payout Withdrawal Action Card */}
+            <Card className="bg-black-surface border-dark-gray lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-text-primary flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-green" />
+                  Instant Withdrawal Request
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col justify-between space-y-4">
+                <p className="text-xs text-text-secondary">
+                  Request transfer of your balance directly to your configured Sierra Leone mobile money or bank account. Payout requests are verified and disbursed promptly.
+                </p>
+                <div className="flex flex-wrap items-center justify-between gap-4 p-3.5 rounded-xl bg-black-elevated border border-white/10">
+                  <div>
+                    <p className="text-[11px] text-text-muted uppercase">Ready for Withdrawal</p>
+                    <p className="text-xl font-bold text-emerald-400 font-display">SLE {availableBalance.toLocaleString()}</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (!payoutMethod?.accountNumber) {
+                        setIsPayoutModalOpen(true);
+                      } else {
+                        setIsRequestModalOpen(true);
+                      }
+                    }}
+                    disabled={availableBalance <= 0}
+                    className="bg-gold-gradient text-black font-bold hover:opacity-90 text-xs px-5 py-2.5"
+                  >
+                    <ArrowUpRight className="w-4 h-4 mr-1.5" />
+                    Withdraw Available Balance
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Payout Requests History */}
+          {payoutRequests.length > 0 && (
+            <Card className="bg-black-surface border-dark-gray">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base font-semibold text-text-primary flex items-center gap-2">
+                  <History className="w-4 h-4 text-gold" />
+                  Withdrawal Requests History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2.5">
+                  {payoutRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="flex items-center justify-between p-3.5 rounded-xl bg-black-elevated border border-white/5 text-xs"
+                    >
+                      <div>
+                        <p className="font-semibold text-white">
+                          Withdrawal: SLE {req.amount.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          {new Date(req.createdAt).toLocaleDateString()} • {req.payoutMethod?.type || 'Payout'} ({req.payoutMethod?.accountNumber || '--'})
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge
+                          className={`text-[10px] uppercase font-semibold ${
+                            req.status === 'PROCESSED'
+                              ? 'bg-green/20 text-green border-green/30'
+                              : req.status === 'PENDING'
+                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                              : 'bg-red-500/20 text-red-300 border-red-500/30'
+                          }`}
+                        >
+                          {req.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Earnings Chart */}
           <Card className="bg-black-surface border-dark-gray">
@@ -181,18 +374,14 @@ export default function Earnings() {
           <Card className="bg-black-surface border-dark-gray">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-text-primary">Recent Transactions</CardTitle>
-              <Button variant="outline" size="sm" className="border-dark-gray text-text-primary">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
             </CardHeader>
             <CardContent>
               {payments.length === 0 ? (
                 <div className="text-center py-8">
-                  <Wallet className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                  <Wallet className="w-12 h-12 text-text-muted mx-auto mb-3 opacity-60" />
                   <p className="text-text-secondary mb-2">No transactions yet</p>
                   <p className="text-sm text-text-muted">
-                    Completed bookings will appear here as payments.
+                    Completed bookings and VIP fan passes will appear here as payments.
                   </p>
                 </div>
               ) : (
@@ -206,7 +395,7 @@ export default function Earnings() {
                         <p className="font-semibold text-text-primary text-sm">
                           {payment.type === 'BOOKING' && payment.booking
                             ? `Booking: ${payment.booking.eventType}`
-                            : 'Payout'}
+                            : 'Payout / VIP Fan Pass'}
                         </p>
                         <p className="text-xs text-text-muted mt-1">
                           {new Date(payment.createdAt).toLocaleDateString()}
@@ -236,23 +425,27 @@ export default function Earnings() {
         </div>
       </FeatureLock>
 
-      {/* Payout Settings */}
-      <Card className="bg-black-surface border-dark-gray">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-text-primary">Payout Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-4">
-            <p className="text-text-secondary mb-4">
-              Payout methods and scheduling will be configurable here.
-            </p>
-            <Button variant="outline" className="border-dark-gray text-text-primary">
-              Configure Payout Method
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Modals */}
+      <PayoutMethodModal
+        isOpen={isPayoutModalOpen}
+        onClose={() => setIsPayoutModalOpen(false)}
+        currentMethod={payoutMethod}
+        onSuccess={loadData}
+      />
+
+      <RequestPayoutModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        availableBalance={availableBalance}
+        payoutMethod={payoutMethod}
+        onSuccess={loadData}
+        onConfigureMethod={() => {
+          setIsRequestModalOpen(false);
+          setIsPayoutModalOpen(true);
+        }}
+      />
     </div>
   );
 }
+
 

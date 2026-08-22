@@ -56,6 +56,7 @@ const navItems = [
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: Users, label: 'Followers', path: '/dashboard/followers' },
+  { icon: Crown, label: 'Fan Passes', path: '/dashboard/fan-subscriptions' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
   { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
   { icon: BriefcaseBusiness, label: 'Opportunities', path: '/dashboard/opportunities' },

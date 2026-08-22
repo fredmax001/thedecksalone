@@ -107,10 +107,15 @@ function isAllowedOrigin(origin: string | undefined) {
 
 // Middleware - restrict browser origins in production.
 app.use(cors({
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-    logger.warn('CORS origin rejected', { origin });
-    return callback(null, false);
+  origin: (origin: string | undefined, callback?: (err: Error | null, allow?: boolean) => void) => {
+    const allowed = isAllowedOrigin(origin);
+    if (!allowed) {
+      logger.warn('CORS origin rejected', { origin });
+    }
+    if (typeof callback === 'function') {
+      return callback(null, allowed);
+    }
+    return allowed;
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

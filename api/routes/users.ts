@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { isValidUsername } = require('../utils/username');
 
 function extFromMime(mimetype, fallbackName = '') {
   const fromMime = {
@@ -438,6 +439,12 @@ router.put('/profile', authMiddleware, async (req, res) => {
 
     if (username && username.trim() !== '') {
       const normalized = username.toLowerCase().trim();
+      if (!isValidUsername(normalized)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved',
+        });
+      }
       const existing = await prisma.user.findUnique({ where: { username: normalized } });
       if (existing && existing.id !== req.user.id) {
         return res.status(409).json({ success: false, error: 'Username already taken' });

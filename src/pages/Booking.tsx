@@ -34,6 +34,7 @@ import { useEventTypes } from "@/hooks/useEvents";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { BookingCalendar } from "@/components/BookingCalendar";
 
 const EVENT_TYPES = [
   'Wedding',
@@ -266,6 +267,7 @@ function BookingRequestModal({
   const [form, setForm] = useState({
     eventTypes: [] as string[],
     eventDate: "",
+    timeSlot: "EVENING_NIGHT",
     venue: "",
     duration: "",
     requirements: "",
@@ -294,6 +296,11 @@ function BookingRequestModal({
     e.preventDefault();
     if (createBooking.isPending || !dj) return;
 
+    if (!form.eventDate) {
+      toast.error("Please choose an available event date on the calendar");
+      return;
+    }
+
     if (!isAuthenticated) {
       toast.info("Please log in to request a booking");
       window.location.href = "/login";
@@ -307,6 +314,7 @@ function BookingRequestModal({
       djId: dj.id,
       eventType: form.eventTypes[0] || 'General',
       eventDate: form.eventDate,
+      timeSlot: form.timeSlot,
       eventLocation: form.venue,
       duration: parseDuration(form.duration),
       budget: budgetMaxNum || budgetMinNum,
@@ -353,7 +361,7 @@ function BookingRequestModal({
 
         {/* Panel */}
         <motion.div
-          className="relative z-10 w-full max-w-[560px] bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+          className="relative z-10 w-full max-w-[620px] bg-[#111111] border border-[rgba(255,255,255,0.08)] rounded-2xl p-5 sm:p-7 max-h-[90vh] overflow-y-auto"
           initial={{ opacity: 0, y: 30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -369,15 +377,29 @@ function BookingRequestModal({
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-text-primary uppercase tracking-tight">
             Request Booking
           </h2>
-          <p className="mt-2 text-sm text-text-secondary">
+          <p className="mt-1 text-sm text-text-secondary">
             Book <span className="text-gold font-medium">{dj.stageName}</span> for your event
           </p>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+            {/* Interactive Availability Calendar */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gold mb-2">
+                1. Select Available Date & Time Slot
+              </label>
+              <BookingCalendar
+                djId={dj.id}
+                selectedDate={form.eventDate}
+                selectedSlot={form.timeSlot}
+                onSelectDate={(dateStr) => setForm((prev) => ({ ...prev, eventDate: dateStr }))}
+                onSelectSlot={(slotId) => setForm((prev) => ({ ...prev, timeSlot: slotId }))}
+              />
+            </div>
+
             {/* Event Type */}
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                Event Type <span className="text-text-secondary normal-case">(select all that apply)</span>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                2. Event Type <span className="text-text-secondary normal-case">(select all that apply)</span>
               </label>
               <div className="flex flex-wrap gap-2">
                 {EVENT_TYPES.map((et) => (
@@ -388,7 +410,7 @@ function BookingRequestModal({
                     className={cn(
                       'px-3 py-1.5 rounded-full text-xs border transition-colors',
                       form.eventTypes.includes(et)
-                        ? 'bg-gold/20 border-gold text-gold'
+                        ? 'bg-gold/20 border-gold text-gold font-semibold'
                         : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
                     )}
                   >
@@ -398,33 +420,19 @@ function BookingRequestModal({
               </div>
             </div>
 
-            {/* Date & Venue */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                  Event Date
-                </label>
-                <input
-                  required
-                  type="date"
-                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                  value={form.eventDate}
-                  onChange={(e) => setForm({ ...form, eventDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                  Venue
-                </label>
-                <input
-                  required
-                  type="text"
-                  placeholder="City or Venue"
-                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                  value={form.venue}
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                />
-              </div>
+            {/* Venue & Location */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                3. Event Venue / Location
+              </label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. Radisson Blu Freetown, Aberdeen Beach, Private Residence"
+                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
+                value={form.venue}
+                onChange={(e) => setForm({ ...form, venue: e.target.value })}
+              />
             </div>
 
             {/* Duration */}

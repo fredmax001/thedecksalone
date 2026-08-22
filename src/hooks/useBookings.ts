@@ -5,6 +5,7 @@ export interface BookingData {
   djId: string;
   eventType: string;
   eventDate: string;
+  timeSlot?: string;
   eventLocation: string;
   duration: number;
   budget: number;

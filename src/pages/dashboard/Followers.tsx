@@ -8,6 +8,9 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
+  List,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -35,17 +38,19 @@ interface FollowersResponse {
   };
 }
 
+type LayoutMode = 'grid' | 'list';
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.06 },
+    transition: { staggerChildren: 0.04 },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
 };
 
 export default function Followers() {
@@ -55,7 +60,26 @@ export default function Followers() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<FollowersResponse['meta'] | null>(null);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
+    try {
+      const saved = localStorage.getItem('dj-followers-layout');
+      if (saved === 'list' || saved === 'grid') return saved;
+    } catch {
+      // ignore
+    }
+    return 'list';
+  });
+
   const ITEMS_PER_PAGE = 20;
+
+  const handleSetLayout = (mode: LayoutMode) => {
+    setLayoutMode(mode);
+    try {
+      localStorage.setItem('dj-followers-layout', mode);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     loadFollowers(page);
@@ -94,15 +118,44 @@ export default function Followers() {
       animate="visible"
       className="space-y-6"
     >
-      {/* Header */}
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Header & View Switcher */}
+      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
             Followers
           </h1>
           <p className="text-sm text-text-secondary mt-1">
-            {meta?.total ?? 0} people are following you
+            {meta?.total ?? 0} fans & listeners are following you
           </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black-surface border border-dark-gray w-fit">
+          <button
+            type="button"
+            onClick={() => handleSetLayout('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              layoutMode === 'list'
+                ? 'bg-gold text-black shadow'
+                : 'text-text-secondary hover:text-white'
+            }`}
+            title="List View"
+          >
+            <List className="w-3.5 h-3.5" />
+            <span>List</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetLayout('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              layoutMode === 'grid'
+                ? 'bg-gold text-black shadow'
+                : 'text-text-secondary hover:text-white'
+            }`}
+            title="Grid View"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            <span>Grid</span>
+          </button>
         </div>
       </motion.div>
 
@@ -112,7 +165,7 @@ export default function Followers() {
         </motion.div>
       )}
 
-      {/* Followers Grid */}
+      {/* Followers Content */}
       {followers.length === 0 && !loading ? (
         <motion.div variants={itemVariants} className="text-center py-20">
           <div className="w-20 h-20 bg-gold/10 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -133,14 +186,22 @@ export default function Followers() {
         </motion.div>
       ) : (
         <>
-          <motion.div
-            variants={itemVariants}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-          >
-            {followers.map((follower) => (
-              <FollowerCard key={follower.id} follower={follower} />
-            ))}
-          </motion.div>
+          {layoutMode === 'grid' ? (
+            <motion.div
+              variants={itemVariants}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            >
+              {followers.map((follower) => (
+                <FollowerCard key={follower.id} follower={follower} />
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div variants={itemVariants} className="space-y-2.5">
+              {followers.map((follower) => (
+                <FollowerListItem key={follower.id} follower={follower} />
+              ))}
+            </motion.div>
+          )}
 
           {/* Pagination */}
           {meta && meta.totalPages > 1 && (
@@ -174,8 +235,66 @@ export default function Followers() {
   );
 }
 
+function FollowerListItem({ follower }: { follower: Follower }) {
+  const initials = follower.name ? follower.name.slice(0, 2).toUpperCase() : follower.username.slice(0, 2).toUpperCase();
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className="bg-black-surface border-dark-gray hover:border-gold/30 transition-all">
+        <CardContent className="p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <Avatar className="w-11 h-11 border border-gold/30 shrink-0">
+                <AvatarImage src={follower.avatar || ''} alt={follower.name || follower.username} />
+                <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/user/${follower.username}`}
+                    className="text-sm font-bold text-white hover:text-gold transition-colors truncate"
+                  >
+                    {follower.name || follower.username}
+                  </Link>
+                  <span className="text-xs text-text-muted hidden sm:inline truncate">
+                    @{follower.username}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted mt-0.5">
+                  {follower.location && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gold/70" />
+                      {follower.location}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-text-muted" />
+                    Followed {new Date(follower.followedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Link
+              to={`/user/${follower.username}`}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-gold hover:text-black text-xs font-semibold text-text-secondary transition-colors shrink-0"
+            >
+              <span>Profile</span>
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
 function FollowerCard({ follower }: { follower: Follower }) {
-  const initials = follower.name.slice(0, 2).toUpperCase();
+  const initials = follower.name ? follower.name.slice(0, 2).toUpperCase() : follower.username.slice(0, 2).toUpperCase();
 
   return (
     <motion.div variants={itemVariants}>

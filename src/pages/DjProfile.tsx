@@ -25,7 +25,13 @@ import {
   UserPlus,
   UserCheck,
   Zap,
+  Download,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { cn, imageFallback } from "@/lib/utils";
 import { api, getMediaUrl } from "@/lib/api";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -37,6 +43,7 @@ import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
 import DjFanSubscribeModal from "@/components/DjFanSubscribeModal";
+import { BookingCalendar } from "@/components/BookingCalendar";
 import {
   XAxis,
   YAxis,
@@ -293,7 +300,8 @@ function BookingModal({
 
   const [form, setForm] = useState({
     eventType: "",
-    date: "",
+    date: new Date().toISOString().split('T')[0],
+    timeSlot: "EVENING_NIGHT",
     location: "",
     city: dj.city,
     guests: "",
@@ -330,6 +338,7 @@ function BookingModal({
       djId: dj.id,
       eventType: form.eventType,
       eventDate: form.date,
+      timeSlot: form.timeSlot,
       eventLocation: [form.location, form.city].filter(Boolean).join(', '),
       duration: parseDuration(form.duration),
       budget: form.budget ? parseBudget(form.budget) : 0,
@@ -365,7 +374,7 @@ function BookingModal({
 
         {/* Panel */}
         <motion.div
-          className="relative z-10 w-full max-w-[560px] bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+          className="relative z-10 w-full max-w-2xl bg-[#111111] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 30 }}
@@ -385,7 +394,7 @@ function BookingModal({
             Book {dj.stageName} for your event
           </p>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
             {/* Event Type */}
             <div>
               <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
@@ -408,33 +417,33 @@ function BookingModal({
               </select>
             </div>
 
-            {/* Date & Location row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                  Event Date
-                </label>
-                <input
-                  required
-                  type="date"
-                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
-                  Location
-                </label>
-                <input
-                  required
-                  type="text"
-                  placeholder="City or Venue"
-                  className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                />
-              </div>
+            {/* Interactive Availability Calendar & Time Slot Picker */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                Choose Event Date & Available Time Slot (Max 3 / Day)
+              </label>
+              <BookingCalendar
+                djId={dj.id}
+                selectedDate={form.date}
+                selectedSlot={form.timeSlot}
+                onSelectDate={(d) => setForm((prev) => ({ ...prev, date: d }))}
+                onSelectSlot={(s) => setForm((prev) => ({ ...prev, timeSlot: s }))}
+              />
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wider text-text-muted mb-2">
+                Venue or Event Location
+              </label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. Radisson Blu Aberdeen / Atlantic Lumley Beach / Place Name"
+                className="w-full bg-[#181818] border border-[#1E1E1E] rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-[3px] focus:ring-gold-glow transition-all"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
             </div>
 
             {/* City */}
@@ -1008,6 +1017,37 @@ function MixesTab({ dj }: { dj: DJ }) {
 
 function PhotosTab({ dj }: { dj: DJ }) {
   const photos = dj.photos || [];
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+
+  const handleDownload = async (imageUrl: string, filename: string) => {
+    try {
+      toast.info("Downloading photo... 📸");
+      const fullUrl = imageUrl.startsWith("http") || imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
+        ? imageUrl
+        : getMediaUrl(imageUrl);
+
+      const res = await fetch(fullUrl, { mode: "cors" });
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success("Photo downloaded successfully!");
+    } catch {
+      // Fallback
+      const link = document.createElement("a");
+      link.href = imageUrl;
+      link.download = filename;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   if (photos.length === 0) {
     return (
@@ -1021,36 +1061,154 @@ function PhotosTab({ dj }: { dj: DJ }) {
     );
   }
 
+  const selectedPhoto = selectedPhotoIndex !== null ? photos[selectedPhotoIndex] : null;
+
   return (
-    <motion.div
-      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      {photos.map((photo, i) => (
-        <motion.div
-          key={photo.id}
-          className="group relative aspect-square rounded-xl overflow-hidden bg-[#111111] border border-[rgba(255,255,255,0.05)]"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: i * 0.05 }}
-        >
-          <img
-            src={photo.url}
-            alt={photo.caption || `${dj.stageName} photo`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/default-avatar.jpg'; }}
-          />
-          {photo.caption && (
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-              <p className="text-xs text-white/80 truncate">{photo.caption}</p>
+    <>
+      <motion.div
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        {photos.map((photo, i) => (
+          <motion.div
+            key={photo.id}
+            className="group relative aspect-square rounded-2xl overflow-hidden bg-[#111111] border border-white/10 hover:border-gold/50 transition-all cursor-pointer"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05 }}
+            onClick={() => setSelectedPhotoIndex(i)}
+          >
+            <img
+              src={photo.url}
+              alt={photo.caption || `${dj.stageName} photo`}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/default-avatar.jpg'; }}
+            />
+
+            {/* Hover overlay with action buttons */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-between">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(photo.url, `DJ_${dj.stageName.replace(/\s+/g, '_')}_Photo_${i + 1}.jpg`);
+                  }}
+                  className="p-2 rounded-xl bg-black/70 hover:bg-gold text-white hover:text-black transition-all shadow-lg backdrop-blur-sm"
+                  title="Download Photo"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div>
+                {photo.caption && (
+                  <p className="text-xs text-white font-medium truncate mb-1">{photo.caption}</p>
+                )}
+                <span className="text-[10px] text-gold font-semibold uppercase tracking-wider flex items-center gap-1">
+                  <Maximize2 className="w-3 h-3" /> View & Download HD
+                </span>
+              </div>
             </div>
-          )}
-        </motion.div>
-      ))}
-    </motion.div>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      <AnimatePresence>
+        {selectedPhoto && selectedPhotoIndex !== null && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              className="absolute inset-0 bg-black/95 backdrop-blur-md"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedPhotoIndex(null)}
+            />
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setSelectedPhotoIndex(null)}
+              className="absolute top-5 right-5 z-20 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Previous Photo */}
+            {photos.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPhotoIndex((selectedPhotoIndex - 1 + photos.length) % photos.length);
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Next Photo */}
+            {photos.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPhotoIndex((selectedPhotoIndex + 1) % photos.length);
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Image Container */}
+            <motion.div
+              className="relative z-10 max-w-4xl w-full flex flex-col items-center gap-4"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+            >
+              <div className="relative max-h-[75vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+                <img
+                  src={selectedPhoto.url}
+                  alt={selectedPhoto.caption || `${dj.stageName} photo`}
+                  className="max-h-[75vh] w-auto object-contain"
+                />
+              </div>
+
+              {/* Bottom bar with caption & download button */}
+              <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-[#111111]/90 border border-white/10 backdrop-blur-md">
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    {selectedPhoto.caption || `${dj.stageName} Press Photo`}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    Photo {selectedPhotoIndex + 1} of {photos.length} • {dj.stageName}
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() =>
+                    handleDownload(
+                      selectedPhoto.url,
+                      `DJ_${dj.stageName.replace(/\s+/g, '_')}_Photo_${selectedPhotoIndex + 1}.jpg`
+                    )
+                  }
+                  className="bg-gold-gradient text-black font-bold hover:opacity-90 text-xs px-5 py-2.5 shadow-lg"
+                >
+                  <Download className="w-4 h-4 mr-2" /> Download HD Photo
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 

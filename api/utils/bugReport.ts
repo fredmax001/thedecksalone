@@ -44,8 +44,22 @@ export async function logSystemError(data: {
  */
 export async function checkAndSendDailyBugReport() {
   try {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Auto-mark stale errors older than 24h as reported to prevent repeated legacy alerts
+    await prisma.systemErrorLog.updateMany({
+      where: {
+        reported: false,
+        createdAt: { lt: oneDayAgo },
+      },
+      data: { reported: true },
+    }).catch(() => {});
+
     const unreportErrors = await prisma.systemErrorLog.findMany({
-      where: { reported: false },
+      where: {
+        reported: false,
+        createdAt: { gte: oneDayAgo },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });

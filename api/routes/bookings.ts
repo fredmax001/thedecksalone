@@ -19,6 +19,7 @@ const createBookingSchema = z.object({
   djId: z.string(),
   eventType: z.string().min(1),
   eventDate: z.string().datetime(),
+  timeSlot: z.string().optional(),
   eventLocation: z.string().min(1),
   duration: z.number().int().min(1),
   budget: z.number().min(0),
@@ -223,6 +224,99 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/bookings/dj/:djId/availability - Get booked slots, availability & blocked dates for calendar
+router.get('/dj/:djId/availability', softAuthMiddleware, async (req, res) => {
+  try {
+    const { djId } = req.params;
+    const { month } = req.query; // format: YYYY-MM
+
+    const dj = await prisma.djProfile.findUnique({
+      where: { id: djId },
+      select: {
+        id: true,
+        stageName: true,
+        blockedDates: true,
+        availabilitySchedule: true,
+        availability: true,
+      },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ not found' });
+    }
+
+    // Determine date range (defaults to current month +/- 2 months)
+    let startDate: Date;
+    let endDate: Date;
+
+    if (typeof month === 'string' && /^\d{4}-\d{2}$/.test(month)) {
+      const [year, m] = month.split('-').map(Number);
+      startDate = new Date(year, m - 1, 1);
+      endDate = new Date(year, m, 0, 23, 59, 59, 999);
+    } else {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 4, 0, 23, 59, 59, 999);
+    }
+
+    // Find all active bookings in this range
+    const bookings = await prisma.booking.findMany({
+      where: {
+        djId,
+        status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        eventDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        id: true,
+        eventDate: true,
+        timeSlot: true,
+        eventType: true,
+        status: true,
+      },
+    });
+
+    // Group bookings by YYYY-MM-DD
+    const dateMap: Record<string, { count: number; bookedSlots: string[]; isFullyBooked: boolean }> = {};
+
+    bookings.forEach((b) => {
+      const dateKey = b.eventDate.toISOString().split('T')[0];
+      if (!dateMap[dateKey]) {
+        dateMap[dateKey] = { count: 0, bookedSlots: [], isFullyBooked: false };
+      }
+      dateMap[dateKey].count += 1;
+      if (b.timeSlot) {
+        dateMap[dateKey].bookedSlots.push(b.timeSlot);
+      }
+      if (dateMap[dateKey].count >= 3) {
+        dateMap[dateKey].isFullyBooked = true;
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        djId: dj.id,
+        stageName: dj.stageName,
+        blockedDates: dj.blockedDates || [],
+        availabilitySchedule: dj.availabilitySchedule || null,
+        maxBookingsPerDay: 3,
+        dailyAvailability: dateMap,
+        slots: [
+          { id: 'MORNING', label: 'Morning Slot (08:00 – 13:00)', period: '08:00 - 13:00' },
+          { id: 'AFTERNOON', label: 'Afternoon Slot (13:00 – 18:00)', period: '13:00 - 18:00' },
+          { id: 'EVENING_NIGHT', label: 'Night / Prime Event (18:00 – 02:00)', period: '18:00 - 02:00' },
+        ],
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching DJ availability:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // GET /api/bookings/:id - Get single booking
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -276,13 +370,60 @@ router.post('/', softAuthMiddleware, bookingLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: 'You cannot book yourself' });
     }
 
+    const eventDateObj = new Date(data.eventDate);
+    const dateKey = eventDateObj.toISOString().split('T')[0];
+
+    // Check if DJ blocked this date
+    if (Array.isArray(dj.blockedDates) && dj.blockedDates.includes(dateKey)) {
+      return res.status(409).json({
+        success: false,
+        error: `DJ is not available for bookings on ${dateKey}. Please select another date.`,
+      });
+    }
+
+    // Calculate start & end of day for max 3 bookings / day check
+    const startOfDay = new Date(eventDateObj);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(eventDateObj);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const existingDayBookings = await prisma.booking.findMany({
+      where: {
+        djId: data.djId,
+        status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        eventDate: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+      select: { id: true, timeSlot: true },
+    });
+
+    if (existingDayBookings.length >= 3) {
+      return res.status(409).json({
+        success: false,
+        error: `This DJ is fully booked for ${dateKey} (maximum 3 bookings per day reached). Please choose another date.`,
+      });
+    }
+
+    // If specific timeSlot is selected, verify slot is not already taken
+    if (data.timeSlot && data.timeSlot !== 'CUSTOM') {
+      const slotTaken = existingDayBookings.some((b) => b.timeSlot === data.timeSlot);
+      if (slotTaken) {
+        return res.status(409).json({
+          success: false,
+          error: `The ${data.timeSlot} slot is already booked for this DJ on ${dateKey}. Please pick a different slot or date.`,
+        });
+      }
+    }
+
     const bookingData = {
       ...data,
       clientId: req.user?.id || null,
       guestName: req.user ? null : data.guestName || null,
       guestEmail: req.user ? null : data.guestEmail || null,
       guestPhone: req.user ? null : data.guestPhone || null,
-      eventDate: new Date(data.eventDate),
+      eventDate: eventDateObj,
     };
 
     const booking = await prisma.booking.create({

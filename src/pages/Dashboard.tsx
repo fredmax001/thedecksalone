@@ -65,7 +65,6 @@ export default function Dashboard() {
 
   const isDj = user?.role === 'DJ';
   const djProfile = user?.djProfile;
-  const setAuth = useAuthStore((state) => state.setAuth);
   const [newUsername, setNewUsername] = useState(user?.username || '');
   const [usernameStatus, setUsernameStatus] = useState<{ message: string; type: 'success' | 'error' | '' }>({ message: '', type: '' });
   const [updatingUsername, setUpdatingUsername] = useState(false);
@@ -357,8 +356,8 @@ export default function Dashboard() {
                 try {
                   const res = await api.put('/auth/me', { username: newUsername });
                   if (res.data.success) {
-                    setAuth(res.data.data, localStorage.getItem('soundit_token') || '');
-                    setUsernameStatus({ message: 'Username updated', type: 'success' });
+                    useAuthStore.getState().fetchMe();
+                    setUsernameStatus({ message: 'Username updated successfully', type: 'success' });
                   }
                 } catch (err: any) {
                   setUsernameStatus({ message: err.response?.data?.error || 'Update failed', type: 'error' });

@@ -1239,4 +1239,349 @@ router.get('/me/promotion-points', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/djs/me/availability - DJ reads their availability and blocked dates
+router.get('/me/availability', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: {
+        id: true,
+        stageName: true,
+        blockedDates: true,
+        availabilitySchedule: true,
+        availability: true,
+      },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        blockedDates: dj.blockedDates || [],
+        availabilitySchedule: dj.availabilitySchedule || {
+          enabledDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+          enabledSlots: ['MORNING', 'AFTERNOON', 'EVENING_NIGHT'],
+        },
+        availability: dj.availability || 'AVAILABLE',
+      },
+    });
+  } catch (error) {
+    console.error('[DJ Availability API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/djs/me/availability - DJ updates their availability and blocked dates
+router.put('/me/availability', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const { blockedDates, availabilitySchedule, availability } = req.body;
+    const updateData: any = {};
+
+    if (Array.isArray(blockedDates)) {
+      updateData.blockedDates = blockedDates.filter((d: any) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
+    }
+
+    if (availabilitySchedule !== undefined) {
+      updateData.availabilitySchedule = availabilitySchedule;
+    }
+
+    if (typeof availability === 'string') {
+      updateData.availability = availability;
+    }
+
+    const updated = await prisma.djProfile.update({
+      where: { id: dj.id },
+      data: updateData,
+      select: {
+        id: true,
+        blockedDates: true,
+        availabilitySchedule: true,
+        availability: true,
+      },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('[DJ Availability Update API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/me/fan-subscriptions - Full DJ dashboard view with pending, active, and expired subscribers
+router.get('/me/fan-subscriptions', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, stageName: true, subscriptionPrice: true, subscriptionTier: true },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const subscriptions = await prisma.djFanSubscription.findMany({
+      where: { djId: dj.id },
+      include: {
+        user: { select: { id: true, name: true, username: true, avatar: true, email: true, phone: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pending = subscriptions.filter((s) => s.status === 'PENDING');
+    const active = subscriptions.filter((s) => s.status === 'ACTIVE' && new Date(s.expiresAt) > new Date());
+    const expiredOrDenied = subscriptions.filter((s) => s.status !== 'PENDING' && (s.status === 'DENIED' || new Date(s.expiresAt) <= new Date()));
+
+    const totalActiveRevenue = active.reduce((acc, s) => acc + (s.amount || 100), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        subscriptions,
+        pending,
+        active,
+        expiredOrDenied,
+        stats: {
+          pendingCount: pending.length,
+          activeCount: active.length,
+          totalRevenue: totalActiveRevenue,
+          subscriptionPrice: dj.subscriptionPrice || 100,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[DJ Fan Subscriptions API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/djs/me/fan-subscriptions/:id/approve - DJ approves a pending fan subscription
+router.put('/me/fan-subscriptions/:id/approve', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const sub = await prisma.djFanSubscription.findUnique({
+      where: { id: req.params.id },
+      include: { user: true },
+    });
+
+    if (!sub || sub.djId !== dj.id) {
+      return res.status(404).json({ success: false, error: 'Fan subscription request not found' });
+    }
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const updated = await prisma.djFanSubscription.update({
+      where: { id: sub.id },
+      data: {
+        status: 'ACTIVE',
+        expiresAt,
+      },
+      include: {
+        user: { select: { id: true, name: true, username: true, avatar: true } },
+      },
+    });
+
+    const { createNotification } = require('../utils/notifications');
+    await createNotification({
+      userId: sub.userId,
+      type: 'SYSTEM',
+      title: 'Fan Club Access Approved! 🎉',
+      body: `${dj.stageName} has approved your Fan Club VIP access. Enjoy exclusive mixes and VIP perks for the next 30 days!`,
+      actionUrl: `/dj/${dj.id}`,
+    });
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: `Approved ${sub.user?.name || sub.user?.username || 'Fan'}'s subscription successfully!`,
+    });
+  } catch (error) {
+    console.error('[DJ Fan Subscription Approve API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/djs/me/fan-subscriptions/:id/deny - DJ denies a pending fan subscription
+router.put('/me/fan-subscriptions/:id/deny', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const sub = await prisma.djFanSubscription.findUnique({
+      where: { id: req.params.id },
+      include: { user: true },
+    });
+
+    if (!sub || sub.djId !== dj.id) {
+      return res.status(404).json({ success: false, error: 'Fan subscription request not found' });
+    }
+
+    const updated = await prisma.djFanSubscription.update({
+      where: { id: sub.id },
+      data: {
+        status: 'DENIED',
+      },
+    });
+
+    const { createNotification } = require('../utils/notifications');
+    await createNotification({
+      userId: sub.userId,
+      type: 'SYSTEM',
+      title: 'Fan Club Request Update',
+      body: `Your Fan Club subscription request to ${dj.stageName} was not approved. Please verify your payment details or contact support.`,
+      actionUrl: `/dj/${dj.id}`,
+    });
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: 'Subscription request denied',
+    });
+  } catch (error) {
+    console.error('[DJ Fan Subscription Deny API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/me/payout-method - Get DJ's configured payout method
+router.get('/me/payout-method', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, payoutMethod: true },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    return res.json({ success: true, data: dj.payoutMethod || null });
+  } catch (error) {
+    console.error('[DJ Payout Method GET API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/djs/me/payout-method - Save DJ's payout method (Orange Money, Afrimoney, Bank)
+router.put('/me/payout-method', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const { type, accountName, accountNumber, bankName, phone } = req.body;
+
+    if (!type || !['ORANGE_MONEY', 'AFRIMONEY', 'BANK_TRANSFER'].includes(type)) {
+      return res.status(400).json({ success: false, error: 'Invalid payout method type' });
+    }
+
+    if (!accountName || accountName.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Account / Beneficiary name is required' });
+    }
+
+    const payoutMethodData = {
+      type,
+      accountName: accountName.trim(),
+      accountNumber: (accountNumber || phone || '').trim(),
+      bankName: type === 'BANK_TRANSFER' ? (bankName || '').trim() : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updated = await prisma.djProfile.update({
+      where: { id: dj.id },
+      data: { payoutMethod: payoutMethodData },
+      select: { id: true, payoutMethod: true },
+    });
+
+    return res.json({
+      success: true,
+      data: updated.payoutMethod,
+      message: 'Payout method saved successfully',
+    });
+  } catch (error) {
+    console.error('[DJ Payout Method PUT API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/djs/me/payout-requests - DJ submits a withdrawal request
+router.post('/me/payout-requests', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, stageName: true, payoutMethod: true },
+    });
+
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    if (!dj.payoutMethod) {
+      return res.status(400).json({ success: false, error: 'Please configure a payout method first' });
+    }
+
+    const { amount, notes } = req.body;
+    const numAmount = parseFloat(amount);
+
+    if (Number.isNaN(numAmount) || numAmount < 50) {
+      return res.status(400).json({ success: false, error: 'Minimum withdrawal amount is SLE 50' });
+    }
+
+    const payoutRequest = await prisma.payoutRequest.create({
+      data: {
+        djId: dj.id,
+        amount: numAmount,
+        currency: 'SLE',
+        status: 'PENDING',
+        payoutMethod: dj.payoutMethod,
+        notes: notes || null,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: payoutRequest,
+      message: `Withdrawal request for SLE ${numAmount.toLocaleString()} submitted successfully. Our finance team will process it within 24-48 hours.`,
+    });
+  } catch (error) {
+    console.error('[DJ Payout Request API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /api/djs/me/payout-requests - DJ views their withdrawal requests history
+router.get('/me/payout-requests', authMiddleware, async (req, res) => {
+  try {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return res.status(403).json({ success: false, error: 'DJ profile required' });
+    }
+
+    const requests = await prisma.payoutRequest.findMany({
+      where: { djId: dj.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error('[DJ Payout Requests History API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

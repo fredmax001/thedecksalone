@@ -201,6 +201,10 @@ model DjProfile {
   promoGrants             PromoGrant[]
   promotionPoints         Int                      @default(1000)
   subscriptionPrice       Float                    @default(100.0)
+  availabilitySchedule    Json?
+  blockedDates            String[]                 @default([])
+  payoutMethod            Json?
+  payoutRequests          PayoutRequest[]
   fanSubscriptions        DjFanSubscription[]
   campaigns               AdCampaign[]
   battleEntries           BattleEntry[]
@@ -435,6 +439,7 @@ model Booking {
   djId            String
   eventType       String
   eventDate       DateTime
+  timeSlot        String?
   eventLocation   String
   duration        Int
   budget          Float
@@ -1232,6 +1237,26 @@ model DjFanSubscription {
   @@index([userId])
   @@index([status])
   @@map("dj_fan_subscriptions")
+}
+
+model PayoutRequest {
+  id              String        @id @default(cuid())
+  djId            String
+  amount          Float
+  currency        String        @default("SLE")
+  status          String        @default("PENDING") // PENDING, PROCESSED, REJECTED
+  payoutMethod    Json
+  notes           String?
+  adminNotes      String?
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  dj              DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  @@index([djId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payout_requests")
 }
 
 

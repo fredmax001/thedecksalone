@@ -637,11 +637,11 @@ const updateProfileSchema = z.object({
 });
 
 const updateMeSchema = z.object({
-  username: z.string().trim().min(3).max(30).regex(/^[a-z0-9_-]+$/i).optional(),
-  email: z.string().trim().email().max(254).optional(),
-  gender: z.string().optional(),
-  phone: z.string().trim().min(8).max(20).optional(),
-  dateOfBirth: z.string().datetime().or(z.literal('')).optional(),
+  username: z.string().trim().max(50).optional().nullable().or(z.literal('')),
+  email: z.string().trim().max(254).optional().nullable().or(z.literal('')),
+  gender: z.string().optional().nullable().or(z.literal('')),
+  phone: z.string().trim().max(30).optional().nullable().or(z.literal('')),
+  dateOfBirth: z.string().optional().nullable().or(z.literal('')),
 });
 
 const changePasswordSchema = z.object({
@@ -660,7 +660,7 @@ router.put('/me', authMiddleware, async (req, res) => {
   try {
     const parsed = updateMeSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
 
     const { username, email, gender, phone, dateOfBirth } = parsed.data;
@@ -671,24 +671,27 @@ router.put('/me', authMiddleware, async (req, res) => {
     }
 
     if (phone !== undefined) {
-      updateData.phone = phone.trim() || null;
+      updateData.phone = phone ? phone.trim() : null;
     }
 
     if (dateOfBirth !== undefined) {
       if (!dateOfBirth || dateOfBirth.trim() === '') {
         updateData.dateOfBirth = null;
       } else {
-        const parsed = new Date(dateOfBirth);
-        if (!Number.isNaN(parsed.getTime())) {
-          updateData.dateOfBirth = parsed;
+        const parsedDob = new Date(dateOfBirth);
+        if (!Number.isNaN(parsedDob.getTime())) {
+          updateData.dateOfBirth = parsedDob;
         }
       }
     }
 
-    if (username !== undefined) {
-      const normalized = username.toLowerCase();
+    if (username && username.trim() !== '') {
+      const normalized = username.toLowerCase().trim();
       if (!isValidUsername(normalized)) {
-        return res.status(400).json({ success: false, error: 'Invalid or reserved username' });
+        return res.status(400).json({
+          success: false,
+          error: 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved',
+        });
       }
       const existing = await prisma.user.findUnique({ where: { username: normalized } });
       if (existing && existing.id !== req.user.id) {
@@ -697,31 +700,42 @@ router.put('/me', authMiddleware, async (req, res) => {
       updateData.username = normalized;
     }
 
-    if (email !== undefined) {
+    // Only initiate email verification flow if email actually CHANGED
+    if (email && email.trim() !== '') {
       const normalizedEmail = email.toLowerCase().trim();
-      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-      if (existing && existing.id !== req.user.id) {
-        return res.status(409).json({ success: false, error: 'Email already in use' });
+      if (normalizedEmail !== req.user.email?.toLowerCase()) {
+        const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+        if (existing && existing.id !== req.user.id) {
+          return res.status(409).json({ success: false, error: 'Email already in use' });
+        }
+
+        // Email changes must be verified before the new address is saved.
+        // Send a one-time code to the new address and store the pending change.
+        const code = crypto.randomInt(100000, 999999).toString();
+        await setCache(`email_change:${req.user.id}`, { newEmail: normalizedEmail, code, expiry: Date.now() + 10 * 60 * 1000 }, 10 * 60);
+
+        sendOtpEmail({
+          to: normalizedEmail,
+          code,
+          username: req.user.email?.split('@')[0] || 'User',
+        }).catch((err) => console.error('[Auth] Failed to send email change OTP:', err));
+
+        // Save other non-email fields first if any were modified
+        if (Object.keys(updateData).length > 0) {
+          await prisma.user.update({
+            where: { id: req.user.id },
+            data: updateData,
+          });
+        }
+
+        return res.status(202).json({
+          success: true,
+          data: {
+            message: 'A verification code has been sent to the new email address. Use /confirm-email-change to apply the update.',
+            pendingEmail: normalizedEmail,
+          },
+        });
       }
-
-      // Email changes must be verified before the new address is saved.
-      // Send a one-time code to the new address and store the pending change.
-      const code = crypto.randomInt(100000, 999999).toString();
-      await setCache(`email_change:${req.user.id}`, { newEmail: normalizedEmail, code, expiry: Date.now() + 10 * 60 * 1000 }, 10 * 60);
-
-      sendOtpEmail({
-        to: normalizedEmail,
-        code,
-        username: req.user.email?.split('@')[0] || 'User',
-      }).catch((err) => console.error('[Auth] Failed to send email change OTP:', err));
-
-      return res.status(202).json({
-        success: true,
-        data: {
-          message: 'A verification code has been sent to the new email address. Use /confirm-email-change to apply the update.',
-          pendingEmail: normalizedEmail,
-        },
-      });
     }
 
     const user = await prisma.user.update({
@@ -729,6 +743,7 @@ router.put('/me', authMiddleware, async (req, res) => {
       data: updateData,
       select: {
         id: true, email: true, username: true, role: true,
+        name: true, avatar: true, bio: true, location: true,
         phone: true, phoneVerified: true, gender: true,
         dateOfBirth: true, createdAt: true, djProfile: true,
       },

@@ -6,15 +6,18 @@ import {
   XCircle,
   MessageCircle,
   Search,
+  List,
+  Ban,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -31,11 +34,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { BookingCalendar } from '@/components/BookingCalendar';
 
 interface Booking {
   id: string;
   eventType: string;
   eventDate: string;
+  timeSlot?: string;
   eventLocation: string;
   duration: number;
   budget: number;
@@ -62,6 +67,7 @@ const statusColors: Record<string, string> = {
 export default function Bookings() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'list' | 'calendar'>('list');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
@@ -76,7 +82,54 @@ export default function Bookings() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Calendar availability state
+  const [selectedCalDate, setSelectedCalDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedCalSlot, setSelectedCalSlot] = useState<string>('EVENING_NIGHT');
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
+
   const isDj = user?.role === 'DJ';
+  const djId = user?.djProfile?.id;
+
+  useEffect(() => {
+    if (!isDj) {
+      setLoading(false);
+      return;
+    }
+    fetchBookings();
+    fetchAvailability();
+  }, [isDj, filter]);
+
+  const fetchAvailability = async () => {
+    try {
+      const res = await api.get('/djs/me/availability');
+      if (res.data.success) {
+        setBlockedDates(res.data.data.blockedDates || []);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const toggleBlockDate = async (dateStr: string) => {
+    try {
+      setUpdatingAvailability(true);
+      const isAlreadyBlocked = blockedDates.includes(dateStr);
+      const newBlocked = isAlreadyBlocked
+        ? blockedDates.filter((d) => d !== dateStr)
+        : [...blockedDates, dateStr];
+
+      const res = await api.put('/djs/me/availability', { blockedDates: newBlocked });
+      if (res.data.success) {
+        setBlockedDates(newBlocked);
+        toast.success(isAlreadyBlocked ? `Unblocked ${dateStr}` : `Blocked ${dateStr} for bookings`);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update date availability');
+    } finally {
+      setUpdatingAvailability(false);
+    }
+  };
 
   useEffect(() => {
     if (!isDj) {
@@ -162,12 +215,38 @@ export default function Bookings() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Header & View Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-text-primary uppercase tracking-wide">
-            Bookings
+            Bookings & Calendar
           </h1>
+          <p className="text-xs text-text-muted mt-1">Manage client bookings and your 3-slot daily availability schedule</p>
+        </div>
+
+        <div className="flex items-center gap-2 p-1 rounded-xl bg-black-surface border border-dark-gray w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab('list')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'list'
+                ? 'bg-gold text-black shadow'
+                : 'text-text-secondary hover:text-white'
+            }`}
+          >
+            <List className="w-4 h-4" /> List View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'calendar'
+                ? 'bg-gold text-black shadow'
+                : 'text-text-secondary hover:text-white'
+            }`}
+          >
+            <Calendar className="w-4 h-4" /> Availability Calendar
+          </button>
         </div>
       </div>
 
@@ -205,31 +284,128 @@ export default function Bookings() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <Input
-            placeholder="Search bookings..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted"
-          />
+      {activeTab === 'calendar' ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Calendar on left */}
+            <div className="lg:col-span-2">
+              {djId ? (
+                <BookingCalendar
+                  djId={djId}
+                  selectedDate={selectedCalDate}
+                  selectedSlot={selectedCalSlot}
+                  onSelectDate={(d) => setSelectedCalDate(d)}
+                  onSelectSlot={(s) => setSelectedCalSlot(s)}
+                />
+              ) : (
+                <p className="text-text-muted">DJ Profile not loaded</p>
+              )}
+            </div>
+
+            {/* Day details & blocking controls on right */}
+            <div className="space-y-4">
+              <Card className="bg-black-surface border-dark-gray">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold text-text-primary flex items-center justify-between">
+                    <span>Manage Selected Date</span>
+                    <Badge variant="outline" className="text-gold border-gold/30 text-xs">
+                      {selectedCalDate}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Status */}
+                  <div className="p-3 rounded-xl bg-black-elevated border border-dark-gray">
+                    <p className="text-xs text-text-secondary mb-1">Status on this day:</p>
+                    <p className="text-sm font-bold text-white">
+                      {blockedDates.includes(selectedCalDate) ? (
+                        <span className="text-red-400 flex items-center gap-1.5">
+                          <Ban className="w-4 h-4" /> Blocked for Bookings
+                        </span>
+                      ) : (
+                        <span className="text-green flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" /> Open for Bookings
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Block / Unblock Action */}
+                  <Button
+                    type="button"
+                    disabled={updatingAvailability}
+                    onClick={() => toggleBlockDate(selectedCalDate)}
+                    className={`w-full font-semibold ${
+                      blockedDates.includes(selectedCalDate)
+                        ? 'bg-green/20 hover:bg-green/30 text-green border border-green/30'
+                        : 'bg-red/20 hover:bg-red/30 text-red border border-red/30'
+                    }`}
+                  >
+                    {updatingAvailability ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : blockedDates.includes(selectedCalDate) ? (
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                    ) : (
+                      <Ban className="w-4 h-4 mr-2" />
+                    )}
+                    {blockedDates.includes(selectedCalDate) ? 'Unblock Date' : 'Block Out Date'}
+                  </Button>
+
+                  {/* Day bookings */}
+                  <div className="pt-2 border-t border-dark-gray">
+                    <p className="text-xs font-semibold text-text-secondary uppercase mb-2">
+                      Gigs on {selectedCalDate}
+                    </p>
+                    {bookings.filter((b) => b.eventDate.startsWith(selectedCalDate)).length === 0 ? (
+                      <p className="text-xs text-text-muted italic">No bookings on this day yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {bookings
+                          .filter((b) => b.eventDate.startsWith(selectedCalDate))
+                          .map((b) => (
+                            <div key={b.id} className="p-2.5 rounded-lg bg-black-elevated border border-dark-gray text-xs flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-white">{b.eventType}</p>
+                                <p className="text-text-muted">{b.timeSlot || 'Custom Time'}</p>
+                              </div>
+                              <Badge className={cn('text-[10px]', statusColors[b.status])}>{b.status}</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-[180px] bg-black-elevated border-dark-gray text-text-primary">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent className="bg-black-surface border-dark-gray">
-            <SelectItem value="ALL">All Statuses</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="NEGOTIATING">Negotiating</SelectItem>
-            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-            <SelectItem value="COMPLETED">Completed</SelectItem>
-            <SelectItem value="CANCELLED">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      ) : (
+        <>
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+              <Input
+                placeholder="Search bookings..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 bg-black-elevated border-dark-gray text-text-primary placeholder:text-text-muted"
+              />
+            </div>
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-[180px] bg-black-elevated border-dark-gray text-text-primary">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent className="bg-black-surface border-dark-gray">
+                <SelectItem value="ALL">All Statuses</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="NEGOTIATING">Negotiating</SelectItem>
+                <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
       {/* Booking Cards */}
       <div className="space-y-3">
@@ -351,6 +527,8 @@ export default function Bookings() {
           ))
         )}
       </div>
+      </>
+      )}
 
       {/* Accept Dialog */}
       <Dialog open={actionType === 'accept' && !!selectedBooking} onOpenChange={() => { setActionType(null); setSelectedBooking(null); }}>
