@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -27,7 +27,6 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { useAuthStore } from '@/stores/authStore';
 import NotificationBell from '@/components/NotificationBell';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +38,7 @@ import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
 import { cn } from '@/lib/utils';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
+import SearchModal from '@/components/SearchModal';
 
 const browseItems = [
   { label: 'Home', path: '/', icon: Home },
@@ -107,6 +107,7 @@ export default function Layout() {
   const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
   const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
   const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -116,15 +117,6 @@ export default function Layout() {
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
-  };
-
-  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const query = String(formData.get('q') || '').trim();
-    if (query) {
-      navigate(`/discover?search=${encodeURIComponent(query)}`);
-    }
   };
 
   const handleLogout = () => {
@@ -278,142 +270,134 @@ export default function Layout() {
               <img src="/logo-mobile.png?v=3" alt="Deck Salone" className="h-9 w-auto object-contain" />
             </Link>
 
-            {shouldShowGetPro && (
-              <Link
-                to="/dashboard/subscription"
-                className="shrink-0 rounded-full bg-gold-gradient text-black px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide transition-colors"
+            <div className="flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
+              {shouldShowGetPro && (
+                <Link
+                  to="/dashboard/subscription"
+                  className="shrink-0 rounded-full bg-gold-gradient text-black px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide transition-colors"
+                >
+                  Get Pro
+                </Link>
+              )}
+
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 text-text-muted hover:text-gold hover:border-gold/40 transition-all shadow-inner"
+                aria-label="Search"
               >
-                Get Pro
-              </Link>
-            )}
+                <Search className="w-4 h-4 text-gold" />
+              </button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="ml-auto shrink-0 text-text-secondary hover:text-gold md:hidden">
-                  <Search className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] border-dark-gray bg-black-surface p-3 z-50">
-                <form onSubmit={handleSearch} className="relative">
-                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-                  <input
-                    name="q"
-                    type="search"
-                    autoFocus
-                    placeholder="Search DJs, mixes, genres"
-                    className="h-11 w-full rounded-full border border-white/10 bg-white/10 py-2.5 pl-11 pr-4 text-xs font-medium text-text-primary outline-none placeholder:text-text-muted focus:border-gold/50"
-                  />
-                </form>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {/* For DJs: Replace Theme Toggle with Upload icon */}
+              {isDj ? (
+                <Link
+                  to="/dashboard/mixes"
+                  className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 hover:border-gold/40 text-gold hover:brightness-110 active:scale-95 transition-all shadow-inner shrink-0"
+                  title="Upload Mix"
+                  aria-label="Upload Mix"
+                >
+                  <Upload className="w-4 h-4" />
+                </Link>
+              ) : (
+                <ThemeToggle />
+              )}
 
-            <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-xl md:block">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-              <input
-                name="q"
-                type="search"
-                placeholder="Search DJs, mixes, events..."
-                className="h-10 w-full rounded-full border border-dark-gray bg-black-surface py-2.5 pl-10 pr-5 text-sm font-medium text-text-primary outline-none placeholder:text-text-muted focus:border-gold focus:shadow-[0_0_12px_rgba(244,224,89,0.12)] transition-all"
-              />
-            </form>
+              {isAuthenticated && (
+                <NotificationBell className="shrink-0" />
+              )}
 
-            <ThemeToggle />
-
-            {isAuthenticated && (
-              <NotificationBell className="shrink-0" />
-            )}
-
-            {isAuthenticated ? (
-              <div className="shrink-0">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
-                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border border-gold/40">
-                        <AvatarImage src={avatarUrl || '/default-avatar.jpg'} alt={displayName} />
-                        <AvatarFallback className="bg-black-surface">
-                          <img src="/default-avatar.jpg" alt="avatar" className="w-full h-full object-cover rounded-full" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface w-52 shadow-2xl z-50">
-                    <div className="px-3 py-2 border-b border-dark-gray">
-                      <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
-                      <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
-                    </div>
-                    <DropdownMenuItem asChild>
-                      <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
-                    </DropdownMenuItem>
-                    {isDj && (
+              {isAuthenticated ? (
+                <div className="shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
+                        <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border border-gold/40">
+                          <AvatarImage src={avatarUrl || '/default-avatar.jpg'} alt={displayName} />
+                          <AvatarFallback className="bg-black-surface">
+                            <img src="/default-avatar.jpg" alt="avatar" className="w-full h-full object-cover rounded-full" />
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface w-52 shadow-2xl z-50">
+                      <div className="px-3 py-2 border-b border-dark-gray">
+                        <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
+                        <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
+                      </div>
                       <DropdownMenuItem asChild>
-                        <Link to="/dashboard" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
-                          <Radio className="w-3.5 h-3.5" /> DJ Studio
-                        </Link>
+                        <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
                       </DropdownMenuItem>
-                    )}
-                    {isModerator && (
                       <DropdownMenuItem asChild>
-                        <Link to="/moderator" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
-                          <Shield className="w-3.5 h-3.5" /> Moderator Console
-                        </Link>
+                        <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem asChild>
-                      <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer text-xs">Settings</Link>
-                    </DropdownMenuItem>
-                    {!isNativeApp && (
-                      <DropdownMenuItem asChild>
-                        <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
-                          Install App
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator className="bg-dark-gray" />
-                    <DropdownMenuItem asChild>
-                      <Link to="/about" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5" /> About Deck Salone
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/help" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
-                        <HelpCircle className="w-3.5 h-3.5" /> Help & DJ Guide
-                      </Link>
-                    </DropdownMenuItem>
-                    {shouldShowGetPro && (
-                      <>
-                        <DropdownMenuSeparator className="bg-dark-gray" />
-                        <div className="px-2 py-2">
-                          <Link
-                            to="/dashboard/subscription"
-                            className="flex items-center gap-2 w-full rounded-lg bg-gold/10 border border-gold/25 px-3 py-2 hover:bg-gold/20 transition-colors"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
-                            <div>
-                              <p className="text-[10px] font-extrabold text-gold uppercase tracking-wide">Upgrade to Pro</p>
-                              <p className="text-[9px] text-text-muted">Unlock analytics & more</p>
-                            </div>
+                      {isDj && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/dashboard" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
+                            <Radio className="w-3.5 h-3.5" /> DJ Studio
                           </Link>
-                        </div>
-                      </>
-                    )}
-                    <DropdownMenuSeparator className="bg-dark-gray" />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
-                      <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ) : (
-              <Link
-                to="/login"
-                className="shrink-0 rounded-full bg-gold-gradient text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all"
-              >
-                Join
-              </Link>
-            )}
+                        </DropdownMenuItem>
+                      )}
+                      {isModerator && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/moderator" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
+                            <Shield className="w-3.5 h-3.5" /> Moderator Console
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem asChild>
+                        <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer text-xs">Settings</Link>
+                      </DropdownMenuItem>
+                      {!isNativeApp && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
+                            Install App
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator className="bg-dark-gray" />
+                      <DropdownMenuItem asChild>
+                        <Link to="/about" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
+                          <Info className="w-3.5 h-3.5" /> About Deck Salone
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/help" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
+                          <HelpCircle className="w-3.5 h-3.5" /> Help & DJ Guide
+                        </Link>
+                      </DropdownMenuItem>
+                      {shouldShowGetPro && (
+                        <>
+                          <DropdownMenuSeparator className="bg-dark-gray" />
+                          <div className="px-2 py-2">
+                            <Link
+                              to="/dashboard/subscription"
+                              className="flex items-center gap-2 w-full rounded-lg bg-gold/10 border border-gold/25 px-3 py-2 hover:bg-gold/20 transition-colors"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
+                              <div>
+                                <p className="text-[10px] font-extrabold text-gold uppercase tracking-wide">Upgrade to Pro</p>
+                                <p className="text-[9px] text-text-muted">Unlock analytics & more</p>
+                              </div>
+                            </Link>
+                          </div>
+                        </>
+                      )}
+                      <DropdownMenuSeparator className="bg-dark-gray" />
+                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
+                        <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="shrink-0 rounded-full bg-gold-gradient text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all"
+                >
+                  Join
+                </Link>
+              )}
+            </div>
           </div>
         </header>
 
@@ -430,6 +414,7 @@ export default function Layout() {
         </div>
       </div>
       <BottomNav />
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

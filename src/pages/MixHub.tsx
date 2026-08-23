@@ -8,14 +8,10 @@ import {
   Grid2X2,
   List,
   LayoutList,
-  Search,
   Loader2,
-  Upload,
   ListMusic,
-  Music,
   Shuffle,
   Radio,
-  ChevronRight,
   Rocket,
   Code2,
   Plus,
@@ -26,8 +22,18 @@ import {
   Edit2,
   Lock,
   Clock,
+  Flame,
+  Sparkles,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
-import api, { getMediaUrl } from '@/lib/api';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import api from '@/lib/api';
 import { type MixTrack } from '@/stores/playerStore';
 import { useMixes, useTrendingMixes, useLikeMix, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
@@ -843,13 +849,19 @@ function MixTracklistRow({
   );
 }
 
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest Uploads', icon: Sparkles },
+  { value: 'plays', label: 'Most Streamed', icon: Flame },
+  { value: 'downloads', label: 'Most Downloaded', icon: Download },
+  { value: 'likes', label: 'Most Liked', icon: Heart },
+];
+
 /* ═══════════════════════════ MAIN MIX HUB PAGE ═══════════════════════════ */
 export default function MixHub() {
   const { user } = useAuthStore();
   const { currentTrack, isPlaying, play, pause, setQueue, currentTime, setCurrentTime } = usePlayerStore();
 
   const [activeGenre, setActiveGenre] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'waveform' | 'grid' | 'list'>('waveform');
   const [page, setPage] = useState(1);
@@ -859,26 +871,6 @@ export default function MixHub() {
   const [subscribeModalDj, setSubscribeModalDj] = useState<any | null>(null);
   const [embedModalMix, setEmbedModalMix] = useState<MixTrack | null>(null);
   const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' | 'repost' | 'follow' } | null>(null);
-
-  const [officialPlaylists, setOfficialPlaylists] = useState<any[]>([]);
-  const [playlistsLoading, setPlaylistsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchPlaylists = async () => {
-      try {
-        setPlaylistsLoading(true);
-        const res = await api.get('/official-playlists');
-        if (res.data.success) {
-          setOfficialPlaylists(res.data.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to load official playlists', err);
-      } finally {
-        setPlaylistsLoading(false);
-      }
-    };
-    fetchPlaylists();
-  }, []);
 
   // Sync URL genre param
   useEffect(() => {
@@ -910,7 +902,6 @@ export default function MixHub() {
 
   const { data: latestData, isLoading: latestLoading, refetch: refetchLatest } = useMixes({
     genre: activeGenre !== 'all' ? activeGenre : undefined,
-    search: searchQuery || undefined,
     sortBy,
     page,
     limit: 16,
@@ -919,10 +910,18 @@ export default function MixHub() {
   const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
   const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
 
+  const sortedLatest = useMemo(() => {
+    const list = [...latest];
+    if (sortBy === 'plays') return list.sort((a, b) => (b.plays || 0) - (a.plays || 0));
+    if (sortBy === 'downloads') return list.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+    if (sortBy === 'likes') return list.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    return list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [latest, sortBy]);
+
   const allMixesForRank = useMemo(() => {
-    const combined = [...trending, ...latest];
+    const combined = [...trending, ...sortedLatest];
     return combined.filter((m, idx, arr) => arr.findIndex((x) => x.id === m.id) === idx);
-  }, [trending, latest]);
+  }, [trending, sortedLatest]);
 
   const genreRanks = useMemo(() => computeGenreRanks(allMixesForRank), [allMixesForRank]);
 
@@ -934,12 +933,12 @@ export default function MixHub() {
         else play();
         return;
       }
-      const allVisible = [...trending, ...latest];
+      const allVisible = [...trending, ...sortedLatest];
       const uniqueQueue = allVisible.filter((t, i, arr) => arr.findIndex((x) => x.id === t.id) === i);
       setQueue(uniqueQueue);
       play(mix);
     },
-    [currentTrack, isPlaying, trending, latest, play, pause, setQueue]
+    [currentTrack, isPlaying, trending, sortedLatest, play, pause, setQueue]
   );
 
   // Handle Waveform Seek
@@ -957,20 +956,19 @@ export default function MixHub() {
 
   // Handle Shuffle Play
   const handleShufflePlay = useCallback(() => {
-    const allVisible = [...trending, ...latest];
+    const allVisible = [...trending, ...sortedLatest];
     if (allVisible.length === 0) return;
     const shuffled = [...allVisible].sort(() => Math.random() - 0.5);
     setQueue(shuffled);
     play(shuffled[0]);
-  }, [trending, latest, setQueue, play]);
+  }, [trending, sortedLatest, setQueue, play]);
 
   const featuredMix = trending[0] || latest[0];
-  const isDj = user?.role === 'DJ' || (user as any)?.djProfile;
 
   return (
     <div className="min-h-screen bg-[#080808] text-text-primary pb-32">
-      {/* ─── 🎧 SPOTIFY / APPLE MUSIC SPOTLIGHT HERO ─── */}
-      <section className="relative overflow-hidden border-b border-white/[0.06] bg-gradient-to-b from-[#141412] via-[#0A0A0A] to-[#080808] pt-6 pb-10 sm:pt-10 sm:pb-14">
+      {/* ─── 🎧 SPOTIFY / APPLE MUSIC SPOTLIGHT HERO (Desktop only) ─── */}
+      <section className="hidden md:block relative overflow-hidden border-b border-white/[0.06] bg-gradient-to-b from-[#141412] via-[#0A0A0A] to-[#080808] pt-6 pb-10 sm:pt-10 sm:pb-14">
         {/* Subtle Ambient Radial Glow */}
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#f4e059]/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -978,38 +976,14 @@ export default function MixHub() {
           <div className="grid lg:grid-cols-12 gap-8 items-center">
             {/* Left Hero Content */}
             <div className="lg:col-span-7 space-y-4">
+              <img
+                src="/logo-mobile.png?v=3"
+                alt="Deck Salone"
+                className="lg:hidden h-10 w-auto object-contain"
+              />
               <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
                 Experience Sierra Leone's <span className="text-[#f4e059]">Finest DJ Sets</span>
               </h1>
-
-              <p className="text-sm text-text-secondary max-w-xl">
-                Stream non-stop Afrobeats, Amapiano, Dancehall, Hip-Hop, and traditional Salone sounds curated and uploaded daily by verified DJs.
-              </p>
-
-              {/* Search Bar */}
-              <div className="pt-2 max-w-lg">
-                <div className="relative flex items-center">
-                  <Search className="w-4 h-4 text-text-muted absolute left-3.5" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search by mix title, DJ name, or genre..."
-                    className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-[#f4e059] focus:bg-black transition-all"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3.5 text-xs text-text-muted hover:text-white font-bold"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
 
               {/* Quick Actions */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -1030,16 +1004,6 @@ export default function MixHub() {
                   <Shuffle className="w-4 h-4 text-[#f4e059]" />
                   Shuffle Play
                 </button>
-
-                {isDj && (
-                  <Link
-                    to="/dashboard/mixes"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#f4e059] text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 transition-all shadow"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Upload Set
-                  </Link>
-                )}
               </div>
             </div>
 
@@ -1104,89 +1068,8 @@ export default function MixHub() {
         </div>
       </section>
 
-      {/* ─── 🎵 OFFICIAL CURATED PLAYLISTS SECTION ─── */}
-      {(playlistsLoading || officialPlaylists.length > 0) && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-10">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#f4e059]/10 flex items-center justify-center border border-[#f4e059]/30">
-                <ListMusic className="w-4 h-4 text-[#f4e059]" />
-              </div>
-              <div>
-                <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
-                  Official Playlists
-                </h2>
-                <p className="text-xs text-text-muted">Curated by Deck Salone team & moderators</p>
-              </div>
-            </div>
-
-            <Link
-              to="/playlists"
-              className="inline-flex items-center gap-1 text-xs font-bold uppercase text-[#f4e059] hover:underline"
-            >
-              See All Playlists <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {playlistsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 text-[#f4e059] animate-spin" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {officialPlaylists.slice(0, 3).map((pl: any) => (
-                <Link key={pl.id} to={`/playlist/${pl.slug || pl.id}`}>
-                  <div className="group rounded-2xl bg-[#121110] border border-white/[0.06] hover:border-[#f4e059]/40 p-4 transition-all hover:bg-[#161413] h-full flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <div className="relative aspect-video rounded-xl bg-black overflow-hidden">
-                        {pl.coverImage ? (
-                          <img
-                            src={getMediaUrl(pl.coverImage)}
-                            alt={pl.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#f4e059]/20 via-[#111] to-black">
-                            <ListMusic className="w-8 h-8 text-[#f4e059] mb-1" />
-                            <span className="text-[10px] text-[#f4e059] font-bold uppercase tracking-widest">
-                              Deck Salone
-                            </span>
-                          </div>
-                        )}
-                        {pl.isFeatured && (
-                          <span className="absolute top-2 left-2 bg-[#f4e059] text-black font-black text-[9px] px-2 py-0.5 rounded shadow">
-                            ★ FEATURED
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-bold text-white uppercase group-hover:text-[#f4e059] transition-colors truncate">
-                          {pl.title}
-                        </h3>
-                        <p className="text-xs text-text-secondary line-clamp-2 mt-1">
-                          {pl.description || 'Official Deck Salone curated playlist.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 mt-3 border-t border-white/[0.04] flex items-center justify-between text-xs text-text-muted">
-                      <span className="flex items-center gap-1 font-mono text-[11px]">
-                        <Music className="w-3 h-3 text-[#f4e059]" />
-                        {pl._count?.items || pl.items?.length || 0} Mixes
-                      </span>
-                      <span className="text-xs font-bold text-[#f4e059]">Open Playlist →</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
       {/* ─── 🎛️ GENRE CAPSULES & CONTROLS BAR ─── */}
-      <section className="sticky top-16 lg:top-20 z-20 bg-[#080808]/95 backdrop-blur-xl border-y border-white/[0.06] my-10 py-3">
+      <section className="sticky top-14 sm:top-16 lg:top-20 z-20 bg-[#080808]/95 backdrop-blur-xl border-y border-white/[0.06] mb-8 py-3">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             {/* Genre Capsules Bar */}
@@ -1235,28 +1118,53 @@ export default function MixHub() {
 
             {/* View Toggle & Sort Options */}
             <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0">
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 text-xs font-bold text-text-primary outline-none focus:border-[#f4e059]"
-                aria-label="Sort mixes"
-              >
-                <option value="newest" className="bg-[#111] text-white">
-                  ✨ Newest Uploads
-                </option>
-                <option value="plays" className="bg-[#111] text-white">
-                  🔥 Most Streamed
-                </option>
-                <option value="downloads" className="bg-[#111] text-white">
-                  ⬇ Most Downloaded
-                </option>
-                <option value="likes" className="bg-[#111] text-white">
-                  ♡ Most Liked
-                </option>
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="h-9 px-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-[#f4e059]/50 text-xs font-bold text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                    aria-label="Sort mixes"
+                  >
+                    {(() => {
+                      const current = SORT_OPTIONS.find((s) => s.value === sortBy) || SORT_OPTIONS[0];
+                      const Icon = current.icon;
+                      return (
+                        <>
+                          <Icon className="w-3.5 h-3.5 text-[#f4e059]" />
+                          <span>{current.label}</span>
+                          <ChevronDown className="w-3.5 h-3.5 text-text-muted ml-0.5" />
+                        </>
+                      );
+                    })()}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-[#121212] border-white/10 w-52 shadow-2xl z-50 p-1.5 rounded-2xl">
+                  {SORT_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const isSelected = sortBy === opt.value;
+                    return (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => {
+                          setSortBy(opt.value);
+                          setPage(1);
+                        }}
+                        className={cn(
+                          'flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                          isSelected
+                            ? 'bg-[#f4e059]/15 text-[#f4e059]'
+                            : 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon className={cn('w-4 h-4', isSelected ? 'text-[#f4e059]' : 'text-text-muted')} />
+                          <span>{opt.label}</span>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-[#f4e059]" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* 3-Way Layout Switcher (Waveform Cards | Grid | Tracklist) */}
               <div className="flex rounded-xl bg-white/[0.04] border border-white/[0.08] p-0.5">
@@ -1312,7 +1220,7 @@ export default function MixHub() {
               {activeGenre !== 'all' ? `${activeGenre} Mixes` : 'All Releases'}
             </h2>
             <p className="text-xs text-text-muted">
-              Showing {latest.length} mix sets {activeGenre !== 'all' ? `in ${activeGenre}` : ''}
+              Showing {sortedLatest.length} mix sets {activeGenre !== 'all' ? `in ${activeGenre}` : ''}
             </p>
           </div>
 
@@ -1337,7 +1245,7 @@ export default function MixHub() {
         ) : viewMode === 'waveform' ? (
           /* 1. Full Waveform Cards (Matching User Reference Image) */
           <div className="space-y-4">
-            {latest.map((mix: MixTrack, i: number) => {
+            {sortedLatest.map((mix: MixTrack, i: number) => {
               const rank = genreRanks[mix.id] || (page - 1) * 16 + (i + 1);
               const isOwner = !!(user && ((user as any)?.djProfile?.id === mix.djId || user.id === mix.djId));
 
@@ -1373,7 +1281,7 @@ export default function MixHub() {
         ) : viewMode === 'grid' ? (
           /* 2. Grid Cards (Spotify & Audiomack 4-Column Grid) */
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
-            {latest.map((mix: MixTrack, i: number) => {
+            {sortedLatest.map((mix: MixTrack, i: number) => {
               const rank = genreRanks[mix.id] || (page - 1) * 16 + (i + 1);
               return (
                 <MixGridCard
@@ -1408,7 +1316,7 @@ export default function MixHub() {
               <span className="w-10 text-right">Like</span>
             </div>
 
-            {latest.map((mix: MixTrack, i: number) => (
+            {sortedLatest.map((mix: MixTrack, i: number) => (
               <MixTracklistRow
                 key={mix.id}
                 mix={mix}
@@ -1431,21 +1339,13 @@ export default function MixHub() {
         )}
 
         {/* Empty State */}
-        {latest.length === 0 && !latestLoading && (
+        {sortedLatest.length === 0 && !latestLoading && (
           <div className="rounded-3xl border border-white/[0.06] bg-[#101010] p-12 text-center max-w-lg mx-auto my-8">
             <Radio className="w-12 h-12 text-[#f4e059] mx-auto mb-3 opacity-60" />
             <h3 className="text-base font-bold text-white uppercase">No mixes found</h3>
             <p className="text-xs text-text-muted mt-1">
-              {searchQuery ? `No results matching "${searchQuery}".` : 'Be the first DJ to upload a mix in this genre!'}
+              {activeGenre !== 'all' ? `No ${activeGenre} mixes found yet.` : 'No mixes found for this filter.'}
             </p>
-            {isDj && (
-              <Link
-                to="/dashboard/mixes"
-                className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-[#f4e059] text-black font-bold text-xs uppercase rounded-full shadow-lg"
-              >
-                <Upload className="w-4 h-4" /> Upload Now
-              </Link>
-            )}
           </div>
         )}
 

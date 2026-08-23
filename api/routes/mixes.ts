@@ -21,7 +21,7 @@ const mixFilterSchema = z.object({
   djId: z.string().optional(),
   search: z.string().max(200).optional(),
   featured: z.string().optional(),
-  sortBy: z.enum(['plays', 'likes', 'downloads', 'newest']).optional(),
+  sortBy: z.enum(['plays', 'likes', 'downloads', 'newest', 'trending', 'streamed']).optional(),
   order: z.enum(['asc', 'desc']).optional(),
   page: z.string().optional(),
   limit: z.string().optional(),
@@ -191,10 +191,16 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
     }
 
     const orderBy: any = [];
-    if (sortBy === 'plays') orderBy.push({ plays: order === 'asc' ? 'asc' : 'desc' });
-    else if (sortBy === 'likes') orderBy.push({ likes: order === 'asc' ? 'asc' : 'desc' });
-    else if (sortBy === 'downloads') orderBy.push({ downloads: order === 'asc' ? 'asc' : 'desc' });
-    else {
+    if (sortBy === 'plays' || sortBy === 'trending' || sortBy === 'streamed') {
+      orderBy.push({ plays: order === 'asc' ? 'asc' : 'desc' });
+      orderBy.push({ createdAt: 'desc' });
+    } else if (sortBy === 'likes') {
+      orderBy.push({ likes: order === 'asc' ? 'asc' : 'desc' });
+      orderBy.push({ createdAt: 'desc' });
+    } else if (sortBy === 'downloads') {
+      orderBy.push({ downloads: order === 'asc' ? 'asc' : 'desc' });
+      orderBy.push({ createdAt: 'desc' });
+    } else {
       orderBy.push({ promotedUntil: 'desc' });
       orderBy.push({ createdAt: 'desc' });
     }

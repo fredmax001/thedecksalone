@@ -209,10 +209,6 @@ export default function Pricing() {
             Unlock the Full Power of Sierra Leone's #1 DJ Platform
           </h1>
 
-          <p className="text-sm sm:text-base text-text-secondary mt-3 max-w-2xl mx-auto">
-            Enjoy unlimited 320kbps MP3 downloads, ad-free streaming, exclusive mix sets, event discounts, and professional DJ promotion tools.
-          </p>
-
           {/* Toggle Switches */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
             {/* Audience Toggle (Listeners vs DJs) */}

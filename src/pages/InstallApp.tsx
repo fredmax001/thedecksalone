@@ -125,9 +125,6 @@ export default function InstallApp() {
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase text-text-primary tracking-tight">
           Install Deck Salone App
         </h1>
-        <p className="text-sm text-text-secondary max-w-xl mx-auto leading-relaxed">
-          Enjoy a fast, app-like experience with offline support, instant load times, full-screen playback, and push notifications directly on your home screen.
-        </p>
       </div>
 
       {/* Main Status / Install Banner */}

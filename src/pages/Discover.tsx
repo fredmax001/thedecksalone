@@ -515,7 +515,6 @@ type TabType = 'djs' | 'people';
 
 export default function Discover() {
   const [activeTab, setActiveTab] = useState<TabType>('djs');
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeGenre, setActiveGenre] = useState('All');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedCity, setSelectedCity] = useState('');
@@ -530,7 +529,6 @@ export default function Discover() {
 
   /* ── Data ── */
   const djsQuery = useDJs({
-    search: searchQuery || undefined,
     city: selectedCity || undefined,
     community: selectedCommunity || undefined,
     genre: activeGenre !== 'All' ? activeGenre : undefined,
@@ -540,7 +538,6 @@ export default function Discover() {
   });
 
   const usersQuery = useUsers({
-    search: searchQuery || undefined,
     page: currentPage,
     limit: ITEMS_PER_PAGE,
   });
@@ -631,7 +628,6 @@ export default function Discover() {
     setSelectedCommunity('');
     setSelectedEquipment([]);
     setRatingMin(1);
-    setSearchQuery('');
     setCurrentPage(1);
   };
 
@@ -658,11 +654,6 @@ export default function Discover() {
 
   const handleGenreClick = (genre: string) => {
     setActiveGenre(genre);
-    setCurrentPage(1);
-  };
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
     setCurrentPage(1);
   };
 
@@ -732,25 +723,6 @@ export default function Discover() {
               </div>
             </div>
           </FadeIn>
-          {/* Search Bar */}
-          <FadeIn delay={0.4}>
-            <div className="max-w-xl mx-auto mt-4">
-              <div className="relative flex items-center">
-                <Search className="absolute left-3.5 w-4 h-4 text-gold pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder={activeTab === 'djs' ? "Search by DJ name, city, or community..." : "Search people by name or username..."}
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  className="w-full pl-10 pr-24 py-2.5 bg-black-surface border border-dark-gray rounded-full text-text-primary placeholder:text-text-muted text-xs sm:text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
-                />
-                <button className="absolute right-1.5 px-4 py-1.5 bg-gold-gradient text-black text-xs font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform">
-                  Search
-                </button>
-              </div>
-            </div>
-          </FadeIn>
-
           {/* Genre Filter Pills — Desktop */}
           {activeTab === 'djs' && (
           <FadeIn delay={0.5}>
@@ -1030,24 +1002,6 @@ export default function Discover() {
               : `Showing ${usersData?.data?.length ?? 0} of ${usersData?.meta?.total ?? 0} People`}
           </span>
 
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-black-surface border border-dark-gray rounded-full p-0.5">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
-              title="List view"
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
-              title="Grid view"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
           {/* Sort Dropdown */}
           <div className="relative">
             <button
@@ -1081,6 +1035,24 @@ export default function Discover() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-black-surface border border-dark-gray rounded-full p-0.5 shrink-0">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              title="List view"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </section>
@@ -1235,10 +1207,10 @@ export default function Discover() {
                     Try adjusting your search or check back later.
                   </p>
                   <button
-                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                    onClick={() => { clearAllFilters(); }}
                     className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
                   >
-                    Clear Search
+                    Clear Filters
                   </button>
                 </motion.div>
               ) : viewMode === 'list' ? (

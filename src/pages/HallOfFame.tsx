@@ -489,16 +489,6 @@ export default function HallOfFame() {
             <span className="text-gradient-gold">Hall of Fame</span>
           </motion.h1>
 
-          <motion.p
-            className="mt-5 text-lg text-text-secondary max-w-[520px] mx-auto leading-relaxed"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 1.5 }}
-          >
-            Honoring the pioneers, preserving the mixes, and documenting the
-            history of Sierra Leone&apos;s DJ culture for future generations.
-          </motion.p>
-
           <motion.div
             className="mt-10 flex items-center justify-center gap-8"
             initial={{ opacity: 0, y: 20 }}

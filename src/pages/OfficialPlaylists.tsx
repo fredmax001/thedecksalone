@@ -268,10 +268,6 @@ export function OfficialPlaylists() {
             <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white leading-none">
               Curated <span className="text-gradient-gold">Playlists</span>
             </h1>
-
-            <p className="text-sm sm:text-base text-text-secondary max-w-2xl leading-relaxed">
-              Hand-picked collections and algorithmically customized sets. Dive into high-energy party anthems, throwback classics, and the hottest weekly DJ club mixes in Sierra Leone.
-            </p>
           </div>
 
           {featuredPlaylist && (

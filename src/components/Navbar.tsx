@@ -4,6 +4,7 @@ import { Search, LogOut, Menu, Sparkles, Smartphone, Crown } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore';
 import NotificationBell from '@/components/NotificationBell';
 import ThemeToggle from '@/components/ThemeToggle';
+import SearchModal from '@/components/SearchModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,7 @@ const navLinks = [
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -114,18 +116,6 @@ export default function Navbar() {
             />
           </Link>
 
-          {/* ── Join Now pill — mobile only, guests only ── */}
-          {!isAuthenticated && (
-            <Link
-              to="/register"
-              className="lg:hidden flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-gradient text-black text-[10px] font-extrabold uppercase tracking-wide shrink-0 ml-1"
-              style={{ boxShadow: '0 0 10px rgba(244,224,89,0.3)' }}
-            >
-              <Sparkles className="w-3 h-3" />
-              Join
-            </Link>
-          )}
-
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => {
@@ -153,25 +143,26 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Mobile Search Bar in Center */}
-          <div
-            onClick={() => navigate('/discover')}
-            className="lg:hidden flex-1 mx-2 flex items-center justify-between px-3 py-1.5 rounded-full bg-[#141414] border border-[#2a2a2a] text-text-muted text-xs cursor-pointer shadow-inner hover:border-gold/40 transition-colors"
-          >
-            <span className="truncate text-[11px] font-medium">Search DJs, mixes, events...</span>
-            <Search className="w-3.5 h-3.5 text-text-muted shrink-0 ml-1" />
-          </div>
-
           {/* Right Actions — Desktop & Mobile */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Desktop Inline Quick Search Trigger */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
+            {!isAuthenticated && (
+              <Link
+                to="/register"
+                className="lg:hidden flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-gradient text-black text-[10px] font-extrabold uppercase tracking-wide shrink-0"
+                style={{ boxShadow: '0 0 10px rgba(244,224,89,0.3)' }}
+              >
+                <Sparkles className="w-3 h-3" />
+                Join
+              </Link>
+            )}
+
+            {/* Global Search Trigger */}
             <button
-              onClick={() => navigate('/discover')}
-              className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black-surface/80 border border-white/10 text-text-muted hover:text-gold hover:border-gold/40 transition-all text-xs group shadow-inner"
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 text-text-muted hover:text-gold hover:border-gold/40 transition-all shadow-inner"
+              aria-label="Search"
             >
-              <Search className="w-3.5 h-3.5 text-gold group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Search mixes, DJs...</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-black border border-white/15 text-[9px] font-mono text-gold font-bold">⌘K</kbd>
+              <Search className="w-4 h-4 text-gold" />
             </button>
 
             {isModerator && (
@@ -193,10 +184,10 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Theme Toggle (Always visible) */}
+            {/* Theme Toggle */}
             <ThemeToggle className="flex" />
 
-            {/* Notification Bell (Always accessible) */}
+            {/* Notification Bell */}
             <NotificationBell />
 
             {/* Profile Avatar Dropdown */}
@@ -363,6 +354,8 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </nav>
   );
 }

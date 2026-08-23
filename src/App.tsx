@@ -10,6 +10,7 @@ import UserDashboardLayout from './components/UserDashboardLayout';
 import MixPlayer from './components/MixPlayer';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import LocationPrompt from './components/LocationPrompt';
+import ResumeListeningModal from './components/ResumeListeningModal';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -291,6 +292,7 @@ export default function App() {
         <MixPlayer />
         <TermsAcceptanceModal />
         <LocationPrompt />
+        <ResumeListeningModal />
       </Suspense>
     </BrowserRouter>
   );

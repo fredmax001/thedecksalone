@@ -168,37 +168,17 @@ export default function Feed() {
   return (
     <div className="min-h-screen bg-black text-text-primary pb-32">
       <SEOHead
-        title="Live Feed & Personalized Mixes — Deck Salone"
+        title="Feed — Deck Salone"
         description="Explore the latest mixtape releases, personalized daily blends, recommended DJs, and live events across Sierra Leone."
       />
 
       {/* ═══════════════ FEED HERO & HEADER ═══════════════ */}
-      <section className="border-b border-dark-gray bg-gradient-to-b from-[#161614] via-[#10100f] to-black pt-8 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight text-white">
-                Live Activity <span className="text-gradient-gold">Feed</span>
-              </h1>
-              <p className="text-xs sm:text-sm text-text-secondary mt-1 max-w-xl leading-relaxed">
-                Stream fresh DJ mixtape drops, algorithmically recommended blends tailored to your taste, and upcoming event tickets in Sierra Leone.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link
-                to="/playlists"
-                className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-bold uppercase text-white transition-all"
-              >
-                Curated Playlists
-              </Link>
-              <Link
-                to="/mixes"
-                className="px-4 py-2 rounded-xl bg-gold hover:brightness-110 text-black text-xs font-bold uppercase transition-all shadow-md shadow-gold/20"
-              >
-                Browse All Mixes
-              </Link>
-            </div>
+      <section className="border-b border-dark-gray bg-gradient-to-b from-[#161614] via-[#10100f] to-black pt-6 pb-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="font-display text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
+              FEED
+            </h1>
           </div>
 
           {/* ─── 🔔 NEW DROPS NOTIFICATION TRACKER BANNER ─── */}
@@ -322,7 +302,6 @@ export default function Feed() {
               <div className="space-y-4">
                 <SectionHeader
                   title="Recommended DJs to Follow"
-                  subtitle="Curated artists who match your favorite genres and tempo"
                   action={{ label: 'Explore all DJs', to: '/discover' }}
                   icon={<Headphones className="w-4 h-4 text-gold" />}
                 />
@@ -397,7 +376,6 @@ export default function Feed() {
               <div className="space-y-4">
                 <SectionHeader
                   title="Made For You Playlists"
-                  subtitle="Dynamic taste blends generated from your listening choices"
                   action={{ label: 'View all playlists', to: '/playlists' }}
                   icon={<Compass className="w-4 h-4 text-gold" />}
                 />
@@ -435,7 +413,6 @@ export default function Feed() {
               <div className="space-y-4">
                 <SectionHeader
                   title="Fresh Mix Releases"
-                  subtitle="Newest uploads from Sierra Leone DJs"
                   action={{ label: 'See all mixes', to: '/mixes' }}
                   icon={<Music2 className="w-4 h-4 text-gold" />}
                 />
@@ -459,7 +436,6 @@ export default function Feed() {
             {/* 🎟️ UPCOMING EVENTS */}
             <EventCarousel
               title="Upcoming Events & Nightlife"
-              subtitle="Get tickets to concerts, club parties, and beach festivals"
               events={events.slice(0, 8)}
               action={{ label: 'See all events', to: '/events' }}
             />
@@ -469,7 +445,6 @@ export default function Feed() {
               <div className="space-y-4">
                 <SectionHeader
                   title="Trending Now"
-                  subtitle="Most played tracks across Sierra Leone this week"
                   action={{ label: 'Full charts', to: '/rankings' }}
                   icon={<TrendingUp className="w-4 h-4 text-gold" />}
                 />

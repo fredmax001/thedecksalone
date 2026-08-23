@@ -109,11 +109,11 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
         <Button
           variant={variant}
           size="icon"
-          className={cn('relative text-text-secondary hover:text-text-primary', className)}
+          className={cn('relative w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 hover:border-gold/40 text-text-muted hover:text-gold transition-all shrink-0', className)}
         >
-          <Bell className="w-5 h-5" />
+          <Bell className="w-4 h-4 text-gold" />
           {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1 flex items-center justify-center bg-gold text-black text-[10px] font-bold border-0">
+            <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 flex items-center justify-center bg-gold text-black text-[9px] font-bold border-0 rounded-full">
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
