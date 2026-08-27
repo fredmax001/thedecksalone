@@ -113,11 +113,16 @@ async function checkDownloadAccess(mix, user) {
     return { allowed: false, gate: 'follow' };
   }
 
-  // Fall back to platform subscription gating (DJ or platform Pro subscriptions)
+  // Fans / listeners can download mixes for free. DJs still need a Pro subscription
+  // to unlock downloads as a platform monetization feature.
   const userWithDj = await prisma.user.findUnique({
     where: { id: user.id },
     include: { djProfile: true },
   });
+
+  if (userWithDj?.role === 'USER') {
+    return { allowed: true, gate: 'free' };
+  }
 
   const userTier = (userWithDj?.djProfile?.subscriptionTier || userWithDj?.subscriptionTier || 'free').toLowerCase();
   const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
@@ -578,7 +583,7 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
                 audioUrl: resolved.audioUrl,
                 audioSource: resolved.audioSource,
                 originalUrl,
-                coverImage: resolved.coverImage,
+                coverImage: resolved.coverImage || dj?.avatar || null,
                 duration: resolved.duration,
                 isPublic,
                 sortOrder: nextSortOrder++,
@@ -623,7 +628,7 @@ router.post('/import-hearthis', authMiddleware, async (req, res) => {
             audioUrl: resolved.audioUrl,
             audioSource: resolved.audioSource,
             originalUrl: url,
-            coverImage: resolved.coverImage,
+            coverImage: resolved.coverImage || dj?.avatar || null,
             duration: resolved.duration,
             isPublic,
             sortOrder: nextSortOrder++,
@@ -847,6 +852,10 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, async (r
       const { buffer, contentType, ext } = await processCover(coverFile.buffer);
       coverUrl = await uploadBuffer(buffer, 'covers', { contentType, ext });
     }
+    // Fallback to the artist's avatar when no cover art is provided
+    if (!coverUrl) {
+      coverUrl = dj?.avatar || req.user.avatar || null;
+    }
 
     const maxOrder = await prisma.mix.aggregate({
       where: { djId },
@@ -934,6 +943,10 @@ router.put('/:id', authMiddleware, uploadMix, async (req, res) => {
     if (coverFile) {
       const { buffer, contentType, ext } = await processCover(coverFile.buffer);
       updateData.coverImage = await uploadBuffer(buffer, 'covers', { contentType, ext });
+    }
+    // Fallback to the artist's avatar when no cover art is set
+    if (!updateData.coverImage) {
+      updateData.coverImage = mix.dj?.avatar || req.user.avatar || null;
     }
 
     const updated = await prisma.mix.update({
@@ -1548,6 +1561,7 @@ router.get('/:id/comments', softAuthMiddleware, async (req: any, res: any) => {
               },
             },
           },
+          _count: { select: { likes: true } },
           replies: {
             include: {
               user: {
@@ -1566,6 +1580,7 @@ router.get('/:id/comments', softAuthMiddleware, async (req: any, res: any) => {
                   },
                 },
               },
+              _count: { select: { likes: true } },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -1575,14 +1590,32 @@ router.get('/:id/comments', softAuthMiddleware, async (req: any, res: any) => {
       prisma.mixComment.count({ where: { mixId } }),
     ]);
 
-    const formattedComments = comments.map((c: any) => ({
+    let likedCommentIds = new Set<string>();
+    if (req.user?.id) {
+      const likes = await prisma.mixCommentLike.findMany({
+        where: {
+          userId: req.user.id,
+          commentId: { in: comments.flatMap((c: any) => [c.id, ...(c.replies || []).map((r: any) => r.id)]) },
+        },
+        select: { commentId: true },
+      });
+      likedCommentIds = new Set(likes.map((l: any) => l.commentId));
+    }
+
+    const mapComment = (c: any) => ({
       ...c,
+      likeCount: c._count?.likes || 0,
+      isLiked: likedCommentIds.has(c.id),
       isDjCreator: Boolean(djUserId && c.userId === djUserId),
       replies: (c.replies || []).map((r: any) => ({
         ...r,
+        likeCount: r._count?.likes || 0,
+        isLiked: likedCommentIds.has(r.id),
         isDjCreator: Boolean(djUserId && r.userId === djUserId),
       })),
-    }));
+    });
+
+    const formattedComments = comments.map(mapComment);
 
     return res.json({
       success: true,
@@ -1670,20 +1703,38 @@ router.post('/:id/comments', authMiddleware, async (req: any, res: any) => {
       },
     });
 
+    const authorName = comment.user?.djProfile?.stageName || comment.user?.name || comment.user?.username || 'A user';
+
     // Notify mix creator if someone else commented on their mix
     if (mix.dj?.userId && mix.dj.userId !== userId) {
-      const authorName = comment.user?.djProfile?.stageName || comment.user?.name || comment.user?.username || 'A user';
-      prisma.notification.create({
-        data: {
-          userId: mix.dj.userId,
+      createNotification({
+        userId: mix.dj.userId,
+        type: 'SYSTEM',
+        title: 'New Comment on Your Mix',
+        body: `${authorName} commented on "${mix.title || 'your mix'}"`,
+        actionUrl: `/mixes/${mix.id}#comments`,
+        entityId: mix.id,
+        entityType: 'mix',
+      }).catch((err: any) => console.error('[Mix Comments Notification Error]:', err));
+    }
+
+    // Notify parent comment author when someone replies to their comment
+    if (parentId) {
+      const parentComment = await prisma.mixComment.findUnique({
+        where: { id: parentId },
+        select: { userId: true },
+      });
+      if (parentComment && parentComment.userId !== userId) {
+        createNotification({
+          userId: parentComment.userId,
           type: 'SYSTEM',
-          title: 'New Comment on Your Mix',
-          body: `${authorName} commented on "${mix.title || 'your mix'}"`,
+          title: 'New Reply to Your Comment',
+          body: `${authorName} replied to your comment on "${mix.title || 'a mix'}"`,
           actionUrl: `/mixes/${mix.id}#comments`,
           entityId: mix.id,
           entityType: 'mix',
-        },
-      }).catch((err: any) => console.error('[Mix Comments Notification Error]:', err));
+        }).catch((err: any) => console.error('[Comment Reply Notification Error]:', err));
+      }
     }
 
     return res.status(201).json({
@@ -1740,6 +1791,61 @@ router.delete('/:id/comments/:commentId', authMiddleware, async (req: any, res: 
     return res.json({ success: true, message: 'Comment deleted successfully' });
   } catch (error) {
     console.error('[Mix Comments API] Error deleting comment:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/mixes/:id/comments/:commentId/like - Toggle like on a comment
+router.post('/:id/comments/:commentId/like', authMiddleware, async (req: any, res: any) => {
+  try {
+    const { id: mixId, commentId } = req.params;
+    const userId = req.user.id;
+
+    const comment = await prisma.mixComment.findUnique({
+      where: { id: commentId },
+      select: { id: true, mixId: true, userId: true },
+    });
+
+    if (!comment || comment.mixId !== mixId) {
+      return res.status(404).json({ success: false, error: 'Comment not found' });
+    }
+
+    const existingLike = await prisma.mixCommentLike.findUnique({
+      where: { commentId_userId: { commentId, userId } },
+    });
+
+    if (existingLike) {
+      await prisma.mixCommentLike.delete({
+        where: { id: existingLike.id },
+      });
+      return res.json({ success: true, data: { liked: false } });
+    }
+
+    await prisma.mixCommentLike.create({
+      data: { commentId, userId },
+    });
+
+    // Notify comment author (not self)
+    if (comment.userId !== userId) {
+      const liker = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, username: true, djProfile: { select: { stageName: true } } },
+      });
+      const likerName = liker?.djProfile?.stageName || liker?.name || liker?.username || 'A user';
+      createNotification({
+        userId: comment.userId,
+        type: 'SYSTEM',
+        title: 'New Like on Your Comment',
+        body: `${likerName} liked your comment`,
+        actionUrl: `/mixes/${mixId}#comments`,
+        entityId: mixId,
+        entityType: 'mix',
+      }).catch((err: any) => console.error('[Comment Like Notification Error]:', err));
+    }
+
+    return res.json({ success: true, data: { liked: true } });
+  } catch (error) {
+    console.error('[Mix Comments API] Error toggling comment like:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

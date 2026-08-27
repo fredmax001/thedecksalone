@@ -207,8 +207,15 @@ export default function Pricing() {
           </div>
 
           <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white max-w-3xl mx-auto leading-tight">
-            Unlock the Full Power of Sierra Leone's #1 DJ Platform
+            {audience === 'listeners'
+              ? 'Stream, Discover & Download for Free'
+              : "Unlock the Full Power of Sierra Leone's #1 DJ Platform"}
           </h1>
+          <p className="mt-3 text-sm text-text-secondary max-w-2xl mx-auto">
+            {audience === 'listeners'
+              ? 'Fans never pay a subscription. Support your favourite DJs directly from their profiles.'
+              : 'Choose the creator tier that fits your DJ career. Fans stream for free.'}
+          </p>
 
           {/* Toggle Switches */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
@@ -274,8 +281,15 @@ export default function Pricing() {
 
       {/* ─── PRICING CARDS GRID ─── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
-          {PLANS.map((plan) => {
+        <div
+          className={cn(
+            'grid gap-6 lg:gap-8 items-stretch',
+            audience === 'listeners'
+              ? 'grid-cols-1 max-w-md mx-auto'
+              : 'grid-cols-1 md:grid-cols-3'
+          )}
+        >
+          {PLANS.filter((plan) => (audience === 'listeners' ? plan.id === 'free' : true)).map((plan) => {
             const Icon = plan.icon;
             const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
             const perks = audience === 'listeners' ? plan.listenerPerks : plan.djPerks;

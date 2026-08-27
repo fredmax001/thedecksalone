@@ -147,7 +147,9 @@ router.get('/mixes', async (req: any, res: any) => {
         { dj: { stageName: { contains: search, mode: 'insensitive' } } },
       ];
     }
-    if (genre && genre !== 'ALL') where.genre = genre;
+    if (genre && genre !== 'ALL') {
+      where.genre = { equals: genre, mode: 'insensitive' };
+    }
     if (flagged) where.flaggedForReview = true;
     if (hidden) where.isPublic = false;
 

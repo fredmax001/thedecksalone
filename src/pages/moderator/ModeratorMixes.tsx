@@ -25,16 +25,16 @@ import {
 } from '@/components/ui/dialog';
 
 const SYSTEM_GENRES = [
-  'AFROBEATS',
-  'AMAPIANO',
-  'SALONE MIX',
-  'HIP-HOP / R&B',
-  'DANCEHALL / REGGAE',
-  'GOSPEL',
-  'POP / CLUB',
-  'HOUSE / TECHNO',
-  'OLD SCHOOL / VINTAGE',
-  'OTHER',
+  'Afrobeats',
+  'Amapiano',
+  'Salone Mix',
+  'Reggae',
+  'Dancehall',
+  'Gospel',
+  'Club Mixes',
+  'Club & Party Mixes',
+  'Throwbacks',
+  'Other',
 ];
 
 export function ModeratorMixes() {

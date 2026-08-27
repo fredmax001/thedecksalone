@@ -192,7 +192,7 @@ function DeepLinkHandler() {
             if (meRes.data?.data) {
               const user = meRes.data.data;
               useAuthStore.getState().setAuth(user, token);
-              const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+              const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
               const target = user.role === 'DJ' ? (isMobile ? '/discover' : '/dashboard') : (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? '/admin' : '/discover');
               navigate(target, { replace: true });
               return;
@@ -310,17 +310,15 @@ export default function App() {
             <Route path="verification" element={<VerificationDashboard />} />
           </Route>
 
-          {/* Moderator Console — protected */}
+          {/* Moderator Console — protected, standalone layout */}
           <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MODERATOR']} fallback="/login" />}>
-            <Route element={<Layout />}>
-              <Route path="moderator" element={<ModeratorLayout />}>
-                <Route index element={<ModeratorOverview />} />
-                <Route path="mixes" element={<ModeratorMixes />} />
-                <Route path="playlists" element={<ModeratorPlaylists />} />
-                <Route path="rankings" element={<ModeratorRankings />} />
-                <Route path="reports" element={<ModeratorReports />} />
-                <Route path="logs" element={<ModeratorAuditLogs />} />
-              </Route>
+            <Route path="moderator" element={<ModeratorLayout />}>
+              <Route index element={<ModeratorOverview />} />
+              <Route path="mixes" element={<ModeratorMixes />} />
+              <Route path="playlists" element={<ModeratorPlaylists />} />
+              <Route path="rankings" element={<ModeratorRankings />} />
+              <Route path="reports" element={<ModeratorReports />} />
+              <Route path="logs" element={<ModeratorAuditLogs />} />
             </Route>
           </Route>
 

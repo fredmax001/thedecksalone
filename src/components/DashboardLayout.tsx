@@ -5,6 +5,8 @@ import NotificationBell from '@/components/NotificationBell';
 import {
   Calendar,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   LayoutDashboard,
   LogOut,
   Music,
@@ -70,6 +72,7 @@ export default function DashboardLayout() {
   const { user, logout } = useAuthStore();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const [collapsed, setCollapsed] = useState(false);
+  const [manualCollapse, setManualCollapse] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const isDj = user?.role === 'DJ';
@@ -114,16 +117,14 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1280) {
-        setCollapsed(true);
-      } else {
-        setCollapsed(false);
+      if (!manualCollapse) {
+        setCollapsed(window.innerWidth < 1280);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [manualCollapse]);
 
   // Role guard: only DJs may access the DJ dashboard
   useEffect(() => {
@@ -265,7 +266,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen bg-black flex">
       {/* Desktop Sidebar */}
       <aside
-        className="hidden lg:flex flex-col fixed top-0 left-0 h-screen border-r border-dark-gray transition-all duration-300 z-40 bg-black"
+        className="hidden md:flex flex-col fixed top-0 left-0 h-screen border-r border-dark-gray transition-all duration-300 z-40 bg-black"
         style={{ width: sidebarWidth }}
       >
         <SidebarContent />
@@ -273,13 +274,27 @@ export default function DashboardLayout() {
 
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
+        className={cn(
+          'flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ml-0',
+          collapsed ? 'md:ml-[72px]' : 'md:ml-[260px]'
+        )}
       >
         {/* Top Bar */}
         <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-xl border-b border-dark-gray pt-[env(safe-area-inset-top,0px)]">
           <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 lg:px-6">
-            {/* Left: Breadcrumb / Mobile Home Link */}
+            {/* Left: Sidebar toggle + Breadcrumb */}
             <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setManualCollapse(true);
+                  setCollapsed((c) => !c);
+                }}
+                className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-primary hover:bg-black-elevated transition-colors"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
+              </button>
               <Link to="/" className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
                 <img src="/logo-mobile.png?v=4" alt="Home" className="h-6 w-auto lg:hidden object-contain" />
                 <span className="hidden sm:inline">Home</span>
@@ -352,8 +367,8 @@ export default function DashboardLayout() {
         {/* Page Content */}
         <main
           className={cn(
-            'flex-1 p-4 lg:p-6 transition-all duration-300 space-y-4',
-            currentTrack ? 'pb-40 lg:pb-24' : 'pb-20 lg:pb-6'
+            'flex-1 p-4 md:p-6 transition-all duration-300 space-y-4',
+            currentTrack ? 'pb-40 md:pb-24' : 'pb-20 md:pb-6'
           )}
         >
           <TrialBanner />

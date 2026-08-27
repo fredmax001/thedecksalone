@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { sendAccountDeletionEmail } = require('../utils/email');
 const { isValidUsername } = require('../utils/username');
 
 function extFromMime(mimetype, fallbackName = '') {
@@ -736,7 +737,7 @@ router.get('/search', authMiddleware, searchLimiter, async (req, res) => {
   }
 });
 
-// DELETE /api/users/account - Delete the authenticated user's account and all related data
+// DELETE /api/users/account - Schedule the authenticated user's account for deletion
 router.delete('/account', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -750,43 +751,69 @@ router.delete('/account', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    if (user.deletedAt) {
+      return res.json({
+        success: true,
+        data: { scheduled: true, deletionDate: user.deletedAt },
+      });
+    }
+
+    const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const anonymizedEmail = `deleted.${user.id}@decksalone.anon`;
+    const anonymizedUsername = `deleted_${user.id.slice(-8)}`;
+
     await prisma.$transaction(async (tx) => {
-      // User-scoped relations that do not cascade on user delete
-      await tx.notification.deleteMany({ where: { userId } });
-      await tx.battleVote.deleteMany({ where: { userId } });
-      await tx.mixLike.deleteMany({ where: { userId } });
-      await tx.follow.deleteMany({ where: { userId } });
-      await tx.message.deleteMany({ where: { senderId: userId } });
-      await tx.message.deleteMany({ where: { receiverId: userId } });
-      await tx.review.deleteMany({ where: { userId } });
-      await tx.payment.deleteMany({ where: { clientId: userId } });
-      await tx.booking.deleteMany({ where: { clientId: userId } });
+      // Soft-delete: mark user as deleted, anonymize identifiers, clear profile data
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          deletedAt: deletionDate,
+          deletionEmailSentAt: new Date(),
+          email: anonymizedEmail,
+          username: anonymizedUsername,
+          name: 'Deleted User',
+          avatar: null,
+          bio: null,
+          phone: null,
+          googleId: null,
+          password: null,
+          status: 'DELETED',
+          subscriptionTier: 'free',
+          subscriptionActivatedAt: null,
+          socialLinks: {},
+          notificationPreferences: {},
+          privacyPreferences: {},
+        },
+      });
 
-      // DJ-scoped relations (if the user has a DJ profile)
+      // Hide DJ profile if present
       if (user.djProfile) {
-        const djId = user.djProfile.id;
-
-        await tx.review.deleteMany({ where: { djId } });
-        await tx.payment.deleteMany({ where: { djId } });
-        await tx.booking.deleteMany({ where: { djId } });
-        await tx.event.deleteMany({ where: { djId } });
-        await tx.battleEntry.deleteMany({ where: { djId } });
-        await tx.mix.deleteMany({ where: { djId } });
-        await tx.djPhoto.deleteMany({ where: { djId } });
-        await tx.streamingPlatform.deleteMany({ where: { djId } });
-        await tx.rankingHistory.deleteMany({ where: { djId } });
-        await tx.gigApplication.deleteMany({ where: { djId } });
-        await tx.proSubscriptionRequest.deleteMany({ where: { djId } });
-        await tx.oppApplications.deleteMany({ where: { djId } });
-        await tx.follow.deleteMany({ where: { djId } });
-
-        await tx.djProfile.delete({ where: { id: djId } });
+        await tx.djProfile.update({
+          where: { id: user.djProfile.id },
+          data: {
+            isPublic: false,
+            stageName: 'Deleted DJ',
+            bio: null,
+            avatar: null,
+          },
+        });
       }
-
-      await tx.user.delete({ where: { id: userId } });
     });
 
-    return res.json({ success: true, data: { deleted: true } });
+    // Send deletion confirmation email to the original email address
+    sendAccountDeletionEmail({
+      to: user.email,
+      username: user.name || user.username || 'User',
+      deletionDate,
+    }).catch((err: any) => {
+      console.error('[Account Deletion] Failed to send email:', err);
+    });
+
+    return res.json({
+      success: true,
+      data: { scheduled: true, deletionDate },
+      message: 'Your account has been scheduled for deletion in 30 days. You can log in before then to reactivate.',
+    });
   } catch (error) {
     console.error('Delete account error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -1085,6 +1112,14 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Platform subscriptions are only for DJs. Fans and listeners are always free.
+    if (user.role !== 'DJ') {
+      return res.status(403).json({
+        success: false,
+        error: 'Subscriptions are only available for DJ accounts. Fans can stream and download for free.',
+      });
     }
 
     const djId = user.djProfile?.id || null;

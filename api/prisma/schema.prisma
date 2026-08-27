@@ -40,6 +40,8 @@ model User {
   username                String       @unique @db.VarChar(30)
   subscriptionTier        String       @default("free")
   subscriptionActivatedAt DateTime?
+  deletedAt               DateTime?
+  deletionEmailSentAt     DateTime?
 
 
   notificationPreferences Json?
@@ -56,6 +58,7 @@ model User {
   mixLikes                MixLike[]
   mixReposts              MixRepost[]
   mixComments             MixComment[]
+  mixCommentLikes         MixCommentLike[]
   payments                Payment[]    @relation("ClientPayments")
   reviews                 Review[]
   eventTickets            EventTicket[]
@@ -377,12 +380,27 @@ model MixComment {
   parent    MixComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   MixComment[] @relation("CommentReplies")
   violationReports ViolationReport[]
+  likes     MixCommentLike[]
 
   @@index([mixId, createdAt])
   @@index([mixId, parentId, createdAt])
   @@index([userId])
   @@index([parentId])
   @@map("mix_comments")
+}
+
+model MixCommentLike {
+  id        String     @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime   @default(now())
+  comment   MixComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@index([userId])
+  @@map("mix_comment_likes")
 }
 
 model MixLike {

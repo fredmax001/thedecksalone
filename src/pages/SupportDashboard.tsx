@@ -29,6 +29,7 @@ import {
   Send,
   LogOut,
   Menu,
+  ChevronsLeft,
   Search,
   MessageSquare,
   User,
@@ -232,7 +233,7 @@ export default function SupportDashboard() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('inbox');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText, setReplyText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,10 +256,14 @@ export default function SupportDashboard() {
     escalated: TICKETS.filter((t) => t.status === 'escalated').length,
   };
 
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-text-primary flex">
       {/* ─── Sidebar ─── */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-black-surface border-r border-dark-gray transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-black-surface border-r border-dark-gray transform transition-transform duration-300 ${sidebarOpen ? 'translate-x-0 md:relative md:translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-dark-gray">
             <h1 className="text-xl font-bold text-gold flex items-center gap-2">
@@ -272,7 +277,7 @@ export default function SupportDashboard() {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
-                <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); setSelectedTicket(null); }}
+                <button key={item.id} onClick={() => { setActiveTab(item.id); closeSidebarOnMobile(); setSelectedTicket(null); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-gold/10 text-gold border border-gold/20' : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'}`}>
                   <Icon className="w-4 h-4" />{item.label}
                 </button>
@@ -294,12 +299,18 @@ export default function SupportDashboard() {
         </div>
       </aside>
 
-      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* ─── Main ─── */}
       <main className="flex-1 min-w-0">
         <header className="sticky top-0 z-20 bg-[#0A0A0A]/90 backdrop-blur-md border-b border-dark-gray px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-gold"><Menu className="w-5 h-5" /></button>
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            className="p-2 rounded-lg text-text-secondary hover:text-gold hover:bg-white/5 transition-colors"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+          >
+            {sidebarOpen ? <ChevronsLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
           {selectedTicket ? (
             <button onClick={() => setSelectedTicket(null)} className="flex items-center gap-2 text-text-secondary hover:text-gold">
               <ChevronLeft className="w-4 h-4" /><span className="text-sm">Back to tickets</span>

@@ -235,7 +235,7 @@ export function MixDownloadModal({
               </h2>
 
               <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-                Direct MP3 downloads are exclusive to <strong className="text-gold">Pro & Pro+ DJs</strong> and <strong className="text-white">Subscribed Fans</strong>.
+                Direct MP3 downloads are free for fans. DJs need a <strong className="text-gold">Pro or Pro+</strong> subscription to download mixes.
               </p>
 
               {/* Subscription Options Box */}
@@ -267,7 +267,7 @@ export function MixDownloadModal({
                     }}
                   >
                     <Crown className="w-3.5 h-3.5 mr-1.5" />
-                    {isDj ? 'Upgrade DJ to Pro / Pro+' : 'Get Platform Pro Access'}
+                    {isDj ? 'Upgrade DJ to Pro / Pro+' : 'Fans Download Free'}
                   </Button>
                 </div>
 

@@ -36,6 +36,7 @@ import {
   Download,
   LogOut,
   Menu,
+  ChevronsLeft,
   BarChart3,
   Receipt,
   Landmark,
@@ -85,7 +86,7 @@ export default function FinanceDashboard() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   const [grantModalDjId, setGrantModalDjId] = useState<string | null>(null);
@@ -189,12 +190,16 @@ export default function FinanceDashboard() {
 
   const ActiveIcon = SIDEBAR_ITEMS.find((i) => i.id === activeTab)?.icon || BarChart3;
 
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-text-primary flex">
       {/* ─── Sidebar ─── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-black-surface border-r border-dark-gray transform transition-transform duration-300 lg:relative lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-black-surface border-r border-dark-gray transform transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0 md:relative md:translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="h-full flex flex-col">
@@ -218,7 +223,7 @@ export default function FinanceDashboard() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(item.id); closeSidebarOnMobile(); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
                     isActive
                       ? 'bg-gold/15 text-gold border border-gold/30 shadow-[0_0_15px_rgba(244, 224, 89,0.15)]'
@@ -254,15 +259,19 @@ export default function FinanceDashboard() {
 
       {/* ─── Mobile Overlay ─── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ─── Main View ─── */}
       <main className="flex-1 min-w-0">
         {/* Top Header */}
         <header className="sticky top-0 z-20 bg-[#0A0A0A]/90 backdrop-blur-md border-b border-dark-gray px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-gold">
-            <Menu className="w-5 h-5" />
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            className="p-2 rounded-lg text-text-secondary hover:text-gold hover:bg-white/5 transition-colors"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+          >
+            {sidebarOpen ? <ChevronsLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="flex items-center gap-2">
             <ActiveIcon className="w-5 h-5 text-gold hidden sm:block" />

@@ -23,7 +23,7 @@ export default function MobileTabBar({ items }: MobileTabBarProps) {
   };
 
   return (
-    <nav className="lg:hidden fixed bottom-3 left-4 right-4 z-50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-black/90">
+    <nav className="md:hidden fixed bottom-3 left-4 right-4 z-50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-black/90">
       <div className="flex items-center overflow-x-auto scrollbar-hide h-14 px-2">
         {items.map((item) => {
           const active = isActive(item.path);

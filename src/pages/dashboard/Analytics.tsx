@@ -396,7 +396,7 @@ export default function Analytics() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Genre Breakdown */}
               <Card className="bg-black-surface border-dark-gray">
                 <CardHeader className="pb-2">
@@ -568,7 +568,7 @@ export default function Analytics() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="bg-black-surface border-dark-gray">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold text-text-primary">Mix Performance</CardTitle>
@@ -657,7 +657,7 @@ export default function Analytics() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="bg-black-surface border-dark-gray">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold text-text-primary">Booking Status</CardTitle>
@@ -734,7 +734,7 @@ export default function Analytics() {
         {/* ── AUDIENCE TAB ── */}
         {activeTab === 'audience' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-black-surface border-dark-gray lg:col-span-2">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold text-text-primary">Audience Growth</CardTitle>

@@ -106,7 +106,7 @@ export default function Login() {
     } else if (role === 'VERIFICATION_ADMIN') {
       navigate('/verification');
     } else if (role === 'DJ') {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
       navigate(isMobile ? '/discover' : '/dashboard');
     } else {
       navigate('/discover');

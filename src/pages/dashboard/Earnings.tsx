@@ -201,7 +201,7 @@ export default function Earnings() {
           </div>
 
           {/* Payout Method & Withdrawal Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Payout Method Card */}
             <Card className="bg-black-surface border-dark-gray">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">

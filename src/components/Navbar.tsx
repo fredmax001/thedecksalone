@@ -231,11 +231,13 @@ export default function Navbar() {
                       <DropdownMenuItem asChild>
                         <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to={isDj ? '/dashboard/subscription' : '/user/subscription'} className="cursor-pointer text-xs font-bold text-gold flex items-center">
-                          <Crown className="w-3.5 h-3.5 mr-2" /> Membership & Pro
-                        </Link>
-                      </DropdownMenuItem>
+                      {isDj && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/dashboard/subscription" className="cursor-pointer text-xs font-bold text-gold flex items-center">
+                            <Crown className="w-3.5 h-3.5 mr-2" /> Membership & Pro
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem asChild>
                         <Link to={settingsPath} className="cursor-pointer text-xs">Settings</Link>
                       </DropdownMenuItem>

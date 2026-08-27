@@ -9,7 +9,8 @@ import {
   LayoutDashboard, Users, CalendarCheck,
   CheckCircle2, Play, Server,
   ChevronRight, Radio, Mic,
-  Menu, Crown, LogOut, Volume2,
+  Crown, LogOut, Volume2,
+  ChevronsLeft, ChevronsRight,
   BarChart2, MonitorPlay, AudioLines,
   BadgeCheck, Ban,
   Loader2, Search, Save, Eye, Trash2, Star, Lock, ChevronLeft,
@@ -6337,8 +6338,8 @@ function AdminFeedSection() {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [section, setSection] = useState<AdminSection>('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' ? true : window.innerWidth >= 1024);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < 1280);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' ? true : window.innerWidth >= 768);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [bellOpen, setBellOpen] = useState(false);
   const { user, logout } = useAuthStore();
@@ -6359,7 +6360,7 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    const onResize = () => setIsDesktop(window.innerWidth >= 768);
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -6401,7 +6402,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen flex bg-[#080808] text-text-primary" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* ──────────────── SIDEBAR ──────────────── */}
       <motion.aside
-        className="fixed top-0 left-0 h-screen z-50 hidden lg:flex flex-col border-r border-white/[0.06] bg-[#0A0A0A]"
+        className="fixed top-0 left-0 h-screen z-50 hidden md:flex flex-col border-r border-white/[0.06] bg-[#0A0A0A]"
         style={{ width: sidebarCollapsed ? 72 : 280 }}
         animate={{ width: sidebarCollapsed ? 72 : 280 }}
         transition={{ duration: 0.22, ease: 'easeInOut' }}
@@ -6522,14 +6523,15 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarCollapsed((c) => !c)}
-              className="hidden lg:flex p-2 rounded-xl text-text-muted hover:bg-white/[0.06] hover:text-white transition-all"
+              className="hidden md:flex p-2 rounded-xl text-text-muted hover:bg-white/[0.06] hover:text-white transition-all"
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <Menu className="w-4 h-4" />
+              {sidebarCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
             </button>
             <select
               value={section}
               onChange={(event) => setSection(event.target.value as AdminSection)}
-              className="lg:hidden max-w-[150px] rounded-xl border border-white/[0.08] bg-[#111111] px-3 py-2 text-xs font-semibold text-text-primary focus:outline-none focus:border-[#f4e059]/50"
+              className="md:hidden max-w-[150px] rounded-xl border border-white/[0.08] bg-[#111111] px-3 py-2 text-xs font-semibold text-text-primary focus:outline-none focus:border-[#f4e059]/50"
               aria-label="Admin section"
             >
               {sidebarItems.map((item) => (

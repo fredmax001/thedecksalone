@@ -210,13 +210,23 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        <Link
-          to="/pricing"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f4e059] hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider shadow-md shadow-[#f4e059]/20 transition-all shrink-0"
-        >
-          <Crown className="w-3.5 h-3.5" />
-          {isLegend ? 'VIP Perks Active' : isPro ? 'Upgrade to Pro+' : 'Upgrade to Pro (SLE 100)'}
-        </Link>
+        {isFan ? (
+          <Link
+            to="/discover"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f4e059] hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider shadow-md shadow-[#f4e059]/20 transition-all shrink-0"
+          >
+            <Heart className="w-3.5 h-3.5" />
+            Discover DJs
+          </Link>
+        ) : (
+          <Link
+            to="/pricing"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f4e059] hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider shadow-md shadow-[#f4e059]/20 transition-all shrink-0"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            {isLegend ? 'VIP Perks Active' : isPro ? 'Upgrade to Pro+' : 'Upgrade to Pro (SLE 100)'}
+          </Link>
+        )}
       </motion.div>
 
       {/* Real Stats Row */}
@@ -326,13 +336,13 @@ export default function UserDashboard() {
               icon={<Music2 className="w-4 h-4" />}
             />
             {playlistsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-48 rounded-2xl bg-white/5" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                 {playlists.slice(0, 4).map((playlist, i) => (
                   <PlaylistCard key={playlist.id} playlist={playlist} index={i} />
                 ))}
@@ -410,13 +420,13 @@ export default function UserDashboard() {
               icon={<Calendar className="w-4 h-4" />}
             />
             {eventsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <Skeleton key={i} className="h-40 rounded-2xl bg-white/5" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {events.slice(0, 6).map((event: any) => (
                   <EventCard key={event.id} event={event} />
                 ))}

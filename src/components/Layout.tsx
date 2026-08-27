@@ -235,8 +235,8 @@ export default function Layout() {
                   Upload & Promote
                 </Link>
               </div>
-            ) : (
-              /* FREE TRIAL / FREE TIER USERS & DJS */
+            ) : isDj ? (
+              /* FREE TRIAL / FREE TIER DJS */
               <div className="mt-5 mx-1 rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/15 via-[#181610] to-[#0f0e0c] p-3.5 shadow-lg shadow-gold/10">
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-sm">
@@ -245,18 +245,38 @@ export default function Layout() {
                   <span className="text-[10px] font-bold text-gold">Subscribe</span>
                 </div>
                 <h4 className="font-display text-xs font-bold uppercase text-white tracking-tight">
-                  {isDj ? 'Upgrade DJ Studio' : 'Unlock VIP Access'}
+                  Upgrade DJ Studio
                 </h4>
                 <p className="text-[10px] text-text-muted mt-0.5 leading-relaxed">
-                  {isDj
-                    ? 'Unlimited mix uploads, priority booking & HD streaming.'
-                    : 'Ad-free listening, offline downloads & VIP event perks.'}
+                  Unlimited mix uploads, priority booking & HD streaming.
                 </p>
                 <Link
-                  to={isDj ? '/dashboard/subscription' : '/pricing'}
+                  to="/dashboard/subscription"
                   className="mt-2.5 block w-full text-center py-1.5 rounded-xl bg-gold hover:brightness-110 active:scale-95 text-black text-[11px] font-black uppercase tracking-wider transition-all shadow-md shadow-gold/20"
                 >
                   Upgrade to Pro
+                </Link>
+              </div>
+            ) : (
+              /* FANS / LISTENERS */
+              <div className="mt-5 mx-1 rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/15 via-[#181610] to-[#0f0e0c] p-3.5 shadow-lg shadow-gold/10">
+                <div className="flex items-center justify-between gap-1 mb-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-sm">
+                    ♥ Support
+                  </span>
+                  <span className="text-[10px] font-bold text-gold">Free</span>
+                </div>
+                <h4 className="font-display text-xs font-bold uppercase text-white tracking-tight">
+                  Support a DJ
+                </h4>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-relaxed">
+                  Send support directly to your favourite artists. 100% goes to the DJ.
+                </p>
+                <Link
+                  to="/discover"
+                  className="mt-2.5 block w-full text-center py-1.5 rounded-xl bg-gold hover:brightness-110 active:scale-95 text-black text-[11px] font-black uppercase tracking-wider transition-all shadow-md shadow-gold/20"
+                >
+                  Browse DJs
                 </Link>
               </div>
             )}

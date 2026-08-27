@@ -165,7 +165,7 @@ export default function Overview() {
       )}
 
       {/* KPI Cards */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <KpiCard
           icon={CalendarCheck}
           label="Total Bookings"
@@ -209,8 +209,8 @@ export default function Overview() {
       </motion.div>
 
       {/* Row 2: Rank Chart + Snapshot */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl bg-[#101010] border border-white/5 p-5">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 rounded-2xl bg-[#101010] border border-white/5 p-5">
           <div className="flex flex-row items-center justify-between pb-4">
             <h2 className="text-[10px] uppercase tracking-wider text-[#f4e059] font-semibold">Ranking History</h2>
             <span className="text-sm text-[#f4e059] font-medium">
@@ -280,7 +280,7 @@ export default function Overview() {
       </motion.div>
 
       {/* Row 3: Recent Bookings + Top Mixes */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-2xl bg-[#101010] border border-white/5 p-5">
           <div className="flex flex-row items-center justify-between mb-4">
             <h2 className="text-[10px] uppercase tracking-wider text-[#f4e059] font-semibold pl-3 border-l-2 border-[#f4e059]">Recent Bookings</h2>
@@ -380,7 +380,7 @@ export default function Overview() {
       </motion.div>
 
       {/* Row 4: Upcoming Events + Quick Actions */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="rounded-2xl bg-[#101010] border border-white/5 p-5">
           <h2 className="text-[10px] uppercase tracking-wider text-[#f4e059] font-semibold mb-4 pl-3 border-l-2 border-[#f4e059]">Upcoming Events</h2>
           {upcomingEvents.length > 0 ? (

@@ -63,7 +63,7 @@ export default function AuthCallback() {
           } else if (user?.role === 'VERIFICATION_ADMIN') {
             navigate('/verification', { replace: true });
           } else if (user?.role === 'DJ') {
-            const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
             navigate(isMobile ? '/discover' : '/dashboard', { replace: true });
           } else {
             navigate('/discover', { replace: true });
