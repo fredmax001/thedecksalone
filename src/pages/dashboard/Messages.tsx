@@ -9,7 +9,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -335,7 +335,7 @@ export default function Messages() {
                   )}
                 >
                   <Avatar className="w-10 h-10 flex-shrink-0">
-                    <AvatarImage src={conv.avatar || undefined} />
+                    <AvatarImage src={getMediaUrl(conv.avatar) || undefined} />
                     <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                       {conv.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -362,7 +362,7 @@ export default function Messages() {
             <>
               <div className="p-4 border-b border-dark-gray flex items-center gap-3">
                 <Avatar className="w-8 h-8">
-                  <AvatarImage src={partner.avatar || undefined} />
+                  <AvatarImage src={getMediaUrl(partner.avatar) || undefined} />
                   <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                     {partner.name.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
@@ -480,7 +480,7 @@ export default function Messages() {
                       className="w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors hover:bg-black-elevated"
                     >
                       <Avatar className="w-10 h-10 flex-shrink-0">
-                        <AvatarImage src={u.avatar || undefined} />
+                        <AvatarImage src={getMediaUrl(u.avatar) || undefined} />
                         <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                           {u.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>

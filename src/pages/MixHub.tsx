@@ -16,6 +16,7 @@ import {
   Code2,
   Plus,
   Download,
+  Share2,
   Eye,
   Repeat2,
   LineChart,
@@ -33,7 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import api from '@/lib/api';
+import api, { downloadMixFile } from '@/lib/api';
 import { type MixTrack } from '@/stores/playerStore';
 import { useMixes, useTrendingMixes, useLikeMix, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
@@ -43,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { computeGenreRanks } from '@/utils/mixRanking';
 import WaveformPlayer from '@/components/WaveformPlayer';
 import ReachListenersModal from '@/components/ReachListenersModal';
-import DjFanSubscribeModal from '@/components/DjFanSubscribeModal';
+import DjSupportModal from '@/components/DjSupportModal';
 import MixDownloadModal from '@/components/MixDownloadModal';
 import EmbedMixModal from '@/components/EmbedMixModal';
 import { toast } from 'sonner';
@@ -71,6 +72,25 @@ function formatDate(dateStr?: string): string {
   return `${day}.${month}.${year}`;
 }
 
+function handleShareMix(mix: { id: string; title: string }) {
+  const url = `${window.location.origin}/mix/${mix.id}`;
+  if (navigator.share) {
+    navigator.share({ title: mix.title, url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => toast.success('Mix link copied to clipboard'));
+  } else {
+    toast.error('Sharing not supported on this device');
+  }
+}
+
+async function triggerMixDownload(mix: { id: string; title: string }) {
+  toast.info(`Preparing download for "${mix.title}"...`);
+  const res = await api.post(`/mixes/${mix.id}/download`);
+  const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
+  await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+  toast.success(`Download started! Enjoy the mix.`);
+}
+
 function toMixTrack(mix: any): MixTrack {
   return {
     id: mix.id,
@@ -92,7 +112,6 @@ function toMixTrack(mix: any): MixTrack {
     djTier: mix.dj?.subscriptionTier || 'free',
     isExclusive: mix.isExclusive || false,
     promotedUntil: mix.promotedUntil,
-    subscriptionPrice: mix.dj?.subscriptionPrice || 100,
     createdAt: mix.createdAt,
   };
 }
@@ -236,22 +255,8 @@ function MixReleaseWaveformCard({
 
     try {
       setDownloading(true);
-      toast.info(`Preparing download for "${mix.title}"...`);
-
-      // Verify subscription and permissions via backend API
-      const res = await api.post(`/mixes/${mix.id}/download`);
-      const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-
-      const link = document.createElement('a');
-      link.href = downloadEndpoint;
-      link.setAttribute('download', `${mix.title}.mp3`);
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      await triggerMixDownload(mix);
       setDownloadsCount((c) => c + 1);
-      toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
       if (err.response?.status === 403) {
         if (err.response?.data?.requiresRepost) {
@@ -507,6 +512,16 @@ function MixReleaseWaveformCard({
                   <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#f4e059]" />
                 )}
                 <span>{mix.isExclusive ? 'VIP' : 'Download'}</span>
+              </button>
+
+              {/* Share Button */}
+              <button
+                onClick={() => handleShareMix(mix)}
+                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+                title="Share mix"
+              >
+                <Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#f4e059]" />
+                <span className="hidden sm:inline">Share</span>
               </button>
             </div>
 
@@ -868,7 +883,7 @@ export default function MixHub() {
 
   // Modals state
   const [promoteModalMix, setPromoteModalMix] = useState<MixTrack | null>(null);
-  const [subscribeModalDj, setSubscribeModalDj] = useState<any | null>(null);
+  const [supportModalDj, setSupportModalDj] = useState<any | null>(null);
   const [embedModalMix, setEmbedModalMix] = useState<MixTrack | null>(null);
   const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' | 'repost' | 'follow' } | null>(null);
 
@@ -1219,9 +1234,6 @@ export default function MixHub() {
             <h2 className="font-display text-xl sm:text-2xl font-bold uppercase tracking-tight text-white">
               {activeGenre !== 'all' ? `${activeGenre} Mixes` : 'All Releases'}
             </h2>
-            <p className="text-xs text-text-muted">
-              Showing {sortedLatest.length} mix sets {activeGenre !== 'all' ? `in ${activeGenre}` : ''}
-            </p>
           </div>
 
           {activeGenre !== 'all' && (
@@ -1261,11 +1273,10 @@ export default function MixHub() {
                   onSeek={(seekSec) => handleSeek(mix, seekSec)}
                   onOpenPromote={(m) => setPromoteModalMix(m)}
                   onOpenSubscribe={(m) =>
-                    setSubscribeModalDj({
+                    setSupportModalDj({
                       id: m.djId,
                       stageName: m.dj,
                       avatar: m.djAvatar || m.cover,
-                      subscriptionPrice: m.subscriptionPrice || 100,
                     })
                   }
                   onOpenEmbed={(m) => setEmbedModalMix(m)}
@@ -1279,8 +1290,8 @@ export default function MixHub() {
             })}
           </div>
         ) : viewMode === 'grid' ? (
-          /* 2. Grid Cards (Spotify & Audiomack 4-Column Grid) */
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+          /* 2. Grid Cards (6-Column Grid) */
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 sm:gap-5">
             {sortedLatest.map((mix: MixTrack, i: number) => {
               const rank = genreRanks[mix.id] || (page - 1) * 16 + (i + 1);
               return (
@@ -1292,11 +1303,10 @@ export default function MixHub() {
                   isCurrent={currentTrack?.id === mix.id}
                   isPlaying={isPlaying}
                   onOpenSubscribe={(m) =>
-                    setSubscribeModalDj({
+                    setSupportModalDj({
                       id: m.djId,
                       stageName: m.dj,
                       avatar: m.djAvatar || m.cover,
-                      subscriptionPrice: m.subscriptionPrice || 100,
                     })
                   }
                 />
@@ -1326,11 +1336,10 @@ export default function MixHub() {
                 isPlaying={isPlaying}
                 genreRank={genreRanks[mix.id]}
                 onOpenSubscribe={(m) =>
-                  setSubscribeModalDj({
+                  setSupportModalDj({
                     id: m.djId,
                     stageName: m.dj,
                     avatar: m.djAvatar || m.cover,
-                    subscriptionPrice: m.subscriptionPrice || 100,
                   })
                 }
               />
@@ -1375,11 +1384,11 @@ export default function MixHub() {
       )}
 
       {/* ─── 👑 DJ FAN SUBSCRIBE MODAL (EXCLUSIVE MIXES) ─── */}
-      {subscribeModalDj && (
-        <DjFanSubscribeModal
-          isOpen={!!subscribeModalDj}
-          onClose={() => setSubscribeModalDj(null)}
-          dj={subscribeModalDj}
+      {supportModalDj && (
+        <DjSupportModal
+          isOpen={!!supportModalDj}
+          onClose={() => setSupportModalDj(null)}
+          dj={supportModalDj}
           onSuccess={() => {
             refetchLatest();
           }}
@@ -1410,12 +1419,20 @@ export default function MixHub() {
                   id: downloadModalData.mix.djId,
                   stageName: downloadModalData.mix.dj,
                   avatar: downloadModalData.mix.djAvatar || downloadModalData.mix.cover,
-                  subscriptionPrice: 50,
                 },
               }
             : null
         }
-        onOpenDjSubscribe={(dj) => setSubscribeModalDj(dj)}
+        onOpenDjSupport={(dj) => setSupportModalDj(dj)}
+        onActionComplete={() => {
+          if (downloadModalData?.mix) {
+            triggerMixDownload(downloadModalData.mix).catch((err: any) => {
+              if (err.response?.status !== 403) {
+                toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+              }
+            });
+          }
+        }}
       />
     </div>
   );

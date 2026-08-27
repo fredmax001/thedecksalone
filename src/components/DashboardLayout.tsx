@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +56,7 @@ const navItems = [
   { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Wallet, label: 'Earnings', path: '/dashboard/earnings' },
   { icon: Users, label: 'Followers', path: '/dashboard/followers' },
-  { icon: Crown, label: 'Fan Passes', path: '/dashboard/fan-subscriptions' },
+
   { icon: User, label: 'Profile', path: '/dashboard/profile' },
   { icon: CreditCard, label: 'Subscription', path: '/dashboard/subscription' },
   { icon: BriefcaseBusiness, label: 'Opportunities', path: '/dashboard/opportunities' },
@@ -77,7 +77,7 @@ export default function DashboardLayout() {
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
-  const avatarUrl = djProfile?.avatar || localAvatarUrl || user?.avatar || '';
+  const avatarUrl = getMediaUrl(djProfile?.avatar || localAvatarUrl || user?.avatar) || '/default-avatar.jpg';
   const initials = djName.slice(0, 2).toUpperCase();
 
   // Redirect Moderators to Moderator Console
@@ -273,7 +273,7 @@ export default function DashboardLayout() {
 
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
+        className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
       >
         {/* Top Bar */}
         <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-xl border-b border-dark-gray pt-[env(safe-area-inset-top,0px)]">
@@ -352,7 +352,7 @@ export default function DashboardLayout() {
         {/* Page Content */}
         <main
           className={cn(
-            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300 space-y-4',
+            'flex-1 p-4 lg:p-6 transition-all duration-300 space-y-4',
             currentTrack ? 'pb-40 lg:pb-24' : 'pb-20 lg:pb-6'
           )}
         >

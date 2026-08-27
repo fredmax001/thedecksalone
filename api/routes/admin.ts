@@ -78,8 +78,22 @@ const bookingStatusSchema = z.object({
 
 const createAdSchema = z.object({
   name: z.string().min(1, 'Campaign name is required'),
-  status: z.enum(['active', 'paused', 'draft']).default('draft'),
+  status: z.enum(['active', 'paused', 'draft', 'pending_payment', 'rejected', 'completed']).default('draft'),
   budget: z.number().min(0).default(0),
+  description: z.string().optional().nullable(),
+  creativeImageUrl: z.string().optional().nullable(),
+  ctaUrl: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+const updateAdSchema = z.object({
+  name: z.string().min(1).optional(),
+  status: z.enum(['active', 'paused', 'draft', 'pending_payment', 'rejected', 'completed']).optional(),
+  budget: z.number().min(0).optional(),
+  description: z.string().optional().nullable(),
+  creativeImageUrl: z.string().optional().nullable(),
+  ctaUrl: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
 });
@@ -1230,75 +1244,6 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
         req,
       });
     }
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// POST /api/admin/dj-fan-subscriptions/:id/approve - Approve a pending fan-to-DJ subscription
-router.post('/dj-fan-subscriptions/:id/approve', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
-  try {
-    const subscription = await prisma.djFanSubscription.findUnique({
-      where: { id: req.params.id },
-      include: { dj: { select: { id: true, stageName: true, userId: true } }, user: { select: { id: true, username: true, email: true } } },
-    });
-    if (!subscription) {
-      return res.status(404).json({ success: false, error: 'Subscription not found' });
-    }
-
-    const durationDays = subscription.amount >= 100 ? 60 : 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
-
-    const updated = await prisma.djFanSubscription.update({
-      where: { id: subscription.id },
-      data: { status: 'ACTIVE', expiresAt },
-    });
-
-    await createAuditLog({
-      actorId: req.user.id,
-      targetId: subscription.userId,
-      action: 'DJ_FAN_SUBSCRIPTION_APPROVE',
-      entity: 'DJ_FAN_SUBSCRIPTION',
-      entityId: subscription.id,
-      metadata: { djId: subscription.djId, amount: subscription.amount },
-      req,
-    });
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// POST /api/admin/dj-fan-subscriptions/:id/reject - Reject a pending fan-to-DJ subscription
-router.post('/dj-fan-subscriptions/:id/reject', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req, res) => {
-  try {
-    const subscription = await prisma.djFanSubscription.findUnique({
-      where: { id: req.params.id },
-      include: { dj: { select: { id: true, stageName: true, userId: true } }, user: { select: { id: true, username: true, email: true } } },
-    });
-    if (!subscription) {
-      return res.status(404).json({ success: false, error: 'Subscription not found' });
-    }
-
-    const updated = await prisma.djFanSubscription.update({
-      where: { id: subscription.id },
-      data: { status: 'REJECTED' },
-    });
-
-    await createAuditLog({
-      actorId: req.user.id,
-      targetId: subscription.userId,
-      action: 'DJ_FAN_SUBSCRIPTION_REJECT',
-      entity: 'DJ_FAN_SUBSCRIPTION',
-      entityId: subscription.id,
-      metadata: { djId: subscription.djId, amount: subscription.amount },
-      req,
-    });
 
     return res.json({ success: true, data: updated });
   } catch (error) {
@@ -2464,12 +2409,142 @@ router.post('/ads', async (req, res) => {
         name: data.name,
         status: data.status,
         budget: data.budget,
+        description: data.description || null,
+        creativeImageUrl: data.creativeImageUrl || null,
+        ctaUrl: data.ctaUrl || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         endDate: data.endDate ? new Date(data.endDate) : null,
       },
     });
 
+    await createAuditLog({
+      actorId: req.user.id,
+      action: 'CAMPAIGN_CREATE',
+      entity: 'AD_CAMPAIGN',
+      entityId: campaign.id,
+      metadata: { name: campaign.name, status: campaign.status, budget: campaign.budget },
+      req,
+    });
+
     return res.status(201).json({ success: true, data: campaign });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/admin/ads/:id - Update an existing ad campaign
+router.put('/ads/:id', async (req, res) => {
+  try {
+    const parsed = updateAdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { id } = req.params;
+    const data = parsed.data;
+
+    const existing = await prisma.adCampaign.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Ad campaign not found' });
+    }
+
+    const updated = await prisma.adCampaign.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.budget !== undefined && { budget: data.budget }),
+        ...(data.description !== undefined && { description: data.description || null }),
+        ...(data.creativeImageUrl !== undefined && { creativeImageUrl: data.creativeImageUrl || null }),
+        ...(data.ctaUrl !== undefined && { ctaUrl: data.ctaUrl || null }),
+        ...(data.startDate !== undefined && { startDate: data.startDate ? new Date(data.startDate) : null }),
+        ...(data.endDate !== undefined && { endDate: data.endDate ? new Date(data.endDate) : null }),
+      },
+      include: {
+        advertiser: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: updated.advertiserId || null,
+      action: 'CAMPAIGN_UPDATE',
+      entity: 'AD_CAMPAIGN',
+      entityId: id,
+      metadata: { name: updated.name, status: updated.status, budget: updated.budget },
+      req,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/admin/ads/:id - Delete an ad campaign
+router.delete('/ads/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.adCampaign.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Ad campaign not found' });
+    }
+
+    await prisma.adCampaign.delete({ where: { id } });
+
+    await createAuditLog({
+      actorId: req.user.id,
+      targetId: existing.advertiserId || null,
+      action: 'CAMPAIGN_DELETE',
+      entity: 'AD_CAMPAIGN',
+      entityId: id,
+      metadata: { name: existing.name },
+      req,
+    });
+
+    return res.json({ success: true, message: 'Campaign deleted successfully' });
+  } catch (error) {
+    console.error('Internal server error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// PUT /api/admin/campaigns/:id - Alias for updating campaign
+router.put('/campaigns/:id', async (req, res) => {
+  try {
+    const parsed = updateAdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+
+    const { id } = req.params;
+    const data = parsed.data;
+
+    const existing = await prisma.adCampaign.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Ad campaign not found' });
+    }
+
+    const updated = await prisma.adCampaign.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.budget !== undefined && { budget: data.budget }),
+        ...(data.description !== undefined && { description: data.description || null }),
+        ...(data.creativeImageUrl !== undefined && { creativeImageUrl: data.creativeImageUrl || null }),
+        ...(data.ctaUrl !== undefined && { ctaUrl: data.ctaUrl || null }),
+        ...(data.startDate !== undefined && { startDate: data.startDate ? new Date(data.startDate) : null }),
+        ...(data.endDate !== undefined && { endDate: data.endDate ? new Date(data.endDate) : null }),
+      },
+      include: {
+        advertiser: { select: { id: true, stageName: true, avatar: true } },
+      },
+    });
+
+    return res.json({ success: true, data: updated });
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

@@ -66,7 +66,7 @@ export default function MixCarousel({
       >
         <CarouselContent className="-ml-3 sm:-ml-4">
           {mixes.map((mix, i) => (
-            <CarouselItem key={mix.id} className="pl-3 sm:pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5">
+            <CarouselItem key={mix.id} className="pl-3 sm:pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6">
               <MixCard mix={mix} index={i} />
             </CarouselItem>
           ))}

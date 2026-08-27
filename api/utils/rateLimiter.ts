@@ -12,61 +12,68 @@ try {
   // Redis store not available — falling back to in-memory store
 }
 
-// express-rate-limit requires each limiter to have its own Store instance.
-function getRedisStore() {
+function getClientIp(req: any): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+// express-rate-limit requires each limiter to have its own Store instance with unique prefix.
+function getRedisStore(prefix: string) {
   return RedisStore && redisClient
-    ? { store: new RedisStore({ sendCommand: (...args) => redisClient.call(...args) }) }
+    ? { store: new RedisStore({ sendCommand: (...args: any[]) => redisClient.call(...args), prefix: `rl:${prefix}:` }) }
     : {};
 }
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 2000, // Generous limit for multi-query SPA frontend
-  keyGenerator: (req: any) => {
-    // Use Express' req.ip (respects trust proxy) instead of trusting the first
-    // IP in X-Forwarded-For, which clients can spoof.
-    return req.ip || req.socket?.remoteAddress || 'unknown';
-  },
+  max: 5000, // Generous limit for multi-query SPA frontend
+  keyGenerator: (req: any) => getClientIp(req),
   message: {
     success: false,
     error: 'Too many requests. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('general'),
 });
 
-// Dedicated login rate limiter: Max 10 requests per email/IP per 1 minute
+// Dedicated login rate limiter: Max 25 requests per email/IP per 1 minute
 const loginRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // Max 10 login attempts per email/IP per minute
+  max: 25,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
   keyGenerator: (req: any) => {
-    // Key by email when available so users behind shared/NAT IPs don't
-    // consume each other's limits. Body parsing runs before route handlers.
-    return req.body?.email || req.ip || req.socket?.remoteAddress || 'unknown';
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    return email ? `login:${email}` : `login_ip:${getClientIp(req)}`;
   },
   message: {
     success: false,
-    error: 'Too many login attempts. Please try again later.', // Clear, non-generic error
+    error: 'Too many login attempts. Please try again in a minute.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('login'),
 });
 
-// General auth rate limiter (signup, otp, password reset)
+// General auth rate limiter (signup, otp, password reset): Max 60 attempts per 15 minutes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15,
+  max: 60,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  keyGenerator: (req: any) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    return email ? `auth:${email}` : `auth_ip:${getClientIp(req)}`;
   },
   message: {
     success: false,
@@ -74,93 +81,92 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('auth'),
 });
 
 // Booking creation limiter
 const bookingLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 20,
+  max: 30,
   message: {
     success: false,
     error: 'Too many booking requests. Please try again in an hour.',
   },
-  keyGenerator: (req: any) => req.user?.id || req.ip,
+  keyGenerator: (req: any) => (req.user?.id ? `booking:${req.user.id}` : `booking_ip:${getClientIp(req)}`),
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('booking'),
 });
 
-// Dedicated Battle Vote limiter: Max 20 votes per 15 minutes per authenticated user
+// Dedicated Battle Vote limiter: Max 30 votes per 15 minutes per authenticated user
 const voteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 30,
   message: {
     success: false,
     error: 'Too many votes submitted. Please try again in 15 minutes.',
   },
-  keyGenerator: (req: any) => (req.user?.id ? `user_${req.user.id}` : (req.ip || req.socket?.remoteAddress || 'unknown')),
+  keyGenerator: (req: any) => (req.user?.id ? `vote:user_${req.user.id}` : `vote_ip:${getClientIp(req)}`),
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('vote'),
 });
-
 
 // Mix play limiter — cap play-count inflation per mix per IP/user
 const playLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10,
+  max: 20,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
-  keyGenerator: (req: any) => `${req.user?.id || req.ip || 'unknown'}:${req.params.id}`, 
+  keyGenerator: (req: any) => `play:${req.user?.id || getClientIp(req)}:${req.params.id}`, 
   message: {
     success: false,
     error: 'Too many plays. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('play'),
 });
 
 // Ticket purchase limiter — prevent spam pending orders
 const purchaseLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
+  max: 20,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
-  keyGenerator: (req: any) => req.user?.id || req.ip || 'unknown',
+  keyGenerator: (req: any) => (req.user?.id ? `purchase:${req.user.id}` : `purchase_ip:${getClientIp(req)}`),
   message: {
     success: false,
     error: 'Too many ticket purchase attempts. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('purchase'),
 });
 
 // Search / discovery limiter — cap expensive text-search queries
 const searchLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 30,
+  max: 60,
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
-  keyGenerator: (req: any) => req.ip || 'unknown',
+  keyGenerator: (req: any) => `search:${getClientIp(req)}`,
   message: {
     success: false,
     error: 'Too many search requests. Please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
-  ...getRedisStore(),
+  ...getRedisStore('search'),
 });
 
 function conditionalSearchLimiter(req: any, res: any, next: any) {
@@ -170,4 +176,4 @@ function conditionalSearchLimiter(req: any, res: any, next: any) {
   next();
 }
 
-module.exports = { generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter };
+module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter };

@@ -166,3 +166,28 @@ export function useHallOfFameDJs(limit = 6) {
     },
   });
 }
+
+export interface HallOfFameLegend {
+  id: string;
+  name: string;
+  era: string | null;
+  status: 'living' | 'deceased' | 'unknown';
+  story: string;
+  contribution: string;
+  quote: string | null;
+  image: string | null;
+  city: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useHallOfFameLegends() {
+  return useQuery<{ data: HallOfFameLegend[] }>({
+    queryKey: ['hallOfFameLegends'],
+    queryFn: async () => {
+      const res = await api.get('/hall-of-fame/legends');
+      return res.data;
+    },
+  });
+}

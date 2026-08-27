@@ -42,7 +42,7 @@ import {
   useRespondToCounterOffer,
   type UserBooking,
 } from '@/hooks/useUserDashboard';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -233,7 +233,7 @@ export default function MyBookings() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="w-10 h-10 border border-gold/20">
-                          <AvatarImage src={booking.dj?.avatar} />
+                          <AvatarImage src={getMediaUrl(booking.dj?.avatar) || undefined} />
                           <AvatarFallback className="bg-gold/10 text-gold text-xs">
                             <Music className="w-4 h-4" />
                           </AvatarFallback>

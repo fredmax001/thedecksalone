@@ -120,7 +120,7 @@ export function ModeratorOverview() {
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-[#f4e059] w-5 text-center">#{index + 1}</span>
                     <img
-                      src={getMediaUrl(dj.avatar) || '/placeholder-dj.jpg'}
+                      src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                       alt={dj.stageName}
                       className="w-10 h-10 rounded-full object-cover border border-white/10"
                     />

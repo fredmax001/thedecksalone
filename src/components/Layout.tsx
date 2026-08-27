@@ -37,6 +37,7 @@ import {
 import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
 import { cn } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/api';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import SearchModal from '@/components/SearchModal';
 
@@ -103,7 +104,7 @@ export default function Layout() {
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
   const shouldShowGetPro = isDj && subscriptionTier === 'free';
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
-  const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
+  const avatarUrl = getMediaUrl(user?.djProfile?.avatar || user?.avatar) || '/default-avatar.jpg';
   const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
   const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
   const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
@@ -263,7 +264,7 @@ export default function Layout() {
         </nav>
       </aside>
 
-      <div className="min-h-[100dvh] md:ml-[260px] lg:ml-[300px]">
+      <div className="min-h-[100dvh] min-w-0 overflow-x-hidden md:ml-[260px] lg:ml-[300px]">
         <header className="sticky top-0 z-30 border-b border-gold/10 bg-black/95 backdrop-blur-2xl shadow-[0_1px_20px_rgba(0,0,0,0.5)] pt-[env(safe-area-inset-top,0px)]">
           <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-6 lg:px-10">
             <Link to="/" className="flex shrink-0 items-center md:hidden">
@@ -312,7 +313,7 @@ export default function Layout() {
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
                         <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border border-gold/40">
-                          <AvatarImage src={avatarUrl || '/default-avatar.jpg'} alt={displayName} />
+                          <AvatarImage src={avatarUrl} alt={displayName} />
                           <AvatarFallback className="bg-black-surface">
                             <img src="/default-avatar.jpg" alt="avatar" className="w-full h-full object-cover rounded-full" />
                           </AvatarFallback>

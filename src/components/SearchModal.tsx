@@ -72,7 +72,6 @@ function toMixTrack(mix: any): MixTrack {
     djTier: mix.dj?.subscriptionTier || 'free',
     isExclusive: mix.isExclusive || false,
     promotedUntil: mix.promotedUntil,
-    subscriptionPrice: mix.dj?.subscriptionPrice || 100,
     createdAt: mix.createdAt,
   };
 }

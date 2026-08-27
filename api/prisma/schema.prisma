@@ -62,20 +62,25 @@ model User {
   eventRsvps              EventRSVP[]
   submittedReports        ViolationReport[] @relation("SubmittedReports")
   targetedReports         ViolationReport[] @relation("TargetedReports")
-  djFanSubscriptions      DjFanSubscription[]
+  djSupports              DjSupport[]
   proSubscriptionRequests ProSubscriptionRequest[]
 
   @@index([email])
   @@index([username])
+  @@index([name])
+  @@index([favoriteGenres], type: Gin)
   @@index([phone])
   @@index([googleId])
   @@index([role])
   @@index([role, createdAt])
+  @@index([status])
   @@index([status, createdAt])
   @@index([status, role, createdAt])
   @@index([dateOfBirth])
   @@index([referredBy])
   @@index([subscriptionTier])
+  @@index([subscriptionTier, status])
+  @@index([lastLoginAt])
   @@index([createdAt])
   @@map("users")
 }
@@ -156,6 +161,7 @@ model DjProfile {
   industryScore           Float                    @default(0)
   communityScore          Float                    @default(0)
   rankingPosition         Int                      @default(0)
+  rankingScoredAt         DateTime?
   badges                  String[]                 @default([])
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
@@ -201,12 +207,11 @@ model DjProfile {
   promoGrantedById        String?                  // admin userId who granted it
   promoGrants             PromoGrant[]
   promotionPoints         Int                      @default(1000)
-  subscriptionPrice       Float                    @default(100.0)
   availabilitySchedule    Json?
   blockedDates            String[]                 @default([])
   payoutMethod            Json?
   payoutRequests          PayoutRequest[]
-  fanSubscriptions        DjFanSubscription[]
+  supports                DjSupport[]
   campaigns               AdCampaign[]
   battleEntries           BattleEntry[]
   bookingsAsDj            Booking[]                @relation("DjBookings")
@@ -232,10 +237,24 @@ model DjProfile {
   @@index([verified])
   @@index([verificationStatus])
   @@index([subscriptionTier])
+  @@index([stageName])
+  @@index([fullName])
+  @@index([genres], type: Gin)
+  @@index([awards], type: Gin)
+  @@index([equipment], type: Gin)
+  @@index([badges], type: Gin)
+  @@index([eventTypes], type: Gin)
+  @@index([languages], type: Gin)
   @@index([rankingScore])
+  @@index([rankingScoredAt])
   @@index([isPublic])
   @@index([isPublic, createdAt])
   @@index([isPublic, verified, rankingScore])
+  @@index([isPublic, rankingScore])
+  @@index([isPublic, rankingScoredAt])
+  @@index([isPublic, totalFollowers])
+  @@index([isPublic, city, rankingScore])
+  @@index([isPublic, city, rankingScoredAt])
   @@index([updatedAt])
   @@map("dj_profiles")
 }
@@ -301,6 +320,8 @@ model Mix {
   moderatorCurated Boolean       @default(false)
   moderatorNotes   String?
   sortOrder        Int           @default(0)
+  discoveryScore   Float?
+  discoveryScoredAt DateTime?
   highlights  DjHighlight[]
   setItems    DjSetItem[]
   mixLikes    MixLike[]
@@ -314,18 +335,31 @@ model Mix {
 
   @@index([djId])
   @@index([djId, sortOrder])
+  @@index([djId, isPublic, createdAt])
+  @@index([djId, isPublic, discoveryScore])
   @@index([category])
   @@index([genre])
+  @@index([tags], type: Gin)
+  @@index([secondaryGenres], type: Gin)
   @@index([featured])
   @@index([createdAt])
   @@index([plays])
   @@index([likes])
   @@index([title])
+  @@index([discoveryScore])
+  @@index([discoveryScoredAt])
   @@index([isPublic, createdAt])
+  @@index([isPublic, plays])
+  @@index([isPublic, likes])
+  @@index([isPublic, discoveryScore])
+  @@index([isPublic, discoveryScoredAt])
   @@index([isPublic, featured, createdAt])
+  @@index([isPublic, featured, plays])
   @@index([isPublic, genre, createdAt])
   @@index([isPublic, category, createdAt])
+  @@index([isPublic, hallOfFame, discoveryScore])
   @@index([hallOfFame, isPublic, createdAt])
+  @@index([hallOfFame, isPublic, discoveryScore])
   @@index([djId, isPublic])
   @@map("mixes")
 }
@@ -492,8 +526,10 @@ model Booking {
   @@index([clientId, createdAt])
   @@index([djId])
   @@index([djId, status])
+  @@index([djId, status, eventDate])
   @@index([status])
   @@index([status, createdAt])
+  @@index([status, eventDate])
   @@index([eventDate])
   @@map("bookings")
 }
@@ -565,7 +601,9 @@ model Message {
   @@index([receiverId])
   @@index([receiverId, createdAt])
   @@index([senderId, receiverId, createdAt])
+  @@index([senderId, createdAt])
   @@index([bookingId])
+  @@index([bookingId, createdAt])
   @@index([createdAt])
   @@map("messages")
 }
@@ -682,16 +720,19 @@ model Event {
   violationReports     ViolationReport[]
 
   @@index([djId])
+  @@index([djId, date])
+  @@index([djId, status, date])
   @@index([city])
   @@index([date])
   @@index([status, date])
   @@index([publishStatus])
   @@index([publishStatus, status, date])
+  @@index([publishStatus, date])
+  @@index([publishStatus, city, date])
   @@index([city, date])
   @@index([isTicketed])
   @@index([soundItSaloneEventId])
   @@index([isSyncedToSalone])
-  @@index([publishStatus, date])
   @@map("events")
 }
 
@@ -1199,7 +1240,10 @@ model OfficialPlaylist {
   items       OfficialPlaylistItem[]
 
   @@index([isPublished])
+  @@index([isPublished, isFeatured])
+  @@index([isPublished, createdAt])
   @@index([isFeatured])
+  @@index([slug])
   @@index([createdAt])
   @@map("official_playlists")
 }
@@ -1239,25 +1283,25 @@ model ModeratorAuditLog {
   @@map("moderator_audit_logs")
 }
 
-model DjFanSubscription {
+model DjSupport {
   id               String    @id @default(cuid())
   djId             String
   userId           String
-  status           String    @default("ACTIVE") // ACTIVE, PENDING, EXPIRED
-  amount           Float     @default(100.0)
+  amount           Float
+  currency         String    @default("SLE")
   paymentReference String?
   paymentProofUrl  String?
-  expiresAt        DateTime
+  status           String    @default("PENDING") // PENDING, COMPLETED, FAILED
+  message          String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   dj               DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([djId, userId])
   @@index([djId])
   @@index([userId])
   @@index([status])
-  @@map("dj_fan_subscriptions")
+  @@map("dj_supports")
 }
 
 model PayoutRequest {
@@ -1278,6 +1322,25 @@ model PayoutRequest {
   @@index([status])
   @@index([createdAt])
   @@map("payout_requests")
+}
+
+model HallOfFameLegend {
+  id           String   @id @default(cuid())
+  name         String
+  era          String?
+  status       String   @default("unknown") // living, deceased, unknown
+  story        String   @db.Text
+  contribution String   @db.Text
+  quote        String?
+  image        String?
+  city         String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([status])
+  @@map("hall_of_fame_legends")
 }
 
 

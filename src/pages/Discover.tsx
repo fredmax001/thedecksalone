@@ -24,6 +24,7 @@ import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { useUsers } from '@/hooks/useUsers';
 import { imageFallback } from '@/lib/utils';
 import ShareButton from '@/components/ShareButton';
+import { getMediaUrl } from '@/lib/api';
 import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
 
 /* ─────────────────── Types ─────────────────── */
@@ -136,7 +137,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
       {/* Image */}
       <div className="relative aspect-square overflow-hidden">
         <img
-          src={dj.avatar || '/default-avatar.jpg'}
+          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
           alt={dj.stageName}
           onError={imageFallback}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -274,7 +275,7 @@ function DJListRow({ dj, index }: { dj: DJ; index: number }) {
       {/* Avatar */}
       <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
         <img
-          src={dj.avatar || '/default-avatar.jpg'}
+          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
           alt={dj.stageName}
           onError={imageFallback}
           className="w-full h-full object-cover"
@@ -358,7 +359,7 @@ function UserCard({ user, index }: { user: DiscoveredUser; index: number }) {
     >
       <div className="relative aspect-square overflow-hidden">
         <img
-          src={user.avatar || '/default-avatar.jpg'}
+          src={getMediaUrl(user.avatar) || '/default-avatar.jpg'}
           alt={user.displayName}
           onError={imageFallback}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -424,7 +425,7 @@ function UserListRow({ user, index }: { user: DiscoveredUser; index: number }) {
     >
       <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
         <img
-          src={user.avatar || '/default-avatar.jpg'}
+          src={getMediaUrl(user.avatar) || '/default-avatar.jpg'}
           alt={user.displayName}
           onError={imageFallback}
           className="w-full h-full object-cover"
@@ -583,7 +584,6 @@ export default function Discover() {
   }, [djsData, ratingMin, selectedEquipment]);
 
   const totalPages = djsData?.meta?.totalPages ?? 0;
-  const serverTotal = djsData?.meta?.total ?? 0;
   const communityOptions = selectedCity ? CITY_TO_COMMUNITIES[selectedCity] ?? [] : [];
 
   /* ── Active Filters ── */
@@ -995,14 +995,7 @@ export default function Discover() {
             )}
           </div>
 
-          {/* Result Count */}
-          <span className="font-mono text-xs text-text-muted hidden sm:block">
-            {activeTab === 'djs'
-              ? `Showing ${displayedDjs.length} of ${serverTotal} DJs`
-              : `Showing ${usersData?.data?.length ?? 0} of ${usersData?.meta?.total ?? 0} People`}
-          </span>
-
-          {/* Sort Dropdown */}
+          {/* Sort Dropdown -- result count removed per v1.0.4 request */}
           <div className="relative">
             <button
               onClick={() => setSortOpen(!sortOpen)}

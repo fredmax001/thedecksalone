@@ -982,38 +982,6 @@ router.get('/public/:username', async (req, res) => {
   }
 });
 
-// GET /api/users/my-dj-subscriptions - Active fan-to-DJ subscriptions for logged-in user
-router.get('/my-dj-subscriptions', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const subs = await prisma.djFanSubscription.findMany({
-      where: {
-        userId,
-        status: 'ACTIVE',
-        expiresAt: { gt: new Date() },
-      },
-      include: {
-        dj: {
-          select: {
-            id: true,
-            stageName: true,
-            avatar: true,
-            city: true,
-            subscriptionPrice: true,
-            user: { select: { username: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return res.json({ success: true, data: subs });
-  } catch (error) {
-    console.error('[User DJ Subscriptions API] Error:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // Valid platform subscription plan identifiers sent by the frontend
 const VALID_PLANS = ['pro', 'pro_annual', 'legend', 'legend_annual'];
 const EXPECTED_MONTHLY_PRICE = { pro: 100, legend: 150 };

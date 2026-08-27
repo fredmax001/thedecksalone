@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Send, Trash2, ShieldCheck, CornerDownRight, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -159,7 +159,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
       <form onSubmit={handleSubmitComment} className="space-y-3">
         <div className="flex items-start gap-3">
           <Avatar className="w-9 h-9 border border-gold/30 flex-shrink-0 mt-1">
-            <AvatarImage src={user?.avatar || user?.djProfile?.avatar} />
+            <AvatarImage src={getMediaUrl(user?.avatar || user?.djProfile?.avatar) || undefined} />
             <AvatarFallback className="bg-gold-gradient text-black text-xs font-bold">
               {(user?.username || 'U')[0].toUpperCase()}
             </AvatarFallback>
@@ -215,7 +215,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="w-8 h-8 border border-white/10">
-                      <AvatarImage src={comment.user?.djProfile?.avatar || comment.user?.avatar} />
+                      <AvatarImage src={getMediaUrl(comment.user?.djProfile?.avatar || comment.user?.avatar) || undefined} />
                       <AvatarFallback className="bg-dark-gray text-xs font-bold text-gold">
                         {(comment.user?.username || 'U')[0].toUpperCase()}
                       </AvatarFallback>
@@ -305,7 +305,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
                               <Avatar className="w-6 h-6 border border-white/10">
-                                <AvatarImage src={reply.user?.djProfile?.avatar || reply.user?.avatar} />
+                                <AvatarImage src={getMediaUrl(reply.user?.djProfile?.avatar || reply.user?.avatar) || undefined} />
                                 <AvatarFallback className="bg-dark-gray text-[10px] font-bold text-gold">
                                   {(reply.user?.username || 'U')[0].toUpperCase()}
                                 </AvatarFallback>

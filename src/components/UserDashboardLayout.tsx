@@ -15,7 +15,6 @@ import {
   Ticket,
   CalendarCheck,
   Activity,
-  Crown,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -32,9 +31,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/api';
 
 const navItems = [
-  { icon: Crown, label: 'Membership & Pro', path: '/user/subscription' },
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings' },
   { icon: Ticket, label: 'My Tickets', path: '/user/tickets' },
   { icon: MessageSquare, label: 'Messages', path: '/user/messages' },
@@ -54,7 +53,7 @@ export default function UserDashboardLayout() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const displayName = user?.username || user?.email?.split('@')[0] || 'User';
-  const avatarUrl = user?.avatar || user?.djProfile?.avatar || '';
+  const avatarUrl = getMediaUrl(user?.avatar || user?.djProfile?.avatar) || '/default-avatar.jpg';
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const isActive = (path: string) => {
@@ -203,7 +202,7 @@ export default function UserDashboardLayout() {
 
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
+        className="flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300 ml-0 lg:ml-[72px] xl:ml-[260px]"
       >
         {/* Top Bar */}
         <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-xl border-b border-dark-gray pt-[env(safe-area-inset-top,0px)]">
@@ -284,7 +283,7 @@ export default function UserDashboardLayout() {
         {/* Page Content */}
         <main
           className={cn(
-            'flex-1 p-4 lg:p-6 overflow-y-auto transition-all duration-300',
+            'flex-1 p-4 lg:p-6 transition-all duration-300',
             currentTrack ? 'pb-40 lg:pb-6' : 'pb-20 lg:pb-6'
           )}
         >

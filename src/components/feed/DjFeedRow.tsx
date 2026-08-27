@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, ArrowRight } from 'lucide-react';
+import { getMediaUrl } from '@/lib/api';
 import type { FeedDJ } from './types';
 
 interface DjFeedRowProps {
@@ -13,7 +14,7 @@ function formatCompact(n = 0) {
 }
 
 export default function DjFeedRow({ dj, index = 0 }: DjFeedRowProps) {
-  const avatarUrl = dj.avatar || '/default-avatar.jpg';
+  const avatarUrl = getMediaUrl(dj.avatar) || '/default-avatar.jpg';
   const stageName = dj.stageName || dj.username || 'DJ';
 
   return (

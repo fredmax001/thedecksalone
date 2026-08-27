@@ -13,7 +13,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -245,7 +245,7 @@ function FollowerListItem({ follower }: { follower: Follower }) {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <Avatar className="w-11 h-11 border border-gold/30 shrink-0">
-                <AvatarImage src={follower.avatar || ''} alt={follower.name || follower.username} />
+                <AvatarImage src={getMediaUrl(follower.avatar) || undefined} alt={follower.name || follower.username} />
                 <AvatarFallback className="bg-gold/20 text-gold text-xs font-bold">
                   {initials}
                 </AvatarFallback>
@@ -302,7 +302,7 @@ function FollowerCard({ follower }: { follower: Follower }) {
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
             <Avatar className="w-12 h-12 border-2 border-gold/30">
-              <AvatarImage src={follower.avatar || ''} alt={follower.name} />
+              <AvatarImage src={getMediaUrl(follower.avatar) || undefined} alt={follower.name} />
               <AvatarFallback className="bg-gold/20 text-gold text-sm font-bold">
                 {initials}
               </AvatarFallback>

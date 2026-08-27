@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Megaphone, Sparkles, Play, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, ExternalLink } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 import type { HomeDJ, HomeEvent, HomeMix, HomeAd } from './types';
 
 interface HeroBannerProps {
@@ -193,13 +194,18 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
             transition={{ duration: 0.7 }}
             className="absolute inset-0"
           >
-            <img
+            <OptimizedImage
               src={currentSlide.image ? getMediaUrl(currentSlide.image) : '/og-banner.png'}
               alt={currentSlide.title}
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/og-banner.png';
-              }}
+              width={1360}
+              height={520}
+              objectFit="cover"
+              loading="eager"
+              fetchpriority="high"
+              fallbackSrc="/og-banner.png"
+              containerClassName="absolute inset-0"
+              className="absolute inset-0"
+              placeholder="none"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40" />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />

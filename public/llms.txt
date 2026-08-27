@@ -1,0 +1,34 @@
+# Deck Salone — Sierra Leone's Official DJ Platform
+
+Deck Salone is a music streaming and DJ booking platform built for Sierra Leone and the global Salone diaspora.
+
+## About
+
+- **Name:** Deck Salone
+- **Website:** https://decksalone.com
+- **Tagline:** Sierra Leone's Official DJ Platform
+- **Description:** Discover top DJs, stream exclusive Sierra Leonean mixes, book DJs for events, buy event tickets, and vote in live DJ battles.
+
+## Key Features
+
+- DJ profiles, rankings, and verified badges
+- Mix streaming, playlists, and downloads
+- Event ticketing and RSVP
+- DJ booking and payments
+- DJ battles and voting
+- Subscription tiers (Free, Pro, Legend)
+
+## Important Links
+
+- Home: https://decksalone.com/
+- Discover DJs: https://decksalone.com/discover
+- Rankings: https://decksalone.com/rankings
+- Mix Hub: https://decksalone.com/mixes
+- Events: https://decksalone.com/events
+- Battles: https://decksalone.com/battles
+- Terms of Service: https://decksalone.com/terms
+- Privacy Policy: https://decksalone.com/privacy
+
+## Contact
+
+- Support: support@decksalone.com

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 import type { FeedEvent } from './types';
 
 interface EventCardProps {
@@ -23,7 +24,17 @@ export default function EventCard({ event, index = 0 }: EventCardProps) {
         <div className="h-full rounded-2xl bg-black-surface hover:bg-[#181818] border border-dark-gray hover:border-gold/40 p-4 transition-all flex flex-col">
           <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-white/10">
             {flyer ? (
-              <img src={flyer} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+              <OptimizedImage
+                src={flyer}
+                alt={event.title}
+                width={600}
+                height={338}
+                objectFit="cover"
+                loading="lazy"
+                fallbackSrc="/og-banner.jpg"
+                containerClassName="w-full h-full"
+                className="group-hover:scale-105 transition duration-500"
+              />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gold/15 to-black">
                 <Calendar className="w-10 h-10 text-gold mb-1" />

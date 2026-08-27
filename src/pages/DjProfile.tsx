@@ -43,7 +43,7 @@ import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
-import DjFanSubscribeModal from "@/components/DjFanSubscribeModal";
+import DjSupportModal from "@/components/DjSupportModal";
 import { BookingCalendar } from "@/components/BookingCalendar";
 import {
   XAxis,
@@ -164,7 +164,6 @@ interface DJ {
   website?: string;
   whatsappNumber?: string;
   subscriptionTier?: 'free' | 'pro' | 'legend';
-  subscriptionPrice?: number;
   monthlyListeners: number;
   highlights: HighlightItem[];
   sets: SetSummary[];
@@ -900,7 +899,7 @@ function MixesTab({ dj }: { dj: DJ }) {
     >
       {/* Streaming platforms bar */}
       <div className="flex flex-wrap gap-2 mb-8">
-        {["All", "YouTube", "Audiomack", "Mixcloud", "SoundCloud"].map(
+        {["All", "YouTube", "Hearthis", "Mixcloud", "SoundCloud"].map(
           (platform, i) => (
             <button
               key={platform}
@@ -1715,7 +1714,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
           >
             <div className="relative aspect-square overflow-hidden">
               <img
-                src={djItem.avatar}
+                src={getMediaUrl(djItem.avatar) || '/default-avatar.jpg'}
                 alt={djItem.stageName}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
               />
@@ -1929,8 +1928,7 @@ export default function DjProfile() {
   const [activeTab, setActiveTab] = useState("overview");
   const { user } = useAuthStore();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
-  const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
-  const [isSubscribedToDj, setIsSubscribedToDj] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
 
   const handleMessageClick = () => {
     if (!user) {
@@ -1954,17 +1952,7 @@ export default function DjProfile() {
     }
   }, [dj, identifier, navigate]);
 
-  useEffect(() => {
-    if (dj?.id && user) {
-      api.get(`/djs/${dj.id}/subscription-status`)
-        .then((res) => {
-          if (res.data?.success && res.data?.data?.isSubscribed) {
-            setIsSubscribedToDj(true);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [dj?.id, user]);
+
 
   const tabs = useMemo(
     () => [
@@ -2058,7 +2046,7 @@ export default function DjProfile() {
                 <div className="absolute inset-0 rounded-full border border-yellow-400/50 animate-ping opacity-20" style={{ animationDuration: '3s' }} />
               )}
               <img
-                src={dj.avatar || '/default-avatar.jpg'}
+                src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                 alt={dj.stageName}
                 onError={imageFallback}
                 className="w-full h-full object-cover"
@@ -2159,19 +2147,14 @@ export default function DjProfile() {
           >
             <DjFollowButton djId={dj.id} djUserId={dj.userId} />
 
-            {/* Direct Fan-to-DJ Subscribe Button */}
-            {user?.id && dj.userId && user.id === dj.userId ? null : isSubscribedToDj ? (
-              <div className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full bg-[#f4e059]/15 border border-[#f4e059]/40 text-[#f4e059] text-xs font-bold uppercase flex items-center justify-center gap-1.5 shadow-sm">
-                <Crown size={15} />
-                <span>✓ VIP Fan Subscribed</span>
-              </div>
-            ) : (
+            {/* Direct Fan-to-DJ Support Button */}
+            {user?.id && dj.userId && user.id === dj.userId ? null : (
               <button
-                onClick={() => setIsSubscribeOpen(true)}
+                onClick={() => setIsSupportOpen(true)}
                 className="flex-1 sm:flex-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-[#f4e059] to-yellow-300 text-black text-xs font-black uppercase hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f4e059]/20"
               >
-                <Crown size={15} />
-                <span>Subscribe (from SLE 50)</span>
+                <Heart size={15} />
+                <span>Support DJ</span>
               </button>
             )}
 
@@ -2322,18 +2305,16 @@ export default function DjProfile() {
       {/* ══════ Booking Modal ══════ */}
       <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} dj={dj} />
 
-      {/* ══════ DJ Fan Subscription Modal ══════ */}
+      {/* ══════ DJ Support Modal ══════ */}
       {dj && (
-        <DjFanSubscribeModal
-          isOpen={isSubscribeOpen}
-          onClose={() => setIsSubscribeOpen(false)}
+        <DjSupportModal
+          isOpen={isSupportOpen}
+          onClose={() => setIsSupportOpen(false)}
           dj={{
             id: dj.id,
             stageName: dj.stageName,
             avatar: dj.avatar,
-            subscriptionPrice: 50,
           }}
-          onSuccess={() => setIsSubscribedToDj(true)}
         />
       )}
     </div>

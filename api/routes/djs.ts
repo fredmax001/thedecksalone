@@ -3,11 +3,12 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { requirePro } = require('../middleware/permissions');
-const { uploadAvatar, uploadDjProfileImages, uploadDocument } = require('../utils/upload');
+const { uploadAvatar, uploadCover, uploadDjProfileImages, uploadDocument } = require('../utils/upload');
 const { processAvatar, processCover } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
 const { conditionalSearchLimiter } = require('../utils/rateLimiter');
+const { createNotification } = require('../utils/notifications');
 const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
 
 const router = express.Router();
@@ -229,6 +230,42 @@ async function updateDjProfile(req, res, id) {
   return res.json({ success: true, data: updated });
 }
 
+// PUT /api/djs/cover - Upload DJ cover banner directly
+router.put('/cover', authMiddleware, uploadCover.single('coverBanner'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const dj = await prisma.djProfile.findUnique({
+      where: { userId },
+      select: { id: true, coverBanner: true },
+    });
+
+    if (!dj) {
+      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No cover banner image provided' });
+    }
+
+    const { buffer, contentType, ext } = await processCover(req.file.buffer);
+    const coverUrl = await uploadBuffer(buffer, 'covers', { contentType, ext });
+
+    if (dj.coverBanner) {
+      await deleteFile(dj.coverBanner).catch(() => {});
+    }
+
+    const updated = await prisma.djProfile.update({
+      where: { id: dj.id },
+      data: { coverBanner: coverUrl },
+    });
+
+    return res.json({ success: true, data: { coverBanner: coverUrl, dj: updated } });
+  } catch (err: any) {
+    console.error('Error uploading cover:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to upload cover' });
+  }
+});
+
 // GET /api/djs - List DJs with filtering
 router.get('/', conditionalSearchLimiter, async (req, res) => {
   try {
@@ -277,6 +314,7 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
         take: limitNum,
         include: {
           user: { select: { username: true } },
+          mixes: { select: { plays: true } },
           streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
           _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
         },
@@ -284,8 +322,11 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
       prisma.djProfile.count({ where }),
     ]);
 
-    const computeTotalStreams = (platforms: any[]) =>
-      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+    const computeTotalStreams = (dj: any) => {
+      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+    };
 
     return res.json({
       success: true,
@@ -295,7 +336,7 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
         totalFollowers: dj._count.followers,
         totalMixes: dj._count.mixes,
         totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+        totalStreams: computeTotalStreams(dj),
       })),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
@@ -316,6 +357,7 @@ router.get('/hall-of-fame', async (req, res) => {
       take: limitNum,
       include: {
         user: { select: { username: true } },
+        mixes: { select: { plays: true } },
         streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
         _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
       },
@@ -329,14 +371,18 @@ router.get('/hall-of-fame', async (req, res) => {
         take: limitNum,
         include: {
           user: { select: { username: true } },
+          mixes: { select: { plays: true } },
           streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
           _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
         },
       });
     }
 
-    const computeTotalStreams = (platforms) =>
-      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+    const computeTotalStreams = (dj: any) => {
+      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+    };
 
     return res.json({
       success: true,
@@ -346,7 +392,7 @@ router.get('/hall-of-fame', async (req, res) => {
         totalFollowers: dj._count.followers,
         totalMixes: dj._count.mixes,
         totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+        totalStreams: computeTotalStreams(dj),
       })),
     });
   } catch (error) {
@@ -541,8 +587,11 @@ router.get('/:identifier', async (req, res) => {
       return res.status(404).json({ success: false, error: 'DJ not found' });
     }
 
-    const computeTotalStreams = (platforms) =>
-      platforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+    const computeTotalStreams = (dj: any) => {
+      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+    };
 
     return res.json({
       success: true,
@@ -553,7 +602,7 @@ router.get('/:identifier', async (req, res) => {
         totalFollowers: dj._count.followers,
         totalMixes: dj._count.mixes,
         totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj.streamingPlatforms),
+        totalStreams: computeTotalStreams(dj),
         monthlyListeners: dj.monthlyListeners,
         sets: [],
         highlights: dj.highlights || [],
@@ -633,6 +682,48 @@ router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
   }
 });
 
+// POST /api/djs/switch-to-dj - Allow a fan/user to upgrade their own account to DJ
+router.post('/switch-to-dj', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'USER') {
+      return res.status(403).json({ success: false, error: 'Only fan accounts can switch to a DJ account' });
+    }
+
+    const existing = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'DJ profile already exists' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const stageName = user.username || user.email.split('@')[0];
+    const fullName = user.name || user.username || user.email.split('@')[0];
+
+    const dj = await prisma.djProfile.create({
+      data: {
+        userId: req.user.id,
+        stageName,
+        fullName,
+        isPublic: true,
+      },
+    });
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { role: 'DJ' },
+      include: { djProfile: true },
+    });
+
+    return res.json({ success: true, data: { user: updatedUser, dj } });
+  } catch (error) {
+    console.error('Switch to DJ error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // PUT /api/djs/:id - Update DJ profile
 router.put('/me', authMiddleware, uploadDjProfileImages, async (req, res) => {
   try {
@@ -688,11 +779,34 @@ router.post('/:id/follow', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'You cannot follow yourself' });
     }
 
+    const existing = await prisma.follow.findUnique({
+      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+    });
+
     await prisma.follow.upsert({
       where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
       create: { userId: req.user.id, djId: req.params.id },
       update: {},
     });
+
+    // Only notify on a new follow, not a duplicate upsert
+    if (!existing && dj.userId !== req.user.id) {
+      const follower = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { name: true, username: true },
+      });
+      const followerName = follower?.name || follower?.username || 'Someone';
+      createNotification({
+        userId: dj.userId,
+        type: 'NEW_FOLLOWER',
+        title: 'New follower',
+        body: `${followerName} started following you`,
+        actionUrl: `/dj/${dj.username || dj.id}`,
+        entityId: dj.id,
+        entityType: 'DJ',
+        metadata: { followerId: req.user.id },
+      }).catch(() => {});
+    }
 
     return res.json({ success: true, data: { following: true } });
   } catch (error) {
@@ -1085,16 +1199,21 @@ router.get('/:id/reups', async (req, res) => {
   }
 });
 
-// POST /api/djs/:id/subscribe - Fan subscribes directly to a Pro / Legend DJ
-router.post('/:id/subscribe', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+// POST /api/djs/:id/support - Fan sends a one-time support payment of any amount to a DJ
+router.post('/:id/support', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
   try {
     const djId = req.params.id;
     const userId = req.user.id;
-    const { amount, paymentReference } = req.body || {};
+    const { amount, paymentReference, message } = req.body || {};
+    const parsedAmount = parseFloat(amount);
+
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid support amount' });
+    }
 
     const dj = await prisma.djProfile.findUnique({
       where: { id: djId },
-      select: { id: true, stageName: true, subscriptionTier: true, subscriptionPrice: true, userId: true },
+      select: { id: true, stageName: true, userId: true },
     });
 
     if (!dj) {
@@ -1102,148 +1221,38 @@ router.post('/:id/subscribe', authMiddleware, uploadDocument.single('proof'), as
     }
 
     if (dj.userId === userId) {
-      return res.status(400).json({ success: false, error: 'You cannot subscribe to yourself' });
+      return res.status(400).json({ success: false, error: 'You cannot support yourself' });
     }
 
     let proofUrl = req.body.paymentProofUrl || '';
     if (req.file) {
       const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
-      proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
+      proofUrl = await uploadBuffer(req.file.buffer, 'support-proofs', {
         ext,
         contentType: req.file.mimetype,
       });
     }
 
-    const tier = req.body.tier === 'vip' ? 'vip' : 'standard';
-    const subPrice = tier === 'vip' ? 100.0 : 50.0;
-    const durationDays = tier === 'vip' ? 60 : 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
-
-    // Do not auto-activate: payment proof must be reviewed by the DJ or an admin.
-    // Existing active subscriptions are extended, but new/reactivated ones start as PENDING.
-    const existing = await prisma.djFanSubscription.findUnique({
-      where: { djId_userId: { djId, userId } },
-    });
-
-    let subscription;
-    if (existing) {
-      subscription = await prisma.djFanSubscription.update({
-        where: { djId_userId: { djId, userId } },
-        data: {
-          status: existing.status === 'ACTIVE' ? 'ACTIVE' : 'PENDING',
-          amount: subPrice,
-          paymentReference: paymentReference || existing.paymentReference,
-          paymentProofUrl: proofUrl || existing.paymentProofUrl,
-          expiresAt: existing.status === 'ACTIVE' ? expiresAt : existing.expiresAt,
-        },
-      });
-    } else {
-      subscription = await prisma.djFanSubscription.create({
-        data: {
-          djId,
-          userId,
-          status: 'PENDING',
-          amount: subPrice,
-          paymentReference: paymentReference || null,
-          paymentProofUrl: proofUrl || null,
-          expiresAt,
-        },
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: existing?.status === 'ACTIVE'
-        ? `Your subscription to ${dj.stageName} has been extended.`
-        : `Subscription request sent to ${dj.stageName}. Your access will unlock once payment is verified.`,
-      data: subscription,
-    });
-  } catch (error) {
-    console.error('[DJ Fan Subscribe API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// GET /api/djs/:id/subscription-status - Check if current user is subscribed to DJ
-router.get('/:id/subscription-status', softAuthMiddleware, async (req, res) => {
-  try {
-    const djId = req.params.id;
-    if (!req.user) {
-      return res.json({ success: true, data: { isSubscribed: false } });
-    }
-
-    const dj = await prisma.djProfile.findUnique({
-      where: { id: djId },
-      select: { id: true, userId: true, subscriptionPrice: true, subscriptionTier: true },
-    });
-
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-
-    // If current user is the DJ owner, they always have access
-    if (dj.userId === req.user.id) {
-      return res.json({
-        success: true,
-        data: { isSubscribed: true, isOwner: true, subscriptionPrice: dj.subscriptionPrice || 100 },
-      });
-    }
-
-    const sub = await prisma.djFanSubscription.findUnique({
-      where: { djId_userId: { djId, userId: req.user.id } },
-    });
-
-    const isSubscribed = !!sub && sub.status === 'ACTIVE' && new Date(sub.expiresAt) > new Date();
-
-    return res.json({
-      success: true,
+    const support = await prisma.djSupport.create({
       data: {
-        isSubscribed,
-        subscriptionPrice: dj.subscriptionPrice || 100,
-        subscriptionTier: dj.subscriptionTier,
-        subscription: isSubscribed ? sub : null,
+        djId,
+        userId,
+        amount: parsedAmount,
+        currency: 'SLE',
+        paymentReference: paymentReference || null,
+        paymentProofUrl: proofUrl || null,
+        status: 'PENDING',
+        message: message || null,
       },
     });
-  } catch (error) {
-    console.error('[DJ Fan Subscription Status] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// GET /api/djs/me/fan-subscribers - DJ view of their fan subscriber community
-router.get('/me/fan-subscribers', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({
-      where: { userId: req.user.id },
-      select: { id: true, subscriptionTier: true, subscriptionPrice: true, promotionPoints: true },
-    });
-
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-
-    const subscribers = await prisma.djFanSubscription.findMany({
-      where: { djId: dj.id, status: 'ACTIVE', expiresAt: { gt: new Date() } },
-      include: {
-        user: { select: { id: true, name: true, username: true, avatar: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const totalRevenue = subscribers.reduce((acc: number, s: any) => acc + (s.amount || 100), 0);
 
     return res.json({
       success: true,
-      data: {
-        subscribers,
-        totalActive: subscribers.length,
-        monthlyRevenue: totalRevenue,
-        subscriptionPrice: dj.subscriptionPrice || 100,
-        promotionPoints: dj.promotionPoints || 0,
-      },
+      message: `Support request sent to ${dj.stageName}. Thank you!`,
+      data: support,
     });
   } catch (error) {
-    console.error('[DJ Subscribers API] Error:', error);
+    console.error('[DJ Support API] Error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -1346,148 +1355,6 @@ router.put('/me/availability', authMiddleware, async (req, res) => {
     return res.json({ success: true, data: updated });
   } catch (error) {
     console.error('[DJ Availability Update API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// GET /api/djs/me/fan-subscriptions - Full DJ dashboard view with pending, active, and expired subscribers
-router.get('/me/fan-subscriptions', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({
-      where: { userId: req.user.id },
-      select: { id: true, stageName: true, subscriptionPrice: true, subscriptionTier: true },
-    });
-
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-
-    const subscriptions = await prisma.djFanSubscription.findMany({
-      where: { djId: dj.id },
-      include: {
-        user: { select: { id: true, name: true, username: true, avatar: true, email: true, phone: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const pending = subscriptions.filter((s) => s.status === 'PENDING');
-    const active = subscriptions.filter((s) => s.status === 'ACTIVE' && new Date(s.expiresAt) > new Date());
-    const expiredOrDenied = subscriptions.filter((s) => s.status !== 'PENDING' && (s.status === 'DENIED' || new Date(s.expiresAt) <= new Date()));
-
-    const totalActiveRevenue = active.reduce((acc, s) => acc + (s.amount || 100), 0);
-
-    return res.json({
-      success: true,
-      data: {
-        subscriptions,
-        pending,
-        active,
-        expiredOrDenied,
-        stats: {
-          pendingCount: pending.length,
-          activeCount: active.length,
-          totalRevenue: totalActiveRevenue,
-          subscriptionPrice: dj.subscriptionPrice || 100,
-        },
-      },
-    });
-  } catch (error) {
-    console.error('[DJ Fan Subscriptions API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// PUT /api/djs/me/fan-subscriptions/:id/approve - DJ approves a pending fan subscription
-router.put('/me/fan-subscriptions/:id/approve', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-
-    const sub = await prisma.djFanSubscription.findUnique({
-      where: { id: req.params.id },
-      include: { user: true },
-    });
-
-    if (!sub || sub.djId !== dj.id) {
-      return res.status(404).json({ success: false, error: 'Fan subscription request not found' });
-    }
-
-    const durationDays = sub.amount >= 100 ? 60 : 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
-
-    const updated = await prisma.djFanSubscription.update({
-      where: { id: sub.id },
-      data: {
-        status: 'ACTIVE',
-        expiresAt,
-      },
-      include: {
-        user: { select: { id: true, name: true, username: true, avatar: true } },
-      },
-    });
-
-    const { createNotification } = require('../utils/notifications');
-    await createNotification({
-      userId: sub.userId,
-      type: 'SYSTEM',
-      title: 'Fan Club Access Approved! 🎉',
-      body: `${dj.stageName} has approved your Fan Club VIP access. Enjoy exclusive mixes and VIP perks for the next ${durationDays} days!`,
-      actionUrl: `/dj/${dj.id}`,
-    });
-
-    return res.json({
-      success: true,
-      data: updated,
-      message: `Approved ${sub.user?.name || sub.user?.username || 'Fan'}'s subscription successfully!`,
-    });
-  } catch (error) {
-    console.error('[DJ Fan Subscription Approve API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// PUT /api/djs/me/fan-subscriptions/:id/deny - DJ denies a pending fan subscription
-router.put('/me/fan-subscriptions/:id/deny', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-
-    const sub = await prisma.djFanSubscription.findUnique({
-      where: { id: req.params.id },
-      include: { user: true },
-    });
-
-    if (!sub || sub.djId !== dj.id) {
-      return res.status(404).json({ success: false, error: 'Fan subscription request not found' });
-    }
-
-    const updated = await prisma.djFanSubscription.update({
-      where: { id: sub.id },
-      data: {
-        status: 'DENIED',
-      },
-    });
-
-    const { createNotification } = require('../utils/notifications');
-    await createNotification({
-      userId: sub.userId,
-      type: 'SYSTEM',
-      title: 'Fan Club Request Update',
-      body: `Your Fan Club subscription request to ${dj.stageName} was not approved. Please verify your payment details or contact support.`,
-      actionUrl: `/dj/${dj.id}`,
-    });
-
-    return res.json({
-      success: true,
-      data: updated,
-      message: 'Subscription request denied',
-    });
-  } catch (error) {
-    console.error('[DJ Fan Subscription Deny API] Error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

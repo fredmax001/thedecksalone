@@ -16,6 +16,10 @@ const { getActiveCampaigns, applyCampaignBoost } = require('./campaignBoost');
  *
  * The algorithm favors well-documented, actively-engaged content from
  * reputable DJs while giving fresh uploads a temporary boost.
+ *
+ * Phase 2 update: discovery scores are pre-computed and stored on the Mix
+ * row. The feed sorts by the stored score and only falls back to live
+ * scoring for text searches or when the stored score is missing/stale.
  */
 
 const DISCOVERY_WEIGHTS = {
@@ -25,13 +29,14 @@ const DISCOVERY_WEIGHTS = {
   djReputation: 0.15,
 };
 
+const DISCOVERY_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 /* ─────────── Metadata quality scoring ─────────── */
 
-function scoreMetadata(mix) {
+function scoreMetadata(mix: any) {
   let score = 0;
 
   // Title quality (max 20 pts)
-  // Penalize very short or generic titles; reward descriptive titles
   const titleLength = (mix.title || '').length;
   if (titleLength >= 10 && titleLength <= 80) score += 20;
   else if (titleLength >= 5) score += 10;
@@ -62,20 +67,15 @@ function scoreMetadata(mix) {
 
 /* ─────────── Audio quality scoring ─────────── */
 
-function scoreAudio(mix) {
+function scoreAudio(mix: any) {
   let score = 0;
 
-  // Duration present and reasonable (max 40 pts)
-  // Mixes should be between 5 min and 3 hours (180 min)
   const duration = mix.duration || 0;
   if (duration >= 300 && duration <= 10800) score += 40;
   else if (duration > 0) score += 20;
 
-  // Audio URL present (max 30 pts)
   if (mix.audioUrl) score += 30;
 
-  // File type quality proxy (max 20 pts)
-  // We can't check bitrate from DB, but we can infer from URL extension
   const audioUrl = mix.audioUrl || '';
   const ext = audioUrl.split('.').pop()?.toLowerCase();
   const qualityFormats = ['wav', 'flac', 'aiff', 'm4a'];
@@ -84,7 +84,6 @@ function scoreAudio(mix) {
   else if (standardFormats.includes(ext)) score += 15;
   else if (audioUrl) score += 10;
 
-  // Has cover art (max 10 pts) — correlated with production quality
   if (mix.coverImage) score += 10;
 
   return score; // max 100
@@ -92,28 +91,23 @@ function scoreAudio(mix) {
 
 /* ─────────── Engagement scoring ─────────── */
 
-function scoreEngagement(mix) {
+function scoreEngagement(mix: any) {
   let score = 0;
 
-  // Plays (max 35 pts) — 100k plays = max
   const plays = mix.plays || 0;
   score += Math.min(35, (plays / 100000) * 35);
 
-  // Likes (max 25 pts) — 5k likes = max
   const likes = mix.likes || 0;
   score += Math.min(25, (likes / 5000) * 25);
 
-  // Downloads (max 15 pts) — 1k downloads = max
   const downloads = mix.downloads || 0;
   score += Math.min(15, (downloads / 1000) * 15);
 
-  // Like-to-play ratio (max 15 pts) — 10% ratio = max
   const likePlayRatio = plays > 0 ? likes / plays : 0;
   score += Math.min(15, likePlayRatio * 150);
 
-  // Recency boost (max 10 pts) — decays over 30 days
   const ageDays = (Date.now() - new Date(mix.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-  const recencyBoost = Math.max(0, 10 - ageDays * (10 / 30)); // linear decay to 0 over 30 days
+  const recencyBoost = Math.max(0, 10 - ageDays * (10 / 30));
   score += recencyBoost;
 
   return score; // max 100
@@ -121,15 +115,13 @@ function scoreEngagement(mix) {
 
 /* ─────────── DJ reputation scoring ─────────── */
 
-function scoreDjReputation(djRankingScore) {
-  // Normalize DJ ranking score (0-100 scale) to 0-100
-  // If a DJ has a high rankingScore, their mixes get a boost
+function scoreDjReputation(djRankingScore: number) {
   return Math.min(100, djRankingScore || 0);
 }
 
 /* ─────────── Composite mix scoring ─────────── */
 
-function computeMixScore(mix, djRankingScore = 0) {
+function computeMixScore(mix: any, djRankingScore = 0) {
   const metadataScore = Math.min(100, (scoreMetadata(mix) / 120) * 100);
   const audioScore = scoreAudio(mix);
   const engagementScore = scoreEngagement(mix);
@@ -151,9 +143,47 @@ function computeMixScore(mix, djRankingScore = 0) {
   };
 }
 
+function isStoredScoreStale(mix: any) {
+  if (mix.discoveryScore == null) return true;
+  if (!mix.discoveryScoredAt) return true;
+  return Date.now() - new Date(mix.discoveryScoredAt).getTime() > DISCOVERY_STALE_MS;
+}
+
+function attachScore(mix: any) {
+  const djRankingScore = mix.dj?.rankingScore || 0;
+  const live = computeMixScore(mix, djRankingScore);
+  const useStored = !isStoredScoreStale(mix);
+
+  return {
+    ...mix,
+    metadataScore: live.metadataScore,
+    audioScore: live.audioScore,
+    engagementScore: live.engagementScore,
+    reputationScore: live.reputationScore,
+    // Prefer the pre-computed composite score when fresh; otherwise use live.
+    discoveryScore: useStored ? mix.discoveryScore : live.discoveryScore,
+    _scoreSource: useStored ? 'stored' : 'live',
+  };
+}
+
+function djSelect() {
+  return {
+    id: true,
+    stageName: true,
+    avatar: true,
+    rankingScore: true,
+    city: true,
+  };
+}
+
 /**
  * Discover mixes — return mixes ranked by the discovery algorithm.
  * Supports filtering by genre, category, and search query.
+ *
+ * Phase 2: uses the stored discoveryScore for DB-level sorting and pagination
+ * when no free-text search is requested. Text searches still compute scores
+ * on a limited result set because the stored score cannot account for the
+ * search relevance signal.
  */
 async function discoverMixes(options: any = {}) {
   const {
@@ -201,49 +231,49 @@ async function discoverMixes(options: any = {}) {
     where.AND = andConditions;
   }
 
-  // Fetch mixes with DJ ranking scores
-  const mixes = await prisma.mix.findMany({
-    where,
-    include: {
-      dj: {
-        select: {
-          id: true,
-          stageName: true,
-          avatar: true,
-          rankingScore: true,
-          city: true,
-        },
-      },
-    },
-  });
-
-  let scored = mixes.map((mix) => ({
-    ...mix,
-    ...computeMixScore(mix, mix.dj?.rankingScore || 0),
-  }));
-
-  // Apply active campaign boosts for promoted mixes
   const campaigns = await getActiveCampaigns('mix');
-  const promotedIds = campaigns.map((c) => c.targetId).filter(Boolean);
-  if (promotedIds.length > 0) {
-    const promotedMixes = await prisma.mix.findMany({
-      where: { id: { in: promotedIds }, isPublic: true },
-      include: {
-        dj: {
-          select: {
-            id: true,
-            stageName: true,
-            avatar: true,
-            rankingScore: true,
-            city: true,
-          },
-        },
-      },
+  const promotedIds = campaigns.map((c: any) => c.targetId).filter(Boolean);
+
+  let scored: any[];
+  let total: number;
+
+  if (search) {
+    // Free-text search: compute live scores on a limited pool (GIN indexes help here).
+    const searchPoolLimit = Math.max(200, skip + limitNum);
+    const mixes = await prisma.mix.findMany({
+      where,
+      include: { dj: { select: djSelect() } },
+      take: searchPoolLimit,
     });
-    const existingIds = new Set(scored.map((m) => m.id));
-    for (const mix of promotedMixes) {
-      if (!existingIds.has(mix.id)) {
-        scored.push({ ...mix, ...computeMixScore(mix, mix.dj?.rankingScore || 0) });
+
+    scored = mixes.map((mix: any) => attachScore(mix));
+    total = scored.length;
+  } else {
+    // No text search: sort and paginate by stored discoveryScore.
+    const [mixes, count] = await Promise.all([
+      prisma.mix.findMany({
+        where,
+        orderBy: { discoveryScore: { sort: 'desc', nulls: 'last' } },
+        skip,
+        take: limitNum,
+        include: { dj: { select: djSelect() } },
+      }),
+      prisma.mix.count({ where }),
+    ]);
+
+    scored = mixes.map((mix: any) => attachScore(mix));
+    total = count;
+
+    // Merge promoted mixes that are not already in the page so campaign boosts can surface them.
+    if (promotedIds.length > 0) {
+      const fetchedIds = new Set(scored.map((m) => m.id));
+      const missingPromotedIds = promotedIds.filter((id: string) => !fetchedIds.has(id));
+      if (missingPromotedIds.length > 0) {
+        const promotedMixes = await prisma.mix.findMany({
+          where: { id: { in: missingPromotedIds }, isPublic: true },
+          include: { dj: { select: djSelect() } },
+        });
+        scored.push(...promotedMixes.map((mix: any) => attachScore(mix)));
       }
     }
   }
@@ -254,7 +284,6 @@ async function discoverMixes(options: any = {}) {
       scored.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       break;
     case 'trending':
-      // Trending = high engagement in recent days (we use engagement score + recency)
       scored.sort((a, b) => b.engagementScore - a.engagementScore);
       break;
     case 'plays':
@@ -270,18 +299,19 @@ async function discoverMixes(options: any = {}) {
   }
 
   // Re-order so promoted mixes surface at the top by reach score
-  const boosted = applyCampaignBoost(scored, campaigns, (m) => m.id);
+  const boosted = applyCampaignBoost(scored, campaigns, (m: any) => m.id);
 
-  const total = boosted.length;
-  const paginated = boosted.slice(skip, skip + limitNum);
+  // When using text search we paginate in memory; otherwise the DB already paginated.
+  const paginated = search ? boosted.slice(skip, skip + limitNum) : boosted.slice(0, limitNum);
+  const resultTotal = search ? boosted.length : total;
 
   return {
     data: paginated,
     meta: {
-      total,
+      total: resultTotal,
       page: pageNum,
       limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages: Math.ceil(resultTotal / limitNum),
     },
   };
 }
@@ -292,6 +322,8 @@ async function discoverMixes(options: any = {}) {
 async function getTrendingMixes(limit = 10) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+  // Phase 2: prefer stored discoveryScore for the pool sort; fallback DJs without
+  // stored scores still get live scoring after fetch.
   const mixes = await prisma.mix.findMany({
     where: {
       isPublic: true,
@@ -307,16 +339,13 @@ async function getTrendingMixes(limit = 10) {
         },
       },
     },
-    orderBy: [{ plays: 'desc' }, { likes: 'desc' }],
-    take: limit * 3, // fetch more to score and filter
+    orderBy: [{ discoveryScore: { sort: 'desc', nulls: 'last' } }, { plays: 'desc' }, { likes: 'desc' }],
+    take: limit * 3,
   });
 
   const scored = mixes
-    .map((mix) => ({
-      ...mix,
-      ...computeMixScore(mix, mix.dj?.rankingScore || 0),
-    }))
-    .sort((a, b) => b.discoveryScore - a.discoveryScore)
+    .map((mix: any) => attachScore(mix))
+    .sort((a: any, b: any) => b.discoveryScore - a.discoveryScore)
     .slice(0, limit);
 
   return scored;
@@ -325,8 +354,7 @@ async function getTrendingMixes(limit = 10) {
 /**
  * Personalized recommendations for a user based on their follows and likes.
  */
-async function getPersonalizedRecommendations(userId, limit = 10) {
-  // Get user's followed DJs and liked mixes (genres)
+async function getPersonalizedRecommendations(userId: string, limit = 10) {
   const [follows, likedMixes] = await Promise.all([
     prisma.follow.findMany({
       where: { userId },
@@ -340,11 +368,10 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
     }),
   ]);
 
-  const followedDjIds = follows.map((f) => f.djId);
+  const followedDjIds = follows.map((f: any) => f.djId);
 
-  // Extract preferred genres/categories from liked mixes
-  const genreCounts = {};
-  const categoryCounts = {};
+  const genreCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = {};
   for (const like of likedMixes) {
     if (like.mix.genre) genreCounts[like.mix.genre] = (genreCounts[like.mix.genre] || 0) + 1;
     if (like.mix.category) categoryCounts[like.mix.category] = (categoryCounts[like.mix.category] || 0) + 1;
@@ -360,7 +387,6 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
     .slice(0, 3)
     .map(([c]: any) => c);
 
-  // Build where clause for recommendation query
   const orConditions = [];
   if (followedDjIds.length > 0) {
     orConditions.push({ djId: { in: followedDjIds } });
@@ -372,7 +398,6 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
     orConditions.push({ category: { in: preferredCategories } });
   }
 
-  // If we have no preferences, return trending
   if (orConditions.length === 0) {
     return getTrendingMixes(limit);
   }
@@ -381,8 +406,7 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
     where: {
       isPublic: true,
       OR: orConditions,
-      // Exclude already liked mixes
-      id: { notIn: likedMixes.map((l) => l.mixId) },
+      id: { notIn: likedMixes.map((l: any) => l.mixId) },
     },
     include: {
       dj: {
@@ -395,12 +419,12 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
         },
       },
     },
+    orderBy: { discoveryScore: { sort: 'desc', nulls: 'last' } },
     take: limit * 4,
   });
 
-  // Boost followed DJs and preferred genres
-  const scored = mixes.map((mix) => {
-    const base = computeMixScore(mix, mix.dj?.rankingScore || 0);
+  const scored = mixes.map((mix: any) => {
+    const base = attachScore(mix);
     let boost = 0;
 
     if (followedDjIds.includes(mix.djId)) boost += 15;
@@ -408,13 +432,12 @@ async function getPersonalizedRecommendations(userId, limit = 10) {
     if (preferredCategories.includes(mix.category)) boost += 5;
 
     return {
-      ...mix,
       ...base,
       discoveryScore: Math.min(100, base.discoveryScore + boost),
     };
   });
 
-  scored.sort((a, b) => b.discoveryScore - a.discoveryScore);
+  scored.sort((a: any, b: any) => b.discoveryScore - a.discoveryScore);
   return scored.slice(0, limit);
 }
 
@@ -434,16 +457,14 @@ async function getHallOfFameCandidates(limit = 10) {
         },
       },
     },
-    take: 200, // pool to score
+    orderBy: { discoveryScore: { sort: 'desc', nulls: 'last' } },
+    take: 200,
   });
 
   const scored = mixes
-    .map((mix) => ({
-      ...mix,
-      ...computeMixScore(mix, mix.dj?.rankingScore || 0),
-    }))
-    .filter((m) => m.discoveryScore >= 70) // only high-quality content
-    .sort((a, b) => b.discoveryScore - a.discoveryScore)
+    .map((mix: any) => attachScore(mix))
+    .filter((m: any) => m.discoveryScore >= 70)
+    .sort((a: any, b: any) => b.discoveryScore - a.discoveryScore)
     .slice(0, limit);
 
   return scored;

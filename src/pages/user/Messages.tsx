@@ -426,7 +426,7 @@ export default function Messages() {
                         <div className={`flex gap-2 max-w-[70%] ${isMe ? 'flex-row-reverse' : ''}`}>
                           {showAvatar && !isMe && (
                             <Avatar className="w-6 h-6 mt-1 border border-gold/20">
-                              <AvatarImage src={partner.avatar || undefined} />
+                              <AvatarImage src={getMediaUrl(partner.avatar) || undefined} />
                               <AvatarFallback className="bg-gold/10 text-gold text-[8px]">
                                 <Music className="w-2 h-2" />
                               </AvatarFallback>
@@ -539,7 +539,7 @@ export default function Messages() {
                       className="w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors hover:bg-black-surface"
                     >
                       <Avatar className="w-10 h-10 border border-gold/20">
-                        <AvatarImage src={dj.avatar || undefined} />
+                        <AvatarImage src={getMediaUrl(dj.avatar) || undefined} />
                         <AvatarFallback className="bg-gold/10 text-gold text-xs">
                           <Music className="w-4 h-4" />
                         </AvatarFallback>

@@ -1201,7 +1201,7 @@ export default function Mixes() {
                     <Input
                       value={uploadForm.audioUrl}
                       onChange={(e) => setUploadForm({ ...uploadForm, audioUrl: e.target.value })}
-                      placeholder="SoundCloud, Audiomack, Hearthis.at, or direct .mp3 link"
+                      placeholder="Hearthis.at or direct .mp3 link"
                       className="bg-black-elevated border-dark-gray text-text-primary"
                       required={audioSource === 'url'}
                     />

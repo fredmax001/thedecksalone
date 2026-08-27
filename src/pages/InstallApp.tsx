@@ -160,13 +160,11 @@ export default function InstallApp() {
                 <Download className="w-4 h-4 mr-2" /> Install PWA App
               </Button>
             )}
-            <a
-              href="/deck-salone-debug.apk"
-              download="DeckSalone.apk"
-              className="w-full sm:w-auto px-6 py-3 bg-black-surface hover:bg-gold/15 text-gold border border-gold/40 font-bold text-sm uppercase tracking-wide rounded-full flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 text-center"
-            >
-              <Smartphone className="w-4 h-4 text-gold" /> Download Android APK (24MB)
-            </a>
+            {!deferredPrompt && (
+              <p className="text-xs text-text-muted text-center md:text-right">
+                Use the guides below to add Deck Salone to your home screen.
+              </p>
+            )}
           </div>
         </div>
       </div>

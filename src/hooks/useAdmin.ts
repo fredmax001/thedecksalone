@@ -1411,3 +1411,90 @@ export function useSendProfileNudge() {
   });
 }
 
+
+// ─── Hall of Fame Legends (non-account pioneers) ───────────────────
+
+export interface HallOfFameLegendInput {
+  id?: string;
+  name: string;
+  era?: string;
+  status: 'living' | 'deceased' | 'unknown';
+  story: string;
+  contribution: string;
+  quote?: string;
+  city?: string;
+  imageUrl?: string;
+  imageFile?: File;
+  sortOrder?: number;
+}
+
+function buildLegendFormData(input: HallOfFameLegendInput) {
+  const formData = new FormData();
+  formData.append('name', input.name);
+  if (input.era !== undefined) formData.append('era', input.era);
+  formData.append('status', input.status);
+  formData.append('story', input.story);
+  formData.append('contribution', input.contribution);
+  if (input.quote !== undefined) formData.append('quote', input.quote);
+  if (input.city !== undefined) formData.append('city', input.city);
+  if (input.imageUrl !== undefined) formData.append('imageUrl', input.imageUrl);
+  if (input.imageFile) formData.append('imageFile', input.imageFile);
+  if (input.sortOrder !== undefined) formData.append('sortOrder', String(input.sortOrder));
+  return formData;
+}
+
+export function useHallOfFameLegendsAdmin() {
+  return useQuery({
+    queryKey: ['hallOfFameLegendsAdmin'],
+    queryFn: async () => {
+      const res = await api.get('/hall-of-fame/legends');
+      return res.data.data || [];
+    },
+  });
+}
+
+export function useCreateHallOfFameLegend() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: HallOfFameLegendInput) => {
+      const res = await api.post('/hall-of-fame/legends', buildLegendFormData(input), {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegends'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegendsAdmin'] });
+    },
+  });
+}
+
+export function useUpdateHallOfFameLegend() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: HallOfFameLegendInput & { id: string }) => {
+      const res = await api.put(`/hall-of-fame/legends/${input.id}`, buildLegendFormData(input), {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegends'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegendsAdmin'] });
+    },
+  });
+}
+
+export function useDeleteHallOfFameLegend() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/hall-of-fame/legends/${id}`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegends'] });
+      queryClient.invalidateQueries({ queryKey: ['hallOfFameLegendsAdmin'] });
+    },
+  });
+}

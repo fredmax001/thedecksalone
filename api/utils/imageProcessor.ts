@@ -49,4 +49,14 @@ async function processEventImage(buffer: Buffer) {
   return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
 }
 
-module.exports = { validateImage, processAvatar, processCover, processEventImage };
+async function processHallOfFameImage(buffer: Buffer) {
+  await validateImage(buffer);
+  const processed = await sharp(buffer)
+    .rotate()
+    .resize(800, 1000, { fit: 'cover', position: 'centre' })
+    .webp({ quality: 85 })
+    .toBuffer();
+  return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
+}
+
+module.exports = { validateImage, processAvatar, processCover, processEventImage, processHallOfFameImage };

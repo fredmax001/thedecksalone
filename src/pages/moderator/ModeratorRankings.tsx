@@ -7,8 +7,10 @@ import {
   Edit3,
   Search,
   Users,
+  RefreshCw,
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
+import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,8 +27,10 @@ import {
 
 export function ModeratorRankings() {
   const [loading, setLoading] = useState(true);
+  const [recalculating, setRecalculating] = useState(false);
   const [djs, setDjs] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Adjustment Modal
   const [adjustDj, setAdjustDj] = useState<any | null>(null);
@@ -36,12 +40,12 @@ export function ModeratorRankings() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchRankings();
+    fetchRankings(true);
   }, []);
 
-  const fetchRankings = async () => {
+  const fetchRankings = async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await api.get('/moderator/rankings');
       if (res.data.success) {
         setDjs(res.data.data);
@@ -49,7 +53,23 @@ export function ModeratorRankings() {
     } catch (err) {
       console.error('Failed to fetch rankings', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    try {
+      setRecalculating(true);
+      const res = await api.post('/moderator/rankings/recalculate');
+      if (res.data.success) {
+        setDjs(res.data.data);
+        toast.success(res.data.message || 'Rankings recalculated and synced! 🏆');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to recalculate rankings');
+      console.error('Failed to recalculate rankings', err);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -71,8 +91,10 @@ export function ModeratorRankings() {
         reason: reason.trim(),
       });
       setAdjustDj(null);
-      fetchRankings();
-    } catch (err) {
+      fetchRankings(false);
+      toast.success(`Rank adjusted for ${adjustDj.stageName}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to adjust ranking');
       console.error('Failed to adjust ranking', err);
     } finally {
       setSaving(false);
@@ -80,17 +102,47 @@ export function ModeratorRankings() {
   };
 
   const handleToggleFeature = async (dj: any, type: 'MODERATOR_FEATURE' | 'RISING_DJ') => {
-    try {
-      const isModeratorFeatured = type === 'MODERATOR_FEATURE' ? !dj.isModeratorFeatured : dj.isModeratorFeatured;
-      const isRisingDj = type === 'RISING_DJ' ? !dj.isRisingDj : dj.isRisingDj;
+    const isRising = type === 'RISING_DJ';
+    const nextState = isRising ? !dj.isRisingDj : !dj.isModeratorFeatured;
+    const key = isRising ? 'isRisingDj' : 'isModeratorFeatured';
+    const actionKey = `${dj.id}-${type}`;
 
-      await api.post(`/moderator/djs/${dj.id}/feature`, {
-        isModeratorFeatured,
-        isRisingDj,
-      });
-      fetchRankings();
-    } catch (err) {
+    // Optimistic update
+    setDjs((prev) =>
+      prev.map((item) => (item.id === dj.id ? { ...item, [key]: nextState } : item))
+    );
+    setTogglingId(actionKey);
+
+    try {
+      const payload = isRising ? { isRisingDj: nextState } : { isModeratorFeatured: nextState };
+      const res = await api.post(`/moderator/djs/${dj.id}/feature`, payload);
+      if (res.data.success && res.data.data) {
+        setDjs((prev) =>
+          prev.map((item) => (item.id === dj.id ? { ...item, ...res.data.data } : item))
+        );
+        if (isRising) {
+          if (nextState) {
+            toast.success(`🚀 Marked ${dj.stageName} as Rising DJ`);
+          } else {
+            toast.success(`Removed Rising DJ badge from ${dj.stageName}`);
+          }
+        } else {
+          if (nextState) {
+            toast.success(`⭐ Marked ${dj.stageName} as Moderator Choice`);
+          } else {
+            toast.success(`Removed Moderator Choice from ${dj.stageName}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      // Revert on error
+      setDjs((prev) =>
+        prev.map((item) => (item.id === dj.id ? { ...item, [key]: !nextState } : item))
+      );
+      toast.error(err.response?.data?.error || 'Failed to update DJ feature state');
       console.error('Failed to update DJ feature state', err);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -114,14 +166,27 @@ export function ModeratorRankings() {
           </p>
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input
-            placeholder="Search DJ stage name or city..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-black-surface border-dark-gray text-xs text-white"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={recalculating || loading}
+            onClick={handleRecalculate}
+            className="h-9 text-xs border-gold/40 text-gold hover:bg-gold/10 font-semibold"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
+            {recalculating ? 'Calculating...' : 'Recalculate Platform Ranks'}
+          </Button>
+
+          <div className="relative w-full sm:w-60">
+            <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Search DJ stage name or city..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-black-surface border-dark-gray text-xs text-white h-9"
+            />
+          </div>
         </div>
       </div>
 
@@ -148,7 +213,7 @@ export function ModeratorRankings() {
                 </span>
 
                 <img
-                  src={getMediaUrl(dj.avatar) || '/placeholder-dj.jpg'}
+                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                   alt={dj.stageName}
                   className="w-11 h-11 rounded-full object-cover border border-gold/30 shrink-0"
                 />
@@ -185,25 +250,39 @@ export function ModeratorRankings() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={togglingId === `${dj.id}-MODERATOR_FEATURE`}
                   onClick={() => handleToggleFeature(dj, 'MODERATOR_FEATURE')}
-                  className={`h-8 text-xs border-dark-gray ${
-                    dj.isModeratorFeatured ? 'bg-gold/20 text-gold border-gold/40' : 'text-text-secondary hover:text-white'
+                  className={`h-8 text-xs border-dark-gray transition-colors ${
+                    dj.isModeratorFeatured
+                      ? 'bg-gold/20 text-gold border-gold/40 hover:bg-gold/30'
+                      : 'text-text-secondary hover:text-white'
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 mr-1" />
-                  Feature DJ
+                  {togglingId === `${dj.id}-MODERATOR_FEATURE` ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 mr-1" />
+                  )}
+                  {dj.isModeratorFeatured ? 'Featured ⭐' : 'Feature DJ'}
                 </Button>
 
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={togglingId === `${dj.id}-RISING_DJ`}
                   onClick={() => handleToggleFeature(dj, 'RISING_DJ')}
-                  className={`h-8 text-xs border-dark-gray ${
-                    dj.isRisingDj ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'text-text-secondary hover:text-white'
+                  className={`h-8 text-xs border-dark-gray transition-colors ${
+                    dj.isRisingDj
+                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30'
+                      : 'text-text-secondary hover:text-white'
                   }`}
                 >
-                  <Award className="w-3.5 h-3.5 mr-1" />
-                  Rising DJ
+                  {togglingId === `${dj.id}-RISING_DJ` ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Award className="w-3.5 h-3.5 mr-1" />
+                  )}
+                  {dj.isRisingDj ? 'Rising DJ 🚀' : 'Set Rising'}
                 </Button>
 
                 <Button

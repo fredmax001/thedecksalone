@@ -24,12 +24,11 @@ function isEmbedSource(source?: string, audioUrl?: string): boolean {
   const sourceLower = (source || '').toLowerCase();
   if (sourceLower === 'hearthis') return false;
 
-  const knownEmbed = ['audiomack', 'youtube', 'soundcloud', 'mixcloud'];
+  const knownEmbed = ['youtube', 'soundcloud', 'mixcloud'];
   if (knownEmbed.includes(sourceLower)) return true;
   if (!audioUrl) return false;
   const url = audioUrl.toLowerCase();
   return (
-    url.includes('audiomack.com') ||
     url.includes('soundcloud.com') ||
     url.includes('youtube.com') ||
     url.includes('youtu.be') ||
@@ -40,19 +39,6 @@ function isEmbedSource(source?: string, audioUrl?: string): boolean {
 function getNormalizedEmbedUrl(audioUrl?: string): string {
   if (!audioUrl) return '';
   const url = audioUrl.trim();
-
-  // Audiomack URLs
-  if (url.includes('audiomack.com')) {
-    if (url.includes('audiomack.com/embed/')) return url;
-    const match3 = url.match(/audiomack\.com\/([^/]+)\/(song|album|playlist)\/([^/?#]+)/i);
-    if (match3) {
-      return `https://audiomack.com/embed/${match3[2]}/${encodeURIComponent(match3[1])}/${encodeURIComponent(match3[3])}`;
-    }
-    const match2 = url.match(/audiomack\.com\/([^/]+)\/([^/?#]+)/i);
-    if (match2 && !['embed', 'song', 'album', 'playlist', 'search', 'feed'].includes(match2[1].toLowerCase())) {
-      return `https://audiomack.com/embed/song/${encodeURIComponent(match2[1])}/${encodeURIComponent(match2[2])}`;
-    }
-  }
 
   // SoundCloud URLs
   if (url.includes('soundcloud.com') && !url.includes('w.soundcloud.com/player')) {

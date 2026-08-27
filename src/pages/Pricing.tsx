@@ -13,6 +13,7 @@ import {
   X,
   PhoneCall,
   Radio,
+  Heart,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -386,7 +387,7 @@ export default function Pricing() {
         </div>
       </section>
 
-      {/* ─── DJ FAN SUBSCRIPTIONS HIGHLIGHT SECTION ─── */}
+      {/* ─── SUPPORT DJS SECTION ─── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-20">
         <div className="rounded-3xl bg-gradient-to-r from-[#181611] via-[#121210] to-[#15130f] border border-[#f4e059]/30 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-full bg-[#f4e059]/5 blur-[80px] pointer-events-none" />
@@ -394,14 +395,14 @@ export default function Pricing() {
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
             <div className="max-w-2xl space-y-3">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f4e059]/10 border border-[#f4e059]/30 text-[#f4e059] text-[11px] font-bold uppercase tracking-wider">
-                <Crown className="w-3.5 h-3.5" />
-                Fan-to-DJ Direct Subscriptions
+                <Heart className="w-3.5 h-3.5" />
+                Support Sierra Leonean DJs
               </div>
               <h2 className="font-display text-2xl sm:text-3xl font-black uppercase text-white tracking-tight">
                 Want to Support a Specific DJ Directly?
               </h2>
               <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
-                Fans can subscribe directly to their favourite individual DJs on their DJ Profile for just <strong>SLE 100/month</strong>. You unlock that DJ's private exclusive mix sets, early unreleased mixtapes, direct messaging, and fan badges while directly supporting Sierra Leonean talent.
+                Send a one-time support payment of any amount directly to your favourite DJ on their profile. 100% of your support goes to the artist — no subscriptions, no fixed tiers.
               </p>
             </div>
 
@@ -410,13 +411,13 @@ export default function Pricing() {
                 to="/discover"
                 className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-[#f4e059] hover:brightness-110 text-black font-bold text-xs uppercase tracking-wider transition-all text-center shadow-lg shadow-[#f4e059]/20"
               >
-                Browse & Subscribe to DJs
+                Browse DJs to Support
               </Link>
               <Link
                 to="/mixes"
                 className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-white font-bold text-xs uppercase tracking-wider transition-all text-center"
               >
-                Explore Exclusive Mixes
+                Explore Mixes
               </Link>
             </div>
           </div>

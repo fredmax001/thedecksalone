@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
+import { openGoogleAuth } from '@/lib/googleAuth';
 import {
   Mail,
   Lock,
@@ -47,8 +48,14 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const { login } = useAuthStore();
+  const { isAuthenticated, user, login } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      handleRoleRedirect(user.role);
+    }
+  }, [isAuthenticated, user]);
 
   const {
     register,
@@ -134,7 +141,14 @@ export default function Login() {
     }
   };
 
-  const googleLoginUrl = '/api/v1/auth/google';
+  const handleGoogleLogin = async () => {
+    try {
+      await openGoogleAuth();
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError('Could not open Google sign-in. Please try again.');
+    }
+  };
 
   return (
     <AuthLayout
@@ -306,8 +320,9 @@ export default function Login() {
 
           {/* Google Login */}
           <motion.div variants={fadeUpItem}>
-            <a
-              href={googleLoginUrl}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
               className="w-full h-[48px] bg-white hover:bg-gray-100 text-black text-sm font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-md active:scale-95 border border-white/20"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -329,7 +344,7 @@ export default function Login() {
                 />
               </svg>
               <span>Continue with Google</span>
-            </a>
+            </button>
           </motion.div>
 
           {/* Footer */}

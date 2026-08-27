@@ -1,6 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
+const { withCache } = require('../utils/redis');
 const {
   calculateFollowerScore,
   calculateRatingScore,
@@ -29,8 +30,11 @@ function computeRealDjMetrics(dj) {
   const totalMixes = dj.mixes?.length ?? 0;
   const totalEvents = dj._count?.events ?? 0;
   const totalBookings = dj.bookingsAsDj?.length ?? 0;
-  const totalStreams =
+  const mixPlays =
+    dj.mixes?.reduce((sum, m) => sum + (m.plays || 0), 0) ?? 0;
+  const externalStreams =
     dj.streamingPlatforms?.reduce((sum, p) => sum + (p.streams || 0), 0) ?? 0;
+  const totalStreams = Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
   const averageRating =
     dj.reviews?.length > 0
       ? dj.reviews.reduce((sum, r) => sum + r.rating, 0) / dj.reviews.length
@@ -115,69 +119,79 @@ router.get('/', async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const where: any = { isPublic: true };
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (genre) where.genres = { has: genre };
+    const cacheKey = `rankings:list:${city || 'all'}:${genre || 'all'}:${pageNum}:${limitNum}`;
 
-    // Fetch all matching DJs with real related data for accurate scoring
-    const djs = await prisma.djProfile.findMany({
-      where,
-      include: {
-        user: { select: { username: true } },
-        mixes: { select: { plays: true, likes: true, createdAt: true } },
-        streamingPlatforms: { select: { followers: true, streams: true } },
-        bookingsAsDj: { select: { status: true, budget: true } },
-        reviews: { select: { rating: true, verified: true } },
-        _count: {
-          select: {
-            followers: true,
-            events: true,
+    const result = await withCache(cacheKey, 900, async () => {
+      const where: any = { isPublic: true };
+      if (city) where.city = { contains: city, mode: 'insensitive' };
+      if (genre) where.genres = { has: genre };
+
+      // Phase 2: paginate by the pre-computed rankingScore instead of loading all DJs.
+      const [djs, total] = await Promise.all([
+        prisma.djProfile.findMany({
+          where,
+          orderBy: { rankingScore: 'desc' },
+          skip,
+          take: limitNum,
+          include: {
+            user: { select: { username: true } },
+            mixes: { select: { plays: true, likes: true, createdAt: true } },
+            streamingPlatforms: { select: { followers: true, streams: true } },
+            bookingsAsDj: { select: { status: true, budget: true } },
+            reviews: { select: { rating: true, verified: true } },
+            _count: {
+              select: {
+                followers: true,
+                events: true,
+              },
+            },
           },
+        }),
+        prisma.djProfile.count({ where }),
+      ]);
+
+      // Re-compute live sub-scores for the small returned page.
+      // Stored rankingScore drives pagination; live metrics provide sub-score details.
+      const computedDjs = djs.map(computeRealDjMetrics);
+      computedDjs.sort((a, b) => b.rankingScore - a.rankingScore);
+
+      // Fetch last week's history to compute trend (scoreChange) for page DJs only.
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const pageDjIds = computedDjs.map((d) => d.id);
+      const lastWeekHistory: any = await prisma.rankingHistory.findMany({
+        where: {
+          djId: { in: pageDjIds },
+          week: { gte: oneWeekAgo },
         },
-      },
-    });
+        orderBy: { week: 'desc' },
+        distinct: ['djId'],
+        select: { djId: true, score: true },
+      });
+      const historyMap = new Map<string, any>(lastWeekHistory.map((h: any) => [h.djId, h]));
 
-    // Compute real scores and sort by composite ranking score
-    const computedDjs = djs.map(computeRealDjMetrics);
-    computedDjs.sort((a, b) => b.rankingScore - a.rankingScore);
+      const ranked = computedDjs.map((dj, index) => {
+        const last: any = historyMap.get(dj.id);
+        const scoreChange = last ? dj.rankingScore - last.score : 0;
+        return {
+          ...dj,
+          rankingPosition: skip + index + 1,
+          trend: Math.round(scoreChange * 10) / 10,
+        };
+      });
 
-    // Fetch last week's history to compute trend (scoreChange) for each DJ
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const allDjIds = computedDjs.map((d) => d.id);
-    const lastWeekHistory: any = await prisma.rankingHistory.findMany({
-      where: {
-        djId: { in: allDjIds },
-        week: { gte: oneWeekAgo },
-      },
-      orderBy: { week: 'desc' },
-      distinct: ['djId'],
-      select: { djId: true, score: true },
-    });
-    const historyMap = new Map<string, any>(lastWeekHistory.map((h: any) => [h.djId, h]));
-
-    // Paginate in memory after sorting by real score and attach trend
-    const total = computedDjs.length;
-    const paginated = computedDjs.slice(skip, skip + limitNum);
-    const ranked = paginated.map((dj, index) => {
-      const last: any = historyMap.get(dj.id);
-      const scoreChange = last ? dj.rankingScore - last.score : 0;
       return {
-        ...dj,
-        rankingPosition: skip + index + 1,
-        trend: Math.round(scoreChange * 10) / 10,
+        success: true,
+        data: ranked,
+        meta: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        },
       };
     });
 
-    return res.json({
-      success: true,
-      data: ranked,
-      meta: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    });
+    return res.json(result);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -186,76 +200,83 @@ router.get('/', async (req, res) => {
 // GET /api/rankings/overview - Ranking stats (all real data)
 router.get('/overview', async (req, res) => {
   try {
-    const djs = await prisma.djProfile.findMany({
-      where: { isPublic: true },
-      include: {
-        user: { select: { username: true } },
-        mixes: { select: { plays: true, likes: true, createdAt: true } },
-        streamingPlatforms: { select: { followers: true, streams: true } },
-        bookingsAsDj: { select: { status: true, budget: true } },
-        reviews: { select: { rating: true, verified: true } },
-        _count: {
-          select: {
-            followers: true,
-            events: true,
+    const result = await withCache('rankings:overview', 900, async () => {
+      // Phase 2: only fetch a top pool by stored rankingScore instead of all DJs.
+      const djs = await prisma.djProfile.findMany({
+        where: { isPublic: true },
+        orderBy: { rankingScore: 'desc' },
+        take: 200,
+        include: {
+          user: { select: { username: true } },
+          mixes: { select: { plays: true, likes: true, createdAt: true } },
+          streamingPlatforms: { select: { followers: true, streams: true } },
+          bookingsAsDj: { select: { status: true, budget: true } },
+          reviews: { select: { rating: true, verified: true } },
+          _count: {
+            select: {
+              followers: true,
+              events: true,
+            },
           },
         },
-      },
+      });
+
+      const computedDjs = djs.map(computeRealDjMetrics);
+
+      // Top DJs by real composite ranking score
+      const topDjs = [...computedDjs]
+        .sort((a, b) => b.rankingScore - a.rankingScore)
+        .slice(0, 3);
+
+      // Fastest rising: real current score vs last week's history
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const djIds = computedDjs.map((d) => d.id);
+      const lastWeekHistory: any = await prisma.rankingHistory.findMany({
+        where: {
+          djId: { in: djIds },
+          week: { gte: oneWeekAgo },
+        },
+        orderBy: { week: 'desc' },
+        distinct: ['djId'],
+        select: { djId: true, score: true, position: true },
+      });
+      const historyMap = new Map(
+        lastWeekHistory.map((h: any) => [h.djId, h])
+      );
+      const fastestRising = [...computedDjs]
+        .map((dj) => {
+          const last: any = historyMap.get(dj.id);
+          const scoreChange = last ? dj.rankingScore - last.score : 0;
+          const positionChange = last
+            ? last.position - dj.rankingPosition
+            : 0;
+          return { ...dj, scoreChange, positionChange };
+        })
+        .sort((a, b) => b.scoreChange - a.scoreChange)
+        .slice(0, 3);
+
+      // Most booked by real booking count
+      const mostBooked = [...computedDjs]
+        .sort((a, b) => b.totalBookings - a.totalBookings)
+        .slice(0, 3);
+
+      // Most streamed by real stream count
+      const mostStreamed = [...computedDjs]
+        .sort((a, b) => b.totalStreams - a.totalStreams)
+        .slice(0, 3);
+
+      return {
+        success: true,
+        data: {
+          topDjs,
+          fastestRising,
+          mostBooked,
+          mostStreamed,
+        },
+      };
     });
 
-    const computedDjs = djs.map(computeRealDjMetrics);
-
-    // Top DJs by real composite ranking score
-    const topDjs = [...computedDjs]
-      .sort((a, b) => b.rankingScore - a.rankingScore)
-      .slice(0, 3);
-
-    // Fastest rising: real current score vs last week's history
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const djIds = computedDjs.map((d) => d.id);
-    const lastWeekHistory: any = await prisma.rankingHistory.findMany({
-      where: {
-        djId: { in: djIds },
-        week: { gte: oneWeekAgo },
-      },
-      orderBy: { week: 'desc' },
-      distinct: ['djId'],
-      select: { djId: true, score: true, position: true },
-    });
-    const historyMap = new Map(
-      lastWeekHistory.map((h) => [h.djId, h])
-    );
-    const fastestRising = [...computedDjs]
-      .map((dj) => {
-        const last: any = historyMap.get(dj.id);
-        const scoreChange = last ? dj.rankingScore - last.score : 0;
-        const positionChange = last
-          ? last.position - dj.rankingPosition
-          : 0;
-        return { ...dj, scoreChange, positionChange };
-      })
-      .sort((a, b) => b.scoreChange - a.scoreChange)
-      .slice(0, 3);
-
-    // Most booked by real booking count
-    const mostBooked = [...computedDjs]
-      .sort((a, b) => b.totalBookings - a.totalBookings)
-      .slice(0, 3);
-
-    // Most streamed by real stream count
-    const mostStreamed = [...computedDjs]
-      .sort((a, b) => b.totalStreams - a.totalStreams)
-      .slice(0, 3);
-
-    return res.json({
-      success: true,
-      data: {
-        topDjs,
-        fastestRising,
-        mostBooked,
-        mostStreamed,
-      },
-    });
+    return res.json(result);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

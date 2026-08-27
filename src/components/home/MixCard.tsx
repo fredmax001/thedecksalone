@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Play } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 import type { HomeMix } from './types';
 
 interface MixCardProps {
@@ -47,13 +48,16 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
     >
       <div className="relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-black-surface border border-dark-gray group-hover:border-gold/50 transition-all duration-300 shadow-card">
         <Link to={`/mix/${mix.id}`} className="block w-full h-full">
-          <img
+          <OptimizedImage
             src={mix.coverImage ? getMediaUrl(mix.coverImage) : '/mix-placeholder.jpg'}
             alt={mix.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/mix-placeholder.jpg';
-            }}
+            width={400}
+            height={400}
+            objectFit="cover"
+            loading="lazy"
+            fallbackSrc="/mix-placeholder.jpg"
+            containerClassName="w-full h-full"
+            className="group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
         </Link>

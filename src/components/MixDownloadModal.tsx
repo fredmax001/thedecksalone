@@ -29,9 +29,9 @@ interface MixDownloadModalProps {
       id?: string;
       stageName?: string;
       avatar?: string;
-      subscriptionPrice?: number;
     } | null;
   } | null;
+  onOpenDjSupport?: (dj: any) => void;
   onOpenDjSubscribe?: (dj: any) => void;
   onActionComplete?: () => void;
 }
@@ -41,6 +41,7 @@ export function MixDownloadModal({
   onClose,
   mode,
   mix,
+  onOpenDjSupport,
   onOpenDjSubscribe,
   onActionComplete,
 }: MixDownloadModalProps) {
@@ -270,17 +271,17 @@ export function MixDownloadModal({
                   </Button>
                 </div>
 
-                {/* Option 2: DJ Fan Pass (if mix has DJ info) */}
-                {mix?.dj && onOpenDjSubscribe && (
+                {/* Option 2: Support the DJ */}
+                {mix?.dj && (onOpenDjSupport || onOpenDjSubscribe) && (
                   <div className="rounded-xl border border-dark-gray bg-black-surface p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5 text-white font-semibold text-sm">
                           <Headphones className="w-4 h-4 text-emerald-400" />
-                          <span>{djName} Fan Pass</span>
+                          <span>Support {djName}</span>
                         </div>
                         <p className="text-xs text-text-muted mt-0.5">
-                          Subscribe directly to {djName} to unlock all their mix downloads.
+                          Send a one-time support payment of any amount to {djName}.
                         </p>
                       </div>
                     </div>
@@ -291,11 +292,11 @@ export function MixDownloadModal({
                       className="w-full mt-3 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs h-9"
                       onClick={() => {
                         onClose();
-                        onOpenDjSubscribe(mix.dj);
+                        (onOpenDjSupport || onOpenDjSubscribe)?.(mix.dj);
                       }}
                     >
                       <Download className="w-3.5 h-3.5 mr-1.5" />
-                      Subscribe to {djName}
+                      Support {djName}
                     </Button>
                   </div>
                 )}

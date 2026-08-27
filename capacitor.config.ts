@@ -1,9 +1,14 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.decksalone.app',
+  appId: 'decksalone.com',
   appName: 'Deck Salone',
   webDir: 'dist',
+  server: {
+    androidScheme: 'https',
+    cleartext: true,
+    allowNavigation: ['decksalone.com', '*.decksalone.com'],
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 3000,

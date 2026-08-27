@@ -21,7 +21,6 @@ export interface MixTrack {
   djUsername?: string;
   isExclusive?: boolean;
   promotedUntil?: string | null;
-  subscriptionPrice?: number;
   createdAt?: string;
 }
 

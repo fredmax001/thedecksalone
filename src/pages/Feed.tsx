@@ -449,7 +449,7 @@ export default function Feed() {
                   icon={<TrendingUp className="w-4 h-4 text-gold" />}
                 />
                 <div className="space-y-2.5">
-                  {trending.slice(0, 5).map((mix, i) => (
+                  {trending.slice(0, 6).map((mix, i) => (
                     <MixFeedRow
                       key={mix.id}
                       mix={mix}

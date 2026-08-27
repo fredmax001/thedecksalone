@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import WaveformAnimation from './WaveformAnimation';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -18,8 +19,20 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="relative hidden lg:flex lg:w-[45%] flex-col justify-between p-8 overflow-hidden"
-        style={{ backgroundImage: "url('/login-bg.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}
       >
+        <OptimizedImage
+          src="/login-bg.jpg"
+          alt=""
+          responsive
+          width={1920}
+          height={1080}
+          objectFit="cover"
+          loading="eager"
+          fetchpriority="high"
+          containerClassName="absolute inset-0 -z-10"
+          className="absolute inset-0"
+          placeholder="none"
+        />
         {/* Dark overlay for readability */}
         <div className="absolute inset-0 bg-black/85 z-0" />
 
@@ -31,6 +44,8 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
           <img
             src="/logo.png?v=2"
             alt="Deck Salone"
+            width={160}
+            height={48}
             className="h-20 w-auto object-contain"
           />
         </Link>
@@ -84,6 +99,8 @@ export default function AuthLayout({ children, quote, statLine }: AuthLayoutProp
             <img
               src="/logo.png"
               alt="Deck Salone"
+              width={160}
+              height={48}
               className="h-10 sm:h-12 w-auto object-contain mx-auto"
             />
           </Link>

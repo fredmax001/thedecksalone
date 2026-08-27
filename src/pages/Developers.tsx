@@ -449,7 +449,7 @@ export default function Developers() {
                 </div>
                 <h3 className="font-display text-lg font-bold text-white uppercase tracking-tight">Mixes & Streams API</h3>
                 <p className="mt-2 text-xs sm:text-sm text-text-secondary leading-relaxed flex-1">
-                  Access catalog mixes, genres, BPM, direct streaming URLs, embedded SoundCloud / Audiomack players, waveforms, and track durations.
+                  Access catalog mixes, genres, BPM, direct streaming URLs, embedded SoundCloud / Hearthis.at players, waveforms, and track durations.
                 </p>
                 <div className="mt-4 pt-3 border-t border-white/5 text-xs font-mono text-gold">GET /api/mixes</div>
               </div>

@@ -495,64 +495,187 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 });
 
 // Google OAuth Routes
-// GET /api/auth/google or /api/v1/auth/google - Initiate Google OAuth
-router.get('/google', (req, res, next) => {
-  const state = crypto.randomBytes(32).toString('hex');
-  // Store state in cookie with root path so it is accessible on both /api/auth and /api/v1/auth
-  res.cookie('oauth_state', state, {
+// Build the OAuth callback URL from the incoming request host so it always matches
+// the domain the user hit (important when the API is served from app.decksalone.com
+// but BACKEND_URL might be configured differently).
+const getOAuthCallbackUrl = (req: any) => {
+  if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('localhost')) {
+    return `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/v1/auth/google/callback`;
+  }
+  const host = req.get('host') || 'decksalone.com';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+  const protocol = isLocal ? (req.protocol === 'https' ? 'https' : 'http') : 'https';
+  return `${protocol}://${host}/api/v1/auth/google/callback`;
+};
+
+// Set the OAuth state cookie on a shared parent domain so it is available on both
+// the initiate domain (e.g. app.decksalone.com) and the callback domain (e.g. decksalone.com).
+const getOAuthCookieOptions = (req: any): any => {
+  const backendUrl = process.env.BACKEND_URL || '';
+  const requestHost = req.get('host') || 'decksalone.com';
+  const host = backendUrl ? backendUrl.replace(/^https?:\/\//, '').split(':')[0] : requestHost;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const options: any = {
     path: '/',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     sameSite: 'lax',
-    maxAge: 10 * 60 * 1000, // 10 minutes
-  });
+    maxAge: 10 * 60 * 1000,
+  };
+  // Share cookie across subdomains in production (e.g. .decksalone.com)
+  if (isProduction && host && host.includes('.')) {
+    const parts = host.split('.');
+    if (parts.length >= 2) {
+      options.domain = `.${parts.slice(-2).join('.')}`;
+    }
+  }
+  return options;
+};
+
+// Google OAuth Routes
+// GET /api/auth/google or /api/v1/auth/google - Initiate Google OAuth (web)
+router.get('/google', (req, res, next) => {
+  const state = crypto.randomBytes(32).toString('hex');
+  // Store state in cookie with shared domain so it is accessible on both /api/auth and /api/v1/auth
+  res.cookie('oauth_state', state, getOAuthCookieOptions(req));
+  // Encode platform in state so the callback knows where to redirect
   passport.authenticate('google', {
     scope: ['profile', 'email'],
-    state,
+    state: `web:${state}`,
     session: false,
+    callbackURL: getOAuthCallbackUrl(req),
   })(req, res, next);
 });
 
+// GET /api/auth/google/mobile or /api/v1/auth/google/mobile - Initiate Google OAuth (native app)
+router.get('/google/mobile', async (req, res, next) => {
+  try {
+    const state = crypto.randomBytes(32).toString('hex');
+    const deviceId = String(req.query.device_id || '');
+
+    // Native apps (Chrome Custom Tab / SFSafariViewController) don't always send the oauth_state
+    // cookie back on the callback, so we also store the state in Redis keyed by a device_id passed
+    // by the app. The callback can then verify the state without relying on cookies.
+    if (deviceId) {
+      await setCache(`oauth_state:${deviceId}`, state, 10 * 60);
+    }
+
+    res.cookie('oauth_state', state, getOAuthCookieOptions(req));
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      state: `android:${deviceId}:${state}`,
+      session: false,
+      callbackURL: getOAuthCallbackUrl(req),
+    })(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/auth/google/callback or /api/v1/auth/google/callback - Google OAuth callback
-router.get('/google/callback', (req, res, next) => {
+router.get('/google/callback', async (req, res, next) => {
   const FRONTEND_URL = getFrontendUrl();
+
+  // Extract platform from state (format: platform:device_id:nonce for mobile, platform:nonce for web).
+  // Defaults to web for backward compatibility.
+  const rawState = String(req.query.state || '');
+  const stateParts = rawState.includes(':') ? rawState.split(':') : ['web', rawState];
+  const platform = stateParts[0];
+  const isMobile = platform === 'android' || platform === 'ios';
+  const deviceId = isMobile && stateParts.length >= 2 ? stateParts[1] : '';
+  const state = isMobile && stateParts.length >= 3
+    ? stateParts.slice(2).join(':')
+    : (stateParts.length >= 2 ? stateParts[1] : rawState);
+
+  const mobileErrorUrl = (error: string) => `decksalone://auth/callback?error=${encodeURIComponent(error)}`;
+  const mobileSuccessUrl = (token: string) => `decksalone://auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`;
 
   // Check if Google returned an error directly (e.g. user cancelled login)
   if (req.query.error) {
     console.warn('[Google OAuth] Google returned error:', req.query.error);
+    if (isMobile) {
+      return res.redirect(mobileErrorUrl(String(req.query.error)));
+    }
     return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(String(req.query.error))}`);
   }
 
-  // Validate OAuth state parameter to prevent CSRF / session fixation
+  // Validate OAuth state parameter to prevent CSRF / session fixation.
+  // For mobile we prefer a Redis-stored state keyed by device_id because Chrome Custom Tabs
+  // don't reliably send the oauth_state cookie back. We fall back to the cookie for safety.
+  let stateValid = false;
   const cookieState = req.cookies?.oauth_state;
-  const queryState = req.query.state;
-  if (!cookieState || !queryState || cookieState !== queryState) {
-    console.warn('[Google OAuth] Invalid or missing state parameter');
-    res.clearCookie('oauth_state', { path: '/' });
+
+  if (isMobile && deviceId) {
+    try {
+      const cachedState = await getCache(`oauth_state:${deviceId}`);
+      if (cachedState && cachedState === state) {
+        stateValid = true;
+        clearCache(`oauth_state:${deviceId}`);
+      }
+    } catch (e) {
+      console.warn('[Google OAuth] Failed to read mobile state from cache:', e);
+    }
+  }
+
+  if (!stateValid && cookieState && state && cookieState === state) {
+    stateValid = true;
+  }
+
+  if (!stateValid) {
+    console.warn('[Google OAuth] Invalid or missing state parameter', {
+      platform,
+      isMobile,
+      hasDeviceId: !!deviceId,
+      hasCookieState: !!cookieState,
+      hasQueryState: !!state,
+    });
+    res.clearCookie('oauth_state', getOAuthCookieOptions(req));
+    if (deviceId) {
+      clearCache(`oauth_state:${deviceId}`);
+    }
+    if (isMobile) {
+      return res.redirect(mobileErrorUrl('invalid_state'));
+    }
     return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
   }
 
   // Clear the state cookie
-  res.clearCookie('oauth_state', { path: '/' });
+  res.clearCookie('oauth_state', getOAuthCookieOptions(req));
 
   passport.authenticate('google', { session: false }, async (err: any, user: any, info: any) => {
     try {
       if (err) {
         console.error('[Google OAuth] Authentication error:', err);
+        if (isMobile) {
+          return res.redirect(mobileErrorUrl(err.message || 'google_auth_failed'));
+        }
         return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(err.message || 'google_auth_failed')}`);
       }
 
       if (!user) {
         const message = info?.message || 'google_auth_failed';
         console.warn('[Google OAuth] No user returned:', message);
+        if (isMobile) {
+          return res.redirect(mobileErrorUrl(message));
+        }
         return res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(message)}`);
       }
 
+      console.log('[Google OAuth] User authenticated:', { id: user.id, email: user.email, role: user.role, isMobile });
+
       const token = signToken({ id: user.id, email: user.email, role: user.role });
+      if (isMobile) {
+        const mobileUrl = mobileSuccessUrl(token);
+        console.log('[Google OAuth] Mobile redirect URL:', mobileUrl);
+        return res.redirect(mobileUrl);
+      }
       const redirectUrl = `${FRONTEND_URL}/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`;
       return res.redirect(redirectUrl);
     } catch (callbackErr: any) {
       console.error('[Google OAuth] Callback processing error:', callbackErr);
+      if (isMobile) {
+        return res.redirect(mobileErrorUrl('server_error'));
+      }
       return res.redirect(`${FRONTEND_URL}/login?error=server_error`);
     }
   })(req, res, next);
@@ -612,7 +735,6 @@ router.get('/me', authMiddleware, async (req, res) => {
             monthlyListeners: true,
             canReceivePayments: true,
             canViewAnalytics: true,
-            subscriptionPrice: true,
             whatsappNumber: true,
             user: { select: { username: true } },
           },

@@ -16,6 +16,7 @@ const {
   getHallOfFameCandidates,
 } = require('../utils/mixDiscovery');
 const { getActiveCampaigns, applyCampaignBoost } = require('../utils/campaignBoost');
+const { withCache } = require('../utils/redis');
 
 const router = express.Router();
 
@@ -79,8 +80,11 @@ router.get('/mixes', conditionalSearchLimiter, async (req, res) => {
 router.get('/mixes/trending', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const mixes = await getTrendingMixes(limitNum);
-    return res.json({ success: true, data: mixes });
+    const result = await withCache(`discover:mixes:trending:${limitNum}`, 300, async () => {
+      const mixes = await getTrendingMixes(limitNum);
+      return { success: true, data: mixes };
+    });
+    return res.json(result);
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -103,8 +107,11 @@ router.get('/mixes/for-you', authMiddleware, async (req, res) => {
 router.get('/mixes/hall-of-fame', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const mixes = await getHallOfFameCandidates(limitNum);
-    return res.json({ success: true, data: mixes });
+    const result = await withCache(`discover:mixes:hall-of-fame:${limitNum}`, 300, async () => {
+      const mixes = await getHallOfFameCandidates(limitNum);
+      return { success: true, data: mixes };
+    });
+    return res.json(result);
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -126,6 +133,9 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
 
+    const cacheKey = `discover:djs:${city || 'all'}:${community || 'all'}:${genre || 'all'}:${search || 'all'}:${pageNum}:${limitNum}:${sortBy || 'default'}:${minFee || '0'}:${maxFee || 'inf'}`;
+
+    const result = await withCache(cacheKey, 300, async () => {
     const where: any = { isPublic: true };
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (community) where.community = { contains: community, mode: 'insensitive' };
@@ -147,7 +157,7 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
     else if (sortBy === 'newest') orderBy.createdAt = 'desc';
     else if (sortBy === 'mixes') orderBy.mixes = { _count: 'desc' };
     else if (sortBy === 'rating') orderBy.averageRating = 'desc';
-    else orderBy.createdAt = 'desc'; // Never sort by stale stored rankingScore
+    else orderBy.rankingScore = 'desc'; // Phase 2: trust pre-computed weekly ranking score
 
     // Fetch active profile promotion campaigns and apply the same filters to promoted DJs
     const [campaigns, promotedDjs] = await Promise.all([
@@ -156,6 +166,7 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
         where: { ...where, campaigns: { some: { targetType: 'profile', status: 'active' } } },
         include: {
           user: { select: { username: true } },
+          mixes: { select: { plays: true } },
           streamingPlatforms: { select: { streams: true } },
           _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
         },
@@ -170,6 +181,7 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
         take: limitNum,
         include: {
           user: { select: { username: true } },
+          mixes: { select: { plays: true } },
           streamingPlatforms: { select: { streams: true } },
           _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
         },
@@ -178,11 +190,13 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
     ]);
 
     const enrich = (dj: any, indexOffset = 0) => {
-      const realTotalFollowers = dj._count.followers;
-      const realTotalMixes = dj._count.mixes;
-      const realTotalEvents = dj._count.events;
-      const realTotalBookings = dj._count.bookingsAsDj;
-      const realTotalStreams = dj.streamingPlatforms.reduce((sum, p) => sum + (p.streams || 0), 0);
+      const realTotalFollowers = dj._count?.followers || 0;
+      const realTotalMixes = dj._count?.mixes || (dj.mixes?.length || 0);
+      const realTotalEvents = dj._count?.events || 0;
+      const realTotalBookings = dj._count?.bookingsAsDj || 0;
+      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+      const realTotalStreams = Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
 
       // Compute a real ranking score from actual data (never trust stored fake values)
       const followerScore = Math.min(20, realTotalFollowers / 50);
@@ -219,11 +233,14 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
 
     const boosted = applyCampaignBoost(Array.from(mergedMap.values()), campaigns, (dj) => dj.id);
 
-    return res.json({
+    return {
       success: true,
       data: boosted.slice(0, limitNum),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+    };
     });
+
+    return res.json(result);
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -234,8 +251,11 @@ router.get('/djs', conditionalSearchLimiter, async (req, res) => {
 router.get('/djs/rising', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const djs = await getRisingDjs(limitNum);
-    return res.json({ success: true, data: djs });
+    const result = await withCache(`discover:djs:rising:${limitNum}`, 300, async () => {
+      const djs = await getRisingDjs(limitNum);
+      return { success: true, data: djs };
+    });
+    return res.json(result);
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -246,8 +266,11 @@ router.get('/djs/rising', async (req, res) => {
 router.get('/djs/battle-leaders', async (req, res) => {
   try {
     const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const djs = await getBattleLeaders(limitNum);
-    return res.json({ success: true, data: djs });
+    const result = await withCache(`discover:djs:battle-leaders:${limitNum}`, 300, async () => {
+      const djs = await getBattleLeaders(limitNum);
+      return { success: true, data: djs };
+    });
+    return res.json(result);
   } catch (error) {
     console.error('Internal server error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -323,7 +346,7 @@ router.get('/users', conditionalSearchLimiter, async (req, res) => {
 router.post('/recalculate', authMiddleware, requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
   try {
     const startedAt = Date.now();
-    const result = await recalculateAllRankingsV2();
+    const result = await recalculateAllRankingsV2({ sendNotifications: true });
     const durationMs = Date.now() - startedAt;
 
     return res.json({

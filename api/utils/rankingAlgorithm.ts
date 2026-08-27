@@ -190,7 +190,7 @@ async function computeDjScoreV2(djId) {
  * Recalculate enhanced rankings for all DJs in cursor-based batches.
  * Returns the full sorted leaderboard.
  */
-async function recalculateAllRankingsV2() {
+async function recalculateAllRankingsV2(options: { sendNotifications?: boolean } = {}) {
   const BATCH_SIZE = 100;
   const allScored = [];
 
@@ -258,40 +258,45 @@ async function recalculateAllRankingsV2() {
   // Sort by composite score descending
   allScored.sort((a, b) => b.compositeScore - a.compositeScore);
 
-  // Write scores in batches (transaction per batch) & sync badges
+  // Write scores in batches & sync badges
   const now = new Date();
   const top3Badges = ['#1 DJ of the Week', '#2 DJ of the Week', '#3 DJ of the Week'];
 
   for (let i = 0; i < allScored.length; i += BATCH_SIZE) {
     const batch = allScored.slice(i, i + BATCH_SIZE);
 
-    for (let j = 0; j < batch.length; j++) {
-      const dj = batch[j];
-      const position = i + j + 1;
+    // Fetch existing badges for the batch in one query
+    const existingDjs = await prisma.djProfile.findMany({
+      where: { id: { in: batch.map((dj) => dj.id) } },
+      select: { id: true, badges: true },
+    });
+    const badgeMap = new Map<string, string[]>(
+      existingDjs.map((d: any) => [d.id, d.badges || []])
+    );
 
-      // Fetch existing DJ badges
-      const existingDj = await prisma.djProfile.findUnique({
-        where: { id: dj.id },
-        select: { badges: true },
-      });
+    // Update each DJ concurrently within the batch
+    await Promise.all(
+      batch.map(async (dj, j) => {
+        const position = i + j + 1;
+        const currentBadges = (badgeMap.get(dj.id) || []).filter((b: string) => !top3Badges.includes(b));
+        if (position === 1) currentBadges.push('#1 DJ of the Week');
+        else if (position === 2) currentBadges.push('#2 DJ of the Week');
+        else if (position === 3) currentBadges.push('#3 DJ of the Week');
 
-      let currentBadges = (existingDj?.badges || []).filter((b: string) => !top3Badges.includes(b));
-      if (position === 1) currentBadges.push('#1 DJ of the Week');
-      else if (position === 2) currentBadges.push('#2 DJ of the Week');
-      else if (position === 3) currentBadges.push('#3 DJ of the Week');
-
-      await prisma.djProfile.update({
-        where: { id: dj.id },
-        data: {
-          rankingScore: dj.compositeScore,
-          digitalScore: dj.followerScore + dj.mixScore,
-          industryScore: dj.bookingScore + dj.battleScore,
-          communityScore: dj.ratingScore,
-          rankingPosition: position,
-          badges: currentBadges,
-        },
-      });
-    }
+        await prisma.djProfile.update({
+          where: { id: dj.id },
+          data: {
+            rankingScore: dj.compositeScore,
+            digitalScore: dj.followerScore + dj.mixScore,
+            industryScore: dj.bookingScore + dj.battleScore,
+            communityScore: dj.ratingScore,
+            rankingPosition: position,
+            rankingScoredAt: now,
+            badges: currentBadges,
+          },
+        });
+      })
+    );
 
     await prisma.rankingHistory.createMany({
       data: batch.map((dj, idx) => ({
@@ -307,11 +312,13 @@ async function recalculateAllRankingsV2() {
     });
   }
 
-  // Trigger weekly email notification to Top 3 DJs asynchronously
-  try {
-    await sendTop3WeeklyNotifications();
-  } catch (err) {
-    console.error('[Rankings] Error sending weekly top 3 notifications:', err);
+  // Trigger weekly email notification to Top 3 DJs asynchronously (only when explicitly requested)
+  if (options.sendNotifications) {
+    try {
+      await sendTop3WeeklyNotifications();
+    } catch (err) {
+      console.error('[Rankings] Error sending weekly top 3 notifications:', err);
+    }
   }
 
   return allScored;

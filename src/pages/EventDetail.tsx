@@ -7,7 +7,7 @@ import {
 import { useEvent } from '@/hooks/useEvents';
 import { imageFallback } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { api, getMediaUrl } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
@@ -382,7 +382,7 @@ export default function EventDetail() {
                 <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-3">Featured DJ</h3>
                 <button onClick={() => navigate(`/dj/${event.dj.id}`)} className="flex items-center gap-3 group">
                   <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center text-gold font-bold text-lg border border-gold/30 overflow-hidden">
-                    {event.dj.avatar ? <img src={event.dj.avatar} alt={event.dj.stageName} onError={imageFallback} className="w-full h-full object-cover" /> : event.dj.stageName.charAt(0).toUpperCase()}
+                    {event.dj.avatar ? <img src={getMediaUrl(event.dj.avatar)} alt={event.dj.stageName} onError={imageFallback} className="w-full h-full object-cover" /> : event.dj.stageName.charAt(0).toUpperCase()}
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-semibold text-text-primary group-hover:text-gold transition-colors">{event.dj.stageName}</p>

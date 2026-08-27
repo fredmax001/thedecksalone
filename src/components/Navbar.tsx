@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/sheet';
 
 import { useFeedStats } from '@/hooks/useRecommendations';
+import { getMediaUrl } from '@/lib/api';
 
 const navLinks = [
   { label: 'Feed', path: '/feed', showBadge: true },
@@ -66,7 +67,7 @@ export default function Navbar() {
   const profilePath = isAdmin ? dashboardPath : isDj ? '/dashboard/profile' : '/user/profile';
   const settingsPath = isAdmin ? dashboardPath : isDj ? '/dashboard/settings' : '/user/settings';
   const displayName = user?.djProfile?.stageName || user?.name || user?.email?.split('@')[0] || (isModerator ? 'Moderator' : isAdmin ? 'Admin' : 'User');
-  const avatarUrl = user?.djProfile?.avatar || user?.avatar || '';
+  const avatarUrl = getMediaUrl(user?.djProfile?.avatar || user?.avatar) || '/default-avatar.jpg';
   const initials = displayName.slice(0, 2).toUpperCase();
   const { data: feedStats } = useFeedStats();
   const newDropsCount = feedStats?.totalNewDrops || 0;

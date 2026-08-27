@@ -21,6 +21,7 @@ import FadeIn from '../components/FadeIn';
 import CountdownTimer from '../components/CountdownTimer';
 import { useCurrentBattle, useBattles, useVoteBattle } from '@/hooks/useBattles';
 import { useAuthStore } from '@/stores/authStore';
+import { getMediaUrl } from '@/lib/api';
 
 /* ──────────────────────────── data ──────────────────────────── */
 
@@ -413,7 +414,7 @@ export default function Battles() {
                       <div className="w-24 h-24 rounded-full bg-gold/10 border-[3px] border-gold flex items-center justify-center mt-4 overflow-hidden">
                         {leftEntry.dj.avatar ? (
                           <img
-                            src={leftEntry.dj.avatar}
+                            src={getMediaUrl(leftEntry.dj.avatar)}
                             alt={leftEntry.dj.stageName}
                             className="w-full h-full object-cover"
                           />
@@ -520,7 +521,7 @@ export default function Battles() {
                       <div className="w-24 h-24 rounded-full bg-purple/10 border-[3px] border-purple flex items-center justify-center mt-4 overflow-hidden">
                         {rightEntry.dj.avatar ? (
                           <img
-                            src={rightEntry.dj.avatar}
+                            src={getMediaUrl(rightEntry.dj.avatar)}
                             alt={rightEntry.dj.stageName}
                             className="w-full h-full object-cover"
                           />
@@ -770,7 +771,7 @@ export default function Battles() {
                             >
                               {dj.avatar ? (
                                 <img
-                                  src={dj.avatar}
+                                  src={getMediaUrl(dj.avatar)}
                                   alt={dj.name}
                                   className="w-full h-full object-cover rounded-full"
                                 />
@@ -891,7 +892,7 @@ export default function Battles() {
                             <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center text-xs font-bold text-gold overflow-hidden">
                               {e1.dj.avatar ? (
                                 <img
-                                  src={e1.dj.avatar}
+                                  src={getMediaUrl(e1.dj.avatar)}
                                   alt={e1.dj.stageName}
                                   className="w-full h-full object-cover"
                                 />
@@ -915,7 +916,7 @@ export default function Battles() {
                             <div className="w-8 h-8 rounded-full bg-purple/10 flex items-center justify-center text-xs font-bold text-purple overflow-hidden">
                               {e2.dj.avatar ? (
                                 <img
-                                  src={e2.dj.avatar}
+                                  src={getMediaUrl(e2.dj.avatar)}
                                   alt={e2.dj.stageName}
                                   className="w-full h-full object-cover"
                                 />

@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
+import { openGoogleAuth } from '@/lib/googleAuth';
 import api from '@/lib/api';
 import {
   Mail,
@@ -136,6 +137,23 @@ export default function Register() {
   const navigate = useNavigate();
   const register = useAuthStore((state) => state.register);
   const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      if (user.role === 'MODERATOR') navigate('/moderator');
+      else if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') navigate('/admin');
+      else if (user.role === 'FINANCE_ADMIN') navigate('/finance');
+      else if (user.role === 'SUPPORT_ADMIN') navigate('/support');
+      else if (user.role === 'VERIFICATION_ADMIN') navigate('/verification');
+      else if (user.role === 'DJ') {
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+        navigate(isMobile ? '/discover' : '/dashboard');
+      } else {
+        navigate('/discover');
+      }
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -380,8 +398,9 @@ export default function Register() {
           </div>
 
           <div>
-            <a
-              href="/api/v1/auth/google"
+            <button
+              type="button"
+              onClick={() => openGoogleAuth().catch((err) => console.error('Google register error:', err))}
               className="w-full h-[48px] rounded-xl bg-white hover:bg-gray-100 text-black text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-md active:scale-95 border border-white/20"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -403,7 +422,7 @@ export default function Register() {
                 />
               </svg>
               <span>Continue with Google</span>
-            </a>
+            </button>
           </div>
 
           <p className="mt-6 text-center text-sm text-text-secondary">

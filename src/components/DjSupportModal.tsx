@@ -1,52 +1,41 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Unlock,
+  Heart,
   CheckCircle2,
   X,
   UploadCloud,
   Loader2,
   PhoneCall,
-  Crown,
   Sparkles,
-  Download,
 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
-interface DjFanSubscribeModalProps {
+interface DjSupportModalProps {
   isOpen: boolean;
   onClose: () => void;
   dj: {
     id: string;
     stageName: string;
     avatar?: string;
-    subscriptionPrice?: number;
   };
   onSuccess?: () => void;
 }
 
-export function DjFanSubscribeModal({
-  isOpen,
-  onClose,
-  dj,
-  onSuccess,
-}: DjFanSubscribeModalProps) {
+export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModalProps) {
   const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
 
-  const [selectedTier, setSelectedTier] = useState<'standard' | 'vip'>('standard');
+  const [amount, setAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
-
-  const standardPrice = 50;
-  const vipPrice = 100;
-  const currentPrice = selectedTier === 'standard' ? standardPrice : vipPrice;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -55,36 +44,44 @@ export function DjFanSubscribeModal({
     toast.success('Payment receipt screenshot attached!');
   };
 
-  const handleSubscribe = async () => {
+  const handleSupport = async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to subscribe to this DJ.');
+      toast.error('Please login to support this DJ.');
       navigate('/login');
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
       return;
     }
 
     try {
       setSubmitting(true);
       const formData = new FormData();
-      formData.append('amount', String(currentPrice));
-      formData.append('tier', selectedTier);
+      formData.append('amount', String(parsedAmount));
       if (paymentReference) formData.append('paymentReference', paymentReference);
+      if (message) formData.append('message', message);
       if (selectedFile) formData.append('proof', selectedFile);
 
-      const res = await api.post(`/djs/${dj.id}/subscribe`, formData, {
+      const res = await api.post(`/djs/${dj.id}/support`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (res.data.success) {
-        toast.success(`🎉 Subscribed to ${dj.stageName}!`, {
-          description: selectedTier === 'vip' 
-            ? 'You have unlocked 60 days of VIP streaming & offline downloads.' 
-            : 'You have unlocked 30 days of exclusive mixes.',
+        toast.success(`🙏 Thank you for supporting ${dj.stageName}!`, {
+          description: 'Your support request has been sent to the DJ.',
         });
         if (onSuccess) onSuccess();
         onClose();
+        setAmount('');
+        setPaymentReference('');
+        setMessage('');
+        setSelectedFile(null);
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Subscription failed.';
+      const errorMsg = err.response?.data?.error || 'Support request failed.';
       toast.error('Error', { description: errorMsg });
     } finally {
       setSubmitting(false);
@@ -115,85 +112,52 @@ export function DjFanSubscribeModal({
           <div className="flex items-center gap-3.5 mb-5">
             <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-black shrink-0 border border-[#f4e059]/40">
               <img
-                src={dj.avatar || '/dj-avatar.png'}
+                src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                 alt={dj.stageName}
                 className="w-full h-full object-cover"
               />
               <div className="absolute bottom-0 right-0 p-0.5 bg-[#f4e059] rounded-tl text-black">
-                <Crown className="w-3 h-3" />
+                <Heart className="w-3 h-3" />
               </div>
             </div>
             <div>
               <span className="text-[10px] uppercase font-black tracking-widest text-[#f4e059] bg-[#f4e059]/10 px-2 py-0.5 rounded border border-[#f4e059]/30">
-                FAN PASS
+                SUPPORT
               </span>
               <h3 className="font-display text-xl font-bold uppercase tracking-tight text-white mt-1">
-                Subscribe to {dj.stageName}
+                Support {dj.stageName}
               </h3>
             </div>
           </div>
 
-          {/* Tier Selector Buttons (SLE 50 and SLE 100) */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <button
-              type="button"
-              onClick={() => setSelectedTier('standard')}
-              className={`p-3.5 rounded-2xl border text-left transition-all relative ${
-                selectedTier === 'standard'
-                  ? 'bg-[#f4e059]/15 border-[#f4e059] shadow-lg shadow-[#f4e059]/10'
-                  : 'bg-white/[0.02] border-white/10 hover:border-white/20'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-text-muted">Standard Pass</span>
-                <span className="font-mono text-sm font-black text-[#f4e059]">SLE {standardPrice}</span>
-              </div>
-              <p className="text-xs font-bold text-white mt-1">30 Days Streaming</p>
-              <span className="text-[10px] text-text-muted block mt-0.5">All exclusive mixes</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedTier('vip')}
-              className={`p-3.5 rounded-2xl border text-left transition-all relative ${
-                selectedTier === 'vip'
-                  ? 'bg-[#f4e059]/15 border-[#f4e059] shadow-lg shadow-[#f4e059]/10'
-                  : 'bg-white/[0.02] border-white/10 hover:border-white/20'
-              }`}
-            >
-              <div className="absolute -top-2 right-3 px-1.5 py-0.2 bg-[#f4e059] text-black text-[9px] font-black uppercase rounded">
-                VIP
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-text-muted">VIP Supporter</span>
-                <span className="font-mono text-sm font-black text-[#f4e059]">SLE {vipPrice}</span>
-              </div>
-              <p className="text-xs font-bold text-white mt-1">60 Days + Downloads</p>
-              <span className="text-[10px] text-text-muted block mt-0.5">MP3 offline + VIP badge</span>
-            </button>
+          {/* Amount Input */}
+          <div className="mb-5 p-4 rounded-2xl bg-[#f4e059]/10 border border-[#f4e059]/30">
+            <label className="text-[10px] uppercase font-bold text-text-muted block mb-2">
+              Enter any amount (SLE)
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-black text-[#f4e059]">SLE</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="50"
+                className="flex-1 h-12 px-4 rounded-xl bg-black/40 border border-white/10 text-xl font-black text-white placeholder:text-text-muted outline-none focus:border-[#f4e059]"
+              />
+            </div>
           </div>
 
-          {/* Exclusive Perks List */}
+          {/* Perks List */}
           <div className="space-y-2 mb-5 p-3.5 rounded-2xl bg-black/40 border border-white/5">
             <div className="flex items-center gap-2 text-xs text-text-secondary">
               <CheckCircle2 className="w-4 h-4 text-[#f4e059] shrink-0" />
-              <span>Full access to <strong>exclusive & private mixes</strong> by {dj.stageName}</span>
+              <span>100% of your support goes directly to <strong>{dj.stageName}</strong></span>
             </div>
-            {selectedTier === 'vip' ? (
-              <div className="flex items-center gap-2 text-xs text-text-secondary">
-                <Download className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span><strong>Direct 320kbps MP3 Downloads</strong> for offline listening</span>
-              </div>
-            ) : null}
-            {selectedTier === 'vip' ? (
-              <div className="flex items-center gap-2 text-xs text-text-secondary">
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <span><strong>VIP Fan Badge</strong> on DJ profile and mix comments</span>
-              </div>
-            ) : null}
             <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <CheckCircle2 className="w-4 h-4 text-[#f4e059] shrink-0" />
-              <span>Direct support to the DJ (100% of revenue paid directly)</span>
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Leave an optional message of encouragement</span>
             </div>
           </div>
 
@@ -204,7 +168,7 @@ export function DjFanSubscribeModal({
               <span>Payment Details (Orange Money / Afrimoney):</span>
             </div>
             <p className="text-[11px] text-text-muted leading-relaxed">
-              Send <strong>SLE {currentPrice}</strong> via Orange Money or Afrimoney to <strong>+232 72 011156</strong> or the DJ's official number, then attach your screenshot or enter transaction ID below:
+              Send <strong>SLE {amount || 'any amount'}</strong> via Orange Money or Afrimoney to <strong>+232 72 011156</strong> or the DJ's official number, then attach your screenshot or enter transaction ID below:
             </p>
 
             <div className="space-y-2 pt-1">
@@ -214,6 +178,14 @@ export function DjFanSubscribeModal({
                 onChange={(e) => setPaymentReference(e.target.value)}
                 placeholder="Transaction ID / Sender Phone Number (Optional)"
                 className="w-full h-10 px-3.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white placeholder:text-text-muted outline-none focus:border-[#f4e059]"
+              />
+
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Leave a message for the DJ (Optional)"
+                rows={2}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white placeholder:text-text-muted outline-none focus:border-[#f4e059] resize-none"
               />
 
               <label className="flex items-center justify-center gap-2 h-10 px-3.5 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.15] hover:border-[#f4e059] cursor-pointer text-xs text-text-muted hover:text-white transition-colors">
@@ -236,7 +208,7 @@ export function DjFanSubscribeModal({
           <div className="flex gap-3">
             <button
               disabled={submitting}
-              onClick={handleSubscribe}
+              onClick={handleSupport}
               className="flex-1 py-3 px-4 rounded-full bg-[#f4e059] hover:brightness-110 disabled:opacity-50 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#f4e059]/20 flex items-center justify-center gap-2 transition-all"
             >
               {submitting ? (
@@ -245,7 +217,7 @@ export function DjFanSubscribeModal({
                 </>
               ) : (
                 <>
-                  <Unlock className="w-4 h-4" /> Unlock & Subscribe (SLE {currentPrice})
+                  <Heart className="w-4 h-4" /> Send Support {amount ? `(SLE ${amount})` : ''}
                 </>
               )}
             </button>
@@ -263,4 +235,4 @@ export function DjFanSubscribeModal({
   );
 }
 
-export default DjFanSubscribeModal;
+export default DjSupportModal;

@@ -1,8 +1,12 @@
 import { useEffect, Suspense, lazy } from 'react';
 import { hideSplashScreen } from '@/lib/splashScreen';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { initSystemNotifications, syncUnreadSystemNotifications } from '@/lib/systemNotifications';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
@@ -73,7 +77,7 @@ const DashboardEarnings = lazy(() => import('./pages/dashboard/Earnings'));
 const DashboardProfile = lazy(() => import('./pages/dashboard/Profile'));
 const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
-const DashboardFanSubscriptions = lazy(() => import('./pages/dashboard/FanSubscriptions'));
+
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
 const TicketScanner = lazy(() => import('./pages/dashboard/TicketScanner'));
 const ScannerLanding = lazy(() => import('./pages/dashboard/ScannerLanding'));
@@ -95,7 +99,7 @@ const UserActivity = lazy(() => import('./pages/user/Activity'));
 const UserNotifications = lazy(() => import('./pages/user/Notifications'));
 const UserProfile = lazy(() => import('./pages/user/UserProfile'));
 const UserSettings = lazy(() => import('./pages/user/UserSettings'));
-const UserSubscription = lazy(() => import('./pages/user/UserSubscription'));
+
 const Pricing = lazy(() => import('./pages/Pricing'));
 
 function AuthInitializer() {
@@ -142,6 +146,132 @@ function VisitTracker() {
   return null;
 }
 
+/* ─── Deep link handler for native OAuth callbacks ─── */
+function DeepLinkHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handleAuthUrl = async (rawUrl: string) => {
+      try {
+        console.log('[DeepLink] Raw URL received:', rawUrl);
+
+        // Always close any open in-app browser tab when deep link arrives
+        await Browser.close().catch(() => {});
+
+        // Robust parsing: handle decksalone://auth/callback?token=...#token=...
+        let token: string | null = null;
+        let error: string | null = null;
+        try {
+          const url = new URL(rawUrl);
+          const search = new URLSearchParams(url.search);
+          const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+          token = search.get('token') || hash.get('token');
+          error = search.get('error') || hash.get('error');
+        } catch (parseErr) {
+          // Fallback regex parser for non-standard URLs
+          const tokenMatch = rawUrl.match(/[?&#]token=([^&#]+)/);
+          const errorMatch = rawUrl.match(/[?&#]error=([^&#]+)/);
+          token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
+          error = errorMatch ? decodeURIComponent(errorMatch[1]) : null;
+        }
+
+        if (token) {
+          console.log('[DeepLink] Extracted token successfully');
+          try {
+            localStorage.setItem('token', token);
+          } catch (e) {}
+
+          useAuthStore.getState().setAuth({ id: '', email: '', username: '', role: 'USER' } as any, token);
+
+          try {
+            const meRes = await api.get('/auth/me', {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (meRes.data?.data) {
+              const user = meRes.data.data;
+              useAuthStore.getState().setAuth(user, token);
+              const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+              const target = user.role === 'DJ' ? (isMobile ? '/discover' : '/dashboard') : (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? '/admin' : '/discover');
+              navigate(target, { replace: true });
+              return;
+            }
+          } catch (e) {
+            console.warn('[DeepLink] Immediate /auth/me fetch failed, falling back to /auth/callback:', e);
+          }
+
+          navigate(`/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`, {
+            replace: true,
+            state: { token },
+          });
+        } else if (error) {
+          console.warn('[DeepLink] Extracted error from URL:', error);
+          navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true, state: { error } });
+        } else if (rawUrl.includes('decksalone') || rawUrl.includes('auth')) {
+          console.warn('[DeepLink] Callback received without token or error');
+          navigate('/login?error=google_auth_failed', { replace: true });
+        }
+      } catch (e) {
+        console.error('Failed to handle deep link:', e);
+      }
+    };
+
+    let listener: { remove: () => Promise<void> } | null = null;
+
+    // Listen for app being resumed via deep link while running
+    CapacitorApp.addListener('appUrlOpen', (event) => {
+      console.log('[DeepLink] appUrlOpen event:', event.url);
+      handleAuthUrl(event.url);
+    }).then((l) => {
+      listener = l;
+    });
+
+    // Also handle the URL that launched the app (cold start)
+    CapacitorApp.getLaunchUrl().then((launchUrl) => {
+      if (launchUrl?.url) {
+        console.log('[DeepLink] Launch URL:', launchUrl.url);
+        handleAuthUrl(launchUrl.url);
+      }
+    }).catch((e) => {
+      console.error('[DeepLink] Failed to get launch URL:', e);
+    });
+
+    return () => {
+      listener?.remove().catch(() => {});
+      CapacitorApp.removeAllListeners();
+    };
+  }, [navigate]);
+
+  return null;
+}
+
+/* ─── Android System Notification sync and tap manager ─── */
+function SystemNotificationManager() {
+  const navigate = useNavigate();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  useEffect(() => {
+    initSystemNotifications(navigate);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Initial sync
+    syncUnreadSystemNotifications();
+
+    // Periodic sync every 45 seconds while app is running
+    const interval = setInterval(() => {
+      syncUnreadSystemNotifications();
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 /* ──────────────────────── Router ──────────────────────── */
 export default function App() {
   useEffect(() => {
@@ -151,6 +281,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <DeepLinkHandler />
+      <SystemNotificationManager />
       <AuthInitializer />
       <VisitTracker />
       <Suspense fallback={<div className="flex h-screen w-full items-center justify-center text-deck-accent"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent"></div></div>}>
@@ -211,7 +343,7 @@ export default function App() {
               <Route path="dashboard/followers" element={<DashboardFollowers />} />
               <Route path="dashboard/profile" element={<DashboardProfile />} />
               <Route path="dashboard/subscription" element={<DashboardSubscription />} />
-              <Route path="dashboard/fan-subscriptions" element={<DashboardFanSubscriptions />} />
+
               <Route path="dashboard/opportunities" element={<DashboardOpportunities />} />
               <Route path="dashboard/campaigns" element={<DashboardCampaigns />} />
               <Route path="dashboard/settings" element={<DashboardSettings />} />
@@ -246,7 +378,7 @@ export default function App() {
               <Route path="user/activity" element={<UserActivity />} />
               <Route path="user/notifications" element={<UserNotifications />} />
               <Route path="user/profile" element={<UserProfile />} />
-              <Route path="user/subscription" element={<UserSubscription />} />
+
               <Route path="user/settings" element={<UserSettings />} />
             </Route>
           </Route>

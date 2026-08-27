@@ -12,6 +12,7 @@ const { processCover } = require('../utils/imageProcessor');
 const { withCache, clearCache } = require('../utils/cache');
 const { resolveAudioUrl, resolveHearthisSet } = require('../utils/audioResolver');
 const { requireTrialOrSubscription, calculateTrialStatus } = require('../utils/trial');
+const { createNotification, createNotificationForDj } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -112,7 +113,7 @@ async function checkDownloadAccess(mix, user) {
     return { allowed: false, gate: 'follow' };
   }
 
-  // Fall back to platform subscription / DJ fan pass gating
+  // Fall back to platform subscription gating (DJ or platform Pro subscriptions)
   const userWithDj = await prisma.user.findUnique({
     where: { id: user.id },
     include: { djProfile: true },
@@ -121,12 +122,7 @@ async function checkDownloadAccess(mix, user) {
   const userTier = (userWithDj?.djProfile?.subscriptionTier || userWithDj?.subscriptionTier || 'free').toLowerCase();
   const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
 
-  const fanSub = await prisma.djFanSubscription.findUnique({
-    where: { djId_userId: { djId: mix.djId, userId: user.id } },
-  });
-  const hasActiveFanSub = !!fanSub && fanSub.status === 'ACTIVE' && new Date(fanSub.expiresAt) > new Date();
-
-  if (hasProPlan || hasActiveFanSub) {
+  if (hasProPlan) {
     return { allowed: true, gate: 'subscription' };
   }
 
@@ -222,7 +218,6 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
               verified: true,
               subscriptionTier: true,
               isPro: true,
-              subscriptionPrice: true,
               promotionPoints: true,
             },
           },
@@ -495,7 +490,6 @@ router.get('/trending', async (req, res) => {
             verified: true,
             subscriptionTier: true,
             isPro: true,
-            subscriptionPrice: true,
             promotionPoints: true,
           },
         },
@@ -836,7 +830,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, async (r
         return res.status(400).json({
           success: false,
           error:
-            'Unable to use this audio link. Please provide a direct audio file, SoundCloud, Audiomack, or Hearthis.at link.',
+            'Unable to use this audio link. Please provide a direct audio file or a Hearthis.at link.',
         });
       }
       audioUrl = resolved.audioUrl;
@@ -924,7 +918,7 @@ router.put('/:id', authMiddleware, uploadMix, async (req, res) => {
         return res.status(400).json({
           success: false,
           error:
-            'Unable to use this audio link. Please provide a direct audio file, SoundCloud, Audiomack, or Hearthis.at link.',
+            'Unable to use this audio link. Please provide a direct audio file or a Hearthis.at link.',
         });
       }
       updateData.audioUrl = resolved.audioUrl;
@@ -988,8 +982,11 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
     const mixId = req.params.id;
     const userId = req.user.id;
 
-    // Check if mix exists
-    const mix = await prisma.mix.findUnique({ where: { id: mixId }, select: { id: true } });
+    // Check if mix exists and belongs to a DJ
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      select: { id: true, title: true, djId: true, dj: { select: { userId: true } } },
+    });
     if (!mix) {
       return res.status(404).json({ success: false, error: 'Mix not found' });
     }
@@ -1002,6 +999,26 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
         prisma.mixLike.create({ data: { mixId, userId } }),
         prisma.mix.update({ where: { id: mixId }, data: { likes: { increment: 1 } } }),
       ]);
+
+      // Notify the DJ when someone else likes their mix
+      if (mix.dj?.userId && mix.dj.userId !== userId) {
+        const liker = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, username: true },
+        });
+        const likerName = liker?.name || liker?.username || 'Someone';
+        createNotification({
+          userId: mix.dj.userId,
+          type: 'MIX_LIKED',
+          title: 'New mix like',
+          body: `${likerName} liked your mix "${mix.title || 'Untitled'}"`,
+          actionUrl: `/mix/${mix.id}`,
+          entityId: mix.id,
+          entityType: 'MIX',
+          metadata: { likerId: userId },
+        }).catch(() => {});
+      }
+
       return res.json({ success: true, data: { liked: true, message: 'Mix liked' } });
     } catch (createErr: any) {
       // P2002 = unique constraint violation -> already liked, so unlike instead
@@ -1356,7 +1373,6 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
             stageName: true,
             userId: true,
             subscriptionTier: true,
-            subscriptionPrice: true,
           },
         },
       },
@@ -1374,7 +1390,7 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
     const access = await checkDownloadAccess(mix, req.user);
 
     if (!access.allowed) {
-      let message = 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.';
+      let message = 'Downloading mixes requires an active PRO subscription.';
       if (access.gate === 'repost') {
         message = 'Download is only active for users who reposted this mix.';
       } else if (access.gate === 'follow') {
@@ -1383,12 +1399,7 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
       return res.status(403).send(message);
     }
 
-    // Increment download counter
-    await prisma.mix.update({
-      where: { id: mixId },
-      data: { downloads: { increment: 1 } },
-    }).catch(() => {});
-
+    // NOTE: download counter is incremented once by POST /:id/download
     const filename = `${sanitizeFilename(mix.title)}.mp3`;
 
     // Local uploads are served directly; external URLs are redirected (never proxied)
@@ -1433,7 +1444,6 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
             stageName: true,
             userId: true,
             subscriptionTier: true,
-            subscriptionPrice: true,
           },
         },
       },
@@ -1441,6 +1451,10 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
 
     if (!mix) {
       return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    if (!mix.audioUrl) {
+      return res.status(400).json({ success: false, error: 'No audio file available for this mix.' });
     }
 
     // Require authentication and check download permissions
@@ -1457,7 +1471,7 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
     if (!access.allowed) {
       const errorResponse: any = {
         success: false,
-        error: 'Downloading mixes requires an active PRO subscription or DJ Fan Pass.',
+        error: 'Downloading mixes requires an active PRO subscription.',
         djId: mix.djId,
         djName: mix.dj?.stageName,
       };
@@ -1470,7 +1484,6 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
         errorResponse.requiresFollow = true;
       } else {
         errorResponse.requiresSubscription = true;
-        errorResponse.subscriptionPrice = 50;
       }
 
       return res.status(403).json(errorResponse);
@@ -1491,6 +1504,242 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('[Mix Download API] Error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// MIX COMMENTS ENDPOINTS
+// ==========================================
+
+// GET /api/mixes/:id/comments - Get comments for a mix
+router.get('/:id/comments', softAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const mixId = req.params.id;
+
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      select: { id: true, dj: { select: { userId: true } } },
+    });
+
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    const djUserId = mix.dj?.userId;
+
+    const [comments, total] = await Promise.all([
+      prisma.mixComment.findMany({
+        where: { mixId, parentId: null },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              avatar: true,
+              role: true,
+              djProfile: {
+                select: {
+                  id: true,
+                  stageName: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+          replies: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  avatar: true,
+                  role: true,
+                  djProfile: {
+                    select: {
+                      id: true,
+                      stageName: true,
+                      avatar: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.mixComment.count({ where: { mixId } }),
+    ]);
+
+    const formattedComments = comments.map((c: any) => ({
+      ...c,
+      isDjCreator: Boolean(djUserId && c.userId === djUserId),
+      replies: (c.replies || []).map((r: any) => ({
+        ...r,
+        isDjCreator: Boolean(djUserId && r.userId === djUserId),
+      })),
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        comments: formattedComments,
+        total,
+      },
+    });
+  } catch (error) {
+    console.error('[Mix Comments API] Error fetching comments:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/mixes/:id/comments - Post a comment or reply to a mix
+router.post('/:id/comments', authMiddleware, async (req: any, res: any) => {
+  try {
+    const mixId = req.params.id;
+    const userId = req.user.id;
+
+    const parsed = z.object({
+      content: z.string().trim().min(1, 'Comment cannot be empty').max(1000, 'Comment cannot exceed 1000 characters'),
+      parentId: z.string().optional().nullable(),
+    }).safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: parsed.error.issues[0]?.message || 'Invalid comment input',
+      });
+    }
+
+    const { content, parentId } = parsed.data;
+
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            userId: true,
+            stageName: true,
+          },
+        },
+      },
+    });
+
+    if (!mix) {
+      return res.status(404).json({ success: false, error: 'Mix not found' });
+    }
+
+    if (parentId) {
+      const parentComment = await prisma.mixComment.findUnique({
+        where: { id: parentId },
+      });
+      if (!parentComment || parentComment.mixId !== mixId) {
+        return res.status(404).json({ success: false, error: 'Parent comment not found' });
+      }
+    }
+
+    const comment = await prisma.mixComment.create({
+      data: {
+        mixId,
+        userId,
+        content,
+        parentId: parentId || null,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatar: true,
+            role: true,
+            djProfile: {
+              select: {
+                id: true,
+                stageName: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Notify mix creator if someone else commented on their mix
+    if (mix.dj?.userId && mix.dj.userId !== userId) {
+      const authorName = comment.user?.djProfile?.stageName || comment.user?.name || comment.user?.username || 'A user';
+      prisma.notification.create({
+        data: {
+          userId: mix.dj.userId,
+          type: 'SYSTEM',
+          title: 'New Comment on Your Mix',
+          body: `${authorName} commented on "${mix.title || 'your mix'}"`,
+          actionUrl: `/mixes/${mix.id}#comments`,
+          entityId: mix.id,
+          entityType: 'mix',
+        },
+      }).catch((err: any) => console.error('[Mix Comments Notification Error]:', err));
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...comment,
+        isDjCreator: Boolean(mix.dj?.userId && comment.userId === mix.dj.userId),
+        replies: [],
+      },
+    });
+  } catch (error) {
+    console.error('[Mix Comments API] Error creating comment:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/mixes/:id/comments/:commentId - Delete a comment
+router.delete('/:id/comments/:commentId', authMiddleware, async (req: any, res: any) => {
+  try {
+    const { id: mixId, commentId } = req.params;
+    const userId = req.user.id;
+
+    const comment = await prisma.mixComment.findUnique({
+      where: { id: commentId },
+      include: {
+        mix: {
+          include: {
+            dj: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!comment || comment.mixId !== mixId) {
+      return res.status(404).json({ success: false, error: 'Comment not found' });
+    }
+
+    const isAuthor = comment.userId === userId;
+    const isDjCreator = comment.mix?.dj?.userId === userId;
+    const isStaff = ['ADMIN', 'MODERATOR'].includes(req.user.role || '');
+
+    if (!isAuthor && !isDjCreator && !isStaff) {
+      return res.status(403).json({ success: false, error: 'You are not authorized to delete this comment' });
+    }
+
+    await prisma.mixComment.delete({
+      where: { id: commentId },
+    });
+
+    return res.json({ success: true, message: 'Comment deleted successfully' });
+  } catch (error) {
+    console.error('[Mix Comments API] Error deleting comment:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

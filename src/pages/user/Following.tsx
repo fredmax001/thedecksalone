@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFollowing, type FollowingDJ } from '@/hooks/useUserDashboard';
 import { useFollowDj } from '@/hooks/useDJs';
+import { getMediaUrl } from '@/lib/api';
 
 type LayoutMode = 'grid' | 'list';
 
@@ -66,7 +67,7 @@ function DJCard({ dj, index }: { dj: FollowingDJ; index: number }) {
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="w-12 h-12 border-2 border-gold/30">
-                <AvatarImage src={dj.avatar} />
+                <AvatarImage src={getMediaUrl(dj.avatar) || undefined} />
                 <AvatarFallback className="bg-gold/10 text-gold">
                   <Music className="w-5 h-5" />
                 </AvatarFallback>
@@ -184,7 +185,7 @@ function DJListRow({ dj, index }: { dj: FollowingDJ; index: number }) {
               className="w-10 h-10 border-2 border-gold/30 cursor-pointer shrink-0"
               onClick={() => navigate(`/dj/${dj.id}`)}
             >
-              <AvatarImage src={dj.avatar} />
+              <AvatarImage src={getMediaUrl(dj.avatar) || undefined} />
               <AvatarFallback className="bg-gold/10 text-gold">
                 <Music className="w-4 h-4" />
               </AvatarFallback>

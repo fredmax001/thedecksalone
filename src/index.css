@@ -68,6 +68,10 @@
   }
 
   body {
+    overflow-x: hidden;
+  }
+
+  body {
     @apply bg-black text-text-primary antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 15px;
@@ -704,7 +708,6 @@ html[data-theme="light"] select option {
 
 /* App-like mobile touch & viewport resets */
 html, body {
-  overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
 }

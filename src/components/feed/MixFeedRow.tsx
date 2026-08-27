@@ -22,7 +22,7 @@ import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { useLikeMix } from '@/hooks/useMixes';
 import { WaveformPlayer } from '@/components/WaveformPlayer';
 import { cn } from '@/lib/utils';
-import api, { getMediaUrl } from '@/lib/api';
+import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
 import { toast } from 'sonner';
 import MixDownloadModal from '@/components/MixDownloadModal';
 import type { FeedMix } from './types';
@@ -34,7 +34,7 @@ interface MixFeedRowProps {
   variant?: 'waveform' | 'compact';
   onOpenPromote?: (mix: any) => void;
   onOpenEmbed?: (mix: any) => void;
-  onOpenSubscribe?: (mix: any) => void;
+  onOpenDjSupport?: (dj: any) => void;
 }
 
 function formatDuration(seconds = 0) {
@@ -68,7 +68,7 @@ export default function MixFeedRow({
   variant = 'waveform',
   onOpenPromote,
   onOpenEmbed,
-  onOpenSubscribe,
+  onOpenDjSupport,
 }: MixFeedRowProps) {
   const { user, isAuthenticated } = useAuthStore();
   const { currentTrack, isPlaying, currentTime, play, pause, setCurrentTime, addToQueue } = usePlayerStore();
@@ -110,7 +110,7 @@ export default function MixFeedRow({
       e.preventDefault();
       e.stopPropagation();
       if (mix.isExclusive && !isOwner) {
-        if (onOpenSubscribe) onOpenSubscribe(mix);
+        if (onOpenDjSupport) onOpenDjSupport(mix.dj);
         return;
       }
       if (isCurrent) {
@@ -120,7 +120,7 @@ export default function MixFeedRow({
       }
       play(convertedTrack);
     },
-    [convertedTrack, isCurrent, isPlaying, mix.isExclusive, isOwner, onOpenSubscribe, pause, play]
+    [convertedTrack, isCurrent, isPlaying, mix.isExclusive, isOwner, onOpenDjSupport, pause, play]
   );
 
   const handleSeek = (time: number) => {
@@ -163,13 +163,8 @@ export default function MixFeedRow({
       const res = await api.post(`/mixes/${mix.id}/download`);
       if (res.data.success) {
         setDownloadsCount((c: number) => c + 1);
-        const link = document.createElement('a');
-        link.href = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-        link.setAttribute('download', `${mix.title}.mp3`);
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
+        await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
         toast.success(`Download started! Enjoy the mix.`);
       }
     } catch (err: any) {
@@ -563,7 +558,7 @@ export default function MixFeedRow({
         onClose={() => setDownloadModalMode(null)}
         mode={downloadModalMode || 'auth'}
         mix={mix}
-        onOpenDjSubscribe={onOpenSubscribe}
+        onOpenDjSupport={onOpenDjSupport}
         onActionComplete={() => handleDownload({ stopPropagation: () => {} } as React.MouseEvent)}
       />
     </motion.div>

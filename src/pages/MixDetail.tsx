@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag } from 'lucide-react';
+import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag, Download } from 'lucide-react';
 import { useMix, useLikeMix } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
 import ShareButton from '@/components/ShareButton';
 import ReportModal from '@/components/ReportModal';
-import { getMediaUrl } from '@/lib/api';
+import MixDownloadModal from '@/components/MixDownloadModal';
+import DjSupportModal from '@/components/DjSupportModal';
+import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
 import MixComments from '@/components/MixComments';
 import MixRecommendations from '@/components/MixRecommendations';
 import { Button } from '@/components/ui/button';
@@ -33,6 +35,9 @@ export default function MixDetail() {
   const { isAuthenticated } = useAuthStore();
   const { mutate: likeMix } = useLikeMix();
   const [showReportModal, setShowReportModal] = useState(false);
+  const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const mixUrl = `${baseUrl}/mix/${id}`;
@@ -80,6 +85,52 @@ export default function MixDetail() {
       return;
     }
     likeMix(mix.id);
+  };
+
+  const handleDownload = async () => {
+    if (!mix) return;
+    if (!isAuthenticated) {
+      setDownloadModalMode('auth');
+      return;
+    }
+    try {
+      setDownloading(true);
+      toast.info(`Preparing download for "${mix.title}"...`);
+      const res = await api.post(`/mixes/${mix.id}/download`);
+      const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
+      await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+      toast.success(`Download started! Enjoy the mix.`);
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresRepost) setDownloadModalMode('repost');
+        else if (err.response?.data?.requiresFollow) setDownloadModalMode('follow');
+        else if (err.response?.data?.requiresSubscription) setDownloadModalMode('subscribe');
+        else toast.error('Download failed', { description: err.response?.data?.error || 'Unable to download this mix.' });
+      } else if (err.response?.status === 401) {
+        setDownloadModalMode('auth');
+      } else {
+        toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const retryDownload = async () => {
+    if (!mix) return;
+    try {
+      setDownloading(true);
+      const res = await api.post(`/mixes/${mix.id}/download`);
+      const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
+      await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+      toast.success(`Download started! Enjoy the mix.`);
+    } catch (err: any) {
+      if (err.response?.status !== 403) {
+        toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+      }
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -224,6 +275,14 @@ export default function MixDetail() {
                 >
                   <Heart size={15} className="mr-1.5" /> Like ({mix.likes || 0})
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
+                >
+                  <Download size={15} className="mr-1.5" /> {downloading ? '...' : 'Download'}
+                </Button>
                 <ShareButton
                   url={mixUrl}
                   title={title}
@@ -259,6 +318,40 @@ export default function MixDetail() {
                 itemTitle={mix.title}
               />
 
+              <MixDownloadModal
+                isOpen={!!downloadModalMode}
+                onClose={() => setDownloadModalMode(null)}
+                mode={downloadModalMode || 'auth'}
+                mix={
+                  mix
+                    ? {
+                        id: mix.id,
+                        title: mix.title,
+                        djName: mix.dj?.stageName,
+                        dj: {
+                          id: mix.dj?.id || mix.djId,
+                          stageName: mix.dj?.stageName,
+                          avatar: mix.dj?.avatar,
+                        },
+                      }
+                    : null
+                }
+                onActionComplete={retryDownload}
+                onOpenDjSupport={() => setSupportModalOpen(true)}
+              />
+
+              {mix?.dj && (
+                <DjSupportModal
+                  isOpen={supportModalOpen}
+                  onClose={() => setSupportModalOpen(false)}
+                  dj={{
+                    id: mix.dj.id || mix.djId,
+                    stageName: mix.dj.stageName || 'DJ',
+                    avatar: mix.dj.avatar,
+                  }}
+                />
+              )}
+
               {/* ─── Compact DJ / Artist Card ─── */}
               {djProfile && (
                 <div className="mt-8 pt-4">
@@ -266,7 +359,7 @@ export default function MixDetail() {
                     <div className="flex items-center gap-3.5">
                       <Link to={`/dj/${djIdentifier}`} className="shrink-0 relative">
                         <img
-                          src={djProfile.avatar || '/default-avatar.jpg'}
+                          src={getMediaUrl(djProfile.avatar) || '/default-avatar.jpg'}
                           alt={djProfile.stageName}
                           className="w-14 h-14 rounded-full object-cover border-2 border-gold/40"
                         />

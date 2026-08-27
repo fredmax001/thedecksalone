@@ -137,7 +137,7 @@ export default function FeedHero({ mix, event, dj }: FeedHeroProps) {
   }
 
   if (dj) {
-    const avatar = dj.avatar || '/default-avatar.jpg';
+    const avatar = getMediaUrl(dj.avatar) || '/default-avatar.jpg';
 
     return (
       <section className="relative overflow-hidden rounded-3xl border border-dark-gray bg-black-surface">

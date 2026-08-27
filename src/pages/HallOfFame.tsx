@@ -13,19 +13,29 @@ import {
   Search,
   Check,
   Loader2,
+  Upload,
+  Trash2,
+  Pencil,
+  X,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
-import { useHallOfFameDJs } from '../hooks/useDJs';
+import { useHallOfFameDJs, useHallOfFameLegends, type HallOfFameLegend } from '../hooks/useDJs';
 import { useHallOfFameMixes } from '../hooks/useMixes';
 import {
   useAdminDjs,
   useAdminMixes,
   useToggleDjHallOfFame,
   useToggleMixHallOfFame,
+  useHallOfFameLegendsAdmin,
+  useCreateHallOfFameLegend,
+  useUpdateHallOfFameLegend,
+  useDeleteHallOfFameLegend,
+  type HallOfFameLegendInput,
 } from '../hooks/useAdmin';
 import { useAuthStore } from '../stores/authStore';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import ShareButton from '../components/ShareButton';
+import { getMediaUrl } from '@/lib/api';
 
 /* ──────────────────────────── types ──────────────────────────── */
 
@@ -121,65 +131,6 @@ const timelineEvents = [
   },
 ];
 
-/* ──────────────────────────── Legacy Legends (not on platform / passed away) ──────────────────────────── */
-
-interface Legend {
-  id: string;
-  name: string;
-  era: string;
-  status: 'living' | 'deceased' | 'unknown';
-  story: string;
-  contribution: string;
-  quote?: string;
-  image: string;
-  city: string;
-}
-
-const legacyLegends: Legend[] = [
-  {
-    id: 'legend-1',
-    name: 'DJ Master J',
-    era: "1985 — 2005",
-    status: 'deceased',
-    story: "One of the first mobile DJs in Freetown, Master J built his own sound system from salvaged parts in the early 1980s. He played at virtually every community event in the capital for two decades, introducing generations to vinyl culture before anyone else had access to imported records. His Saturday night sets at the famous Palm Beach Nightclub became legendary.",
-    contribution: "Introduced vinyl DJ culture to Freetown; built the first community sound system; mentored over 20 DJs who went on to define the scene.",
-    quote: "The music is the message. Without it, we have no voice.",
-    image: '/placeholder.jpg',
-    city: 'Freetown',
-  },
-  {
-    id: 'legend-2',
-    name: 'Selector Brown',
-    era: "1990 — Present",
-    status: 'living',
-    story: "The godfather of mixtape culture in Sierra Leone. In the mid-1990s, Brown began recording live sets onto cassette tapes and distributing them across the country through market vendors. Before the internet, his tapes were how people in Bo, Kenema, and Makeni discovered new music. He never owned a digital mixer, but his ear for transitions was unmatched.",
-    contribution: "Created the nationwide mixtape distribution network; bridged regional music scenes; preserved hundreds of live sets from the 1990s.",
-    image: '/placeholder.jpg',
-    city: 'Bo',
-  },
-  {
-    id: 'legend-3',
-    name: 'MC Spinna',
-    era: "1995 — 2010",
-    status: 'deceased',
-    story: "The first DJ to introduce competitive battling to Sierra Leone. In 1995, MC Spinna organized the legendary battle at Lumley Beach that pitted east Freetown DJs against west Freetown selectors. The event drew over 5,000 people and established the competitive DJ culture that still thrives today. He was known for his rapid-fire scratching and unmatched crowd control.",
-    contribution: "Founded the DJ battle culture in Sierra Leone; established the first DJ competition format; inspired the modern battle scene.",
-    quote: "Let the turntables talk.",
-    image: '/placeholder.jpg',
-    city: 'Freetown',
-  },
-  {
-    id: 'legend-4',
-    name: 'Digital K',
-    era: "2000 — Present",
-    status: 'living',
-    story: "When CDJs arrived in Sierra Leone in the early 2000s, most DJs resisted the change. Digital K embraced it. He was the first to blend digital mixing with traditional vinyl techniques, creating a hybrid style that defined the 2000s era. His groundbreaking work in wedding DJing professionalized the industry, setting standards for equipment and performance quality.",
-    contribution: "Pioneered digital mixing in Sierra Leone; professionalized wedding DJ industry; set equipment standards adopted nationwide.",
-    image: '/placeholder.jpg',
-    city: 'Makeni',
-  },
-];
-
 /* ──────────────────────────── components ──────────────────────────── */
 
 
@@ -188,6 +139,200 @@ function SectionLabel({ text }: { text: string }) {
     <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">
       {text}
     </span>
+  );
+}
+
+function HallOfFameLegendAdminPanel({
+  legends,
+  isLoading,
+  form,
+  setForm,
+  editingId,
+  imagePreview,
+  onImageChange,
+  onSubmit,
+  onEdit,
+  onDelete,
+  onCancel,
+  isPending,
+}: {
+  legends: HallOfFameLegend[];
+  isLoading: boolean;
+  form: HallOfFameLegendInput;
+  setForm: React.Dispatch<React.SetStateAction<HallOfFameLegendInput>>;
+  editingId: string | null;
+  imagePreview: string | null;
+  onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onEdit: (legend: HallOfFameLegend) => void;
+  onDelete: (id: string) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={onSubmit} className="bg-black-surface/50 border border-dark-gray rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-text-primary">
+            {editingId ? 'Edit Legend' : 'Add New Legend'}
+          </h4>
+          {editingId && (
+            <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-white flex items-center gap-1">
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          )}
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input
+            type="text"
+            placeholder="Name *"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+            required
+          />
+          <input
+            type="text"
+            placeholder="Era (e.g. 1985 — 2005)"
+            value={form.era}
+            onChange={(e) => setForm((f) => ({ ...f, era: e.target.value }))}
+            className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+          />
+          <select
+            value={form.status}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as HallOfFameLegendInput['status'] }))}
+            className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold outline-none"
+          >
+            <option value="living">Living</option>
+            <option value="deceased">Deceased</option>
+            <option value="unknown">Unknown</option>
+          </select>
+          <input
+            type="text"
+            placeholder="City"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+            className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+          />
+        </div>
+
+        <textarea
+          placeholder="Story / Bio *"
+          value={form.story}
+          onChange={(e) => setForm((f) => ({ ...f, story: e.target.value }))}
+          rows={3}
+          className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+          required
+        />
+        <textarea
+          placeholder="Contribution to culture *"
+          value={form.contribution}
+          onChange={(e) => setForm((f) => ({ ...f, contribution: e.target.value }))}
+          rows={2}
+          className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+          required
+        />
+        <input
+          type="text"
+          placeholder="Quote (optional)"
+          value={form.quote}
+          onChange={(e) => setForm((f) => ({ ...f, quote: e.target.value }))}
+          className="w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+        />
+
+        <div className="flex flex-col sm:flex-row gap-3 items-start">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary text-xs transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" /> {imagePreview ? 'Change Image' : 'Upload Image'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onImageChange}
+            className="hidden"
+          />
+          <input
+            type="url"
+            placeholder="Or paste image URL"
+            value={form.imageUrl}
+            onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+            className="flex-1 w-full bg-black border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-gold outline-none"
+          />
+        </div>
+
+        {imagePreview && (
+          <div className="w-24 h-24 rounded-lg overflow-hidden border border-dark-gray">
+            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold text-black text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-colors disabled:opacity-50"
+          >
+            {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {editingId ? 'Update Legend' : 'Add Legend'}
+          </button>
+        </div>
+      </form>
+
+      <div className="max-h-[300px] overflow-y-auto space-y-1">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 text-gold animate-spin" />
+          </div>
+        ) : legends.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">No legends yet</p>
+        ) : (
+          legends.map((legend) => (
+            <div
+              key={legend.id}
+              className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <img
+                  src={legend.image || '/placeholder.jpg'}
+                  alt={legend.name}
+                  className="w-8 h-8 rounded-full object-cover shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary truncate">{legend.name}</p>
+                  <p className="text-xs text-text-muted truncate">
+                    {legend.city || 'Sierra Leone'} • {legend.status}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onEdit(legend)}
+                  className="p-1.5 rounded-full hover:bg-white/10 text-text-secondary hover:text-gold transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDelete(legend.id)}
+                  disabled={isPending}
+                  className="p-1.5 rounded-full hover:bg-white/10 text-text-secondary hover:text-red transition-colors disabled:opacity-50"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -202,9 +347,59 @@ export default function HallOfFame() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [adminTab, setAdminTab] = useState<'djs' | 'mixes'>('djs');
+  const [adminTab, setAdminTab] = useState<'djs' | 'mixes' | 'legends'>('legends');
   const [djSearch, setDjSearch] = useState('');
   const [mixSearch, setMixSearch] = useState('');
+
+  /* Legacy legends (non-account) */
+  const { data: legendsData, isLoading: legendsLoading } = useHallOfFameLegends();
+  const legends = (legendsData?.data || []) as HallOfFameLegend[];
+
+  /* Admin legend management */
+  const { data: adminLegends = [], isLoading: adminLegendsLoading } = useHallOfFameLegendsAdmin();
+  const createLegend = useCreateHallOfFameLegend();
+  const updateLegend = useUpdateHallOfFameLegend();
+  const deleteLegend = useDeleteHallOfFameLegend();
+
+  const emptyLegendForm: HallOfFameLegendInput = {
+    name: '',
+    era: '',
+    status: 'living',
+    story: '',
+    contribution: '',
+    quote: '',
+    city: '',
+    imageUrl: '',
+    sortOrder: 0,
+  };
+  const [legendForm, setLegendForm] = useState<HallOfFameLegendInput>(emptyLegendForm);
+  const [editingLegendId, setEditingLegendId] = useState<string | null>(null);
+  const [legendImageFile, setLegendImageFile] = useState<File | null>(null);
+  const [legendImagePreview, setLegendImagePreview] = useState<string | null>(null);
+
+  const resetLegendForm = () => {
+    setLegendForm(emptyLegendForm);
+    setEditingLegendId(null);
+    setLegendImageFile(null);
+    setLegendImagePreview(null);
+  };
+
+  const startEditLegend = (legend: HallOfFameLegend) => {
+    setEditingLegendId(legend.id);
+    setLegendForm({
+      name: legend.name,
+      era: legend.era || '',
+      status: legend.status,
+      story: legend.story,
+      contribution: legend.contribution,
+      quote: legend.quote || '',
+      city: legend.city || '',
+      imageUrl: legend.image || '',
+      sortOrder: legend.sortOrder,
+    });
+    setLegendImageFile(null);
+    setLegendImagePreview(legend.image || null);
+  };
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineInView = useInView(timelineRef, { once: true, margin: '-100px' });
@@ -239,6 +434,34 @@ export default function HallOfFame() {
     e.preventDefault();
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
+  };
+
+  const handleLegendImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLegendImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setLegendImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleLegendSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!legendForm.name || !legendForm.story || !legendForm.contribution) return;
+    const payload: HallOfFameLegendInput = {
+      ...legendForm,
+      imageFile: legendImageFile || undefined,
+    };
+    try {
+      if (editingLegendId) {
+        await updateLegend.mutateAsync({ ...payload, id: editingLegendId });
+      } else {
+        await createLegend.mutateAsync(payload);
+      }
+      resetLegendForm();
+    } catch (err: any) {
+      // errors handled by toast via mutation? no default; keep minimal
+    }
   };
 
   const handlePlay = (mix: HallOfFameMix) => {
@@ -291,7 +514,17 @@ export default function HallOfFame() {
               >
                 <div className="container-main py-4">
                   {/* Tabs */}
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    <button
+                      onClick={() => setAdminTab('legends')}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase transition-colors ${
+                        adminTab === 'legends'
+                          ? 'bg-gold text-black'
+                          : 'bg-white/10 text-text-secondary hover:bg-white/20'
+                      }`}
+                    >
+                      Legends ({adminLegends.length})
+                    </button>
                     <button
                       onClick={() => setAdminTab('djs')}
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase transition-colors ${
@@ -314,7 +547,22 @@ export default function HallOfFame() {
                     </button>
                   </div>
 
-                  {adminTab === 'djs' ? (
+                  {adminTab === 'legends' ? (
+                    <HallOfFameLegendAdminPanel
+                      legends={adminLegends as HallOfFameLegend[]}
+                      isLoading={adminLegendsLoading}
+                      form={legendForm}
+                      setForm={setLegendForm}
+                      editingId={editingLegendId}
+                      imagePreview={legendImagePreview}
+                      onImageChange={handleLegendImageChange}
+                      onSubmit={handleLegendSubmit}
+                      onEdit={startEditLegend}
+                      onDelete={(id: string) => deleteLegend.mutate(id)}
+                      onCancel={resetLegendForm}
+                      isPending={createLegend.isPending || updateLegend.isPending || deleteLegend.isPending}
+                    />
+                  ) : adminTab === 'djs' ? (
                     <div>
                       <div className="relative mb-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
@@ -343,7 +591,7 @@ export default function HallOfFame() {
                             >
                               <div className="flex items-center gap-3">
                                 <img
-                                  src={dj.avatar || '/placeholder.jpg'}
+                                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                                   alt={dj.stageName}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
@@ -617,8 +865,17 @@ export default function HallOfFame() {
             </FadeIn>
           </div>
 
-          <div className="space-y-20">
-            {legacyLegends.map((legend, index) => {
+          {legendsLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-gold animate-spin" />
+            </div>
+          ) : legends.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-text-secondary text-lg">No legacy legends recorded yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-20">
+            {legends.map((legend, index) => {
               const isEven = index % 2 === 0;
               return (
                 <FadeIn key={legend.id} delay={0.1}>
@@ -631,7 +888,7 @@ export default function HallOfFame() {
                     <div className="w-full md:w-5/12 relative group">
                       <div className="aspect-[4/5] rounded-2xl overflow-hidden border-2 border-white/5 relative">
                         <img
-                          src={legend.image}
+                          src={legend.image || '/placeholder.jpg'}
                           alt={legend.name}
                           className="w-full h-full object-cover sepia opacity-70 group-hover:sepia-0 group-hover:opacity-90 transition-all duration-700"
                         />
@@ -698,6 +955,7 @@ export default function HallOfFame() {
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
@@ -745,7 +1003,7 @@ export default function HallOfFame() {
                       <div className="w-full md:w-5/12 relative group">
                         <div className="aspect-[4/5] rounded-2xl overflow-hidden border-2 border-white/5 group-hover:border-gold/30 transition-all duration-700 relative">
                           <img
-                            src={pioneer.avatar || '/placeholder.jpg'}
+                            src={getMediaUrl(pioneer.avatar) || '/default-avatar.jpg'}
                             alt={pioneer.stageName}
                             className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
                           />

@@ -712,7 +712,7 @@ function DJsSection() {
                 <tr key={dj.id} className="border-b border-white/5 text-sm">
                   <td className="p-4">
                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                      {dj.avatar ? <img src={dj.avatar} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                      {dj.avatar ? <img src={getMediaUrl(dj.avatar)} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
                     </div>
                   </td>
                   <td className="p-4 font-bold text-text-primary">{dj.stageName}</td>
@@ -862,7 +862,7 @@ function RankingsSection() {
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                        {dj.avatar ? <img src={dj.avatar} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
+                        {dj.avatar ? <img src={getMediaUrl(dj.avatar)} alt="" className="w-full h-full object-cover" /> : <Mic className="w-4 h-4 text-text-muted" />}
                       </div>
                       <span className="font-bold text-text-primary">{dj.stageName}</span>
                     </div>
@@ -5106,7 +5106,7 @@ function HallOfFameSection() {
                   >
                     <div className="flex items-center gap-3">
                       <img
-                        src={dj.avatar || '/placeholder.jpg'}
+                        src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                         alt={dj.stageName}
                         className="w-10 h-10 rounded-full object-cover"
                       />
@@ -5688,7 +5688,7 @@ function IncompleteProfilesWidget() {
                     <td className="p-3">
                       <div className="flex items-center gap-2.5">
                         <img
-                          src={u.avatar || '/default-dj-avatar.jpg'}
+                          src={getMediaUrl(u.avatar) || '/default-avatar.jpg'}
                           alt=""
                           className="w-8 h-8 rounded-full object-cover border border-white/10"
                         />
@@ -5804,7 +5804,7 @@ function BirthdayWidget() {
                 {todaysCelebrants.map((c: any) => (
                   <div key={c.id} className="p-4 rounded-xl border border-[#f4e059]/30 bg-[#f4e059]/10 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img src={c.avatar || '/logo-icon.png'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover border border-[#f4e059]" />
+                      <img src={getMediaUrl(c.avatar) || '/default-avatar.jpg'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover border border-[#f4e059]" />
                       <div>
                         <p className="font-bold text-white text-sm">{c.displayName} <span className="text-xs font-normal text-text-muted">({c.age} yrs)</span></p>
                         <p className="text-xs text-text-muted">{c.email} • <span className="text-[#f4e059] font-medium">{c.role}</span></p>
@@ -5842,7 +5842,7 @@ function BirthdayWidget() {
                 {upcomingBirthdays.map((u: any) => (
                   <div key={u.id} className="p-3 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <img src={u.avatar || '/logo-icon.png'} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
+                      <img src={getMediaUrl(u.avatar) || '/default-avatar.jpg'} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
                       <div>
                         <p className="text-xs font-bold text-white">{u.displayName}</p>
                         <p className="text-[10px] text-text-muted">In {u.daysUntil} day{u.daysUntil > 1 ? 's' : ''} ({new Date(u.dateOfBirth).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})</p>
@@ -6003,7 +6003,7 @@ function PromoSection() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={dj.avatar || '/logo-icon.png'}
+                            src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                             alt={dj.stageName}
                             className="w-9 h-9 rounded-full object-cover border border-white/10"
                           />
@@ -6751,7 +6751,7 @@ function OpportunitiesSection() {
                     {opp.applicants.map((app: any) => (
                       <div key={app.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5">
                         <div className="flex items-center gap-3">
-                          <img src={app.dj?.avatar || '/default-avatar.jpg'} alt={app.dj?.stageName} className="w-8 h-8 rounded-full border border-gold/30 object-cover" />
+                          <img src={getMediaUrl(app.dj?.avatar) || '/default-avatar.jpg'} alt={app.dj?.stageName} className="w-8 h-8 rounded-full border border-gold/30 object-cover" />
                           <div>
                             <p className="text-sm font-bold text-text-primary">{app.dj?.stageName}</p>
                             <StatusBadge status={app.status} />

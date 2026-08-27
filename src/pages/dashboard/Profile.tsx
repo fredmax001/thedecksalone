@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
-import api from '@/lib/api';
+import api, { getMediaUrl } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -352,10 +352,10 @@ export default function Profile() {
     formData.append('socialLinks', JSON.stringify(form.socialLinks));
     formData.append('streamingLinks', JSON.stringify(form.streamingLinks));
 
-    const avatarFromInput = avatarInputRef.current?.files?.[0];
-    const coverFromInput = coverInputRef.current?.files?.[0];
-    if (avatarFromInput) formData.append('avatar', avatarFromInput);
-    if (coverFromInput) formData.append('coverBanner', coverFromInput);
+    const avatarToSend = avatarFile || avatarInputRef.current?.files?.[0];
+    const coverToSend = coverFile || coverInputRef.current?.files?.[0];
+    if (avatarToSend) formData.append('avatar', avatarToSend);
+    if (coverToSend) formData.append('coverBanner', coverToSend);
     return formData;
   };
 
@@ -513,7 +513,7 @@ export default function Profile() {
               <Label className="text-text-secondary mb-3 block">Avatar</Label>
               <div className="flex items-center gap-4">
                 <Avatar className="w-20 h-20 border-2 border-gold/30">
-                  <AvatarImage src={avatarPreview || user?.avatar} />
+                  <AvatarImage src={avatarPreview || getMediaUrl(user?.avatar) || undefined} />
                   <AvatarFallback className="bg-gold/20 text-gold text-xl font-bold">
                     {(user?.name || user?.username || 'U').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
@@ -535,6 +535,7 @@ export default function Profile() {
                         formData.append('avatar', file);
                         try {
                           await api.put('/users/avatar', formData);
+                          await useAuthStore.getState().fetchMe();
                           toast.success('Avatar updated successfully!');
                         } catch (err: any) {
                           toast.error(err.response?.data?.error || 'Failed to update avatar');
@@ -756,7 +757,7 @@ export default function Profile() {
                   <div className="flex items-center gap-5">
                     <div className="relative group">
                       <Avatar className="w-24 h-24 rounded-full border-2 border-gold/40 bg-black">
-                        <AvatarImage src={avatarPreview || djData?.avatar || user?.avatar} className="object-cover" />
+                        <AvatarImage src={avatarPreview || getMediaUrl(djData?.avatar || user?.avatar) || undefined} className="object-cover" />
                         <AvatarFallback className="bg-gold/20 text-gold text-2xl font-black">
                           {(form.stageName || 'DJ').slice(0, 2).toUpperCase()}
                         </AvatarFallback>
@@ -793,9 +794,12 @@ export default function Profile() {
                   <div className="relative rounded-xl overflow-hidden border border-[#2a2a2a] bg-[#0a0a0a] h-40 sm:h-48 group flex items-center justify-center">
                     {coverPreview || djData?.coverBanner ? (
                       <img
-                        src={coverPreview || djData?.coverBanner}
+                        src={getMediaUrl(coverPreview || djData?.coverBanner)}
                         alt="Cover preview"
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/images/battle-arena.jpg';
+                        }}
                       />
                     ) : (
                       <div className="text-center p-4">
@@ -1354,7 +1358,7 @@ export default function Profile() {
         type="file"
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
           if (file) {
             setCoverFile(file);
@@ -1362,6 +1366,21 @@ export default function Profile() {
             const reader = new FileReader();
             reader.onloadend = () => setCoverPreview(reader.result as string);
             reader.readAsDataURL(file);
+
+            if (djId) {
+              const formData = new FormData();
+              formData.append('coverBanner', file);
+              try {
+                const res = await api.put('/djs/cover', formData);
+                if (res.data?.data?.coverBanner) {
+                  setCoverPreview(res.data.data.coverBanner);
+                  setCoverFile(null);
+                  toast.success('Cover banner updated successfully!');
+                }
+              } catch (err: any) {
+                console.warn('Direct cover upload error, will save on full form submit:', err);
+              }
+            }
           }
         }}
       />
@@ -1376,13 +1395,25 @@ export default function Profile() {
       {/* ═══════════ Hero Header Card ═══════════ */}
       <div className="relative rounded-2xl overflow-hidden bg-[#0d0d0d] border border-[#222222] shadow-2xl">
         {/* Cover Banner Area */}
-        <div className="relative h-32 sm:h-36 w-full overflow-hidden bg-black">
+        <div className="relative h-32 sm:h-36 w-full overflow-hidden bg-black group">
           <img
-            src={coverPreview || djData?.coverBanner || '/images/battle-arena.jpg'}
+            src={getMediaUrl(coverPreview || djData?.coverBanner) || '/images/battle-arena.jpg'}
             alt="DJ Cover"
             className="w-full h-full object-cover opacity-75"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/images/battle-arena.jpg';
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-[#0d0d0d]/50 to-transparent" />
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black/90 border border-gold/40 text-gold text-xs font-bold flex items-center gap-1.5 shadow-lg backdrop-blur-sm cursor-pointer hover:scale-105 active:scale-95 transition-all"
+            title="Change Cover Banner"
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Change Cover</span>
+          </button>
         </div>
 
         {/* User Info Content Overlapping Banner */}
@@ -1393,7 +1424,7 @@ export default function Profile() {
               <div className="relative shrink-0">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-[3.5px] border-white/90 bg-black overflow-hidden shadow-2xl">
                   <img
-                    src={avatarPreview || djData?.avatar || user?.avatar || '/logo-icon.png'}
+                    src={avatarPreview || getMediaUrl(djData?.avatar || user?.avatar) || '/default-avatar.jpg'}
                     alt={form.stageName || 'DJ Avatar'}
                     className="w-full h-full object-cover"
                   />

@@ -18,6 +18,7 @@ import {
 import FadeIn from '@/components/FadeIn';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useRankings } from '@/hooks/useRankings';
+import { getMediaUrl } from '@/lib/api';
 
 
 /* ─────────────────── Easing ─────────────────── */
@@ -101,7 +102,7 @@ function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
 
       <div className="shrink-0">
         <img
-          src={dj.avatar || '/placeholder.jpg'}
+          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
           alt={dj.stageName}
           className={`w-12 h-12 rounded-full object-cover border-2 ${getRankBorder(dj.rankingPosition)}`}
         />
@@ -227,7 +228,7 @@ function ByCitySection({ djs }: { djs: RankedDJ[] }) {
                 {cityData.djs.map((dj, j) => (
                   <div key={dj.id} className="flex items-center gap-3">
                     <span className={`font-mono text-sm font-bold w-6 ${getRankColor(j + 1)}`}>{j + 1}</span>
-                    <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                    <img src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-text-primary truncate">{dj.stageName}</p>
                       <p className="font-mono text-[10px] text-gold">{dj.rankingScore.toFixed(1)}</p>
@@ -263,7 +264,7 @@ function ByGenreSection({ djs }: { djs: RankedDJ[] }) {
                 {genreData.djs.map((dj, j) => (
                   <div key={dj.id} className="flex items-center gap-3">
                     <span className={`font-mono text-sm font-bold w-6 ${getRankColor(j + 1)}`}>{j + 1}</span>
-                    <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                    <img src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-text-primary truncate">{dj.stageName}</p>
                       <p className="font-mono text-[10px] text-gold">{dj.rankingScore.toFixed(1)}</p>
@@ -315,7 +316,7 @@ function FastestRisingSection({ djs }: { djs: RankedDJ[] }) {
                 <span className="font-mono text-base font-bold text-green">{i + 1}</span>
               </div>
               <div className="col-span-4 flex items-center gap-3">
-                <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                <img src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'} alt={dj.stageName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
                 <div>
                   <p className="text-sm font-semibold text-text-primary">{dj.stageName}</p>
                   {(dj.trend || 0) > 3 && (
@@ -361,7 +362,7 @@ function MostBookedSection({ djs }: { djs: RankedDJ[] }) {
           <FadeIn key={dj.id} delay={i * 0.08}>
             <div className="flex items-center gap-4">
               <span className="font-mono text-sm font-bold text-text-muted w-6">{i + 1}</span>
-              <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+              <img src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
               <span className="text-sm font-medium text-text-primary w-32 truncate">{dj.stageName}</span>
               <div className="flex-1 h-6 bg-dark-gray rounded-md overflow-hidden max-w-md">
                 <motion.div
@@ -397,7 +398,7 @@ function MostStreamedSection({ djs }: { djs: RankedDJ[] }) {
           <FadeIn key={dj.id} delay={i * 0.08}>
             <div className="flex items-center gap-4">
               <span className="font-mono text-sm font-bold text-text-muted w-6">{i + 1}</span>
-              <img src={dj.avatar || '/placeholder.jpg'} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+              <img src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
               <span className="text-sm font-medium text-text-primary w-32 truncate">{dj.stageName}</span>
               <div className="flex-1 h-6 bg-dark-gray rounded-md overflow-hidden max-w-md">
                 <motion.div

@@ -608,16 +608,24 @@ router.delete('/playlists/:id/items/:itemId', async (req: any, res: any) => {
   }
 });
 
+const { recalculateAllRankingsV2 } = require('../utils/rankingAlgorithm');
+
 /* ─────────────────────────────────────────────────────────────
    4. DJ RANKING MANAGEMENT & AUDIT TRAIL
    GET /api/moderator/rankings
+   POST /api/moderator/rankings/recalculate
    POST /api/moderator/rankings/adjust
    POST /api/moderator/djs/:id/feature
    ───────────────────────────────────────────────────────────── */
 router.get('/rankings', async (req: any, res: any) => {
   try {
     const djs = await prisma.djProfile.findMany({
-      orderBy: { rankingPosition: 'asc' },
+      orderBy: [
+        { rankingScore: 'desc' },
+        { monthlyListeners: 'desc' },
+        { totalMixUploads: 'desc' },
+        { createdAt: 'asc' },
+      ],
       select: {
         id: true,
         stageName: true,
@@ -636,7 +644,69 @@ router.get('/rankings', async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: djs });
+    // Assign clean sequential, deduplicated rankings based on actual scores
+    const deduplicated = djs.map((dj: any, index: number) => ({
+      ...dj,
+      rankingPosition: index + 1,
+    }));
+
+    return res.json({ success: true, data: deduplicated });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Recalculate all rankings via platform scoring algorithm
+router.post('/rankings/recalculate', async (req: any, res: any) => {
+  try {
+    if (typeof recalculateAllRankingsV2 === 'function') {
+      await recalculateAllRankingsV2();
+    }
+
+    const djs = await prisma.djProfile.findMany({
+      orderBy: [
+        { rankingScore: 'desc' },
+        { monthlyListeners: 'desc' },
+        { totalMixUploads: 'desc' },
+        { createdAt: 'asc' },
+      ],
+      select: {
+        id: true,
+        stageName: true,
+        avatar: true,
+        city: true,
+        verified: true,
+        rankingPosition: true,
+        rankingScore: true,
+        communityScore: true,
+        industryScore: true,
+        monthlyListeners: true,
+        totalMixUploads: true,
+        isModeratorFeatured: true,
+        isRisingDj: true,
+        user: { select: { id: true, username: true, email: true } },
+      },
+    });
+
+    const deduplicated = djs.map((dj: any, index: number) => ({
+      ...dj,
+      rankingPosition: index + 1,
+    }));
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.username || req.user.email || req.user.name || 'Moderator',
+      action: 'RECALCULATE_RANKINGS',
+      targetType: 'SYSTEM',
+      targetName: 'Leaderboard Algorithm',
+      newData: { totalDjs: deduplicated.length },
+    });
+
+    return res.json({
+      success: true,
+      data: deduplicated,
+      message: 'All platform rankings successfully recalculated and synchronized!',
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -708,24 +778,44 @@ router.post('/djs/:id/feature', async (req: any, res: any) => {
     const { id } = req.params;
     const { isModeratorFeatured, isRisingDj } = req.body;
 
-    const dj = await prisma.djProfile.findUnique({ where: { id } });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+    const dj = await prisma.djProfile.findFirst({
+      where: {
+        OR: [{ id }, { userId: id }],
+      },
+    });
+    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
 
     const updateData: any = {};
     if (isModeratorFeatured !== undefined) updateData.isModeratorFeatured = Boolean(isModeratorFeatured);
     if (isRisingDj !== undefined) updateData.isRisingDj = Boolean(isRisingDj);
 
     const updated = await prisma.djProfile.update({
-      where: { id },
+      where: { id: dj.id },
       data: updateData,
+      select: {
+        id: true,
+        stageName: true,
+        avatar: true,
+        city: true,
+        verified: true,
+        rankingPosition: true,
+        rankingScore: true,
+        communityScore: true,
+        industryScore: true,
+        monthlyListeners: true,
+        totalMixUploads: true,
+        isModeratorFeatured: true,
+        isRisingDj: true,
+        user: { select: { id: true, username: true, email: true } },
+      },
     });
 
     await createModeratorLog({
       moderatorId: req.user.id,
-      moderatorName: req.user.name || req.user.email,
+      moderatorName: req.user.username || req.user.email || req.user.name || 'Moderator',
       action: 'FEATURE_DJ',
       targetType: 'DJ',
-      targetId: id,
+      targetId: dj.id,
       targetName: dj.stageName,
       newData: updateData,
     });

@@ -61,12 +61,11 @@ const reportRoutes = require('./routes/reports');
 const moderatorRoutes = require('./routes/moderator');
 const officialPlaylistRoutes = require('./routes/officialPlaylists');
 const developerRoutes = require('./routes/developers');
+const hallOfFameRoutes = require('./routes/hallOfFame');
 
 const app = express();
-// Two reverse proxies sit in front of the API in production:
-// the host edge proxy (ports 80/443) and the in-compose nginx container.
-// Trust exactly those two hops so req.ip resolves to the real client IP.
-app.set('trust proxy', 2);
+// Trust reverse proxies (Nginx / Cloudflare / Host edge) to resolve client IP correctly
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean);
@@ -76,6 +75,11 @@ if (process.env.NODE_ENV !== 'production') {
     if (!ALLOWED_ORIGINS.includes(origin)) ALLOWED_ORIGINS.push(origin);
   });
 }
+// Capacitor mobile app origins (WebView runs on localhost scheme)
+['https://localhost', 'capacitor://localhost'].forEach((origin) => {
+  if (!ALLOWED_ORIGINS.includes(origin)) ALLOWED_ORIGINS.push(origin);
+});
+
 
 // Security headers hardened for production
 app.use(helmet({
@@ -224,6 +228,7 @@ app.use('/api/photos', photoRoutes);
 app.use('/api/sets', setRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/developers', developerRoutes);
+app.use('/api/hall-of-fame', hallOfFameRoutes);
 
 // OG Meta routes for social media sharing (own file)
 app.use('/og', ogRoutes);
@@ -494,6 +499,7 @@ process.on('SIGHUP', () => logger.info('SIGHUP ignored'));
 
 const { checkAndSendTrialNotifications } = require('./utils/trial');
 const { cleanupOldNotifications } = require('./utils/notifications');
+const { startScheduledJobs } = require('./jobs/scheduler');
 
 function startBackgroundJobs() {
   logger.info('[BackgroundJobs] Starting scheduled background tasks');
@@ -521,6 +527,9 @@ function startBackgroundJobs() {
       user: { role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } },
     },
   }).catch(() => {});
+
+  // Phase 2: scheduled ranking & discovery score recalculation jobs
+  startScheduledJobs();
 }
 
 if (require.main === module) {

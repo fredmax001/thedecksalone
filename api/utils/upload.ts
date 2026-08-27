@@ -89,6 +89,12 @@ const uploadEventImage = multer({
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
 });
 
+const uploadHallOfFameImage = multer({
+  storage: memoryStorage,
+  fileFilter: imageFileFilter,
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
+});
+
 const uploadDocument = multer({
   storage: memoryStorage,
   fileFilter: (req, file, cb) => {
@@ -155,6 +161,7 @@ module.exports = {
   uploadMixCover,
   uploadMix,
   uploadEventImage,
+  uploadHallOfFameImage,
   uploadDjProfileImages,
   uploadDocument,
   serveUploads,

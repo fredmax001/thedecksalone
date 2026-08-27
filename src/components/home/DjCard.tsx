@@ -4,6 +4,7 @@ import { Play } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 import type { HomeDJ } from './types';
 
 interface DjCardProps {
@@ -47,13 +48,15 @@ export default function DjCard({ dj, variant = 'portrait', index = 0 }: DjCardPr
         <Link to={profileLink} className="flex flex-col items-center gap-2 group w-[72px] sm:w-24 shrink-0">
           <div className="relative p-[2px] rounded-full border-2 border-gold group-hover:scale-105 transition-transform shadow-[0_0_14px_rgba(244,224,89,0.25)]">
             <div className="w-[64px] h-[64px] sm:w-[84px] sm:h-[84px] rounded-full overflow-hidden bg-black">
-              <img
+              <OptimizedImage
                 src={dj.avatar ? getMediaUrl(dj.avatar) : '/default-avatar.jpg'}
                 alt={dj.stageName}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/default-avatar.jpg';
-                }}
+                width={128}
+                height={128}
+                objectFit="cover"
+                loading="lazy"
+                fallbackSrc="/default-avatar.jpg"
+                containerClassName="w-full h-full"
               />
             </div>
             {dj.verified && (
@@ -81,13 +84,16 @@ export default function DjCard({ dj, variant = 'portrait', index = 0 }: DjCardPr
     >
       <Link to={profileLink} className="group block">
         <div className="relative aspect-[3/4] rounded-xl sm:rounded-2xl overflow-hidden bg-black-surface border border-dark-gray group-hover:border-gold/50 transition-all duration-300 shadow-card">
-          <img
+          <OptimizedImage
             src={dj.avatar ? getMediaUrl(dj.avatar) : '/default-avatar.jpg'}
             alt={dj.stageName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/default-avatar.jpg';
-            }}
+            width={400}
+            height={533}
+            objectFit="cover"
+            loading="lazy"
+            fallbackSrc="/default-avatar.jpg"
+            containerClassName="w-full h-full"
+            className="group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
 

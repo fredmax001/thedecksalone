@@ -35,6 +35,7 @@ import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { BookingCalendar } from "@/components/BookingCalendar";
+import { getMediaUrl } from "@/lib/api";
 
 const EVENT_TYPES = [
   'Wedding',
@@ -1093,7 +1094,7 @@ export default function Booking() {
                     <div className="sm:w-[200px] shrink-0">
                       <div className="aspect-[4/3] sm:h-full sm:aspect-auto relative overflow-hidden">
                         <img
-                          src={dj.avatar || '/default-avatar.jpg'}
+                          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
                           alt={dj.name}
                           onError={imageFallback}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"

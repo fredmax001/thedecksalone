@@ -1,28 +1,40 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { fetchMe, setAuth } = useAuthStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Google OAuth redirects with token in query param or hash fragment
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const searchParams = new URLSearchParams(window.location.search);
+    // Google OAuth redirects with token in query param, hash fragment, or state
+    const hashParams = new URLSearchParams((location.hash || window.location.hash || '').replace(/^#/, ''));
+    const searchParams = new URLSearchParams(location.search || window.location.search || '');
 
-    const token = hashParams.get('token') || searchParams.get('token');
-    const error = hashParams.get('error') || searchParams.get('error');
+    const token =
+      hashParams.get('token') ||
+      searchParams.get('token') ||
+      (location.state as any)?.token ||
+      localStorage.getItem('token') ||
+      useAuthStore.getState().token;
+
+    const error =
+      hashParams.get('error') ||
+      searchParams.get('error') ||
+      (location.state as any)?.error;
+
+    console.log('[AuthCallback] Received callback:', { hasToken: !!token, error, locationSearch: location.search, locationHash: location.hash });
 
     if (error) {
       console.error('[Google Auth Error]:', error);
       setErrorMessage(error);
       toast.error(`Sign in failed: ${error}`);
       const timer = setTimeout(() => {
-        navigate('/login?error=' + encodeURIComponent(error));
+        navigate('/login?error=' + encodeURIComponent(error), { replace: true });
       }, 2500);
       return () => clearTimeout(timer);
     }
@@ -41,30 +53,30 @@ export default function AuthCallback() {
           toast.success('Successfully signed in with Google!');
           const user = useAuthStore.getState().user;
           if (user?.role === 'MODERATOR') {
-            navigate('/moderator');
+            navigate('/moderator', { replace: true });
           } else if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
-            navigate('/admin');
+            navigate('/admin', { replace: true });
           } else if (user?.role === 'FINANCE_ADMIN') {
-            navigate('/finance');
+            navigate('/finance', { replace: true });
           } else if (user?.role === 'SUPPORT_ADMIN') {
-            navigate('/support');
+            navigate('/support', { replace: true });
           } else if (user?.role === 'VERIFICATION_ADMIN') {
-            navigate('/verification');
+            navigate('/verification', { replace: true });
           } else if (user?.role === 'DJ') {
             const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
-            navigate(isMobile ? '/discover' : '/dashboard');
+            navigate(isMobile ? '/discover' : '/dashboard', { replace: true });
           } else {
-            navigate('/discover');
+            navigate('/discover', { replace: true });
           }
         })
         .catch((err) => {
           console.error('[Google Auth] Failed to fetch user profile:', err);
-          navigate('/discover');
+          navigate('/discover', { replace: true });
         });
     } else {
-      navigate('/login');
+      navigate('/login', { replace: true });
     }
-  }, [navigate, fetchMe, setAuth]);
+  }, [navigate, location, fetchMe, setAuth]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black text-text-primary p-4">
