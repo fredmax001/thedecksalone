@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { uploadCover } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { requireTrialOrSubscription } = require('../utils/trial');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -37,11 +38,11 @@ const setItemSchema = z.object({
 // Helper middleware: Ensure user is a DJ and attach djProfile
 async function requireDjProfile(req: any, res: any, next: any) {
   if (!req.user || req.user.role !== 'DJ') {
-    return res.status(403).json({ success: false, error: 'Only DJ accounts can perform this action' });
+    return fail(res, 403, 'Only DJ accounts can perform this action');
   }
   const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
   if (!dj) {
-    return res.status(404).json({ success: false, error: 'DJ Profile not found' });
+    return fail(res, 404, 'DJ Profile not found');
   }
   req.djProfile = dj;
   next();
@@ -80,9 +81,9 @@ router.get('/mine', authMiddleware, requireDjProfile, async (req: any, res: any)
       mixCount: s.items.length,
     }));
 
-    return res.json({ success: true, data: formatted });
+    return ok(res, formatted);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -122,9 +123,9 @@ router.get('/dj/:djId', async (req: any, res: any) => {
       mixCount: s.items.length,
     }));
 
-    return res.json({ success: true, data: formatted });
+    return ok(res, formatted);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -152,18 +153,15 @@ router.get('/:id', async (req: any, res: any) => {
     });
 
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         ...set,
         mixCount: set.items.length,
-      },
-    });
+      });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -186,7 +184,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, requireDjProfile, u
 
     const parsed = createSetSchema.safeParse(payload);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
+      return fail(res, 400, 'Invalid input parameters');
     }
 
     const djId = req.djProfile.id;
@@ -196,7 +194,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, requireDjProfile, u
 
     return res.status(201).json({ success: true, data: set });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -205,11 +203,11 @@ router.put('/:id', authMiddleware, requireDjProfile, uploadCover.single('coverIm
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     let coverImage = req.body.coverImage;
@@ -228,7 +226,7 @@ router.put('/:id', authMiddleware, requireDjProfile, uploadCover.single('coverIm
 
     const parsed = updateSetSchema.safeParse(payload);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
+      return fail(res, 400, 'Invalid input parameters');
     }
 
     const updated = await prisma.djSet.update({
@@ -236,9 +234,9 @@ router.put('/:id', authMiddleware, requireDjProfile, uploadCover.single('coverIm
       data: parsed.data,
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -247,19 +245,19 @@ router.delete('/:id', authMiddleware, requireDjProfile, async (req: any, res: an
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     await prisma.djSetItem.deleteMany({ where: { setId: req.params.id } });
     await prisma.djSet.delete({ where: { id: req.params.id } });
 
-    return res.json({ success: true, data: { message: 'Set deleted' } });
+    return ok(res, { message: 'Set deleted' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -268,16 +266,16 @@ router.post('/:id/mixes', authMiddleware, requireDjProfile, async (req: any, res
   try {
     const parsed = setItemSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input parameters' });
+      return fail(res, 400, 'Invalid input parameters');
     }
 
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const { mixId, sortOrder = 0 } = parsed.data;
@@ -287,7 +285,7 @@ router.post('/:id/mixes', authMiddleware, requireDjProfile, async (req: any, res
       where: { setId: req.params.id, mixId },
     });
     if (existingItem) {
-      return res.status(409).json({ success: false, error: 'Mix is already in this set' });
+      return fail(res, 409, 'Mix is already in this set');
     }
 
     const item = await prisma.djSetItem.create({
@@ -303,7 +301,7 @@ router.post('/:id/mixes', authMiddleware, requireDjProfile, async (req: any, res
 
     return res.status(201).json({ success: true, data: item });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -312,20 +310,20 @@ router.delete('/:id/mixes/:mixId', authMiddleware, requireDjProfile, async (req:
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     await prisma.djSetItem.deleteMany({
       where: { setId: req.params.id, mixId: req.params.mixId },
     });
 
-    return res.json({ success: true, data: { removed: true } });
+    return ok(res, { removed: true });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -334,16 +332,16 @@ router.put('/:id/reorder', authMiddleware, requireDjProfile, async (req: any, re
   try {
     const set = await prisma.djSet.findUnique({ where: { id: req.params.id } });
     if (!set) {
-      return res.status(404).json({ success: false, error: 'Set not found' });
+      return fail(res, 404, 'Set not found');
     }
 
     if (set.djId !== req.djProfile.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const { itemIds } = req.body; // array of djSetItem IDs in desired order
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ success: false, error: 'itemIds array required' });
+      return fail(res, 400, 'itemIds array required');
     }
 
     const updates = itemIds.map((itemId: string, index: number) =>
@@ -357,7 +355,7 @@ router.put('/:id/reorder', authMiddleware, requireDjProfile, async (req: any, re
 
     return res.json({ success: true, message: 'Set reordered successfully' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

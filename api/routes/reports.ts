@@ -1,4 +1,5 @@
 const express = require('express');
+const { ok, fail } = require('../utils/response');
 const router = express.Router();
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
@@ -28,11 +29,7 @@ router.post('/', softAuthMiddleware, async (req: any, res: any) => {
   try {
     const parsed = createReportSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid report data',
-        details: parsed.error.flatten(),
-      });
+      return fail(res, 400, 'Invalid report data', { details: parsed.error.flatten() });
     }
 
     const { targetUserId, mixId, eventId, commentId, reason, details } = parsed.data;
@@ -97,7 +94,7 @@ router.post('/', softAuthMiddleware, async (req: any, res: any) => {
     });
   } catch (error: any) {
     console.error('[Reports] Error creating report:', error);
-    return res.status(500).json({ success: false, error: 'Failed to submit report' });
+    return fail(res, 500, 'Failed to submit report');
   }
 });
 

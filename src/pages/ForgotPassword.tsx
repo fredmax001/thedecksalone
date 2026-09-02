@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const forgotPasswordSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
@@ -47,7 +48,7 @@ export default function ForgotPassword() {
         setError(res.data.error || 'Request failed');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      setError(getApiErrorMessage(err, 'Something went wrong. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

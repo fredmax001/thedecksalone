@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { formatDate, formatTime } from '@/lib/dateTime';
 import {
   useUserNotifications,
   useMarkNotificationRead,
@@ -89,8 +90,8 @@ function NotificationRow({ item, index }: { item: NotificationItem; index: numbe
           </div>
           <p className="text-xs text-text-muted mt-1 line-clamp-2">{item.body}</p>
           <p className="text-[10px] text-text-muted mt-2">
-            {new Date(item.createdAt).toLocaleDateString()} ·{' '}
-            {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {formatDate(item.createdAt)} ·{' '}
+            {formatTime(item.createdAt)}
           </p>
         </div>
 

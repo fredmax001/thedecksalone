@@ -39,6 +39,16 @@ async function processCover(buffer: Buffer) {
   return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
 }
 
+async function processMixCover(buffer: Buffer) {
+  await validateImage(buffer);
+  const processed = await sharp(buffer)
+    .rotate()
+    .resize(1200, 1200, { fit: 'cover', position: 'centre' })
+    .webp({ quality: 85 })
+    .toBuffer();
+  return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
+}
+
 async function processEventImage(buffer: Buffer) {
   await validateImage(buffer);
   const processed = await sharp(buffer)
@@ -59,4 +69,4 @@ async function processHallOfFameImage(buffer: Buffer) {
   return { buffer: processed, contentType: 'image/webp', ext: 'webp' };
 }
 
-module.exports = { validateImage, processAvatar, processCover, processEventImage, processHallOfFameImage };
+module.exports = { validateImage, processAvatar, processCover, processMixCover, processEventImage, processHallOfFameImage };

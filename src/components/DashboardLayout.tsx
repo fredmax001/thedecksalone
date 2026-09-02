@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
-import api, { getMediaUrl } from '@/lib/api';
+import api from '@/lib/api';
 import MobileTabBar from '@/components/MobileTabBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,8 @@ import { cn } from '@/lib/utils';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
 import TrialBanner from '@/components/TrialBanner';
+import { getAvatarImageUrl } from '@/lib/utils';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
@@ -75,12 +77,12 @@ export default function DashboardLayout() {
   const [manualCollapse, setManualCollapse] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const isDj = user?.role === 'DJ';
+  const { isDj } = useUserRole();
   const isProPlus = user?.djProfile?.subscriptionTier === 'legend';
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
-  const avatarUrl = getMediaUrl(djProfile?.avatar || localAvatarUrl || user?.avatar) || '/default-avatar.jpg';
+  const avatarUrl = getAvatarImageUrl(djProfile?.avatar || localAvatarUrl || user?.avatar);
   const initials = djName.slice(0, 2).toUpperCase();
 
   // Redirect Moderators to Moderator Console

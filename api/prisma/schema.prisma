@@ -316,6 +316,18 @@ model Mix {
   allowPublicDownloads Boolean   @default(false)
   repostToDownload Boolean       @default(false)
   followToDownload Boolean       @default(false)
+  notListed        Boolean       @default(false)
+  hideStats        Boolean       @default(false)
+  allowComments    Boolean       @default(true)
+  fansSeeTracklist Boolean       @default(false)
+  recordingLocation String?
+  version          String?
+  bpm              String?
+  musicalKey       String?
+  showAutoBpmKey   Boolean       @default(true)
+  isAiProduced     Boolean       @default(false)
+  releaseDate      DateTime?
+  license          String?       @default("All Rights Reserved")
   promotedUntil    DateTime?
   promotedPointsSpent Int        @default(0)
   flaggedForReview Boolean       @default(false)
@@ -729,6 +741,11 @@ model Event {
   totalRevenue         Float      @default(0)
   ticketsSold          Int        @default(0)
   ticketsCheckedIn     Int        @default(0)
+  ticketSalesClosed    Boolean    @default(false)
+  showRemainingTickets Boolean    @default(true)
+  onsiteUsername       String?    @default("staff")
+  onsitePassword       String?
+  eventCode            String?
   dj                   DjProfile? @relation(fields: [djId], references: [id])
   applications         EventApplication[]
   eventTickets         EventTicket[]
@@ -1104,6 +1121,8 @@ enum NotificationType {
   TICKET_PURCHASED
   TICKET_APPROVED
   TICKET_DECLINED
+  MIX_COMMENTED
+  COMMENT_LIKED
 }
 
 enum Gender {

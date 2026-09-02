@@ -9,8 +9,12 @@ import {
   Loader2,
   Music,
   Sparkles,
+  Star,
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
+import { formatDate } from '@/lib/dateTime';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -151,6 +155,20 @@ export function ModeratorMixes() {
     }
   };
 
+  const handleToggleFeature = async (mix: { id: string; featured?: boolean }) => {
+    try {
+      const newFeatured = !mix.featured;
+      const res = await api.put(`/admin/mixes/${mix.id}/feature`, { featured: newFeatured });
+      if (res.data.success) {
+        toast.success(newFeatured ? 'Mix featured' : 'Mix unfeatured');
+        fetchMixes();
+      }
+    } catch (err) {
+      console.error('Failed to toggle mix feature status', err);
+      toast.error('Failed to update feature status');
+    }
+  };
+
   const handleActionSubmit = async () => {
     if (!actionMix || !actionType) return;
     try {
@@ -281,6 +299,12 @@ export function ModeratorMixes() {
                         Moderator Curated
                       </Badge>
                     )}
+                    {mix.featured && (
+                      <Badge className="text-[10px] bg-gold/20 text-gold border-gold/40 gap-1">
+                        <Star className="w-3 h-3" />
+                        Featured
+                      </Badge>
+                    )}
                     {!mix.isPublic && (
                       <Badge variant="destructive" className="text-[10px]">
                         Hidden / Unpublished
@@ -296,7 +320,7 @@ export function ModeratorMixes() {
 
                   <p className="text-xs text-text-secondary truncate">
                     by <span className="text-white font-medium">{mix.dj?.stageName}</span> • Uploaded{' '}
-                    {new Date(mix.createdAt).toLocaleDateString()}
+                    {formatDate(mix.createdAt)}
                   </p>
 
                   <div className="flex items-center gap-3 text-[11px] text-text-muted">
@@ -340,6 +364,21 @@ export function ModeratorMixes() {
                       <Eye className="w-3.5 h-3.5 mr-1" /> Publish
                     </>
                   )}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleToggleFeature(mix)}
+                  className={`h-8 text-xs border-dark-gray ${
+                    mix.featured
+                      ? 'text-gold hover:bg-gold/10'
+                      : 'text-text-secondary hover:text-gold hover:bg-gold/10'
+                  }`}
+                  title={mix.featured ? 'Unfeature Mix' : 'Feature Mix'}
+                >
+                  <Star className={cn('w-3.5 h-3.5 mr-1', mix.featured && 'fill-gold')} />
+                  {mix.featured ? 'Featured' : 'Feature'}
                 </Button>
 
                 <Button

@@ -5,6 +5,7 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadCover } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const logger = require('../utils/logger');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -103,9 +104,7 @@ router.get('/stats', async (req: any, res: any) => {
       }),
     ]);
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         totalDjs,
         verifiedDjs,
         totalMixes,
@@ -115,11 +114,10 @@ router.get('/stats', async (req: any, res: any) => {
         officialPlaylistsCount,
         topRankedDjs,
         recentUploads,
-      },
-    });
+      });
   } catch (error: any) {
     logger.error('Error fetching moderator stats:', error.message);
-    return res.status(500).json({ success: false, error: 'Failed to load moderator dashboard stats' });
+    return fail(res, 500, 'Failed to load moderator dashboard stats');
   }
 });
 
@@ -179,7 +177,7 @@ router.get('/mixes', async (req: any, res: any) => {
     });
   } catch (error: any) {
     logger.error('Error fetching moderator mixes:', error.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch mixes' });
+    return fail(res, 500, 'Failed to fetch mixes');
   }
 });
 
@@ -201,7 +199,7 @@ router.put('/mixes/:id', async (req: any, res: any) => {
     const { id } = req.params;
     const parsed = updateMixSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const existingMix = await prisma.mix.findUnique({
@@ -209,7 +207,7 @@ router.put('/mixes/:id', async (req: any, res: any) => {
       include: { dj: { select: { stageName: true } } },
     });
     if (!existingMix) {
-      return res.status(404).json({ success: false, error: 'Mix not found' });
+      return fail(res, 404, 'Mix not found');
     }
 
     const { reason, ...updateFields } = parsed.data;
@@ -245,10 +243,10 @@ router.put('/mixes/:id', async (req: any, res: any) => {
       reason: reason || updateFields.moderatorNotes || 'Moderator content update',
     });
 
-    return res.json({ success: true, data: updatedMix });
+    return ok(res, updatedMix);
   } catch (error: any) {
     logger.error('Error updating mix by moderator:', error.message);
-    return res.status(500).json({ success: false, error: 'Failed to update mix' });
+    return fail(res, 500, 'Failed to update mix');
   }
 });
 
@@ -259,7 +257,7 @@ router.post('/mixes/:id/flag', async (req: any, res: any) => {
     const { reason } = req.body;
 
     const mix = await prisma.mix.findUnique({ where: { id } });
-    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+    if (!mix) return fail(res, 404, 'Mix not found');
 
     const updated = await prisma.mix.update({
       where: { id },
@@ -279,9 +277,9 @@ router.post('/mixes/:id/flag', async (req: any, res: any) => {
       reason: reason || 'Flagged for Admin review',
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -317,9 +315,9 @@ router.get('/playlists', async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: playlists });
+    return ok(res, playlists);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -329,7 +327,7 @@ router.post('/playlists', uploadCover.single('coverImageFile'), async (req: any,
     let coverImage = req.body.coverImage;
 
     if (!title || title.trim() === '') {
-      return res.status(400).json({ success: false, error: 'Playlist title is required' });
+      return fail(res, 400, 'Playlist title is required');
     }
 
     if (req.file) {
@@ -364,10 +362,10 @@ router.post('/playlists', uploadCover.single('coverImageFile'), async (req: any,
       reason: 'Created Official Deck Salone Playlist',
     });
 
-    return res.json({ success: true, data: playlist });
+    return ok(res, playlist);
   } catch (error: any) {
     logger.error('Error creating official playlist:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -378,7 +376,7 @@ router.put('/playlists/:id', uploadCover.single('coverImageFile'), async (req: a
     let coverImage = req.body.coverImage;
 
     const existing = await prisma.officialPlaylist.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!existing) return fail(res, 404, 'Playlist not found');
 
     if (req.file) {
       const ext = req.file.originalname.split('.').pop() || 'jpg';
@@ -408,10 +406,10 @@ router.put('/playlists/:id', uploadCover.single('coverImageFile'), async (req: a
       newData: { title: updated.title, isPublished: updated.isPublished },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
     logger.error('Error updating official playlist:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -419,7 +417,7 @@ router.delete('/playlists/:id', async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const existing = await prisma.officialPlaylist.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!existing) return fail(res, 404, 'Playlist not found');
 
     await prisma.officialPlaylist.delete({ where: { id } });
 
@@ -434,7 +432,7 @@ router.delete('/playlists/:id', async (req: any, res: any) => {
 
     return res.json({ success: true, message: 'Playlist deleted' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -443,7 +441,7 @@ router.post('/playlists/:id/items', async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { mixId } = req.body;
-    if (!mixId) return res.status(400).json({ success: false, error: 'mixId required' });
+    if (!mixId) return fail(res, 400, 'mixId required');
 
     const [playlist, mix, existingItem, itemCount] = await Promise.all([
       prisma.officialPlaylist.findUnique({ where: { id } }),
@@ -452,10 +450,10 @@ router.post('/playlists/:id/items', async (req: any, res: any) => {
       prisma.officialPlaylistItem.count({ where: { playlistId: id } }),
     ]);
 
-    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
-    if (!mix) return res.status(404).json({ success: false, error: 'Mix not found' });
+    if (!playlist) return fail(res, 404, 'Playlist not found');
+    if (!mix) return fail(res, 404, 'Mix not found');
     if (existingItem) {
-      return res.status(409).json({ success: false, error: 'Mix is already in this playlist' });
+      return fail(res, 409, 'Mix is already in this playlist');
     }
 
     const item = await prisma.officialPlaylistItem.create({
@@ -478,10 +476,10 @@ router.post('/playlists/:id/items', async (req: any, res: any) => {
       targetName: `${mix.title} -> ${playlist.title}`,
     });
 
-    return res.json({ success: true, data: item });
+    return ok(res, item);
   } catch (error: any) {
     logger.error('Error adding mix to playlist:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -491,11 +489,11 @@ router.post('/playlists/:id/items/bulk', async (req: any, res: any) => {
     const { id } = req.params;
     const { mixIds } = req.body;
     if (!Array.isArray(mixIds) || mixIds.length === 0) {
-      return res.status(400).json({ success: false, error: 'Array of mixIds is required' });
+      return fail(res, 400, 'Array of mixIds is required');
     }
 
     const playlist = await prisma.officialPlaylist.findUnique({ where: { id } });
-    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!playlist) return fail(res, 404, 'Playlist not found');
 
     const [existingItems, currentCount] = await Promise.all([
       prisma.officialPlaylistItem.findMany({
@@ -536,7 +534,7 @@ router.post('/playlists/:id/items/bulk', async (req: any, res: any) => {
     return res.json({ success: true, addedCount: newMixIds.length });
   } catch (error: any) {
     logger.error('Error bulk adding mixes to playlist:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -546,7 +544,7 @@ router.put('/playlists/:id/reorder', async (req: any, res: any) => {
     const { id } = req.params;
     const { itemIds } = req.body; // ordered array of officialPlaylistItem IDs
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ success: false, error: 'itemIds array required' });
+      return fail(res, 400, 'itemIds array required');
     }
 
     const updates = itemIds.map((itemId: string, index: number) =>
@@ -570,7 +568,7 @@ router.put('/playlists/:id/reorder', async (req: any, res: any) => {
     return res.json({ success: true, message: 'Playlist reordered successfully' });
   } catch (error: any) {
     logger.error('Error reordering playlist:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -606,7 +604,7 @@ router.delete('/playlists/:id/items/:itemId', async (req: any, res: any) => {
 
     return res.json({ success: true, message: 'Item removed from playlist' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -652,9 +650,9 @@ router.get('/rankings', async (req: any, res: any) => {
       rankingPosition: index + 1,
     }));
 
-    return res.json({ success: true, data: deduplicated });
+    return ok(res, deduplicated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -704,13 +702,9 @@ router.post('/rankings/recalculate', async (req: any, res: any) => {
       newData: { totalDjs: deduplicated.length },
     });
 
-    return res.json({
-      success: true,
-      data: deduplicated,
-      message: 'All platform rankings successfully recalculated and synchronized!',
-    });
+    return ok(res, deduplicated, 'All platform rankings successfully recalculated and synchronized!');
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -719,14 +713,14 @@ router.post('/rankings/adjust', async (req: any, res: any) => {
   try {
     const { djId, newPosition, newScore, reason } = req.body;
     if (!djId || !reason || reason.trim() === '') {
-      return res.status(400).json({ success: false, error: 'djId and a mandatory reason are required for audit trail' });
+      return fail(res, 400, 'djId and a mandatory reason are required for audit trail');
     }
 
     const dj = await prisma.djProfile.findUnique({
       where: { id: djId },
       select: { id: true, stageName: true, rankingPosition: true, rankingScore: true },
     });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    if (!dj) return fail(res, 404, 'DJ profile not found');
 
     const previousPosition = dj.rankingPosition;
     const previousScore = dj.rankingScore;
@@ -764,13 +758,9 @@ router.post('/rankings/adjust', async (req: any, res: any) => {
       reason: reason.trim(),
     });
 
-    return res.json({
-      success: true,
-      data: updated,
-      message: `Ranking updated for ${dj.stageName}. Adjustment logged in audit trail.`,
-    });
+    return ok(res, updated, `Ranking updated for ${dj.stageName}. Adjustment logged in audit trail.`);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -785,7 +775,7 @@ router.post('/djs/:id/feature', async (req: any, res: any) => {
         OR: [{ id }, { userId: id }],
       },
     });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    if (!dj) return fail(res, 404, 'DJ profile not found');
 
     const updateData: any = {};
     if (isModeratorFeatured !== undefined) updateData.isModeratorFeatured = Boolean(isModeratorFeatured);
@@ -822,9 +812,9 @@ router.post('/djs/:id/feature', async (req: any, res: any) => {
       newData: updateData,
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -851,9 +841,9 @@ router.get('/reports', async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: reports });
+    return ok(res, reports);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -867,7 +857,7 @@ router.post('/reports/:id/action', async (req: any, res: any) => {
       where: { id },
       include: { mix: true, targetUser: true },
     });
-    if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
+    if (!report) return fail(res, 404, 'Report not found');
 
     let status = 'RESOLVED';
     let actionTaken = action || 'RESOLVED';
@@ -913,9 +903,9 @@ router.post('/reports/:id/action', async (req: any, res: any) => {
       reason: notes || `Moderator action: ${actionTaken}`,
     });
 
-    return res.json({ success: true, data: updatedReport });
+    return ok(res, updatedReport);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -943,7 +933,7 @@ router.get('/audit-logs', async (req: any, res: any) => {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

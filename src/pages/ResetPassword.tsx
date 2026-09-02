@@ -8,15 +8,12 @@ import { Lock, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
 import api from '@/lib/api';
+import { passwordSchema } from '@/lib/schemas';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const resetPasswordSchema = z
   .object({
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/\d/, 'Must contain at least one number'),
+    password: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -77,7 +74,7 @@ export default function ResetPassword() {
         setError(res.data.error || 'Reset failed');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      setError(getApiErrorMessage(err, 'Something went wrong. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

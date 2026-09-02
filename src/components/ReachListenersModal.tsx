@@ -11,7 +11,10 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { formatDate } from '@/lib/dateTime';
 import { toast } from 'sonner';
+import { useUserRole } from '@/hooks/useUserRole';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface ReachListenersModalProps {
   isOpen: boolean;
@@ -42,7 +45,7 @@ export function ReachListenersModal({
     isEligible: boolean;
   } | null>(null);
 
-  const isDj = user?.role === 'DJ' || (user as any)?.djProfile;
+  const { isDj } = useUserRole();
   const userTier = ((user as any)?.djProfile?.subscriptionTier || (user as any)?.subscriptionTier || 'free').toLowerCase();
   const isProEligible = userTier === 'pro' || userTier === 'legend';
 
@@ -86,7 +89,7 @@ export function ReachListenersModal({
 
       if (res.data.success) {
         toast.success(`🚀 "${mix.title}" has been boosted!`, {
-          description: `Promoted until ${new Date(res.data.data.promotedUntil).toLocaleDateString()}`,
+          description: `Promoted until ${formatDate(res.data.data.promotedUntil)}`,
         });
         if (onPromoted) {
           onPromoted(res.data.data.promotedUntil, res.data.data.remainingPoints);
@@ -94,7 +97,7 @@ export function ReachListenersModal({
         onClose();
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Failed to promote mix.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to promote mix.');
       toast.error('Promotion Failed', { description: errorMsg });
     } finally {
       setLoading(false);
@@ -150,14 +153,14 @@ export function ReachListenersModal({
             </div>
           </div>
 
-          {/* If NOT a Pro or Legend DJ: Upgrade requirement */}
+          {/* If NOT a Pro or Pro+ DJ: Upgrade requirement */}
           {!isProEligible ? (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-gradient-to-br from-red-950/40 via-[#181210] to-[#121212] border border-red-500/30 space-y-3">
                 <div className="flex items-start gap-3">
                   <Crown className="w-6 h-6 text-[#f4e059] shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-bold text-white uppercase">Upgrade to Pro or Pro+ (Legend)</h4>
+                    <h4 className="text-sm font-bold text-white uppercase">Upgrade to Pro or Pro+</h4>
                     <p className="text-xs text-text-secondary mt-1 leading-relaxed">
                       Promotion points and algorithm mix boosts are exclusively available for verified **Pro** and **PRO+** DJs.
                     </p>
@@ -171,7 +174,7 @@ export function ReachListenersModal({
                     <p className="text-[10px] text-text-muted">Boost up to 10 mixes</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                    <span className="text-[10px] uppercase font-bold text-red-400">Pro+ Legend</span>
+                    <span className="text-[10px] uppercase font-bold text-red-400">Pro+</span>
                     <p className="text-white font-bold font-mono mt-0.5">10,000 Points/yr</p>
                     <p className="text-[10px] text-text-muted">Maximum reach + VIP</p>
                   </div>
@@ -194,7 +197,7 @@ export function ReachListenersModal({
               </div>
             </div>
           ) : (
-            /* Pro / Legend DJ Flow: Points Spending */
+            /* Pro / Pro+ DJ Flow: Points Spending */
             <div className="space-y-5">
               {/* Point Balance Header */}
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#f4e059]/10 border border-[#f4e059]/30">

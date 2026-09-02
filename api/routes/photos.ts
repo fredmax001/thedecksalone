@@ -3,6 +3,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { uploadBuffer } = require('../utils/storage');
 const multer = require('multer');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -25,15 +26,15 @@ router.post('/', authMiddleware, uploadPhoto.single('photo'), async (req, res) =
       where: { userId: req.user.id },
       select: { id: true },
     });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    if (!dj) return fail(res, 404, 'DJ profile not found');
 
     const count = await prisma.djPhoto.count({ where: { djId: dj.id } });
     if (count >= 10) {
-      return res.status(400).json({ success: false, error: 'Maximum 10 photos allowed' });
+      return fail(res, 400, 'Maximum 10 photos allowed');
     }
 
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'Photo file required' });
+      return fail(res, 400, 'Photo file required');
     }
 
     const imageUrl = await uploadBuffer(req.file.buffer, 'photos', {
@@ -53,7 +54,7 @@ router.post('/', authMiddleware, uploadPhoto.single('photo'), async (req, res) =
 
     return res.status(201).json({ success: true, data: photo });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -64,16 +65,16 @@ router.get('/me', authMiddleware, async (req, res) => {
       where: { userId: req.user.id },
       select: { id: true },
     });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    if (!dj) return fail(res, 404, 'DJ profile not found');
 
     const photos = await prisma.djPhoto.findMany({
       where: { djId: dj.id, isPublic: true },
       orderBy: { sortOrder: 'asc' },
     });
 
-    return res.json({ success: true, data: photos });
+    return ok(res, photos);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -91,16 +92,16 @@ router.get('/dj/:identifier', async (req, res) => {
       select: { id: true },
     });
 
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ not found' });
+    if (!dj) return fail(res, 404, 'DJ not found');
 
     const photos = await prisma.djPhoto.findMany({
       where: { djId: dj.id, isPublic: true },
       orderBy: { sortOrder: 'asc' },
     });
 
-    return res.json({ success: true, data: photos });
+    return ok(res, photos);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -111,18 +112,18 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       where: { userId: req.user.id },
       select: { id: true },
     });
-    if (!dj) return res.status(404).json({ success: false, error: 'DJ profile not found' });
+    if (!dj) return fail(res, 404, 'DJ profile not found');
 
     const photo = await prisma.djPhoto.findFirst({
       where: { id: req.params.id, djId: dj.id },
     });
-    if (!photo) return res.status(404).json({ success: false, error: 'Photo not found' });
+    if (!photo) return fail(res, 404, 'Photo not found');
 
     await prisma.djPhoto.delete({ where: { id: photo.id } });
 
     return res.json({ success: true, message: 'Photo deleted' });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import SEOHead from '@/components/SEOHead';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface MenuItem {
   label: string;
@@ -27,7 +28,7 @@ export default function AccountPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
 
-  const isDj = user?.role === 'DJ';
+  const { isDj } = useUserRole();
   const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
 
   const baseItems: MenuItem[] = [

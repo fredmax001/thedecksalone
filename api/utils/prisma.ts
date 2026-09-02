@@ -30,3 +30,9 @@ if (!globalForPrisma.prisma && !isProduction) {
 }
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+export const DJ_PUBLIC_SELECT = {
+  id: true,
+  stageName: true,
+  avatar: true,
+} as const;

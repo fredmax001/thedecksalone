@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Play, Sparkles } from 'lucide-react';
+import { formatCompactNumber } from '@/lib/formatting';
 
 import { ReupButton } from '@/components/ReupButton';
 
@@ -20,13 +21,6 @@ interface HighlightItem {
 
 interface HighlightsTabProps {
   highlights: HighlightItem[];
-}
-
-function formatCompact(num: number): string {
-  return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(num);
 }
 
 export function HighlightsTab({ highlights }: HighlightsTabProps) {
@@ -104,7 +98,7 @@ export function HighlightsTab({ highlights }: HighlightsTabProps) {
               <div className="mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-text-muted">
                   <Play size={12} />
-                  <span className="font-mono-data">{formatCompact(item.mix.plays)}</span>
+                  <span className="font-mono-data">{formatCompactNumber(item.mix.plays)}</span>
                 </div>
                 <ReupButton mixId={item.mix.id} size="sm" showCount={false} />
               </div>

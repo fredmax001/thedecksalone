@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { createNotification, getUnreadCount, markAllAsRead } = require('../utils/notifications');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const parsed = listSchema.safeParse(req.query);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid query parameters' });
+      return fail(res, 400, 'Invalid query parameters');
     }
 
     const { page, limit, unreadOnly } = parsed.data;
@@ -55,7 +56,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('[Notifications] List error:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -63,9 +64,9 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/unread-count', authMiddleware, async (req, res) => {
   try {
     const count = await getUnreadCount(req.user.id);
-    return res.json({ success: true, data: { count } });
+    return ok(res, { count });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -77,11 +78,11 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
     });
 
     if (!notification) {
-      return res.status(404).json({ success: false, error: 'Notification not found' });
+      return fail(res, 404, 'Notification not found');
     }
 
     if (notification.userId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const updated = await prisma.notification.update({
@@ -89,9 +90,9 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
       data: { read: true },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -99,9 +100,9 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
 router.patch('/read-all', authMiddleware, async (req, res) => {
   try {
     const result = await markAllAsRead(req.user.id);
-    return res.json({ success: true, data: { updated: result.count } });
+    return ok(res, { updated: result.count });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -111,9 +112,9 @@ router.delete('/clear-all', authMiddleware, async (req, res) => {
     const result = await prisma.notification.deleteMany({
       where: { userId: req.user.id }
     });
-    return res.json({ success: true, data: { deleted: result.count } });
+    return ok(res, { deleted: result.count });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -125,17 +126,17 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     });
 
     if (!notification) {
-      return res.status(404).json({ success: false, error: 'Notification not found' });
+      return fail(res, 404, 'Notification not found');
     }
 
     if (notification.userId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     await prisma.notification.delete({ where: { id: req.params.id } });
-    return res.json({ success: true, data: { deleted: true } });
+    return ok(res, { deleted: true });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -144,13 +145,13 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     // Only admins can create notifications for other users
     if (!['ADMIN', 'MODERATOR'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const { userId, type, title, body, actionUrl, entityId, entityType, metadata } = req.body;
 
     if (!userId || !type || !title || !body) {
-      return res.status(400).json({ success: false, error: 'userId, type, title, and body are required' });
+      return fail(res, 400, 'userId, type, title, and body are required');
     }
 
     const notification = await createNotification({
@@ -166,7 +167,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: notification });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

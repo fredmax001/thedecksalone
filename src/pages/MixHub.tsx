@@ -9,18 +9,9 @@ import {
   List,
   LayoutList,
   Loader2,
-  ListMusic,
   Shuffle,
   Radio,
-  Rocket,
-  Code2,
-  Plus,
   Download,
-  Share2,
-  Eye,
-  Repeat2,
-  LineChart,
-  Edit2,
   Lock,
   Clock,
   Flame,
@@ -41,13 +32,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { GENRES } from '@/constants/genres';
 import { cn } from '@/lib/utils';
+import { formatCompactNumber } from '@/lib/formatting';
 import { computeGenreRanks } from '@/utils/mixRanking';
-import WaveformPlayer from '@/components/WaveformPlayer';
 import ReachListenersModal from '@/components/ReachListenersModal';
 import DjSupportModal from '@/components/DjSupportModal';
 import MixDownloadModal from '@/components/MixDownloadModal';
 import EmbedMixModal from '@/components/EmbedMixModal';
+import MixFeedRow from '@/components/feed/MixFeedRow';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 /* ──────────────────────── Helpers ──────────────────────── */
 function formatDuration(seconds: number): string {
@@ -57,30 +50,6 @@ function formatDuration(seconds: number): string {
   const s = seconds % 60;
   if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatCompact(n: number): string {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
-}
-
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return 'Recent';
-  const d = new Date(dateStr);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-function handleShareMix(mix: { id: string; title: string }) {
-  const url = `${window.location.origin}/mix/${mix.id}`;
-  if (navigator.share) {
-    navigator.share({ title: mix.title, url }).catch(() => {});
-  } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(() => toast.success('Mix link copied to clipboard'));
-  } else {
-    toast.error('Sharing not supported on this device');
-  }
 }
 
 async function triggerMixDownload(mix: { id: string; title: string }) {
@@ -95,7 +64,7 @@ function toMixTrack(mix: any): MixTrack {
   return {
     id: mix.id,
     title: mix.title,
-    dj: mix.dj?.stageName || 'Unknown DJ',
+    dj: mix.dj?.stageName || (typeof mix.dj === 'string' ? mix.dj : '') || mix.djName || mix.dj?.user?.username || mix.dj?.user?.name || (mix.dj as any)?.stage_name || 'DJ Fredmax',
     djId: mix.dj?.id || mix.djId,
     djAvatar: mix.dj?.avatar,
     djUsername: mix.dj?.user?.username || mix.dj?.username,
@@ -136,466 +105,6 @@ function PlayingWaveIndicator() {
         transition={{ duration: 0.85, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
       />
     </div>
-  );
-}
-
-/* ──────────────────────── 🌟 1. WAVEFORM CARD (MATCHING USER REFERENCE IMAGE) ──────────────────────── */
-function MixReleaseWaveformCard({
-  mix,
-  rank,
-  onPlay,
-  isCurrent,
-  isPlaying,
-  currentTime,
-  onSeek,
-  onOpenPromote,
-  onOpenSubscribe,
-  onOpenEmbed,
-  onOpenDownloadAuth,
-  onOpenDownloadSubscribe,
-  onOpenDownloadRepost,
-  onOpenDownloadFollow,
-  isOwner,
-}: {
-  mix: MixTrack;
-  rank: number;
-  onPlay: (mix: MixTrack) => void;
-  isCurrent: boolean;
-  isPlaying: boolean;
-  currentTime: number;
-  onSeek: (seconds: number) => void;
-  onOpenPromote: (mix: MixTrack) => void;
-  onOpenSubscribe: (mix: MixTrack) => void;
-  onOpenEmbed: (mix: MixTrack) => void;
-  onOpenDownloadAuth?: (mix: MixTrack) => void;
-  onOpenDownloadSubscribe?: (mix: MixTrack) => void;
-  onOpenDownloadRepost?: (mix: MixTrack) => void;
-  onOpenDownloadFollow?: (mix: MixTrack) => void;
-  isOwner?: boolean;
-}) {
-  const { isAuthenticated } = useAuthStore();
-  const { addToQueue } = usePlayerStore();
-  const { mutate: likeMix } = useLikeMix();
-
-  const [liked, setLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(mix.likes || 0);
-  const [reupped, setReupped] = useState(false);
-  const [reupsCount, setReupsCount] = useState(mix.reups || 0);
-  const [downloadsCount, setDownloadsCount] = useState(mix.downloads || 0);
-  const [downloading, setDownloading] = useState(false);
-  const [showAddMenu, setShowAddMenu] = useState(false);
-
-  const [userReactions, setUserReactions] = useState<{ pos: number; emoji: string }[]>([]);
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
-
-  // Handle Real User Reaction at Timestamp
-  const handleAddReaction = (emoji: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      toast.error('Please login to react to this mix.');
-      return;
-    }
-    const pos = duration > 0 ? Math.min(1, Math.max(0.01, currentTime / duration)) : 0.5;
-    const newReaction = { pos, emoji };
-    setUserReactions((prev) => [...prev, newReaction]);
-    setShowReactionPicker(false);
-    toast.success(`Dropped ${emoji} at ${formatDuration(currentTime)}!`);
-
-    // Post reaction to backend
-    api.post(`/mixes/${mix.id}/reactions`, { emoji, timestamp: currentTime, position: pos }).catch(() => {});
-  };
-
-  const isProDj = mix.djTier === 'pro' || mix.djTier === 'legend';
-  const isPromoted = mix.promotedUntil && new Date(mix.promotedUntil) > new Date();
-
-  // Handle Like
-  const handleLike = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      toast.error('Please login to like this mix.');
-      return;
-    }
-    setLiked((prev) => !prev);
-    setLikesCount((prev) => (liked ? Math.max(0, prev - 1) : prev + 1));
-    likeMix(mix.id);
-  };
-
-  // Handle Re-up
-  const handleReup = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      toast.error('Please login to re-up this mix.');
-      return;
-    }
-    try {
-      if (reupped) {
-        await api.delete(`/mixes/${mix.id}/reup`);
-        setReupped(false);
-        setReupsCount((c) => Math.max(0, c - 1));
-        toast.info('Re-up removed');
-      } else {
-        await api.post(`/mixes/${mix.id}/reup`);
-        setReupped(true);
-        setReupsCount((c) => c + 1);
-        toast.success('Mix re-upped to your DJ profile!');
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Re-up failed.');
-    }
-  };
-
-  // Direct Audio Download
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      if (onOpenDownloadAuth) onOpenDownloadAuth(mix);
-      else onOpenSubscribe(mix);
-      return;
-    }
-
-    try {
-      setDownloading(true);
-      await triggerMixDownload(mix);
-      setDownloadsCount((c) => c + 1);
-    } catch (err: any) {
-      if (err.response?.status === 403) {
-        if (err.response?.data?.requiresRepost) {
-          if (onOpenDownloadRepost) onOpenDownloadRepost(mix);
-          else if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
-          else onOpenSubscribe(mix);
-        } else if (err.response?.data?.requiresFollow) {
-          if (onOpenDownloadFollow) onOpenDownloadFollow(mix);
-          else if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
-          else onOpenSubscribe(mix);
-        } else if (err.response?.data?.requiresSubscription) {
-          if (onOpenDownloadSubscribe) onOpenDownloadSubscribe(mix);
-          else onOpenSubscribe(mix);
-        } else {
-          toast.error('Download failed', { description: err.response?.data?.error || 'Please check your subscription and connection.' });
-        }
-      } else if (err.response?.status === 401) {
-        if (onOpenDownloadAuth) onOpenDownloadAuth(mix);
-        else onOpenSubscribe(mix);
-      } else {
-        toast.error('Download failed', { description: err.response?.data?.error || 'Please check your subscription and connection.' });
-      }
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handlePlayClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (mix.isExclusive && !isOwner) {
-      onOpenSubscribe(mix);
-      return;
-    }
-    onPlay(mix);
-  };
-
-  const duration = mix.duration || 0;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        'group relative rounded-2xl sm:rounded-3xl border p-3.5 sm:p-5 transition-all overflow-hidden',
-        isPromoted
-          ? 'bg-gradient-to-r from-[#1c180f] via-[#141412] to-[#121210] border-[#f4e059]/40 shadow-xl shadow-[#f4e059]/10'
-          : 'bg-[#121110] hover:bg-[#161413] border-white/[0.08] hover:border-white/[0.15]'
-      )}
-    >
-      {/* Background warm ambient overlay matching reference image */}
-      <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-[#f4e059]/5 via-transparent to-transparent pointer-events-none" />
-
-      <div className="relative flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-5">
-        {/* ─── LEFT: ALBUM COVER + CORNER RANK BADGE ─── */}
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-xl sm:rounded-2xl overflow-hidden bg-black shrink-0 shadow-2xl">
-          <img
-            src={mix.cover}
-            alt={mix.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
-
-          {/* PINNED CORNER RANK BADGE (#1, #2, #12...) */}
-          <div
-            className={cn(
-              'absolute top-0 left-0 px-2 py-0.5 rounded-br-lg text-[10px] sm:text-xs font-black tracking-tighter shadow-md z-10 flex items-center gap-0.5',
-              rank === 1
-                ? 'bg-[#f4e059] text-black'
-                : rank === 2
-                ? 'bg-amber-400 text-black'
-                : rank === 3
-                ? 'bg-amber-500 text-black'
-                : 'bg-black/90 text-[#f4e059] border-r border-b border-[#f4e059]/40'
-            )}
-          >
-            <span>#{rank}</span>
-          </div>
-
-          {/* Exclusive VIP Lock Overlay if mix is subscribers-only */}
-          {mix.isExclusive && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center">
-              <Lock className="w-6 h-6 text-[#f4e059] mb-1" />
-              <span className="text-[9px] font-black uppercase text-[#f4e059] tracking-wider">
-                Subscribers Only
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ─── MIDDLE & RIGHT: TRACK INFO, WAVEFORM & ACTION BAR ─── */}
-        <div className="min-w-0 flex-1 w-full space-y-2.5">
-          {/* Top Row: Play Button, DJ, Title, Genre, Duration */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              {/* Circular Play / Pause Button matching reference image */}
-              <button
-                onClick={handlePlayClick}
-                aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
-                className={cn(
-                  'w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center border transition-all shrink-0 shadow-lg',
-                  isCurrent && isPlaying
-                    ? 'bg-[#f4e059] text-black border-[#f4e059] scale-105'
-                    : 'bg-black/60 hover:bg-[#f4e059] text-white hover:text-black border-white/80 hover:border-[#f4e059] hover:scale-105'
-                )}
-              >
-                {isCurrent && isPlaying ? (
-                  <Pause className="w-5 h-5 fill-current" />
-                ) : (
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
-                )}
-              </button>
-
-              {/* DJ & Title */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <Link
-                    to={`/dj/${mix.djUsername || mix.djId || mix.dj}`}
-                    className="font-semibold text-white hover:text-[#f4e059] hover:underline transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {mix.dj}
-                  </Link>
-                  <span className="inline-flex items-center text-[#f4e059]" title="Verified DJ">
-                    ✓
-                  </span>
-                  <span className="text-xs">🇸🇱</span>
-                  {isProDj && (
-                    <span className="text-[8px] uppercase font-black px-1.5 py-0.2 rounded bg-[#f4e059]/20 text-[#f4e059] border border-[#f4e059]/30 shadow-sm">
-                      PRO
-                    </span>
-                  )}
-                  {isPromoted && (
-                    <span className="text-[8px] uppercase font-black px-1.5 py-0.2 rounded bg-[#f4e059] text-black font-bold animate-pulse">
-                      ⚡ BOOSTED
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-baseline gap-2 mt-0.5">
-                  <Link to={`/mix/${mix.id}`}>
-                    <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate hover:text-[#f4e059] transition-colors">
-                      {mix.title}
-                    </h3>
-                  </Link>
-                  <span className="text-[10px] font-mono text-text-muted hidden sm:inline">
-                    320kbit/s
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Top Right: Genre & Duration */}
-            <div className="text-right shrink-0">
-              <div className="text-xs sm:text-sm font-semibold text-text-primary uppercase tracking-tight">
-                {mix.genre}
-              </div>
-              <div className="text-xs font-mono text-text-muted mt-0.5">
-                {formatDuration(mix.duration)}
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Waveform Component (Deck Salone Yellow Gold Theme - with real user reaction pins) */}
-          <div className="w-full py-0.5">
-            <WaveformPlayer
-              trackId={mix.id}
-              isCurrent={isCurrent}
-              duration={mix.duration}
-              currentTime={currentTime}
-              onSeek={onSeek}
-              reactions={userReactions}
-            />
-          </div>
-
-          {/* ─── BOTTOM ACTION & STATS ROW ─── */}
-          <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs">
-            {/* Left Action Buttons */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto scrollbar-hide py-0.5">
-              {/* Edit button (STRICTLY shown ONLY for the DJ who owns this mix) */}
-              {isOwner && (
-                <Link
-                  to={`/dashboard/mixes`}
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#f4e059] text-black flex items-center justify-center hover:brightness-110 shadow shrink-0"
-                  title="Edit Your Mix"
-                >
-                  <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                </Link>
-              )}
-
-              {/* 🚀 REACH MORE LISTENERS / PROMOTE (PRO & PRO+ FEATURE) */}
-              <button
-                onClick={() => onOpenPromote(mix)}
-                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-[#f4e059] hover:brightness-110 text-black font-bold text-[10px] sm:text-[11px] uppercase tracking-wider shadow-md shadow-[#f4e059]/20 active:scale-95 transition-all shrink-0"
-              >
-                <Rocket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span className="hidden sm:inline">Reach more listeners!</span>
-                <span className="sm:hidden">Promote</span>
-              </button>
-
-              {/* </> Embed Button */}
-              <button
-                onClick={() => onOpenEmbed(mix)}
-                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
-              >
-                <Code2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Embed</span>
-              </button>
-
-              {/* + Add Dropdown */}
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setShowAddMenu((prev) => !prev)}
-                  className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors"
-                >
-                  <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Add ▾</span>
-                </button>
-
-                {showAddMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-44 rounded-xl bg-[#1a1a1a] border border-white/10 shadow-2xl p-1.5 z-30 space-y-1">
-                    <button
-                      onClick={() => {
-                        addToQueue(mix);
-                        setShowAddMenu(false);
-                        toast.success(`Added "${mix.title}" to play queue`);
-                      }}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <ListMusic className="w-3.5 h-3.5 text-[#f4e059]" />
-                      Add to Play Queue
-                    </button>
-                    <Link
-                      to={`/playlists`}
-                      onClick={() => setShowAddMenu(false)}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-[#f4e059]" />
-                      Save to Playlist
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* ⬇ Download Button */}
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
-              >
-                {downloading ? (
-                  <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-[#f4e059]" />
-                ) : (
-                  <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#f4e059]" />
-                )}
-                <span>{mix.isExclusive ? 'VIP' : 'Download'}</span>
-              </button>
-
-              {/* Share Button */}
-              <button
-                onClick={() => handleShareMix(mix)}
-                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
-                title="Share mix"
-              >
-                <Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#f4e059]" />
-                <span className="hidden sm:inline">Share</span>
-              </button>
-            </div>
-
-            {/* Right Stats & Real Reaction Controls */}
-            <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-text-muted font-mono">
-              <span>on {formatDate(mix.createdAt)}</span>
-
-              {/* Plays */}
-              <span className="flex items-center gap-1 text-text-secondary" title="Total Plays">
-                <Eye className="w-3.5 h-3.5 text-text-muted" />
-                {mix.plays?.toLocaleString() || 0}
-              </span>
-
-              {/* Downloads */}
-              <span className="flex items-center gap-1 text-text-secondary" title="Downloads">
-                <Download className="w-3.5 h-3.5 text-text-muted" />
-                {downloadsCount}
-              </span>
-
-              {/* Interactive Emoji Reaction Trigger Button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowReactionPicker((prev) => !prev)}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-white/[0.08] text-text-secondary hover:text-white transition-colors"
-                  title="Drop emoji reaction at current timestamp"
-                >
-                  <span>🔥</span>
-                  <span className="text-[10px] font-bold">React</span>
-                </button>
-
-                {showReactionPicker && (
-                  <div className="absolute right-0 bottom-full mb-1 flex items-center gap-1.5 p-1.5 rounded-full bg-[#181818] border border-white/20 shadow-2xl z-30 animate-in fade-in zoom-in-95">
-                    {['🔥', '❤️', '⚡', '🙌', '💥', '👑'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={(e) => handleAddReaction(emoji, e)}
-                        className="w-7 h-7 rounded-full hover:scale-125 transition-transform flex items-center justify-center text-sm"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Likes */}
-              <button
-                onClick={handleLike}
-                className="flex items-center gap-1 hover:text-white transition-colors"
-                title="Like Mix"
-              >
-                <Heart className={cn('w-3.5 h-3.5', liked ? 'text-red-500 fill-red-500' : 'text-text-muted')} />
-                {likesCount}
-              </button>
-
-              {/* Re-ups */}
-              <button
-                onClick={handleReup}
-                className="flex items-center gap-1 hover:text-white transition-colors"
-                title="Re-up Mix"
-              >
-                <Repeat2 className={cn('w-3.5 h-3.5', reupped ? 'text-green-400' : 'text-text-muted')} />
-                {reupsCount}
-              </button>
-
-              {/* Charts Link */}
-              <Link to="/rankings" title="View Chart Rankings">
-                <LineChart className="w-3.5 h-3.5 text-[#f4e059] hover:scale-110 transition-transform" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -707,7 +216,7 @@ function MixGridCard({
               {mix.dj}
             </Link>
             {mix.djTier === 'legend' && (
-              <span className="text-[9px] px-1 py-0.2 rounded bg-[#f4e059]/15 text-[#f4e059] font-bold border border-[#f4e059]/30">PRO</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-[#f4e059]/15 text-[#f4e059] font-bold border border-[#f4e059]/30">PRO+</span>
             )}
           </p>
         </div>
@@ -716,7 +225,7 @@ function MixGridCard({
       {/* Metadata & Actions Footer */}
       <div className="pt-3 mt-3 border-t border-white/[0.04] flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 text-[10px] text-text-muted font-mono">
-          <span>{formatCompact(mix.plays || 0)} plays</span>
+          <span>{formatCompactNumber(mix.plays || 0)} plays</span>
           <span>•</span>
           <span className="flex items-center gap-0.5">
             <Clock className="w-3 h-3 text-text-muted" />
@@ -831,7 +340,7 @@ function MixTracklistRow({
             {mix.dj}
           </Link>
           {mix.djTier === 'legend' && (
-            <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO</span>
+            <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO+</span>
           )}
         </p>
       </div>
@@ -845,7 +354,7 @@ function MixTracklistRow({
 
       {/* Stream Count */}
       <div className="hidden sm:block w-24 text-right font-mono text-xs text-text-muted">
-        {formatCompact(mix.plays || 0)} plays
+        {formatCompactNumber(mix.plays || 0)} plays
       </div>
 
       {/* Duration */}
@@ -873,13 +382,15 @@ const SORT_OPTIONS = [
 
 /* ═══════════════════════════ MAIN MIX HUB PAGE ═══════════════════════════ */
 export default function MixHub() {
-  const { user } = useAuthStore();
-  const { currentTrack, isPlaying, play, pause, setQueue, currentTime, setCurrentTime } = usePlayerStore();
+  const { currentTrack, isPlaying, play, pause, setQueue } = usePlayerStore();
 
   const [activeGenre, setActiveGenre] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'waveform' | 'grid' | 'list'>('waveform');
   const [page, setPage] = useState(1);
+
+  // Accumulate loaded pages for true "Load More" behavior
+  const [allMixes, setAllMixes] = useState<MixTrack[]>([]);
 
   // Modals state
   const [promoteModalMix, setPromoteModalMix] = useState<MixTrack | null>(null);
@@ -923,15 +434,30 @@ export default function MixHub() {
   });
 
   const trending = useMemo(() => (trendingData || []).map(toMixTrack), [trendingData]);
-  const latest = useMemo(() => (latestData?.data || []).map(toMixTrack), [latestData]);
+
+  // Accumulate paginated mixes so "Load More" appends instead of replacing
+  useEffect(() => {
+    if (!latestData?.data) return;
+    const pageMixes: MixTrack[] = (latestData.data || []).map(toMixTrack);
+    if (page === 1) {
+      setAllMixes(pageMixes);
+    } else {
+      setAllMixes((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newMixes = pageMixes.filter((m) => !existingIds.has(m.id));
+        return [...prev, ...newMixes];
+      });
+    }
+  }, [latestData, page]);
 
   const sortedLatest = useMemo(() => {
-    const list = [...latest];
+    const list = [...allMixes];
     if (sortBy === 'plays') return list.sort((a, b) => (b.plays || 0) - (a.plays || 0));
     if (sortBy === 'downloads') return list.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
     if (sortBy === 'likes') return list.sort((a, b) => (b.likes || 0) - (a.likes || 0));
-    return list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [latest, sortBy]);
+    // For "newest", preserve the API order: promoted mixes first, then createdAt desc
+    return list;
+  }, [allMixes, sortBy]);
 
   const allMixesForRank = useMemo(() => {
     const combined = [...trending, ...sortedLatest];
@@ -956,19 +482,6 @@ export default function MixHub() {
     [currentTrack, isPlaying, trending, sortedLatest, play, pause, setQueue]
   );
 
-  // Handle Waveform Seek
-  const handleSeek = useCallback(
-    (mix: MixTrack, seekSeconds: number) => {
-      if (currentTrack?.id !== mix.id) {
-        handlePlay(mix);
-      }
-      setCurrentTime(seekSeconds);
-      const audioEl = document.querySelector('audio');
-      if (audioEl) audioEl.currentTime = seekSeconds;
-    },
-    [currentTrack, handlePlay, setCurrentTime]
-  );
-
   // Handle Shuffle Play
   const handleShufflePlay = useCallback(() => {
     const allVisible = [...trending, ...sortedLatest];
@@ -978,7 +491,7 @@ export default function MixHub() {
     play(shuffled[0]);
   }, [trending, sortedLatest, setQueue, play]);
 
-  const featuredMix = trending[0] || latest[0];
+  const featuredMix = trending[0] || allMixes[0];
 
   return (
     <div className="min-h-screen bg-[#080808] text-text-primary pb-32">
@@ -1034,7 +547,7 @@ export default function MixHub() {
                       ★ #1 SPOTLIGHT MIX
                     </span>
                     <span className="text-xs font-mono text-text-muted">
-                      {formatCompact(featuredMix.plays || 0)} plays
+                      {formatCompactNumber(featuredMix.plays || 0)} plays
                     </span>
                   </div>
 
@@ -1255,36 +768,27 @@ export default function MixHub() {
             <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
           </div>
         ) : viewMode === 'waveform' ? (
-          /* 1. Full Waveform Cards (Matching User Reference Image) */
-          <div className="space-y-4">
+          /* 1. Full Waveform Cards (Unified with Feed layout) */
+          <div className="space-y-3.5">
             {sortedLatest.map((mix: MixTrack, i: number) => {
-              const rank = genreRanks[mix.id] || (page - 1) * 16 + (i + 1);
-              const isOwner = !!(user && ((user as any)?.djProfile?.id === mix.djId || user.id === mix.djId));
+              const rank = (page - 1) * 16 + (i + 1);
 
               return (
-                <MixReleaseWaveformCard
+                <MixFeedRow
                   key={mix.id}
-                  mix={mix}
+                  mix={mix as any}
+                  index={i}
                   rank={rank}
-                  onPlay={handlePlay}
-                  isCurrent={currentTrack?.id === mix.id}
-                  isPlaying={isPlaying}
-                  currentTime={currentTime}
-                  onSeek={(seekSec) => handleSeek(mix, seekSec)}
-                  onOpenPromote={(m) => setPromoteModalMix(m)}
-                  onOpenSubscribe={(m) =>
+                  variant="waveform"
+                  onOpenPromote={(m) => setPromoteModalMix(m as any)}
+                  onOpenEmbed={(m) => setEmbedModalMix(m as any)}
+                  onOpenDjSupport={(m) =>
                     setSupportModalDj({
-                      id: m.djId,
-                      stageName: m.dj,
-                      avatar: m.djAvatar || m.cover,
+                      id: (m as any).djId || m.id,
+                      stageName: (m as any).dj || m.title,
+                      avatar: (m as any).djAvatar || (m as any).cover,
                     })
                   }
-                  onOpenEmbed={(m) => setEmbedModalMix(m)}
-                  onOpenDownloadAuth={(m) => setDownloadModalData({ mix: m, mode: 'auth' })}
-                  onOpenDownloadSubscribe={(m) => setDownloadModalData({ mix: m, mode: 'subscribe' })}
-                  onOpenDownloadRepost={(m) => setDownloadModalData({ mix: m, mode: 'repost' })}
-                  onOpenDownloadFollow={(m) => setDownloadModalData({ mix: m, mode: 'follow' })}
-                  isOwner={!!isOwner}
                 />
               );
             })}
@@ -1363,9 +867,17 @@ export default function MixHub() {
           <div className="flex justify-center mt-10">
             <button
               onClick={() => setPage((p) => p + 1)}
-              className="px-8 py-3 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-white text-xs font-bold uppercase rounded-full hover:border-[#f4e059] transition-all"
+              disabled={latestLoading}
+              className="px-8 py-3 bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.08] text-white text-xs font-bold uppercase rounded-full hover:border-[#f4e059] transition-all inline-flex items-center gap-2"
             >
-              Load More Releases
+              {latestLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Load More Releases'
+              )}
             </button>
           </div>
         )}
@@ -1428,7 +940,7 @@ export default function MixHub() {
           if (downloadModalData?.mix) {
             triggerMixDownload(downloadModalData.mix).catch((err: any) => {
               if (err.response?.status !== 403) {
-                toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+                toast.error('Download failed', { description: getApiErrorMessage(err, 'Please try again.') });
               }
             });
           }

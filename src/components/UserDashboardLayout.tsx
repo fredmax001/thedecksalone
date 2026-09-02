@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { getMediaUrl } from '@/lib/api';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 const navItems = [
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings' },
@@ -56,7 +56,7 @@ export default function UserDashboardLayout() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const displayName = user?.username || user?.email?.split('@')[0] || 'User';
-  const avatarUrl = getMediaUrl(user?.avatar || user?.djProfile?.avatar) || '/default-avatar.jpg';
+  const avatarUrl = getAvatarImageUrl(user?.avatar || user?.djProfile?.avatar);
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const isActive = (path: string) => {

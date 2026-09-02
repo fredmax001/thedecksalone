@@ -21,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { formatCurrency } from '@/lib/formatting';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface Plan {
   id: string;
@@ -188,7 +190,7 @@ export default function Subscription() {
         }
       })
       .catch((err) => {
-        toast.error(err.response?.data?.error || 'Failed to load subscription status');
+        toast.error(getApiErrorMessage(err, 'Failed to load subscription status'));
       })
       .finally(() => {
         if (mounted) setStatusLoading(false);
@@ -608,7 +610,7 @@ export default function Subscription() {
                         <h3 className="font-semibold text-text-primary">{plan.name}</h3>
                         {savings > 0 && billingPeriod === 'annual' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-green/15 text-green font-bold">
-                            SAVE SLE {savings.toLocaleString()}
+                            SAVE {formatCurrency(savings)}
                           </span>
                         )}
                       </div>
@@ -619,14 +621,14 @@ export default function Subscription() {
                   {/* Price */}
                   <div className="mb-6">
                     <span className="text-4xl font-bold text-text-primary">
-                      {displayPrice === 0 ? 'Free' : `SLE ${displayPrice.toLocaleString()}`}
+                      {displayPrice === 0 ? 'Free' : formatCurrency(displayPrice)}
                     </span>
                     {displayPrice > 0 && (
                       <span className="text-sm text-text-muted"> / {billingPeriod === 'annual' ? 'year' : plan.period}</span>
                     )}
                     {displayPrice > 0 && billingPeriod === 'monthly' && (
                       <p className="text-xs text-text-muted mt-1">
-                        Or <span className="text-gold font-semibold">SLE {plan.annualPrice.toLocaleString()}/yr</span> annually
+                        Or <span className="text-gold font-semibold">{formatCurrency(plan.annualPrice)}/yr</span> annually
                       </p>
                     )}
                   </div>

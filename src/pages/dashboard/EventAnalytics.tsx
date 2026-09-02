@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEventAnalytics } from '@/hooks/useEventTicketing';
 import { useEvent } from '@/hooks/useEvents';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/formatting';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line,
@@ -38,7 +39,7 @@ export default function EventAnalytics() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-black-surface border-dark-gray"><CardContent className="p-5"><p className="text-xs text-text-muted uppercase">Total Revenue</p><p className="text-2xl font-bold text-gold font-display">{event?.ticketCurrency || 'SLE'} {analytics.revenue.toLocaleString()}</p></CardContent></Card>
+        <Card className="bg-black-surface border-dark-gray"><CardContent className="p-5"><p className="text-xs text-text-muted uppercase">Total Revenue</p><p className="text-2xl font-bold text-gold font-display">{formatCurrency(analytics.revenue, event?.ticketCurrency || 'SLE')}</p></CardContent></Card>
         <Card className="bg-black-surface border-dark-gray"><CardContent className="p-5"><p className="text-xs text-text-muted uppercase">Checked In</p><p className="text-2xl font-bold text-green font-display">{analytics.attendance.checkedIn}</p></CardContent></Card>
         <Card className="bg-black-surface border-dark-gray"><CardContent className="p-5"><p className="text-xs text-text-muted uppercase">Conversion Rate</p><p className="text-2xl font-bold text-blue-400 font-display">{analytics.conversionRate}%</p></CardContent></Card>
       </div>

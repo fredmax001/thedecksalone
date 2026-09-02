@@ -15,6 +15,7 @@ import {
 import { useEvents, useEventTypes } from '@/hooks/useEvents';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -411,7 +412,7 @@ function DJSlotCard({ slot, index }: { slot: EventItem; index: number }) {
         toast.success('Application submitted successfully!');
       }
     } catch (err: any) {
-      const error = err.response?.data?.error || 'Failed to apply';
+      const error = getApiErrorMessage(err, 'Failed to apply');
       if (err.response?.status === 409) {
         toast.info(error);
       } else {

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Repeat, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCompactNumber } from '@/lib/formatting';
 import { useReupStatus, useReupMix, useUnreupMix } from '@/hooks/useReups';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
-import { useAuthStore } from '@/stores/authStore';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface ReupButtonProps {
   mixId: string;
@@ -13,7 +14,6 @@ interface ReupButtonProps {
 }
 
 export function ReupButton({ mixId, size = 'md', showCount = true, className }: ReupButtonProps) {
-  const { user } = useAuthStore();
   const { data: status, isLoading: statusLoading } = useReupStatus(mixId);
   const reup = useReupMix();
   const unreup = useUnreupMix();
@@ -24,8 +24,8 @@ export function ReupButton({ mixId, size = 'md', showCount = true, className }: 
   const count = status?.count || 0;
   const isLoading = statusLoading || isPending || reup.isPending || unreup.isPending;
 
-  // Fans (non-DJs) see count but cannot re-up
-  const isDj = user?.role === 'DJ' || user?.role === 'ADMIN';
+  // Re-ups are for DJs / staff; regular fans only see the count
+  const { isDj } = useUserRole();
   if (!isDj) {
     if (!showCount) return null;
     return (
@@ -38,7 +38,7 @@ export function ReupButton({ mixId, size = 'md', showCount = true, className }: 
         )}
       >
         <Repeat size={size === 'sm' ? 12 : 14} />
-        {formatCount(count)}
+        {formatCompactNumber(count)}
       </button>
     );
   }
@@ -71,7 +71,7 @@ export function ReupButton({ mixId, size = 'md', showCount = true, className }: 
         size === 'sm' ? 'text-xs' : 'text-sm',
         className
       )}
-      title={reupped ? 'Remove re-up' : 'Re-up this mix'}
+      title={reupped ? 'Remove repost' : 'Repost this mix'}
     >
       {isLoading ? (
         <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -80,13 +80,9 @@ export function ReupButton({ mixId, size = 'md', showCount = true, className }: 
       ) : (
         <Repeat size={size === 'sm' ? 12 : 14} className={cn(reupped && 'fill-current')} />
       )}
-      {showCount && <span>{formatCount(count)}</span>}
+      {showCount && <span>{formatCompactNumber(count)}</span>}
       {!showCount && !canAccessPro && <span className="hidden sm:inline">Pro</span>}
     </button>
   );
 }
 
-function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-}

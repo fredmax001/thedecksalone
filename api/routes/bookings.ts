@@ -5,6 +5,8 @@ const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { bookingLimiter } = require('../utils/rateLimiter');
 
 const { createNotification, createNotificationForDj } = require('../utils/notifications');
+const { asyncHandler } = require('../middleware/asyncHandler');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -58,171 +60,156 @@ const counterResponseSchema = z.object({
 });
 
 // GET /api/bookings/my-requests - User's sent booking requests (explicit alias for client bookings)
-router.get('/my-requests', authMiddleware, async (req, res) => {
-  try {
-    const parsed = bookingFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { status, page, limit } = parsed.data;
-
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const where: any = { clientId: req.user.id };
-    if (status) where.status = status;
-
-    const [bookings, total] = await Promise.all([
-      prisma.booking.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum,
-        include: {
-          dj: { select: { id: true, stageName: true, avatar: true, bookingFeeMin: true, bookingFeeMax: true } },
-          payments: { select: { id: true, amount: true, status: true, type: true } },
-        },
-      }),
-      prisma.booking.count({ where }),
-    ]);
-
-    return res.json({
-      success: true,
-      data: bookings,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/my-requests', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = bookingFilterSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
   }
-});
+
+  const { status, page, limit } = parsed.data;
+
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const skip = (pageNum - 1) * limitNum;
+
+  const where: any = { clientId: req.user.id };
+  if (status) where.status = status;
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum,
+      include: {
+        dj: { select: { id: true, stageName: true, avatar: true, bookingFeeMin: true, bookingFeeMax: true } },
+        payments: { select: { id: true, amount: true, status: true, type: true } },
+      },
+    }),
+    prisma.booking.count({ where }),
+  ]);
+
+  return res.json({
+    success: true,
+    data: bookings,
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 // PUT /api/bookings/:id/counter - User responds to a DJ's counter offer
-router.put('/:id/counter', authMiddleware, async (req, res) => {
-  try {
-    const parsed = counterResponseSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+router.put('/:id/counter', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = counterResponseSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
+
+  const { action, proposedPrice, note } = parsed.data;
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: req.params.id },
+    include: { dj: true },
+  });
+
+  if (!booking) {
+    return fail(res, 404, 'Booking not found');
+  }
+
+  if (booking.clientId !== req.user.id) {
+    return fail(res, 403, 'Only the client can respond to counter offers');
+  }
+
+  // Must be in NEGOTIATING state to respond to a counter
+  if (booking.status !== 'NEGOTIATING' && booking.status !== 'PENDING') {
+    return fail(res, 400, `Cannot respond to counter when booking is ${booking.status}`);
+  }
+
+  let updateData: any = {};
+  let newStatus = booking.status;
+
+  if (action === 'accept') {
+    newStatus = 'CONFIRMED';
+  } else if (action === 'reject') {
+    newStatus = 'CANCELLED';
+  } else if (action === 'counter') {
+    if (proposedPrice === undefined) {
+      return fail(res, 400, 'proposedPrice is required for counter action');
     }
+    // Update budget to reflect client's new proposal; keep NEGOTIATING
+    updateData.budget = proposedPrice;
+    newStatus = 'NEGOTIATING';
+  }
 
-    const { action, proposedPrice, note } = parsed.data;
+  updateData.status = newStatus;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
-      include: { dj: true },
-    });
+  // Append note if provided
+  if (note) {
+    const existingNotes = booking.notes || '';
+    updateData.notes = existingNotes
+      ? `${existingNotes}\n[${new Date().toISOString()}] Client ${action}: ${note}`
+      : `[${new Date().toISOString()}] Client ${action}: ${note}`;
+  }
 
-    if (!booking) {
-      return res.status(404).json({ success: false, error: 'Booking not found' });
+  const updated = await prisma.booking.update({
+    where: { id: req.params.id },
+    data: updateData,
+    include: {
+      client: { select: { id: true, email: true } },
+      dj: { select: { id: true, stageName: true, avatar: true } },
+      payments: true,
+    },
+  });
+
+  return ok(res, updated);
+}));
+
+// GET /api/bookings - List bookings (for logged in user)
+router.get('/', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = bookingFilterSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
+  }
+
+  const { status, asDj, page, limit } = parsed.data;
+
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const skip = (pageNum - 1) * limitNum;
+
+  let where: any = {};
+
+  if (asDj === 'true') {
+    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+    if (!dj) {
+      return fail(res, 403, 'You are not a DJ');
     }
+    where.djId = dj.id;
+  } else {
+    where.clientId = req.user.id;
+  }
 
-    if (booking.clientId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Only the client can respond to counter offers' });
-    }
+  if (status) where.status = status;
 
-    // Must be in NEGOTIATING state to respond to a counter
-    if (booking.status !== 'NEGOTIATING' && booking.status !== 'PENDING') {
-      return res.status(400).json({ success: false, error: `Cannot respond to counter when booking is ${booking.status}` });
-    }
-
-    let updateData: any = {};
-    let newStatus = booking.status;
-
-    if (action === 'accept') {
-      newStatus = 'CONFIRMED';
-    } else if (action === 'reject') {
-      newStatus = 'CANCELLED';
-    } else if (action === 'counter') {
-      if (proposedPrice === undefined) {
-        return res.status(400).json({ success: false, error: 'proposedPrice is required for counter action' });
-      }
-      // Update budget to reflect client's new proposal; keep NEGOTIATING
-      updateData.budget = proposedPrice;
-      newStatus = 'NEGOTIATING';
-    }
-
-    updateData.status = newStatus;
-
-    // Append note if provided
-    if (note) {
-      const existingNotes = booking.notes || '';
-      updateData.notes = existingNotes
-        ? `${existingNotes}\n[${new Date().toISOString()}] Client ${action}: ${note}`
-        : `[${new Date().toISOString()}] Client ${action}: ${note}`;
-    }
-
-    const updated = await prisma.booking.update({
-      where: { id: req.params.id },
-      data: updateData,
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum,
       include: {
         client: { select: { id: true, email: true } },
         dj: { select: { id: true, stageName: true, avatar: true } },
-        payments: true,
+        payments: { select: { id: true, amount: true, status: true, type: true } },
       },
-    });
+    }),
+    prisma.booking.count({ where }),
+  ]);
 
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// GET /api/bookings - List bookings (for logged in user)
-router.get('/', authMiddleware, async (req, res) => {
-  try {
-    const parsed = bookingFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { status, asDj, page, limit } = parsed.data;
-
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    let where: any = {};
-
-    if (asDj === 'true') {
-      const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-      if (!dj) {
-        return res.status(403).json({ success: false, error: 'You are not a DJ' });
-      }
-      where.djId = dj.id;
-    } else {
-      where.clientId = req.user.id;
-    }
-
-    if (status) where.status = status;
-
-    const [bookings, total] = await Promise.all([
-      prisma.booking.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum,
-        include: {
-          client: { select: { id: true, email: true } },
-          dj: { select: { id: true, stageName: true, avatar: true } },
-          payments: { select: { id: true, amount: true, status: true, type: true } },
-        },
-      }),
-      prisma.booking.count({ where }),
-    ]);
-
-    return res.json({
-      success: true,
-      data: bookings,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return res.json({
+    success: true,
+    data: bookings,
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 // GET /api/bookings/dj/:djId/availability - Get booked slots, availability & blocked dates for calendar
 router.get('/dj/:djId/availability', softAuthMiddleware, async (req, res) => {
@@ -242,7 +229,7 @@ router.get('/dj/:djId/availability', softAuthMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
+      return fail(res, 404, 'DJ not found');
     }
 
     // Determine date range (defaults to current month +/- 2 months)
@@ -295,9 +282,7 @@ router.get('/dj/:djId/availability', softAuthMiddleware, async (req, res) => {
       }
     });
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         djId: dj.id,
         stageName: dj.stageName,
         blockedDates: dj.blockedDates || [],
@@ -309,326 +294,296 @@ router.get('/dj/:djId/availability', softAuthMiddleware, async (req, res) => {
           { id: 'AFTERNOON', label: 'Afternoon Slot (13:00 – 18:00)', period: '13:00 - 18:00' },
           { id: 'EVENING_NIGHT', label: 'Night / Prime Event (18:00 – 02:00)', period: '18:00 - 02:00' },
         ],
-      },
-    });
+      });
   } catch (error) {
     console.error('Error fetching DJ availability:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // GET /api/bookings/:id - Get single booking
-router.get('/:id', authMiddleware, async (req, res) => {
-  try {
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
-      include: {
-        client: { select: { id: true, email: true } },
-        dj: { select: { id: true, stageName: true, avatar: true, bookingFeeMin: true, bookingFeeMax: true } },
-        payments: true,
-      },
-    });
+router.get('/:id', authMiddleware, asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({
+    where: { id: req.params.id },
+    include: {
+      client: { select: { id: true, email: true } },
+      dj: { select: { id: true, stageName: true, avatar: true, bookingFeeMin: true, bookingFeeMax: true } },
+      payments: true,
+    },
+  });
 
-    if (!booking) {
-      return res.status(404).json({ success: false, error: 'Booking not found' });
-    }
-
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    const isClient = booking.clientId === req.user.id;
-    const isDj = dj && booking.djId === dj.id;
-    const isAdmin = req.user.role === 'ADMIN';
-
-    if (!isClient && !isDj && !isAdmin) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    return res.json({ success: true, data: booking });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!booking) {
+    return fail(res, 404, 'Booking not found');
   }
-});
+
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  const isClient = booking.clientId === req.user.id;
+  const isDj = dj && booking.djId === dj.id;
+  const isAdmin = req.user.role === 'ADMIN';
+
+  if (!isClient && !isDj && !isAdmin) {
+    return fail(res, 403, 'Forbidden');
+  }
+
+  return ok(res, booking);
+}));
 
 // POST /api/bookings - Create booking (authenticated users OR guests)
-router.post('/', softAuthMiddleware, bookingLimiter, async (req, res) => {
-  try {
-    const parsed = createBookingSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
+router.post('/', softAuthMiddleware, bookingLimiter, asyncHandler(async (req, res) => {
+  const parsed = createBookingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
 
-    const data = parsed.data;
+  const data = parsed.data;
 
-    // Verify DJ exists
-    const dj = await prisma.djProfile.findUnique({ where: { id: data.djId } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
+  // Verify DJ exists
+  const dj = await prisma.djProfile.findUnique({ where: { id: data.djId } });
+  if (!dj) {
+    return fail(res, 404, 'DJ not found');
+  }
 
-    // Prevent self-booking for authenticated users
-    if (req.user && dj.userId === req.user.id) {
-      return res.status(400).json({ success: false, error: 'You cannot book yourself' });
-    }
+  // Prevent self-booking for authenticated users
+  if (req.user && dj.userId === req.user.id) {
+    return fail(res, 400, 'You cannot book yourself');
+  }
 
-    const eventDateObj = new Date(data.eventDate);
-    const dateKey = eventDateObj.toISOString().split('T')[0];
+  const eventDateObj = new Date(data.eventDate);
+  const dateKey = eventDateObj.toISOString().split('T')[0];
 
-    // Check if DJ blocked this date
-    if (Array.isArray(dj.blockedDates) && dj.blockedDates.includes(dateKey)) {
-      return res.status(409).json({
-        success: false,
-        error: `DJ is not available for bookings on ${dateKey}. Please select another date.`,
-      });
-    }
+  // Check if DJ blocked this date
+  if (Array.isArray(dj.blockedDates) && dj.blockedDates.includes(dateKey)) {
+    return fail(res, 409, `DJ is not available for bookings on ${dateKey}. Please select another date.`);
+  }
 
-    // Calculate start & end of day for max 3 bookings / day check
-    const startOfDay = new Date(eventDateObj);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(eventDateObj);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+  // Calculate start & end of day for max 3 bookings / day check
+  const startOfDay = new Date(eventDateObj);
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const endOfDay = new Date(eventDateObj);
+  endOfDay.setUTCHours(23, 59, 59, 999);
 
-    const existingDayBookings = await prisma.booking.findMany({
-      where: {
-        djId: data.djId,
-        status: { notIn: ['CANCELLED', 'REFUNDED'] },
-        eventDate: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-      select: { id: true, timeSlot: true },
-    });
-
-    if (existingDayBookings.length >= 3) {
-      return res.status(409).json({
-        success: false,
-        error: `This DJ is fully booked for ${dateKey} (maximum 3 bookings per day reached). Please choose another date.`,
-      });
-    }
-
-    // If specific timeSlot is selected, verify slot is not already taken
-    if (data.timeSlot && data.timeSlot !== 'CUSTOM') {
-      const slotTaken = existingDayBookings.some((b) => b.timeSlot === data.timeSlot);
-      if (slotTaken) {
-        return res.status(409).json({
-          success: false,
-          error: `The ${data.timeSlot} slot is already booked for this DJ on ${dateKey}. Please pick a different slot or date.`,
-        });
-      }
-    }
-
-    const bookingData = {
-      ...data,
-      clientId: req.user?.id || null,
-      guestName: req.user ? null : data.guestName || null,
-      guestEmail: req.user ? null : data.guestEmail || null,
-      guestPhone: req.user ? null : data.guestPhone || null,
-      eventDate: eventDateObj,
-    };
-
-    const booking = await prisma.booking.create({
-      data: bookingData,
-      include: {
-        client: { select: { id: true, email: true } },
-        dj: { select: { id: true, stageName: true, avatar: true } },
-      },
-    });
-
-    // Increment DJ totalBookings
-    await prisma.djProfile.update({
-      where: { id: data.djId },
-      data: { totalBookings: { increment: 1 } },
-    });
-
-    // Notify DJ about new booking
-    await createNotificationForDj({
+  const existingDayBookings = await prisma.booking.findMany({
+    where: {
       djId: data.djId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      eventDate: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+    select: { id: true, timeSlot: true },
+  });
+
+  if (existingDayBookings.length >= 3) {
+    return fail(res, 409, `This DJ is fully booked for ${dateKey} (maximum 3 bookings per day reached). Please choose another date.`);
+  }
+
+  // If specific timeSlot is selected, verify slot is not already taken
+  if (data.timeSlot && data.timeSlot !== 'CUSTOM') {
+    const slotTaken = existingDayBookings.some((b) => b.timeSlot === data.timeSlot);
+    if (slotTaken) {
+      return fail(res, 409, `The ${data.timeSlot} slot is already booked for this DJ on ${dateKey}. Please pick a different slot or date.`);
+    }
+  }
+
+  const bookingData = {
+    ...data,
+    clientId: req.user?.id || null,
+    guestName: req.user ? null : data.guestName || null,
+    guestEmail: req.user ? null : data.guestEmail || null,
+    guestPhone: req.user ? null : data.guestPhone || null,
+    eventDate: eventDateObj,
+  };
+
+  const booking = await prisma.booking.create({
+    data: bookingData,
+    include: {
+      client: { select: { id: true, email: true } },
+      dj: { select: { id: true, stageName: true, avatar: true } },
+    },
+  });
+
+  // Increment DJ totalBookings
+  await prisma.djProfile.update({
+    where: { id: data.djId },
+    data: { totalBookings: { increment: 1 } },
+  });
+
+  // Notify DJ about new booking
+  await createNotificationForDj({
+    djId: data.djId,
+    type: 'BOOKING_CREATED',
+    title: 'New Booking Request',
+    body: `${booking.client?.email || 'Someone'} requested you for ${data.eventType} on ${new Date(data.eventDate).toLocaleDateString()}`,
+    actionUrl: `/dashboard/bookings`,
+    entityId: booking.id,
+    entityType: 'booking',
+    metadata: { eventType: data.eventType, eventDate: data.eventDate, location: data.eventLocation },
+    sendEmail: true,
+    emailSubject: 'New Booking Request - Deck Salone',
+  });
+
+  // Notify client about booking confirmation
+  if (req.user) {
+    await createNotification({
+      userId: req.user.id,
       type: 'BOOKING_CREATED',
-      title: 'New Booking Request',
-      body: `${booking.client?.email || 'Someone'} requested you for ${data.eventType} on ${new Date(data.eventDate).toLocaleDateString()}`,
-      actionUrl: `/dashboard/bookings`,
+      title: 'Booking Request Sent',
+      body: `Your booking request for ${data.eventType} has been sent to ${dj.stageName}`,
+      actionUrl: `/user/bookings`,
       entityId: booking.id,
       entityType: 'booking',
-      metadata: { eventType: data.eventType, eventDate: data.eventDate, location: data.eventLocation },
-      sendEmail: true,
-      emailSubject: 'New Booking Request - Deck Salone',
+      metadata: { djId: data.djId, djName: dj.stageName },
     });
-
-    // Notify client about booking confirmation
-    if (req.user) {
-      await createNotification({
-        userId: req.user.id,
-        type: 'BOOKING_CREATED',
-        title: 'Booking Request Sent',
-        body: `Your booking request for ${data.eventType} has been sent to ${dj.stageName}`,
-        actionUrl: `/user/bookings`,
-        entityId: booking.id,
-        entityType: 'booking',
-        metadata: { djId: data.djId, djName: dj.stageName },
-      });
-    }
-
-    return res.status(201).json({ success: true, data: booking });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+
+  return res.status(201).json({ success: true, data: booking });
+}));
 
 // PUT /api/bookings/:id/status - Update booking status
-router.put('/:id/status', authMiddleware, async (req, res) => {
-  try {
-    const parsed = statusUpdateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const { status, finalPrice, deposit } = parsed.data;
-
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
-      include: { dj: true },
-    });
-
-    if (!booking) {
-      return res.status(404).json({ success: false, error: 'Booking not found' });
-    }
-
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    const isClient = booking.clientId === req.user.id;
-    const isDj = dj && booking.djId === dj.id;
-    const isAdmin = req.user.role === 'ADMIN';
-
-    if (!isClient && !isDj && !isAdmin) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    // Status transition validation
-    const validTransitions = {
-      PENDING: ['NEGOTIATING', 'CONFIRMED', 'CANCELLED'],
-      NEGOTIATING: ['CONFIRMED', 'CANCELLED'],
-      CONFIRMED: ['DEPOSIT_PAID', 'CANCELLED'],
-      DEPOSIT_PAID: ['COMPLETED', 'REFUNDED'],
-      COMPLETED: [],
-      CANCELLED: [],
-      REFUNDED: [],
-    };
-
-    if (!validTransitions[booking.status]?.includes(status)) {
-      return res.status(400).json({ success: false, error: `Cannot transition from ${booking.status} to ${status}` });
-    }
-
-    // Only DJ can set finalPrice; only client can confirm when DJ proposes
-    if (finalPrice !== undefined && !isDj && !isAdmin) {
-      return res.status(403).json({ success: false, error: 'Only the DJ can set the final price' });
-    }
-
-    const updateData: any = { status };
-    if (finalPrice !== undefined) updateData.finalPrice = finalPrice;
-    if (deposit !== undefined) updateData.deposit = deposit;
-
-    const updated = await prisma.booking.update({
-      where: { id: req.params.id },
-      data: updateData,
-      include: {
-        client: { select: { id: true, email: true } },
-        dj: { select: { id: true, stageName: true, avatar: true } },
-        payments: true,
-      },
-    });
-
-    // Notify the other party about status change
-    const statusLabels = {
-      PENDING: 'Pending',
-      NEGOTIATING: 'Under Negotiation',
-      CONFIRMED: 'Confirmed',
-      DEPOSIT_PAID: 'Deposit Paid',
-      COMPLETED: 'Completed',
-      CANCELLED: 'Cancelled',
-      REFUNDED: 'Refunded',
-    };
-    const statusLabel = statusLabels[status] || status;
-
-    // Notify client if DJ changed status
-    if (isDj && updated.clientId) {
-      await createNotification({
-        userId: updated.clientId,
-        type: 'BOOKING_STATUS_CHANGED',
-        title: `Booking ${statusLabel}`,
-        body: `Your booking with ${updated.dj.stageName} is now ${statusLabel.toLowerCase()}`,
-        actionUrl: `/user/bookings`,
-        entityId: updated.id,
-        entityType: 'booking',
-        metadata: { status, djId: updated.dj.id, djName: updated.dj.stageName },
-        sendEmail: ['CONFIRMED', 'CANCELLED', 'DEPOSIT_PAID'].includes(status),
-        emailSubject: `Booking ${statusLabel} - Deck Salone`,
-      });
-    }
-
-    // Notify DJ if client changed status
-    if (isClient) {
-      await createNotificationForDj({
-        djId: updated.dj.id,
-        type: 'BOOKING_STATUS_CHANGED',
-        title: `Booking ${statusLabel}`,
-        body: `The booking with ${updated.client?.email || 'your client'} is now ${statusLabel.toLowerCase()}`,
-        actionUrl: `/dashboard/bookings`,
-        entityId: updated.id,
-        entityType: 'booking',
-        metadata: { status, clientId: updated.clientId },
-      });
-    }
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.put('/:id/status', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = statusUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
+
+  const { status, finalPrice, deposit } = parsed.data;
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: req.params.id },
+    include: { dj: true },
+  });
+
+  if (!booking) {
+    return fail(res, 404, 'Booking not found');
+  }
+
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  const isClient = booking.clientId === req.user.id;
+  const isDj = dj && booking.djId === dj.id;
+  const isAdmin = req.user.role === 'ADMIN';
+
+  if (!isClient && !isDj && !isAdmin) {
+    return fail(res, 403, 'Forbidden');
+  }
+
+  // Status transition validation
+  const validTransitions = {
+    PENDING: ['NEGOTIATING', 'CONFIRMED', 'CANCELLED'],
+    NEGOTIATING: ['CONFIRMED', 'CANCELLED'],
+    CONFIRMED: ['DEPOSIT_PAID', 'CANCELLED'],
+    DEPOSIT_PAID: ['COMPLETED', 'REFUNDED'],
+    COMPLETED: [],
+    CANCELLED: [],
+    REFUNDED: [],
+  };
+
+  if (!validTransitions[booking.status]?.includes(status)) {
+    return fail(res, 400, `Cannot transition from ${booking.status} to ${status}`);
+  }
+
+  // Only DJ can set finalPrice; only client can confirm when DJ proposes
+  if (finalPrice !== undefined && !isDj && !isAdmin) {
+    return fail(res, 403, 'Only the DJ can set the final price');
+  }
+
+  const updateData: any = { status };
+  if (finalPrice !== undefined) updateData.finalPrice = finalPrice;
+  if (deposit !== undefined) updateData.deposit = deposit;
+
+  const updated = await prisma.booking.update({
+    where: { id: req.params.id },
+    data: updateData,
+    include: {
+      client: { select: { id: true, email: true } },
+      dj: { select: { id: true, stageName: true, avatar: true } },
+      payments: true,
+    },
+  });
+
+  // Notify the other party about status change
+  const statusLabels = {
+    PENDING: 'Pending',
+    NEGOTIATING: 'Under Negotiation',
+    CONFIRMED: 'Confirmed',
+    DEPOSIT_PAID: 'Deposit Paid',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+    REFUNDED: 'Refunded',
+  };
+  const statusLabel = statusLabels[status] || status;
+
+  // Notify client if DJ changed status
+  if (isDj && updated.clientId) {
+    await createNotification({
+      userId: updated.clientId,
+      type: 'BOOKING_STATUS_CHANGED',
+      title: `Booking ${statusLabel}`,
+      body: `Your booking with ${updated.dj.stageName} is now ${statusLabel.toLowerCase()}`,
+      actionUrl: `/user/bookings`,
+      entityId: updated.id,
+      entityType: 'booking',
+      metadata: { status, djId: updated.dj.id, djName: updated.dj.stageName },
+      sendEmail: ['CONFIRMED', 'CANCELLED', 'DEPOSIT_PAID'].includes(status),
+      emailSubject: `Booking ${statusLabel} - Deck Salone`,
+    });
+  }
+
+  // Notify DJ if client changed status
+  if (isClient) {
+    await createNotificationForDj({
+      djId: updated.dj.id,
+      type: 'BOOKING_STATUS_CHANGED',
+      title: `Booking ${statusLabel}`,
+      body: `The booking with ${updated.client?.email || 'your client'} is now ${statusLabel.toLowerCase()}`,
+      actionUrl: `/dashboard/bookings`,
+      entityId: updated.id,
+      entityType: 'booking',
+      metadata: { status, clientId: updated.clientId },
+    });
+  }
+
+  return ok(res, updated);
+}));
 
 // POST /api/bookings/:id/review - Add review to completed booking
-router.post('/:id/review', authMiddleware, async (req, res) => {
-  try {
-    const parsed = reviewSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const { rating, review } = parsed.data;
-
-    const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
-    if (!booking) {
-      return res.status(404).json({ success: false, error: 'Booking not found' });
-    }
-    if (booking.clientId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-    if (booking.status !== 'COMPLETED') {
-      return res.status(400).json({ success: false, error: 'Can only review completed bookings' });
-    }
-
-    const updated = await prisma.booking.update({
-      where: { id: req.params.id },
-      data: { rating, review },
-    });
-
-    // Update DJ average rating
-    const bookings = await prisma.booking.findMany({
-      where: { djId: booking.djId, rating: { not: null } },
-      select: { rating: true },
-    });
-    const avg = bookings.reduce((sum, b) => sum + b.rating, 0) / bookings.length;
-
-    await prisma.djProfile.update({
-      where: { id: booking.djId },
-      data: { averageRating: avg },
-    });
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/:id/review', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = reviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
+
+  const { rating, review } = parsed.data;
+
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking) {
+    return fail(res, 404, 'Booking not found');
+  }
+  if (booking.clientId !== req.user.id) {
+    return fail(res, 403, 'Forbidden');
+  }
+  if (booking.status !== 'COMPLETED') {
+    return fail(res, 400, 'Can only review completed bookings');
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: req.params.id },
+    data: { rating, review },
+  });
+
+  // Update DJ average rating
+  const bookings = await prisma.booking.findMany({
+    where: { djId: booking.djId, rating: { not: null } },
+    select: { rating: true },
+  });
+  const avg = bookings.reduce((sum, b) => sum + b.rating, 0) / bookings.length;
+
+  await prisma.djProfile.update({
+    where: { id: booking.djId },
+    data: { averageRating: avg },
+  });
+
+  return ok(res, updated);
+}));
 
 module.exports = router;

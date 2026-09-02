@@ -26,7 +26,19 @@ export interface User {
     avatar?: string;
     verified?: boolean;
     isPro?: boolean;
+    isPublic?: boolean;
     subscriptionTier?: string;
+    verificationStatus?: string | null;
+    verificationBadgeType?: string | null;
+    verificationReason?: string | null;
+    verificationNotes?: string | null;
+    idDocumentType?: string | null;
+    idDocumentUrl?: string | null;
+    nationality?: string | null;
+    legalName?: string | null;
+    socialProof?: string | null;
+    verifiedAt?: string | Date | null;
+    updatedAt?: string | Date;
   } | null;
   trialStatus?: {
     isSubscribed: boolean;
@@ -53,6 +65,7 @@ interface AuthState {
 
 import { usePlayerStore } from '@/stores/playerStore';
 import { queryClient } from '@/lib/queryClient';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -84,7 +97,7 @@ export const useAuthStore = create<AuthState>()(
           }
           return { success: false, error: 'Login failed' };
         } catch (error: any) {
-          return { success: false, error: error.response?.data?.error || 'Invalid credentials' };
+          return { success: false, error: getApiErrorMessage(error, 'Invalid credentials') };
         }
       },
 
@@ -100,7 +113,7 @@ export const useAuthStore = create<AuthState>()(
           }
           return { success: false, error: 'Registration failed' };
         } catch (error: any) {
-          return { success: false, error: error.response?.data?.error || 'Could not create account' };
+          return { success: false, error: getApiErrorMessage(error, 'Could not create account') };
         }
       },
 

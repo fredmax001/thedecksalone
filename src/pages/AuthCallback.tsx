@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { redirectAfterAuth } from '@/lib/navigation';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -52,22 +53,7 @@ export default function AuthCallback() {
         .then(() => {
           toast.success('Successfully signed in with Google!');
           const user = useAuthStore.getState().user;
-          if (user?.role === 'MODERATOR') {
-            navigate('/moderator', { replace: true });
-          } else if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
-            navigate('/admin', { replace: true });
-          } else if (user?.role === 'FINANCE_ADMIN') {
-            navigate('/finance', { replace: true });
-          } else if (user?.role === 'SUPPORT_ADMIN') {
-            navigate('/support', { replace: true });
-          } else if (user?.role === 'VERIFICATION_ADMIN') {
-            navigate('/verification', { replace: true });
-          } else if (user?.role === 'DJ') {
-            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-            navigate(isMobile ? '/discover' : '/dashboard', { replace: true });
-          } else {
-            navigate('/discover', { replace: true });
-          }
+          redirectAfterAuth(user?.role, navigate, { replace: true });
         })
         .catch((err) => {
           console.error('[Google Auth] Failed to fetch user profile:', err);

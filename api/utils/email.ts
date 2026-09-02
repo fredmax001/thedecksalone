@@ -89,6 +89,40 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
 }
 
 
+interface TicketApprovalEmailOptions {
+  to: string;
+  buyerName: string;
+  eventTitle: string;
+  eventDate: any;
+  eventVenue?: string | null;
+  eventCity?: string | null;
+  ticketTypeName: string;
+  ticketNumber?: string | null;
+  ticketId: string;
+  quantity?: number;
+}
+
+export async function sendTicketApprovalEmail(
+  options: TicketApprovalEmailOptions,
+  logLabel = 'approval email'
+): Promise<{ success: boolean; error?: string }> {
+  return sendTicketApprovedEmail({
+    to: options.to,
+    buyerName: options.buyerName,
+    eventTitle: options.eventTitle,
+    eventDate: options.eventDate,
+    eventVenue: options.eventVenue,
+    eventCity: options.eventCity,
+    ticketTypeName: options.ticketTypeName,
+    ticketNumber: options.ticketNumber,
+    ticketId: options.ticketId,
+    quantity: options.quantity ?? 1,
+  }).catch((err) => {
+    console.error(`[Email] Failed to send ${logLabel}:`, err);
+    return { success: false, error: err.message || 'Failed to send email' };
+  });
+}
+
 export async function sendWelcomeEmail(options: { to: string; username: string; role?: string }): Promise<{ success: boolean; error?: string }> {
   const frontendUrl = getFrontendUrl();
   const logoUrl = `${frontendUrl}/logo-icon.png`;
@@ -883,6 +917,132 @@ For questions, contact support@decksalone.com.
               <p style="color:#555;margin:0;font-size:12px;">
                 &copy; ${new Date().getFullYear()} Deck Salone. All rights reserved.<br>
                 Freetown, Sierra Leone
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return sendEmail({ to: options.to, subject, text, html });
+}
+
+export async function sendTicketApprovedEmail(options: {
+  to: string;
+  buyerName: string;
+  eventTitle: string;
+  eventDate: string | Date;
+  eventVenue: string;
+  eventCity?: string;
+  ticketTypeName: string;
+  ticketNumber: string;
+  ticketId: string;
+  quantity?: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const frontendUrl = getFrontendUrl();
+  const logoUrl = `${frontendUrl}/logo-icon.png`;
+  const safeName = escapeHtml(options.buyerName || 'Attendee');
+  const safeTitle = escapeHtml(options.eventTitle);
+  const safeVenue = escapeHtml(options.eventVenue || 'Venue TBA');
+  const safeCity = escapeHtml(options.eventCity ? `, ${options.eventCity}` : '');
+  const safeTypeName = escapeHtml(options.ticketTypeName || 'Ticket');
+  const dateStr = new Date(options.eventDate).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  const subject = `🎟️ Ticket Confirmed: ${options.eventTitle}`;
+  const ticketsUrl = `${frontendUrl}/user/tickets`;
+
+  const text = `Hi ${options.buyerName || 'there'},
+
+Your ticket for "${options.eventTitle}" has been approved!
+
+Ticket Details:
+- Ticket Number: ${options.ticketNumber}
+- Ticket Type: ${options.ticketTypeName}
+- Event: ${options.eventTitle}
+- Date & Time: ${dateStr}
+- Venue: ${options.eventVenue}${options.eventCity ? `, ${options.eventCity}` : ''}
+
+You can view and present your digital QR ticket at the gate here:
+${ticketsUrl}
+
+We look forward to seeing you there!
+
+— The Deck Salone Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket Confirmed</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#111;border-radius:16px;overflow:hidden;border:1px solid #333;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:30px;text-align:center;border-bottom:1px solid #333;">
+              <img src="${logoUrl}" alt="Deck Salone" width="64" height="64" style="border-radius:50%;border:2px solid #d4af37;display:block;margin:0 auto 15px;" />
+              <h1 style="color:#d4af37;margin:0;font-size:24px;font-weight:700;letter-spacing:1px;">DECK SALONE</h1>
+              <p style="color:#22c55e;margin:10px 0 0;font-size:14px;font-weight:700;letter-spacing:0.5px;">✅ TICKET CONFIRMED &amp; APPROVED</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 28px;">
+              <h2 style="color:#fff;margin:0 0 12px;font-size:20px;font-weight:600;">Get Ready, ${safeName}!</h2>
+              <p style="color:#aaa;margin:0 0 24px;font-size:14px;line-height:1.6;">
+                Your ticket order for <strong style="color:#fff;">${safeTitle}</strong> has been approved by the organizer.
+              </p>
+
+              <!-- Ticket Box -->
+              <div style="background-color:#161616;border-radius:14px;padding:24px;margin-bottom:24px;border:1px solid #d4af37;position:relative;">
+                <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #333;padding-bottom:16px;margin-bottom:16px;">
+                  <div>
+                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Ticket Type</span>
+                    <p style="color:#d4af37;margin:4px 0 0;font-size:18px;font-weight:bold;">${safeTypeName}</p>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Ticket #</span>
+                    <p style="color:#fff;margin:4px 0 0;font-size:14px;font-family:monospace;font-weight:bold;">${escapeHtml(options.ticketNumber)}</p>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                  <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Date &amp; Time</span>
+                  <p style="color:#fff;margin:4px 0 0;font-size:14px;font-weight:500;">${dateStr}</p>
+                </div>
+
+                <div>
+                  <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Venue</span>
+                  <p style="color:#fff;margin:4px 0 0;font-size:14px;font-weight:500;">${safeVenue}${safeCity}</p>
+                </div>
+              </div>
+
+              <div style="text-align:center;margin:28px 0;">
+                <a href="${ticketsUrl}" style="display:inline-block;padding:14px 32px;background:#d4af37;color:#000;text-decoration:none;border-radius:50px;font-weight:700;font-size:15px;letter-spacing:0.5px;">View Digital QR Ticket</a>
+              </div>
+
+              <p style="color:#777;margin:20px 0 0;font-size:12px;line-height:1.5;text-align:center;">
+                Present your QR code at the door for entry. Each ticket code is valid for one-time admission.<br>
+                Need assistance? Contact us at <a href="mailto:support@decksalone.com" style="color:#d4af37;text-decoration:none;">support@decksalone.com</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#0a0a0a;padding:20px;text-align:center;border-top:1px solid #222;">
+              <p style="color:#555;margin:0;font-size:11px;">
+                &copy; ${new Date().getFullYear()} Deck Salone • Freetown, Sierra Leone
               </p>
             </td>
           </tr>

@@ -102,9 +102,17 @@ async function reResolveHearthisMixes() {
           if (!isNaN(parsed) && parsed > 0) duration = parsed;
         }
 
-        const coverImage = data.artwork_url && typeof data.artwork_url === 'string'
-          ? data.artwork_url
-          : mix.coverImage;
+        const coverImage = (typeof data.artwork_url_original === 'string' && data.artwork_url_original.trim())
+          ? data.artwork_url_original.trim()
+          : (typeof data.artwork_url === 'string' && data.artwork_url.trim())
+            ? data.artwork_url.trim()
+            : mix.coverImage;
+
+        const description = (typeof data.description === 'string' && data.description.trim())
+          ? data.description.trim()
+          : (typeof data.desc === 'string' && data.desc.trim())
+            ? data.desc.trim()
+            : mix.description;
 
         await prisma.mix.update({
           where: { id: mix.id },
@@ -113,6 +121,7 @@ async function reResolveHearthisMixes() {
             audioSource: 'hearthis',
             duration,
             coverImage,
+            description,
           },
         });
 

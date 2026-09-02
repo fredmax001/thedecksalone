@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
   try {
     const parsed = reviewFilterSchema.safeParse(req.query);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
+      return fail(res, 400, 'Invalid filter parameters');
     }
 
     const { djId, userId, page, limit } = parsed.data;
@@ -57,7 +58,7 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -66,7 +67,7 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const parsed = createReviewSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const { djId, rating, comment, eventType } = parsed.data;
@@ -76,7 +77,7 @@ router.post('/', authMiddleware, async (req, res) => {
       where: { userId_djId: { userId: req.user.id, djId } },
     });
     if (existing) {
-      return res.status(409).json({ success: false, error: 'You already reviewed this DJ' });
+      return fail(res, 409, 'You already reviewed this DJ');
     }
 
     // Verify user has a completed booking with this DJ (optional but recommended)
@@ -120,7 +121,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: review });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -129,10 +130,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const review = await prisma.review.findUnique({ where: { id: req.params.id } });
     if (!review) {
-      return res.status(404).json({ success: false, error: 'Review not found' });
+      return fail(res, 404, 'Review not found');
     }
     if (review.userId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     await prisma.review.delete({ where: { id: req.params.id } });
@@ -149,9 +150,9 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       data: { averageRating: avg },
     });
 
-    return res.json({ success: true, data: { message: 'Review deleted' } });
+    return ok(res, { message: 'Review deleted' });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

@@ -20,6 +20,7 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import SEOHead from '@/components/SEOHead';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface PlanDetails {
   id: 'free' | 'pro' | 'legend';
@@ -181,7 +182,7 @@ export default function Pricing() {
         navigate(user?.role === 'DJ' ? '/dashboard/subscription' : '/user/subscription');
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Failed to submit upgrade request.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to submit upgrade request.');
       toast.error('Error', { description: errorMsg });
     } finally {
       setSubmitting(false);

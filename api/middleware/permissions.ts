@@ -239,6 +239,37 @@ export const requirePro = requireSubscriptionTier(SubscriptionTier.PRO);
 export const requireLegend = requireSubscriptionTier(SubscriptionTier.LEGEND);
 
 /**
+ * Middleware: Require Pro subscription or any admin role
+ */
+export const requireProOrAdmin = async (req: Request, res: Response, next: NextFunction) => {
+    const authUser = (req as any).user;
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'VERIFICATION_ADMIN', 'MODERATOR'];
+    if (adminRoles.includes(authUser.role)) {
+        return next();
+    }
+
+    const profile = await getUserSubscription(authUser.id);
+    if (!profile) {
+        return res.status(403).json({ success: false, error: 'DJ profile not found' });
+    }
+
+    if (!hasSubscriptionTier(profile.subscriptionTier, SubscriptionTier.PRO)) {
+        return res.status(403).json({
+            success: false,
+            error: 'This feature requires Pro subscription or admin access',
+            currentTier: profile.subscriptionTier,
+            requiredTier: SubscriptionTier.PRO,
+        });
+    }
+
+    next();
+};
+
+/**
  * Update feature access when subscription is activated
  */
 export const activateSubscriptionFeatures = async (

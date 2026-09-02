@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 interface BattleFilters {
   status?: string;
@@ -11,12 +12,8 @@ export function useBattles(filters?: BattleFilters) {
   return useQuery({
     queryKey: ['battles', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (filters?.status) params.set('status', filters.status);
-      if (filters?.page) params.set('page', String(filters.page));
-      if (filters?.limit) params.set('limit', String(filters.limit));
-      const query = params.toString();
-      const res = await api.get(`/battles${query ? `?${query}` : ''}`);
+      const qs = buildQueryString({ status: filters?.status, page: filters?.page, limit: filters?.limit });
+      const res = await api.get(`/battles${qs}`);
       return res.data || { data: [], meta: {} };
     },
   });

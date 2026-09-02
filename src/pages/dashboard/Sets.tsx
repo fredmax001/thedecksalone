@@ -22,6 +22,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 interface MixItem {
   id: string;
@@ -152,7 +154,7 @@ export default function Sets() {
         fetchSets();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to create set');
+      toast.error(getApiErrorMessage(err, 'Failed to create set'));
     } finally {
       setFormLoading(false);
     }
@@ -196,7 +198,7 @@ export default function Sets() {
         fetchSets();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to add mix to set');
+      toast.error(getApiErrorMessage(err, 'Failed to add mix to set'));
     } finally {
       setAddingMixId(null);
     }
@@ -303,7 +305,7 @@ export default function Sets() {
                 {/* Cover & Badges */}
                 <div className="relative aspect-[16/9] rounded-xl overflow-hidden mb-3 bg-black-elevated">
                   <img
-                    src={getMediaUrl(set.coverImage || set.items[0]?.mix?.coverImage) || '/default-avatar.jpg'}
+                    src={getAvatarImageUrl(set.coverImage || set.items[0]?.mix?.coverImage)}
                     alt={set.title}
                     className="w-full h-full object-cover"
                   />

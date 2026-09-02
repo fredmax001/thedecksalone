@@ -35,7 +35,9 @@ import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import { useAuthStore } from "@/stores/authStore";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { BookingCalendar } from "@/components/BookingCalendar";
-import { getMediaUrl } from "@/lib/api";
+import { formatCurrency } from '@/lib/formatting';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 const EVENT_TYPES = [
   'Wedding',
@@ -336,7 +338,7 @@ function BookingRequestModal({
         onClose();
       },
       onError: (error: any) => {
-        toast.error(error?.response?.data?.error || "Failed to send booking request.");
+        toast.error(getApiErrorMessage(error, "Failed to send booking request."));
       },
     });
   };
@@ -992,8 +994,8 @@ export default function Booking() {
                           className="flex-1 accent-gold"
                         />
                         <span className="font-mono-data text-sm text-gold whitespace-nowrap">
-                          SLE {filters.budgetMin.toLocaleString()} –{" "}
-                          {filters.budgetMax.toLocaleString()}
+                          {formatCurrency(filters.budgetMin)} –{" "}
+                          {formatCurrency(filters.budgetMax)}
                         </span>
                       </div>
                       <div className="mt-2 flex gap-2">
@@ -1094,7 +1096,7 @@ export default function Booking() {
                     <div className="sm:w-[200px] shrink-0">
                       <div className="aspect-[4/3] sm:h-full sm:aspect-auto relative overflow-hidden">
                         <img
-                          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                          src={getAvatarImageUrl(dj.avatar)}
                           alt={dj.name}
                           onError={imageFallback}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
@@ -1103,7 +1105,7 @@ export default function Booking() {
                         {/* Price tag */}
                         <div className="absolute top-3 left-3 sm:bottom-3 sm:top-auto sm:left-3 sm:right-auto px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm">
                           <p className="font-mono-data text-sm text-gold font-semibold">
-                            SLE {dj.priceMin.toLocaleString()}
+                            {formatCurrency(dj.priceMin)}
                           </p>
                           <p className="text-[9px] text-text-muted">per event</p>
                         </div>

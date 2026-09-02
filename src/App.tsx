@@ -79,8 +79,11 @@ const DashboardSettings = lazy(() => import('./pages/dashboard/Settings'));
 const DashboardSubscription = lazy(() => import('./pages/dashboard/Subscription'));
 
 const DashboardCampaigns = lazy(() => import('./pages/dashboard/Campaigns'));
+const EditMix = lazy(() => import('./pages/dashboard/EditMix'));
 const TicketScanner = lazy(() => import('./pages/dashboard/TicketScanner'));
 const ScannerLanding = lazy(() => import('./pages/dashboard/ScannerLanding'));
+const OnsiteLogin = lazy(() => import('./pages/onsite/OnsiteLogin'));
+const OnsiteTools = lazy(() => import('./pages/onsite/OnsiteTools'));
 const EventDashboard = lazy(() => import('./pages/dashboard/EventDashboard'));
 const EventTicketManagement = lazy(() => import('./pages/dashboard/EventTicketManagement'));
 const EventAnalytics = lazy(() => import('./pages/dashboard/EventAnalytics'));
@@ -112,7 +115,7 @@ function AuthInitializer() {
   return null;
 }
 
-function RequireLegendRoute({ children }: { children: React.ReactNode }) {
+function RequireProRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   if (isLoading) {
     return (
@@ -124,9 +127,10 @@ function RequireLegendRoute({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
-  const isLegend = user.djProfile?.subscriptionTier?.toLowerCase() === 'legend';
+  const tier = user.djProfile?.subscriptionTier?.toLowerCase();
+  const isProPlus = tier === 'pro' || tier === 'legend';
   const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FINANCE_ADMIN' || user.role === 'VERIFICATION_ADMIN' || user.role === 'SUPPORT_ADMIN' || user.role === 'MODERATOR';
-  if (!isLegend && !isAdmin) {
+  if (!isProPlus && !isAdmin) {
     return <Navigate to="/dashboard/events" replace />;
   }
   return <>{children}</>;
@@ -330,6 +334,7 @@ export default function App() {
               <Route path="dashboard/bookings" element={<DashboardBookings />} />
               <Route path="dashboard/messages" element={<DashboardMessages />} />
               <Route path="dashboard/mixes" element={<DashboardMixes />} />
+              <Route path="dashboard/mixes/:id/edit" element={<EditMix />} />
               <Route path="dashboard/sets" element={<DashboardSets />} />
               <Route path="dashboard/photos" element={<DashboardPhotos />} />
               <Route path="dashboard/events" element={<DashboardEvents />} />
@@ -348,19 +353,19 @@ export default function App() {
               <Route
                 path="dashboard/scanner"
                 element={
-                  <RequireLegendRoute>
+                  <RequireProRoute>
                     <ScannerLanding />
-                  </RequireLegendRoute>
+                  </RequireProRoute>
                 }
               />
             </Route>
-            {/* Ticket scanner: full-screen, no dashboard sidebar. Pro+ (legend) only. */}
+            {/* Ticket scanner: full-screen, no dashboard sidebar. Pro+ only. */}
             <Route
               path="dashboard/events/:eventId/scan"
               element={
-                <RequireLegendRoute>
+                <RequireProRoute>
                   <TicketScanner />
-                </RequireLegendRoute>
+                </RequireProRoute>
               }
             />
           </Route>
@@ -396,7 +401,9 @@ export default function App() {
             <Route path="booking" element={<Booking />} />
             <Route path="mixes" element={<MixHub />} />
             <Route path="mix/:id" element={<MixDetail />} />
+            <Route path="mix/:id/edit" element={<EditMix />} />
             <Route path="mixes/:id" element={<MixDetail />} />
+            <Route path="mixes/:id/edit" element={<EditMix />} />
             <Route path="playlists" element={<OfficialPlaylists />} />
             <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
             <Route path="pricing" element={<Pricing />} />
@@ -404,6 +411,8 @@ export default function App() {
             <Route path="user/:username" element={<UserPublicProfile />} />
             <Route path="events" element={<Events />} />
             <Route path="events/:id" element={<EventDetail />} />
+            <Route path="events/:id/onsite" element={<OnsiteLogin />} />
+            <Route path="events/:id/onsite/tools" element={<OnsiteTools />} />
             <Route path="hall-of-fame" element={<HallOfFame />} />
             <Route path="battles" element={<Battles />} />
             <Route path="feed" element={<Feed />} />

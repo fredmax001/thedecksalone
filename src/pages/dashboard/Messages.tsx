@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 import {
   Dialog,
   DialogContent,
@@ -145,7 +146,7 @@ export default function Messages() {
         setConversations(res.data.data || []);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load conversations');
+      setError(getApiErrorMessage(err, 'Failed to load conversations'));
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ export default function Messages() {
         setPartner(res.data.partner || null);
       }
     } catch (err: any) {
-      if (!silent) setError(err.response?.data?.error || 'Failed to load messages');
+      if (!silent) setError(getApiErrorMessage(err, 'Failed to load messages'));
     } finally {
       if (!silent) setLoadingMessages(false);
     }
@@ -238,7 +239,7 @@ export default function Messages() {
         fetchConversations();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to send message');
+      setError(getApiErrorMessage(err, 'Failed to send message'));
       // Remove temp message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
     } finally {

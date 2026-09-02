@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { prisma } = require('../utils/prisma');
 const { softAuthMiddleware } = require('../middleware/auth');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.post('/visit', softAuthMiddleware, async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

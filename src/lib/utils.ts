@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getMediaUrl } from './api';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,4 +15,8 @@ export function getAvatarUrl(url?: string | null): string {
     return '/default-avatar.jpg';
   }
   return url;
+}
+
+export function getAvatarImageUrl(url?: string | null): string {
+  return getMediaUrl(url) || '/default-avatar.jpg';
 }

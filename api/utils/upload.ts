@@ -51,7 +51,8 @@ const ALLOWED_IMAGE_MIMES = [
 ];
 
 function imageFileFilter(req, file, cb) {
-  if (file.mimetype && ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+  const mime = (file.mimetype || '').toLowerCase();
+  if (mime.startsWith('image/') || ALLOWED_IMAGE_MIMES.includes(mime)) {
     cb(null, true);
   } else {
     cb(new Error(`Invalid image format. Allowed: ${ALLOWED_IMAGE_MIMES.map((m) => m.replace('image/', '')).join(', ')}`), false);
@@ -107,6 +108,22 @@ const uploadDocument = multer({
   limits: { fileSize: MAX_DOCUMENT_UPLOAD_MB * MB },
 });
 
+// Generic admin media upload (image or video)
+const uploadAdminMedia = multer({
+  storage: memoryStorage,
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('video/')
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid media format. Allowed: images and videos'), false);
+    }
+  },
+  limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
+});
+
 // Combined upload for DJ profile update (avatar + cover)
 const uploadDjProfileImages = multer({
   storage: memoryStorage,
@@ -124,15 +141,17 @@ const uploadMix = multer({
     if (file.fieldname === 'audio') {
       return fileFilter(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac'])(req, file, cb);
     }
-    if (file.fieldname === 'coverImage') {
-      return fileFilter(['image/jpeg', 'image/png', 'image/webp'])(req, file, cb);
+    if (file.fieldname === 'coverImage' || file.fieldname === 'cover' || file.fieldname === 'coverFile') {
+      return imageFileFilter(req, file, cb);
     }
-    cb(new Error('Unexpected field'), false);
+    cb(new Error(`Unexpected field: ${file.fieldname}`), false);
   },
   limits: { fileSize: MAX_AUDIO_UPLOAD_MB * MB },
 }).fields([
   { name: 'audio', maxCount: 1 },
   { name: 'coverImage', maxCount: 1 },
+  { name: 'cover', maxCount: 1 },
+  { name: 'coverFile', maxCount: 1 },
 ]);
 
 // Serve uploads statically (local fallback)
@@ -164,5 +183,6 @@ module.exports = {
   uploadHallOfFameImage,
   uploadDjProfileImages,
   uploadDocument,
+  uploadAdminMedia,
   serveUploads,
 };

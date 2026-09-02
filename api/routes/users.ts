@@ -1,6 +1,6 @@
 const express = require('express');
 const { z } = require('zod');
-const { prisma } = require('../utils/prisma');
+const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { searchLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
@@ -9,6 +9,9 @@ const { processAvatar } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { sendAccountDeletionEmail } = require('../utils/email');
 const { isValidUsername } = require('../utils/username');
+const { parsePagination } = require('../utils/pagination');
+const { ok, fail } = require('../utils/response');
+const { asyncHandler } = require('../middleware/asyncHandler');
 
 function extFromMime(mimetype, fallbackName = '') {
   const fromMime = {
@@ -32,126 +35,252 @@ const feedFilterSchema = z.object({
 
 // GET /api/users/activity - Current user's activity history
 // Returns: mix likes, ratings given, battle votes, and saved events (when model exists)
-router.get('/activity', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
+router.get('/activity', authMiddleware, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
 
-    const [mixLikes, reviews, battleVotes] = await Promise.all([
-      prisma.mixLike.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        include: {
-          mix: {
-            select: {
-              id: true,
-              title: true,
-              coverImage: true,
-              genre: true,
-              dj: { select: { id: true, stageName: true, avatar: true } },
-            },
+  const [mixLikes, mixReposts, reviews, battleVotes] = await Promise.all([
+    prisma.mixLike.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        mix: {
+          select: {
+            id: true,
+            title: true,
+            coverImage: true,
+            genre: true,
+            dj: { select: DJ_PUBLIC_SELECT },
           },
         },
-      }),
-      prisma.review.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        include: {
-          dj: {
-            select: { id: true, stageName: true, avatar: true },
+      },
+    }),
+    prisma.mixRepost.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        mix: {
+          select: {
+            id: true,
+            title: true,
+            coverImage: true,
+            genre: true,
+            dj: { select: DJ_PUBLIC_SELECT },
           },
         },
-      }),
-      prisma.battleVote.findMany({
-        where: { userId },
-        orderBy: { id: 'desc' },
-        take: 50,
-        include: {
-          entry: {
-            select: {
-              id: true,
-              dj: { select: { id: true, stageName: true, avatar: true } },
-              battle: { select: { id: true, title: true, weekStart: true, status: true } },
-            },
+      },
+    }),
+    prisma.review.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        dj: {
+          select: DJ_PUBLIC_SELECT,
+        },
+      },
+    }),
+    prisma.battleVote.findMany({
+      where: { userId },
+      orderBy: { id: 'desc' },
+      take: 50,
+      include: {
+        entry: {
+          select: {
+            id: true,
+            dj: { select: DJ_PUBLIC_SELECT },
+            battle: { select: { id: true, title: true, weekStart: true, status: true } },
           },
         },
-      }),
-    ]);
+      },
+    }),
+  ]);
 
-    // Build flat activity array matching frontend ActivityItem type
-    const activities = [
-      ...mixLikes.map((like) => ({
-        id: like.id,
-        type: 'LIKE_MIX',
-        title: like.mix.title,
-        subtitle: like.mix.dj.stageName,
-        thumbnail: like.mix.coverImage,
-        createdAt: like.createdAt,
-        meta: { mixId: like.mix.id, djId: like.mix.dj.id },
-      })),
-      ...reviews.map((review) => ({
-        id: review.id,
-        type: 'RATE_DJ',
-        title: review.dj.stageName,
-        subtitle: `Rated ${review.rating} stars`,
-        thumbnail: review.dj.avatar,
-        createdAt: review.createdAt,
-        meta: { djId: review.dj.id, rating: review.rating },
-      })),
-      ...battleVotes.map((vote) => ({
-        id: vote.id,
-        type: 'BATTLE_VOTE',
-        title: vote.entry.battle.title,
-        subtitle: vote.entry.dj.stageName,
-        thumbnail: vote.entry.dj.avatar,
-        createdAt: vote.entry.battle.weekStart || new Date(),
-        meta: { battleId: vote.entry.battle.id, entryId: vote.entry.id },
-      })),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Build flat activity array matching frontend ActivityItem type
+  const activities = [
+    ...mixLikes.map((like) => ({
+      id: like.id,
+      type: 'LIKE_MIX',
+      title: like.mix.title,
+      subtitle: like.mix.dj.stageName,
+      thumbnail: like.mix.coverImage,
+      createdAt: like.createdAt,
+      meta: { mixId: like.mix.id, djId: like.mix.dj.id },
+    })),
+    ...mixReposts.map((repost) => ({
+      id: repost.id,
+      type: 'REPOST_MIX',
+      title: repost.mix.title,
+      subtitle: repost.mix.dj.stageName,
+      thumbnail: repost.mix.coverImage,
+      createdAt: repost.createdAt,
+      meta: { mixId: repost.mix.id, djId: repost.mix.dj.id },
+    })),
+    ...reviews.map((review) => ({
+      id: review.id,
+      type: 'RATE_DJ',
+      title: review.dj.stageName,
+      subtitle: `Rated ${review.rating} stars`,
+      thumbnail: review.dj.avatar,
+      createdAt: review.createdAt,
+      meta: { djId: review.dj.id, rating: review.rating },
+    })),
+    ...battleVotes.map((vote) => ({
+      id: vote.id,
+      type: 'BATTLE_VOTE',
+      title: vote.entry.battle.title,
+      subtitle: vote.entry.dj.stageName,
+      thumbnail: vote.entry.dj.avatar,
+      createdAt: vote.entry.battle.weekStart || new Date(),
+      meta: { battleId: vote.entry.battle.id, entryId: vote.entry.id },
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return res.json({
-      success: true,
-      data: activities,
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return ok(res, activities);
+}));
 
 // GET /api/users/following-feed - New content from DJs the user follows
-router.get('/following-feed', authMiddleware, async (req, res) => {
-  try {
-    const parsed = feedFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
+router.get('/following-feed', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = feedFilterSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
+  }
 
-    const { page, limit, since } = parsed.data;
-    const userId = req.user.id;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const { page, limit, since } = parsed.data;
+  const userId = req.user.id;
+  const { page: pageNum, limit: limitNum } = parsePagination({ page, limit });
 
-    // Get IDs of DJs the user follows
-    const follows = await prisma.follow.findMany({
-      where: { userId },
-      select: { djId: true },
+  // Get IDs of DJs the user follows
+  const follows = await prisma.follow.findMany({
+    where: { userId },
+    select: { djId: true },
+  });
+  const followedDjIds = follows.map((f) => f.djId);
+
+  if (followedDjIds.length === 0) {
+    return res.json({
+      success: true,
+      data: [],
+      meta: { total: 0, page: pageNum, limit: limitNum, totalPages: 0 },
     });
-    const followedDjIds = follows.map((f) => f.djId);
+  }
 
-    if (followedDjIds.length === 0) {
-      return res.json({
-        success: true,
-        data: [],
-        meta: { total: 0, page: pageNum, limit: limitNum, totalPages: 0 },
-      });
-    }
+  const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 86400000); // default 30 days
 
-    const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 86400000); // default 30 days
+  // Fetch new mixes and events from followed DJs
+  const [newMixes, newEvents] = await Promise.all([
+    prisma.mix.findMany({
+      where: {
+        djId: { in: followedDjIds },
+        isPublic: true,
+        createdAt: { gte: sinceDate },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limitNum,
+      include: {
+        dj: { select: DJ_PUBLIC_SELECT },
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        djId: { in: followedDjIds },
+        createdAt: { gte: sinceDate },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limitNum,
+      include: {
+        dj: { select: DJ_PUBLIC_SELECT },
+      },
+    }),
+  ]);
 
-    // Fetch new mixes and events from followed DJs
-    const [newMixes, newEvents] = await Promise.all([
+  // Merge and sort all feed items by createdAt desc
+  const feedItems = [
+    ...newMixes.map((m) => ({
+      id: `mix_${m.id}`,
+      type: 'mix',
+      createdAt: m.createdAt,
+      data: m,
+    })),
+    ...newEvents.map((e) => ({
+      id: `event_${e.id}`,
+      type: 'event',
+      createdAt: e.createdAt,
+      data: e,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Manual pagination after merging
+  const total = feedItems.length;
+  const start = (pageNum - 1) * limitNum;
+  const paginated = feedItems.slice(start, start + limitNum);
+
+  return res.json({
+    success: true,
+    data: paginated,
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
+
+// GET /api/users/notifications - Synthetic notification feed
+// Since there is no Notification table, this aggregates relevant recent activity
+router.get('/notifications', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = feedFilterSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
+  }
+
+  const { page, limit } = parsed.data;
+  const userId = req.user.id;
+  const { page: pageNum, limit: limitNum } = parsePagination({ page, limit });
+
+  const sinceDate = new Date(Date.now() - 30 * 86400000); // 30 days
+
+  // Booking updates for this user
+  const bookingUpdates = await prisma.booking.findMany({
+    where: {
+      clientId: userId,
+      updatedAt: { gte: sinceDate },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 30,
+    include: {
+      dj: { select: DJ_PUBLIC_SELECT },
+    },
+  });
+
+  // Unread messages
+  const unreadMessages = await prisma.message.findMany({
+    where: {
+      receiverId: userId,
+      readAt: null,
+      createdAt: { gte: sinceDate },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    include: {
+      sender: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          djProfile: { select: { stageName: true, avatar: true } },
+        },
+      },
+    },
+  });
+
+  // Followed DJs — get their recent mixes/events
+  const follows = await prisma.follow.findMany({
+    where: { userId },
+    select: { djId: true },
+  });
+  const followedDjIds = follows.map((f) => f.djId);
+
+  let newFollowedContent = [];
+  if (followedDjIds.length > 0) {
+    const [followedMixes, followedEvents] = await Promise.all([
       prisma.mix.findMany({
         where: {
           djId: { in: followedDjIds },
@@ -159,9 +288,9 @@ router.get('/following-feed', authMiddleware, async (req, res) => {
           createdAt: { gte: sinceDate },
         },
         orderBy: { createdAt: 'desc' },
-        take: limitNum,
+        take: 15,
         include: {
-          dj: { select: { id: true, stageName: true, avatar: true } },
+          dj: { select: DJ_PUBLIC_SELECT },
         },
       }),
       prisma.event.findMany({
@@ -170,199 +299,78 @@ router.get('/following-feed', authMiddleware, async (req, res) => {
           createdAt: { gte: sinceDate },
         },
         orderBy: { createdAt: 'desc' },
-        take: limitNum,
+        take: 15,
         include: {
-          dj: { select: { id: true, stageName: true, avatar: true } },
+          dj: { select: DJ_PUBLIC_SELECT },
         },
       }),
     ]);
 
-    // Merge and sort all feed items by createdAt desc
-    const feedItems = [
-      ...newMixes.map((m) => ({
-        id: `mix_${m.id}`,
-        type: 'mix',
+    newFollowedContent = [
+      ...followedMixes.map((m) => ({
+        id: `new_mix_${m.id}`,
+        type: 'new_mix',
         createdAt: m.createdAt,
-        data: m,
+        read: true, // content notifications are implicitly "read"
+        title: `New mix from ${m.dj.stageName}`,
+        body: m.title,
+        data: { mixId: m.id, djId: m.dj.id },
       })),
-      ...newEvents.map((e) => ({
-        id: `event_${e.id}`,
-        type: 'event',
+      ...followedEvents.map((e) => ({
+        id: `new_event_${e.id}`,
+        type: 'new_event',
         createdAt: e.createdAt,
-        data: e,
+        read: true,
+        title: `New event from ${e.dj?.stageName || 'a DJ you follow'}`,
+        body: e.title,
+        data: { eventId: e.id, djId: e.djId },
       })),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    // Manual pagination after merging
-    const total = feedItems.length;
-    const start = (pageNum - 1) * limitNum;
-    const paginated = feedItems.slice(start, start + limitNum);
-
-    return res.json({
-      success: true,
-      data: paginated,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    ];
   }
-});
 
-// GET /api/users/notifications - Synthetic notification feed
-// Since there is no Notification table, this aggregates relevant recent activity
-router.get('/notifications', authMiddleware, async (req, res) => {
-  try {
-    const parsed = feedFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
+  // Build notification objects
+  const bookingNotifications = bookingUpdates.map((b) => {
+    const isNew = b.createdAt.getTime() === b.updatedAt.getTime();
+    return {
+      id: `booking_${b.id}`,
+      type: isNew ? 'booking_created' : 'booking_updated',
+      createdAt: b.updatedAt,
+      read: false, // TODO: track read state with Notification model
+      title: isNew ? 'Booking request sent' : `Booking ${b.status.toLowerCase()}`,
+      body: isNew
+        ? `You requested ${b.dj.stageName} for ${b.eventType}`
+        : `Your booking with ${b.dj.stageName} is now ${b.status}`,
+      data: { bookingId: b.id, djId: b.dj.id, status: b.status },
+    };
+  });
 
-    const { page, limit } = parsed.data;
-    const userId = req.user.id;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const messageNotifications = unreadMessages.map((m) => ({
+    id: `msg_${m.id}`,
+    type: 'new_message',
+    createdAt: m.createdAt,
+    read: false,
+    title: `New message from ${m.sender.djProfile?.stageName || m.sender.username || m.sender.email}`,
+    body: m.content.slice(0, 120),
+    data: { messageId: m.id, senderId: m.sender.id },
+  }));
 
-    const sinceDate = new Date(Date.now() - 30 * 86400000); // 30 days
+  // Merge all notifications, newest first
+  const allNotifications = [
+    ...bookingNotifications,
+    ...messageNotifications,
+    ...newFollowedContent,
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Booking updates for this user
-    const bookingUpdates = await prisma.booking.findMany({
-      where: {
-        clientId: userId,
-        updatedAt: { gte: sinceDate },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 30,
-      include: {
-        dj: { select: { id: true, stageName: true, avatar: true } },
-      },
-    });
+  const total = allNotifications.length;
+  const start = (pageNum - 1) * limitNum;
+  const paginated = allNotifications.slice(start, start + limitNum);
 
-    // Unread messages
-    const unreadMessages = await prisma.message.findMany({
-      where: {
-        receiverId: userId,
-        readAt: null,
-        createdAt: { gte: sinceDate },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            djProfile: { select: { stageName: true, avatar: true } },
-          },
-        },
-      },
-    });
-
-    // Followed DJs — get their recent mixes/events
-    const follows = await prisma.follow.findMany({
-      where: { userId },
-      select: { djId: true },
-    });
-    const followedDjIds = follows.map((f) => f.djId);
-
-    let newFollowedContent = [];
-    if (followedDjIds.length > 0) {
-      const [followedMixes, followedEvents] = await Promise.all([
-        prisma.mix.findMany({
-          where: {
-            djId: { in: followedDjIds },
-            isPublic: true,
-            createdAt: { gte: sinceDate },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 15,
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true } },
-          },
-        }),
-        prisma.event.findMany({
-          where: {
-            djId: { in: followedDjIds },
-            createdAt: { gte: sinceDate },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 15,
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true } },
-          },
-        }),
-      ]);
-
-      newFollowedContent = [
-        ...followedMixes.map((m) => ({
-          id: `new_mix_${m.id}`,
-          type: 'new_mix',
-          createdAt: m.createdAt,
-          read: true, // content notifications are implicitly "read"
-          title: `New mix from ${m.dj.stageName}`,
-          body: m.title,
-          data: { mixId: m.id, djId: m.dj.id },
-        })),
-        ...followedEvents.map((e) => ({
-          id: `new_event_${e.id}`,
-          type: 'new_event',
-          createdAt: e.createdAt,
-          read: true,
-          title: `New event from ${e.dj?.stageName || 'a DJ you follow'}`,
-          body: e.title,
-          data: { eventId: e.id, djId: e.djId },
-        })),
-      ];
-    }
-
-    // Build notification objects
-    const bookingNotifications = bookingUpdates.map((b) => {
-      const isNew = b.createdAt.getTime() === b.updatedAt.getTime();
-      return {
-        id: `booking_${b.id}`,
-        type: isNew ? 'booking_created' : 'booking_updated',
-        createdAt: b.updatedAt,
-        read: false, // TODO: track read state with Notification model
-        title: isNew ? 'Booking request sent' : `Booking ${b.status.toLowerCase()}`,
-        body: isNew
-          ? `You requested ${b.dj.stageName} for ${b.eventType}`
-          : `Your booking with ${b.dj.stageName} is now ${b.status}`,
-        data: { bookingId: b.id, djId: b.dj.id, status: b.status },
-      };
-    });
-
-    const messageNotifications = unreadMessages.map((m) => ({
-      id: `msg_${m.id}`,
-      type: 'new_message',
-      createdAt: m.createdAt,
-      read: false,
-      title: `New message from ${m.sender.djProfile?.stageName || m.sender.username || m.sender.email}`,
-      body: m.content.slice(0, 120),
-      data: { messageId: m.id, senderId: m.sender.id },
-    }));
-
-    // Merge all notifications, newest first
-    const allNotifications = [
-      ...bookingNotifications,
-      ...messageNotifications,
-      ...newFollowedContent,
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = allNotifications.length;
-    const start = (pageNum - 1) * limitNum;
-    const paginated = allNotifications.slice(start, start + limitNum);
-
-    return res.json({
-      success: true,
-      data: paginated,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return res.json({
+    success: true,
+    data: paginated,
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 /* ─────────────────── Profile Endpoints ─────────────────── */
 
@@ -386,356 +394,304 @@ const updateProfileSchema = z.object({
 });
 
 // GET /api/users/profile - Current user's extended profile
-router.get('/profile', authMiddleware, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        gender: true,
-        dateOfBirth: true,
-        avatar: true,
-        favoriteGenres: true,
-        socialLinks: true,
-        role: true,
-      },
-    });
+router.get('/profile', authMiddleware, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      bio: true,
+      location: true,
+      gender: true,
+      dateOfBirth: true,
+      avatar: true,
+      favoriteGenres: true,
+      socialLinks: true,
+      role: true,
+    },
+  });
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        ...user,
-        social: user.socialLinks || {},
-      },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!user) {
+    return fail(res, 404, 'User not found');
   }
-});
+
+  return ok(res, {
+      ...user,
+      social: user.socialLinks || {},
+    });
+}));
 
 // PUT /api/users/profile - Update current user's profile
-router.put('/profile', authMiddleware, async (req, res) => {
-  try {
-    const parsed = updateProfileSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const { username, email, name, bio, location, gender, dateOfBirth, avatar, favoriteGenres, social } = parsed.data;
-    const updateData: any = {};
-
-    if (gender !== undefined) {
-      updateData.gender = gender === '' ? null : gender;
-    }
-
-    if (username && username.trim() !== '') {
-      const normalized = username.toLowerCase().trim();
-      if (!isValidUsername(normalized)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved',
-        });
-      }
-      const existing = await prisma.user.findUnique({ where: { username: normalized } });
-      if (existing && existing.id !== req.user.id) {
-        return res.status(409).json({ success: false, error: 'Username already taken' });
-      }
-      updateData.username = normalized;
-    }
-
-    if (email && email.trim() !== '') {
-      const normalizedEmail = email.toLowerCase().trim();
-      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-      if (existing && existing.id !== req.user.id) {
-        return res.status(409).json({ success: false, error: 'Email already in use' });
-      }
-      updateData.email = normalizedEmail;
-    }
-
-    if (dateOfBirth !== undefined) {
-      if (!dateOfBirth || dateOfBirth.trim() === '') {
-        updateData.dateOfBirth = null;
-      } else {
-        const parsedDate = new Date(dateOfBirth);
-        if (!Number.isNaN(parsedDate.getTime())) {
-          updateData.dateOfBirth = parsedDate;
-        }
-      }
-    }
-
-    if (avatar !== undefined && avatar !== '') {
-      updateData.avatar = avatar;
-    }
-
-    if (name !== undefined) updateData.name = name || null;
-    if (bio !== undefined) updateData.bio = bio || null;
-    if (location !== undefined) updateData.location = location || null;
-    if (favoriteGenres !== undefined) updateData.favoriteGenres = favoriteGenres;
-    if (social !== undefined) updateData.socialLinks = social;
-
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        gender: true,
-        dateOfBirth: true,
-        avatar: true,
-        favoriteGenres: true,
-        socialLinks: true,
-        role: true,
-      },
-    });
-
-    if (updateData.avatar) {
-      await prisma.djProfile.updateMany({
-        where: { userId: req.user.id },
-        data: { avatar: updateData.avatar },
-      }).catch(() => {});
-    }
-
-    return res.json({
-      success: true,
-      data: { ...user, social: user.socialLinks || {} },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.put('/profile', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
 
-// PUT /api/users/avatar - Upload user avatar
-router.put('/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No image file provided' });
+  const { username, email, name, bio, location, gender, dateOfBirth, avatar, favoriteGenres, social } = parsed.data;
+  const updateData: any = {};
+
+  if (gender !== undefined) {
+    updateData.gender = gender === '' ? null : gender;
+  }
+
+  if (username && username.trim() !== '') {
+    const normalized = username.toLowerCase().trim();
+    if (!isValidUsername(normalized)) {
+      return fail(res, 400, 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved');
     }
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, avatar: true },
-    });
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+    const existing = await prisma.user.findUnique({ where: { username: normalized } });
+    if (existing && existing.id !== req.user.id) {
+      return fail(res, 409, 'Username already taken');
     }
+    updateData.username = normalized;
+  }
 
-    // Process and resize avatar
-    const { buffer, contentType, ext } = await processAvatar(req.file.buffer);
+  if (email && email.trim() !== '') {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing && existing.id !== req.user.id) {
+      return fail(res, 409, 'Email already in use');
+    }
+    updateData.email = normalizedEmail;
+  }
 
-    // Upload to storage (S3 or local)
-    const avatarUrl = await uploadBuffer(buffer, 'avatars', { ext, contentType });
-
-    // Delete old avatar if exists
-    if (user.avatar) {
-      try {
-        await deleteFile(user.avatar);
-      } catch (err) {
-        console.warn('Failed to delete old avatar:', err.message);
+  if (dateOfBirth !== undefined) {
+    if (!dateOfBirth || dateOfBirth.trim() === '') {
+      updateData.dateOfBirth = null;
+    } else {
+      const parsedDate = new Date(dateOfBirth);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        updateData.dateOfBirth = parsedDate;
       }
     }
+  }
 
-    // Update user record
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { avatar: avatarUrl },
-    });
+  if (avatar !== undefined && avatar !== '') {
+    updateData.avatar = avatar;
+  }
 
-    // Sync to DjProfile if user is a DJ
+  if (name !== undefined) updateData.name = name || null;
+  if (bio !== undefined) updateData.bio = bio || null;
+  if (location !== undefined) updateData.location = location || null;
+  if (favoriteGenres !== undefined) updateData.favoriteGenres = favoriteGenres;
+  if (social !== undefined) updateData.socialLinks = social;
+
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: updateData,
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      bio: true,
+      location: true,
+      gender: true,
+      dateOfBirth: true,
+      avatar: true,
+      favoriteGenres: true,
+      socialLinks: true,
+      role: true,
+    },
+  });
+
+  if (updateData.avatar) {
     await prisma.djProfile.updateMany({
       where: { userId: req.user.id },
-      data: { avatar: avatarUrl },
-    }).catch(() => { });
-
-    return res.json({ success: true, data: { avatar: avatarUrl } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+      data: { avatar: updateData.avatar },
+    }).catch(() => {});
   }
-});
+
+  return ok(res, { ...user, social: user.socialLinks || {} });
+}));
+
+// PUT /api/users/avatar - Upload user avatar
+router.put('/avatar', authMiddleware, uploadAvatar.single('avatar'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return fail(res, 400, 'No image file provided');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, avatar: true },
+  });
+
+  if (!user) {
+    return fail(res, 404, 'User not found');
+  }
+
+  // Process and resize avatar
+  const { buffer, contentType, ext } = await processAvatar(req.file.buffer);
+
+  // Upload to storage (S3 or local)
+  const avatarUrl = await uploadBuffer(buffer, 'avatars', { ext, contentType });
+
+  // Delete old avatar if exists
+  if (user.avatar) {
+    try {
+      await deleteFile(user.avatar);
+    } catch (err) {
+      console.warn('Failed to delete old avatar:', err.message);
+    }
+  }
+
+  // Update user record
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { avatar: avatarUrl },
+  });
+
+  // Sync to DjProfile if user is a DJ
+  await prisma.djProfile.updateMany({
+    where: { userId: req.user.id },
+    data: { avatar: avatarUrl },
+  }).catch(() => { });
+
+  return ok(res, { avatar: avatarUrl });
+}));
 
 // PUT /api/users/password - Change current user's password
-router.put('/password', authMiddleware, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
+router.put('/password', authMiddleware, asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword || newPassword.length < 6) {
-      return res.status(400).json({ success: false, error: 'Current password and new password (min 6 chars) are required' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, password: true },
-    });
-
-    if (!user || !user.password) {
-      return res.status(400).json({ success: false, error: 'User not found or no password set' });
-    }
-
-    const valid = await bcrypt.compare(currentPassword, user.password);
-    if (!valid) {
-      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { password: hashedPassword },
-    });
-
-    return res.json({ success: true, data: { message: 'Password updated successfully' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!currentPassword || !newPassword || newPassword.length < 6) {
+    return fail(res, 400, 'Current password and new password (min 6 chars) are required');
   }
-});
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, password: true },
+  });
+
+  if (!user || !user.password) {
+    return fail(res, 400, 'User not found or no password set');
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) {
+    return fail(res, 401, 'Current password is incorrect');
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { password: hashedPassword },
+  });
+
+  return ok(res, { message: 'Password updated successfully' });
+}));
 
 // GET /api/users/following - DJs the user follows (with latest mix / event)
-router.get('/following', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
+router.get('/following', authMiddleware, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
 
-    const follows = await prisma.follow.findMany({
-      where: { userId },
-      include: {
-        dj: {
-          select: {
-            id: true,
-            stageName: true,
-            avatar: true,
-            city: true,
-            genres: true,
-            _count: { select: { followers: true } },
-            mixes: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { id: true, title: true, coverImage: true, createdAt: true },
-            },
-            events: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { id: true, title: true, date: true, city: true },
-            },
+  const follows = await prisma.follow.findMany({
+    where: { userId },
+    include: {
+      dj: {
+        select: {
+          id: true,
+          stageName: true,
+          avatar: true,
+          city: true,
+          genres: true,
+          _count: { select: { followers: true } },
+          mixes: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { id: true, title: true, coverImage: true, createdAt: true },
+          },
+          events: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { id: true, title: true, date: true, city: true },
           },
         },
       },
-    });
+    },
+  });
 
-    const data = follows.map((f) => ({
-      id: f.dj.id,
-      stageName: f.dj.stageName,
-      avatar: f.dj.avatar,
-      city: f.dj.city,
-      genre: f.dj.genres,
-      followerCount: f.dj._count.followers,
-      latestMix: f.dj.mixes[0]
-        ? {
-          id: f.dj.mixes[0].id,
-          title: f.dj.mixes[0].title,
-          coverArt: f.dj.mixes[0].coverImage,
-          createdAt: f.dj.mixes[0].createdAt,
-        }
-        : undefined,
-      latestEvent: f.dj.events[0]
-        ? {
-          id: f.dj.events[0].id,
-          title: f.dj.events[0].title,
-          eventDate: f.dj.events[0].date,
-          city: f.dj.events[0].city,
-        }
-        : undefined,
-    }));
+  const data = follows.map((f) => ({
+    id: f.dj.id,
+    stageName: f.dj.stageName,
+    avatar: f.dj.avatar,
+    city: f.dj.city,
+    genre: f.dj.genres,
+    followerCount: f.dj._count.followers,
+    latestMix: f.dj.mixes[0]
+      ? {
+        id: f.dj.mixes[0].id,
+        title: f.dj.mixes[0].title,
+        coverArt: f.dj.mixes[0].coverImage,
+        createdAt: f.dj.mixes[0].createdAt,
+      }
+      : undefined,
+    latestEvent: f.dj.events[0]
+      ? {
+        id: f.dj.events[0].id,
+        title: f.dj.events[0].title,
+        eventDate: f.dj.events[0].date,
+        city: f.dj.events[0].city,
+      }
+      : undefined,
+  }));
 
-    return res.json({ success: true, data });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return ok(res, data);
+}));
 
 // PATCH /api/users/notifications/:id/read - Mark notification as read
-router.patch('/notifications/:id/read', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    // Notifications are synthetic; nothing to persist yet.
-    return res.json({ success: true, data: { id, read: true } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.patch('/notifications/:id/read', authMiddleware, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  // Notifications are synthetic; nothing to persist yet.
+  return ok(res, { id, read: true });
+}));
 
 // PATCH /api/users/notifications/read-all - Mark all notifications as read
-router.patch('/notifications/read-all', authMiddleware, async (req, res) => {
-  try {
-    // Notifications are synthetic; nothing to persist yet.
-    return res.json({ success: true, data: { read: true } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.patch('/notifications/read-all', authMiddleware, asyncHandler(async (req, res) => {
+  // Notifications are synthetic; nothing to persist yet.
+  return ok(res, { read: true });
+}));
 
 // GET /api/users/search - Search for users by name/username/email (for DJs to find clients)
-router.get('/search', authMiddleware, searchLimiter, async (req, res) => {
-  try {
-    const { q, limit } = req.query;
-    if (!q || typeof q !== 'string' || q.trim().length < 2) {
-      return res.status(400).json({ success: false, error: 'Search query must be at least 2 characters' });
-    }
-    const searchTerm = q.trim();
-    const take = Math.min(20, Math.max(1, parseInt(limit as string) || 10));
-
-    const users = await prisma.user.findMany({
-      where: {
-        AND: [
-          { id: { not: req.user.id } }, // Exclude self
-          {
-            OR: [
-              { username: { contains: searchTerm, mode: 'insensitive' } },
-              { name: { contains: searchTerm, mode: 'insensitive' } },
-            ],
-          },
-        ],
-      },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        avatar: true,
-      },
-      take,
-      orderBy: { name: 'asc' },
-    });
-
-    return res.json({
-      success: true,
-      data: users.map((u) => ({
-        id: u.id,
-        name: u.name || u.username || u.email,
-        avatar: u.avatar || null,
-      })),
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/search', authMiddleware, searchLimiter, asyncHandler(async (req, res) => {
+  const { q, limit } = req.query;
+  if (!q || typeof q !== 'string' || q.trim().length < 2) {
+    return fail(res, 400, 'Search query must be at least 2 characters');
   }
-});
+  const searchTerm = q.trim();
+  const { limit: take } = parsePagination({ limit }, { defaultLimit: 10, maxLimit: 20 });
+
+  const users = await prisma.user.findMany({
+    where: {
+      AND: [
+        { id: { not: req.user.id } }, // Exclude self
+        {
+          OR: [
+            { username: { contains: searchTerm, mode: 'insensitive' } },
+            { name: { contains: searchTerm, mode: 'insensitive' } },
+          ],
+        },
+      ],
+    },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      avatar: true,
+    },
+    take,
+    orderBy: { name: 'asc' },
+  });
+
+  return ok(res, users.map((u) => ({
+      id: u.id,
+      name: u.name || u.username || u.email,
+      avatar: u.avatar || null,
+    })));
+}));
 
 // DELETE /api/users/account - Schedule the authenticated user's account for deletion
 router.delete('/account', authMiddleware, async (req, res) => {
@@ -748,14 +704,11 @@ router.delete('/account', authMiddleware, async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
     if (user.deletedAt) {
-      return res.json({
-        success: true,
-        data: { scheduled: true, deletionDate: user.deletedAt },
-      });
+      return ok(res, { scheduled: true, deletionDate: user.deletedAt });
     }
 
     const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -809,14 +762,10 @@ router.delete('/account', authMiddleware, async (req, res) => {
       console.error('[Account Deletion] Failed to send email:', err);
     });
 
-    return res.json({
-      success: true,
-      data: { scheduled: true, deletionDate },
-      message: 'Your account has been scheduled for deletion in 30 days. You can log in before then to reactivate.',
-    });
+    return ok(res, { scheduled: true, deletionDate }, 'Your account has been scheduled for deletion in 30 days. You can log in before then to reactivate.');
   } catch (error) {
     console.error('Delete account error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -826,9 +775,28 @@ const notificationPrefsSchema = z.object({
   emailBookings: z.boolean().optional(),
   emailMessages: z.boolean().optional(),
   emailMarketing: z.boolean().optional(),
+  emailLikes: z.boolean().optional(),
+  emailComments: z.boolean().optional(),
+  emailFollows: z.boolean().optional(),
+  emailReups: z.boolean().optional(),
+  emailNewMixes: z.boolean().optional(),
+  emailEvents: z.boolean().optional(),
+  emailTickets: z.boolean().optional(),
+  emailVerifications: z.boolean().optional(),
+  emailSubscriptions: z.boolean().optional(),
+  emailReviews: z.boolean().optional(),
   pushBookings: z.boolean().optional(),
   pushMessages: z.boolean().optional(),
   pushNewMixes: z.boolean().optional(),
+  pushLikes: z.boolean().optional(),
+  pushComments: z.boolean().optional(),
+  pushFollows: z.boolean().optional(),
+  pushReups: z.boolean().optional(),
+  pushEvents: z.boolean().optional(),
+  pushTickets: z.boolean().optional(),
+  pushVerifications: z.boolean().optional(),
+  pushSubscriptions: z.boolean().optional(),
+  pushReviews: z.boolean().optional(),
 });
 
 const privacyPrefsSchema = z.object({
@@ -844,119 +812,125 @@ const settingsSchema = z.object({
 });
 
 // GET /api/users/settings - Get current user's settings (notifications + privacy)
-router.get('/settings', authMiddleware, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        notificationPreferences: true,
-        privacyPreferences: true,
-        djProfile: { select: { isPublic: true } },
-      },
-    });
+router.get('/settings', authMiddleware, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      notificationPreferences: true,
+      privacyPreferences: true,
+      djProfile: { select: { isPublic: true } },
+    },
+  });
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    // Merge stored preferences with defaults
-    const defaultNotifications = {
-      emailBookings: true,
-      emailMessages: true,
-      emailMarketing: false,
-      pushBookings: true,
-      pushMessages: true,
-      pushNewMixes: true,
-    };
-
-    const defaultPrivacy = {
-      profilePublic: true,
-      allowMessages: true,
-      showEarnings: false,
-      showActivity: false,
-    };
-
-    const notifications = user.notificationPreferences
-      ? { ...defaultNotifications, ...(user.notificationPreferences as Record<string, boolean>) }
-      : defaultNotifications;
-
-    const privacy = user.privacyPreferences
-      ? { ...defaultPrivacy, ...(user.privacyPreferences as Record<string, boolean>) }
-      : defaultPrivacy;
-
-    // Override profilePublic with DjProfile.isPublic if DJ
-    if (user.djProfile) {
-      privacy.profilePublic = user.djProfile.isPublic;
-    }
-
-    return res.json({
-      success: true,
-      data: { notifications, privacy },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!user) {
+    return fail(res, 404, 'User not found');
   }
-});
+
+  // Merge stored preferences with defaults
+  const defaultNotifications = {
+    emailBookings: true,
+    emailMessages: true,
+    emailMarketing: false,
+    emailLikes: true,
+    emailComments: true,
+    emailFollows: true,
+    emailReups: true,
+    emailNewMixes: true,
+    emailEvents: true,
+    emailTickets: true,
+    emailVerifications: true,
+    emailSubscriptions: true,
+    emailReviews: true,
+    pushBookings: true,
+    pushMessages: true,
+    pushNewMixes: true,
+    pushLikes: true,
+    pushComments: true,
+    pushFollows: true,
+    pushReups: true,
+    pushEvents: true,
+    pushTickets: true,
+    pushVerifications: true,
+    pushSubscriptions: true,
+    pushReviews: true,
+  };
+
+  const defaultPrivacy = {
+    profilePublic: true,
+    allowMessages: true,
+    showEarnings: false,
+    showActivity: false,
+  };
+
+  const notifications = user.notificationPreferences
+    ? { ...defaultNotifications, ...(user.notificationPreferences as Record<string, boolean>) }
+    : defaultNotifications;
+
+  const privacy = user.privacyPreferences
+    ? { ...defaultPrivacy, ...(user.privacyPreferences as Record<string, boolean>) }
+    : defaultPrivacy;
+
+  // Override profilePublic with DjProfile.isPublic if DJ
+  if (user.djProfile) {
+    privacy.profilePublic = user.djProfile.isPublic;
+  }
+
+  return ok(res, { notifications, privacy });
+}));
 
 // PUT /api/users/settings - Update current user's settings
-router.put('/settings', authMiddleware, async (req, res) => {
-  try {
-    const parsed = settingsSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
+router.put('/settings', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
 
-    const { notifications, privacy } = parsed.data;
-    const userId = req.user.id;
+  const { notifications, privacy } = parsed.data;
+  const userId = req.user.id;
 
-    // Fetch current user to merge preferences
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { notificationPreferences: true, privacyPreferences: true, djProfile: { select: { id: true } } },
-    });
+  // Fetch current user to merge preferences
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notificationPreferences: true, privacyPreferences: true, djProfile: { select: { id: true } } },
+  });
 
-    if (!currentUser) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
+  if (!currentUser) {
+    return fail(res, 404, 'User not found');
+  }
 
-    const updateData: any = {};
+  const updateData: any = {};
 
-    // Merge notification preferences
-    if (notifications !== undefined) {
-      const existing = (currentUser.notificationPreferences as Record<string, boolean>) || {};
-      updateData.notificationPreferences = { ...existing, ...notifications };
-    }
+  // Merge notification preferences
+  if (notifications !== undefined) {
+    const existing = (currentUser.notificationPreferences as Record<string, boolean>) || {};
+    updateData.notificationPreferences = { ...existing, ...notifications };
+  }
 
-    // Merge privacy preferences (excluding profilePublic which is handled via DjProfile)
-    if (privacy !== undefined) {
-      const { profilePublic, ...restPrivacy } = privacy;
-      const existing = (currentUser.privacyPreferences as Record<string, boolean>) || {};
-      updateData.privacyPreferences = { ...existing, ...restPrivacy };
+  // Merge privacy preferences (excluding profilePublic which is handled via DjProfile)
+  if (privacy !== undefined) {
+    const { profilePublic, ...restPrivacy } = privacy;
+    const existing = (currentUser.privacyPreferences as Record<string, boolean>) || {};
+    updateData.privacyPreferences = { ...existing, ...restPrivacy };
 
-      // If profilePublic is provided and user has a DJ profile, update DjProfile.isPublic
-      if (profilePublic !== undefined && currentUser.djProfile?.id) {
-        await prisma.djProfile.update({
-          where: { id: currentUser.djProfile.id },
-          data: { isPublic: profilePublic },
-        });
-      }
-    }
-
-    // Update user preferences
-    if (Object.keys(updateData).length > 0) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: updateData,
+    // If profilePublic is provided and user has a DJ profile, update DjProfile.isPublic
+    if (profilePublic !== undefined && currentUser.djProfile?.id) {
+      await prisma.djProfile.update({
+        where: { id: currentUser.djProfile.id },
+        data: { isPublic: profilePublic },
       });
     }
-
-    return res.json({ success: true, data: { message: 'Settings updated' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+
+  // Update user preferences
+  if (Object.keys(updateData).length > 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+  }
+
+  return ok(res, { message: 'Settings updated' });
+}));
 
 // GET /api/users/public/:username - Public user profile lookup (no auth required)
 // NOTE: Also mounted at server-level as /api/users/public/:username
@@ -994,18 +968,15 @@ router.get('/public/:username', async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         ...user,
         djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -1044,20 +1015,17 @@ router.get('/subscription/status', authMiddleware, async (req, res) => {
     ]);
 
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         tier: user.subscriptionTier || 'free',
         activatedAt: user.subscriptionActivatedAt,
         latestRequest,
-      },
-    });
+      });
   } catch (error) {
     console.error('[User Subscription Status API] Error:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -1068,10 +1036,7 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
     const { plan, amount, currency = 'SLE', paymentReference } = req.body;
 
     if (!plan || !VALID_PLANS.includes(plan)) {
-      return res.status(400).json({
-        success: false,
-        error: `Plan is required and must be one of: ${VALID_PLANS.join(', ')}`,
-      });
+      return fail(res, 400, `Plan is required and must be one of: ${VALID_PLANS.join(', ')}`);
     }
 
     const isAnnual = plan.includes('annual');
@@ -1080,21 +1045,15 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
 
     const parsedAmount = parseFloat(amount);
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ success: false, error: 'Valid amount is required' });
+      return fail(res, 400, 'Valid amount is required');
     }
 
     if (parsedAmount !== expectedAmount) {
-      return res.status(400).json({
-        success: false,
-        error: `Amount does not match selected plan. Expected SLE ${expectedAmount} for ${plan}`,
-      });
+      return fail(res, 400, `Amount does not match selected plan. Expected SLE ${expectedAmount} for ${plan}`);
     }
 
     if (!paymentReference && !req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Please provide a payment screenshot or transaction reference',
-      });
+      return fail(res, 400, 'Please provide a payment screenshot or transaction reference');
     }
 
     let proofUrl = req.body.paymentProofUrl || '';
@@ -1111,15 +1070,12 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
     // Platform subscriptions are only for DJs. Fans and listeners are always free.
     if (user.role !== 'DJ') {
-      return res.status(403).json({
-        success: false,
-        error: 'Subscriptions are only available for DJ accounts. Fans can stream and download for free.',
-      });
+      return fail(res, 403, 'Subscriptions are only available for DJ accounts. Fans can stream and download for free.');
     }
 
     const djId = user.djProfile?.id || null;
@@ -1129,11 +1085,7 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
       where: { userId: user.id, status: 'pending' },
     });
     if (existingPending) {
-      return res.status(409).json({
-        success: false,
-        error: 'You already have a pending subscription request. Please wait for admin approval.',
-        data: existingPending,
-      });
+      return fail(res, 409, 'You already have a pending subscription request. Please wait for admin approval.', { data: existingPending });
     }
 
     const subRequest = await prisma.proSubscriptionRequest.create({
@@ -1149,65 +1101,56 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
       },
     });
 
-    return res.json({
-      success: true,
-      message: 'Upgrade request submitted successfully! Your subscription is pending admin confirmation.',
-      data: subRequest,
-    });
+    return ok(res, subRequest, 'Upgrade request submitted successfully! Your subscription is pending admin confirmation.');
   } catch (error) {
     console.error('[User Subscription Request API] Error:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
 // GET /api/users/:username - Public user profile by username (MUST be last GET route)
-router.get('/:username', async (req, res) => {
-  try {
-    const username = req.params.username.toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { username },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        bio: true,
-        location: true,
-        avatar: true,
-        favoriteGenres: true,
-        role: true,
-        createdAt: true,
-        djProfile: {
-          select: {
-            id: true,
-            stageName: true,
-            bio: true,
-            avatar: true,
-            city: true,
-            community: true,
-            country: true,
-            isPublic: true,
-            subscriptionTier: true,
-            verified: true,
-            user: { select: { username: true } },
-          },
+router.get('/:username', asyncHandler(async (req, res) => {
+  const username = req.params.username.toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      bio: true,
+      location: true,
+      avatar: true,
+      favoriteGenres: true,
+      role: true,
+      createdAt: true,
+      djProfile: {
+        select: {
+          id: true,
+          stageName: true,
+          bio: true,
+          avatar: true,
+          city: true,
+          community: true,
+          country: true,
+          isPublic: true,
+          subscriptionTier: true,
+          verified: true,
+          user: { select: { username: true } },
         },
       },
-    });
+    },
+  });
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    const publicUser = {
-      ...user,
-      djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
-    };
-
-    return res.json({ success: true, data: publicUser });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!user) {
+    return fail(res, 404, 'User not found');
   }
-});
+
+  const publicUser = {
+    ...user,
+    djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
+  };
+
+  return ok(res, publicUser);
+}));
 
 module.exports = router;

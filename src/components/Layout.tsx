@@ -12,11 +12,9 @@ import {
   Library,
   ListMusic,
   LogOut,
-  Moon,
   Radio,
   Search,
   Sparkles,
-  Sun,
   Trophy,
   Upload,
   Users,
@@ -37,9 +35,10 @@ import {
 import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
 import { cn } from '@/lib/utils';
-import { getMediaUrl } from '@/lib/api';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import SearchModal from '@/components/SearchModal';
+import { getAvatarImageUrl } from '@/lib/utils';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const browseItems = [
   { label: 'Home', path: '/', icon: Home },
@@ -60,51 +59,18 @@ const studioItems = [
   { label: 'Sets', path: '/dashboard/sets', icon: Radio },
 ];
 
-function ThemeToggle() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('deck_salone_theme') as 'dark' | 'light') || 'dark';
-  });
-
-  useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    localStorage.setItem('deck_salone_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
-
-  return (
-    <button
-      onClick={toggleTheme}
-      title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-      className="p-2 rounded-full border border-gold/25 bg-black-surface/80 hover:bg-gold/15 hover:border-gold/50 text-gold transition-all shrink-0 flex items-center justify-center shadow-sm"
-      aria-label="Toggle theme mode"
-    >
-      {theme === 'dark' ? (
-        <Sun className="w-4 h-4 text-gold hover:rotate-45 transition-transform" />
-      ) : (
-        <Moon className="w-4 h-4 text-gold hover:-rotate-12 transition-transform" />
-      )}
-    </button>
-  );
-}
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const { user, isAuthenticated, logout } = useAuthStore();
-  const isDj = user?.role === 'DJ';
+  const { isDj } = useUserRole();
   const isModerator = user?.role === 'MODERATOR';
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
   const shouldShowGetPro = isDj && subscriptionTier === 'free';
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
-  const avatarUrl = getMediaUrl(user?.djProfile?.avatar || user?.avatar) || '/default-avatar.jpg';
+  const avatarUrl = getAvatarImageUrl(user?.djProfile?.avatar || user?.avatar);
   const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
   const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
   const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
@@ -214,11 +180,11 @@ export default function Layout() {
 
             {/* ─── SIDEBAR UPGRADE / VIP STATUS BADGE (AFTER HOW TO USE) ─── */}
             {isDj && (subscriptionTier === 'pro' || subscriptionTier === 'legend' || subscriptionTier === 'pro_plus') ? (
-              /* PRO / PRO+ / LEGEND VIP STATUS */
+              /* PRO / PRO+ VIP STATUS */
               <div className="mt-5 mx-1 rounded-2xl border border-amber-400/30 bg-gradient-to-b from-amber-500/10 via-[#161410] to-[#0d0c0a] p-3.5 shadow-lg shadow-amber-500/5">
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-sm">
-                    👑 {subscriptionTier === 'legend' ? 'LEGEND VIP' : subscriptionTier === 'pro_plus' ? 'PRO+ VIP' : 'PRO MEMBER'}
+                    👑 {subscriptionTier === 'legend' ? 'PRO+ VIP' : subscriptionTier === 'pro_plus' ? 'PRO+ VIP' : 'PRO MEMBER'}
                   </span>
                   <span className="text-[10px] font-mono font-bold text-amber-400">Active</span>
                 </div>
@@ -310,7 +276,7 @@ export default function Layout() {
               </button>
 
               {/* For DJs: Replace Theme Toggle with Upload icon */}
-              {isDj ? (
+              {isDj && (
                 <Link
                   to="/dashboard/mixes"
                   className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 hover:border-gold/40 text-gold hover:brightness-110 active:scale-95 transition-all shadow-inner shrink-0"
@@ -319,8 +285,6 @@ export default function Layout() {
                 >
                   <Upload className="w-4 h-4" />
                 </Link>
-              ) : (
-                <ThemeToggle />
               )}
 
               {isAuthenticated && (

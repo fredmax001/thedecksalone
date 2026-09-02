@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DigitalTicket from '@/components/events/DigitalTicket';
+import { formatEventDate } from '@/lib/dateTime';
 import { toast } from 'sonner';
 
 const statusColor: Record<string, string> = {
@@ -82,7 +83,7 @@ export default function MyTickets() {
                   {date && (
                     <p className="text-xs text-text-secondary flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-gold" />
-                      {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      {formatEventDate(date)}
                     </p>
                   )}
                   {(event?.venue || event?.location) && (

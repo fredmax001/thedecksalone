@@ -42,6 +42,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 const GENRES = [
   'Amapiano',
@@ -138,7 +141,7 @@ export default function Profile() {
     whyVerified: '',
   });
   const [verificationSubmitting, setVerificationSubmitting] = useState(false);
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
   const [djId, setDjId] = useState<string | null>(user?.djProfile?.id || null);
 
   // Form state
@@ -393,7 +396,7 @@ export default function Profile() {
       }
     } catch (err: any) {
       const details = err.response?.data?.details;
-      let msg = err.response?.data?.error || 'Failed to save profile';
+      let msg = getApiErrorMessage(err, 'Failed to save profile');
       if (details?.fieldErrors) {
         const fields = Object.entries(details.fieldErrors)
           .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
@@ -480,7 +483,7 @@ export default function Profile() {
       const res = await api.get('/djs/me');
       if (res.data.success) setDjData(res.data.data);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to submit verification request');
+      toast.error(getApiErrorMessage(err, 'Failed to submit verification request'));
     } finally {
       setVerificationSubmitting(false);
     }
@@ -538,7 +541,7 @@ export default function Profile() {
                           await useAuthStore.getState().fetchMe();
                           toast.success('Avatar updated successfully!');
                         } catch (err: any) {
-                          toast.error(err.response?.data?.error || 'Failed to update avatar');
+                          toast.error(getApiErrorMessage(err, 'Failed to update avatar'));
                         }
                       }
                     }}
@@ -1424,7 +1427,7 @@ export default function Profile() {
               <div className="relative shrink-0">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-[3.5px] border-white/90 bg-black overflow-hidden shadow-2xl">
                   <img
-                    src={avatarPreview || getMediaUrl(djData?.avatar || user?.avatar) || '/default-avatar.jpg'}
+                    src={avatarPreview || getAvatarImageUrl(djData?.avatar || user?.avatar)}
                     alt={form.stageName || 'DJ Avatar'}
                     className="w-full h-full object-cover"
                   />

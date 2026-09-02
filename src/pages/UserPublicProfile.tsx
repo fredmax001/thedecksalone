@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { getMediaUrl } from '@/lib/api';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Loader2, MapPin, Music, ArrowLeft, User, Calendar } from 'lucide-react';
 import { usePublicUser } from '@/hooks/usePublicUser';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import ShareButton from '@/components/ShareButton';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -73,7 +73,7 @@ export default function UserPublicProfile() {
           >
             <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-2 border-gold/30 shrink-0 bg-white/5">
               {profile.avatar ? (
-                <img src={getMediaUrl(profile.avatar) || '/default-avatar.jpg'} alt={displayName} className="w-full h-full object-cover" />
+                <img src={getAvatarImageUrl(profile.avatar)} alt={displayName} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gold">
                   <User size={48} />

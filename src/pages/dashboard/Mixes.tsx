@@ -84,6 +84,8 @@ interface Mix {
 }
 
 import { GENRES } from '@/constants/genres';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 function ToggleRow({
   icon,
@@ -154,7 +156,7 @@ export default function Mixes() {
   const [audioSource, setAudioSource] = useState<'file' | 'url'>('file');
   const audioInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
   const djId = user?.djProfile?.id;
 
   // Highlights
@@ -306,7 +308,7 @@ export default function Mixes() {
         toast.error(res.data.error || 'Upload failed');
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Upload failed. Check your internet connection.');
+      toast.error(getApiErrorMessage(err, 'Upload failed. Check your internet connection.'));
     } finally {
       setUploadLoading(false);
       setUploadProgress(null);
@@ -315,18 +317,7 @@ export default function Mixes() {
   };
 
   const openEditModal = (mix: Mix) => {
-    setEditingMix(mix);
-    setEditForm({
-      title: mix.title,
-      genre: mix.genre,
-      description: mix.description || '',
-      isPublic: mix.isPublic,
-      allowPublicDownloads: mix.allowPublicDownloads || false,
-      repostToDownload: mix.repostToDownload || false,
-      followToDownload: mix.followToDownload || false,
-    });
-    setEditCoverFile(null);
-    setEditCoverUrl(mix.coverImage || '');
+    navigate(`/dashboard/mixes/${mix.id}/edit`);
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -366,7 +357,7 @@ export default function Mixes() {
         toast.error(res.data.error || 'Update failed');
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Update failed');
+      toast.error(getApiErrorMessage(err, 'Update failed'));
     } finally {
       setEditLoading(false);
     }
@@ -387,7 +378,7 @@ export default function Mixes() {
       setDeleteDialogOpen(false);
       setDeletingMixId(null);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     } finally {
       setDeleteLoading(false);
     }
@@ -435,7 +426,7 @@ export default function Mixes() {
       await api.put('/mixes/reorder', { items });
       toast.success('Mix order updated');
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to update order');
+      toast.error(getApiErrorMessage(err, 'Failed to update order'));
       setMixes(previousMixes);
     }
   };

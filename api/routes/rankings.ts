@@ -9,6 +9,7 @@ const {
   calculateBookingScore,
   WEIGHTS_V2,
 } = require('../utils/rankingAlgorithm');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -108,9 +109,7 @@ router.get('/', async (req, res) => {
   try {
     const parsed = rankingFilterSchema.safeParse(req.query);
     if (!parsed.success) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Invalid filter parameters' });
+      return fail(res, 400, 'Invalid filter parameters');
     }
 
     const { city, genre, page, limit } = parsed.data;
@@ -193,7 +192,7 @@ router.get('/', async (req, res) => {
 
     return res.json(result);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -278,7 +277,7 @@ router.get('/overview', async (req, res) => {
 
     return res.json(result);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -290,9 +289,9 @@ router.get('/:djId/history', async (req, res) => {
       orderBy: { week: 'asc' },
     });
 
-    return res.json({ success: true, data: history });
+    return ok(res, history);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

@@ -10,6 +10,9 @@ const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
 const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { createNotification } = require('../utils/notifications');
 const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
+const { parsePagination } = require('../utils/pagination');
+const { ok, fail } = require('../utils/response');
+const { asyncHandler } = require('../middleware/asyncHandler');
 
 const router = express.Router();
 
@@ -158,21 +161,21 @@ function parseFormFields(body) {
 async function updateDjProfile(req, res, id) {
   const dj = await prisma.djProfile.findUnique({ where: { id } });
   if (!dj) {
-    return res.status(404).json({ success: false, error: 'DJ not found' });
+    return fail(res, 404, 'DJ not found');
   }
   if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
-    return res.status(403).json({ success: false, error: 'Forbidden' });
+    return fail(res, 403, 'Forbidden');
   }
 
   const parsed = updateDjSchema.safeParse(parseFormFields(req.body));
   if (!parsed.success) {
-    return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
 
   const updateData = { ...parsed.data };
 
   if (updateData.city === undefined && updateData.community !== undefined) {
-    return res.status(400).json({ success: false, error: 'City is required when setting a community' });
+    return fail(res, 400, 'City is required when setting a community');
   }
 
   const nextCity = updateData.city ?? dj.city;
@@ -180,7 +183,7 @@ async function updateDjProfile(req, res, id) {
   if (nextCommunity !== undefined && nextCommunity !== null) {
     const validCommunities = CITY_TO_COMMUNITIES[nextCity] || [];
     if (validCommunities.length && !validCommunities.includes(nextCommunity)) {
-      return res.status(400).json({ success: false, error: 'Selected community does not belong to the selected city' });
+      return fail(res, 400, 'Selected community does not belong to the selected city');
     }
   }
 
@@ -212,7 +215,7 @@ async function updateDjProfile(req, res, id) {
   }
 
   if (updateData.genres && updateData.genres.length > 5) {
-    return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
+    return fail(res, 400, 'Maximum 5 genres allowed');
   }
 
   if (updateData.avatar) {
@@ -227,7 +230,7 @@ async function updateDjProfile(req, res, id) {
     data: updateData,
   });
 
-  return res.json({ success: true, data: updated });
+  return ok(res, updated);
 }
 
 // PUT /api/djs/cover - Upload DJ cover banner directly
@@ -240,11 +243,11 @@ router.put('/cover', authMiddleware, uploadCover.single('coverBanner'), async (r
     });
 
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No cover banner image provided' });
+      return fail(res, 400, 'No cover banner image provided');
     }
 
     const { buffer, contentType, ext } = await processCover(req.file.buffer);
@@ -259,100 +262,106 @@ router.put('/cover', authMiddleware, uploadCover.single('coverBanner'), async (r
       data: { coverBanner: coverUrl },
     });
 
-    return res.json({ success: true, data: { coverBanner: coverUrl, dj: updated } });
+    return ok(res, { coverBanner: coverUrl, dj: updated });
   } catch (err: any) {
     console.error('Error uploading cover:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed to upload cover' });
+    return fail(res, 500, err.message || 'Failed to upload cover');
   }
 });
 
 // GET /api/djs - List DJs with filtering
-router.get('/', conditionalSearchLimiter, async (req, res) => {
-  try {
-    const parsed = djFilterSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { city, community, genre, verified, minFee, maxFee, search, sortBy, order, page, limit } = parsed.data;
-
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const where: any = { isPublic: true };
-
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (community) where.community = { contains: community, mode: 'insensitive' };
-    if (genre) where.genres = { has: genre };
-    if (verified === 'true') where.verified = true;
-    if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
-    if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
-    if (search) {
-      where.OR = [
-        { stageName: { contains: search, mode: 'insensitive' } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-        { community: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    const orderBy: any = {};
-    if (sortBy === 'ranking') orderBy.rankingScore = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'streams') orderBy.totalStreams = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'followers') orderBy.totalFollowers = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'name') orderBy.stageName = order === 'desc' ? 'desc' : 'asc';
-    else if (sortBy === 'mixes') orderBy.totalMixes = order === 'asc' ? 'asc' : 'desc';
-    else if (sortBy === 'rating') orderBy.averageRating = order === 'asc' ? 'asc' : 'desc';
-    else orderBy.rankingScore = 'desc';
-
-    const [djs, total] = await Promise.all([
-      prisma.djProfile.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limitNum,
-        include: {
-          user: { select: { username: true } },
-          mixes: { select: { plays: true } },
-          streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
-          _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
-        },
-      }),
-      prisma.djProfile.count({ where }),
-    ]);
-
-    const computeTotalStreams = (dj: any) => {
-      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
-      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
-      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
-    };
-
-    return res.json({
-      success: true,
-      data: djs.map((dj) => ({
-        ...dj,
-        username: dj.user.username,
-        totalFollowers: dj._count.followers,
-        totalMixes: dj._count.mixes,
-        totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj),
-      })),
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/', conditionalSearchLimiter, asyncHandler(async (req, res) => {
+  const parsed = djFilterSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
   }
-});
+
+  const { city, community, genre, verified, minFee, maxFee, search, sortBy, order, page, limit } = parsed.data;
+
+  const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit });
+
+  const where: any = { isPublic: true };
+
+  if (city) where.city = { contains: city, mode: 'insensitive' };
+  if (community) where.community = { contains: community, mode: 'insensitive' };
+  if (genre) where.genres = { has: genre };
+  if (verified === 'true') where.verified = true;
+  if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
+  if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
+  if (search) {
+    where.OR = [
+      { stageName: { contains: search, mode: 'insensitive' } },
+      { fullName: { contains: search, mode: 'insensitive' } },
+      { city: { contains: search, mode: 'insensitive' } },
+      { community: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const orderBy: any = {};
+  if (sortBy === 'ranking') orderBy.rankingScore = order === 'asc' ? 'asc' : 'desc';
+  else if (sortBy === 'streams') orderBy.totalStreams = order === 'asc' ? 'asc' : 'desc';
+  else if (sortBy === 'followers') orderBy.totalFollowers = order === 'asc' ? 'asc' : 'desc';
+  else if (sortBy === 'name') orderBy.stageName = order === 'desc' ? 'desc' : 'asc';
+  else if (sortBy === 'mixes') orderBy.totalMixes = order === 'asc' ? 'asc' : 'desc';
+  else if (sortBy === 'rating') orderBy.averageRating = order === 'asc' ? 'asc' : 'desc';
+  else orderBy.rankingScore = 'desc';
+
+  const [djs, total] = await Promise.all([
+    prisma.djProfile.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limitNum,
+      include: {
+        user: { select: { username: true } },
+        mixes: { select: { plays: true } },
+        streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
+        _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
+      },
+    }),
+    prisma.djProfile.count({ where }),
+  ]);
+
+  const computeTotalStreams = (dj: any) => {
+    const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+    const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+    return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+  };
+
+  return res.json({
+    success: true,
+    data: djs.map((dj) => ({
+      ...dj,
+      username: dj.user.username,
+      totalFollowers: dj._count.followers,
+      totalMixes: dj._count.mixes,
+      totalEvents: dj._count.events,
+      totalStreams: computeTotalStreams(dj),
+    })),
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 // GET /api/djs/hall-of-fame - DJs in the Hall of Fame
-router.get('/hall-of-fame', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 6));
+router.get('/hall-of-fame', asyncHandler(async (req, res) => {
+  const { limit: limitNum } = parsePagination({ limit: req.query.limit }, { defaultLimit: 6, maxLimit: 20 });
 
-    let djs = await prisma.djProfile.findMany({
-      where: { hallOfFame: true, isPublic: true },
+  let djs = await prisma.djProfile.findMany({
+    where: { hallOfFame: true, isPublic: true },
+    orderBy: { rankingScore: 'desc' },
+    take: limitNum,
+    include: {
+      user: { select: { username: true } },
+      mixes: { select: { plays: true } },
+      streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
+      _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
+    },
+  });
+
+  // Fallback: if no Hall of Fame DJs, return top verified DJs
+  if (djs.length === 0) {
+    djs = await prisma.djProfile.findMany({
+      where: { verified: true, isPublic: true },
       orderBy: { rankingScore: 'desc' },
       take: limitNum,
       include: {
@@ -362,341 +371,320 @@ router.get('/hall-of-fame', async (req, res) => {
         _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
       },
     });
-
-    // Fallback: if no Hall of Fame DJs, return top verified DJs
-    if (djs.length === 0) {
-      djs = await prisma.djProfile.findMany({
-        where: { verified: true, isPublic: true },
-        orderBy: { rankingScore: 'desc' },
-        take: limitNum,
-        include: {
-          user: { select: { username: true } },
-          mixes: { select: { plays: true } },
-          streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
-          _count: { select: { mixes: true, reviews: true, events: true, followers: true } },
-        },
-      });
-    }
-
-    const computeTotalStreams = (dj: any) => {
-      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
-      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
-      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
-    };
-
-    return res.json({
-      success: true,
-      data: djs.map((dj) => ({
-        ...dj,
-        username: dj.user.username,
-        totalFollowers: dj._count.followers,
-        totalMixes: dj._count.mixes,
-        totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj),
-      })),
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+
+  const computeTotalStreams = (dj: any) => {
+    const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+    const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+    return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+  };
+
+  return ok(res, djs.map((dj) => ({
+      ...dj,
+      username: dj.user.username,
+      totalFollowers: dj._count.followers,
+      totalMixes: dj._count.mixes,
+      totalEvents: dj._count.events,
+      totalStreams: computeTotalStreams(dj),
+    })));
+}));
 
 // GET /api/djs/cities - Get all cities
-router.get('/cities', async (req, res) => {
-  try {
-    const cities = await prisma.djProfile.findMany({
-      where: { isPublic: true },
-      select: { city: true },
-      distinct: ['city'],
-    });
-    return res.json({ success: true, data: cities.map((c) => c.city).filter(Boolean) });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/cities', asyncHandler(async (req, res) => {
+  const cities = await prisma.djProfile.findMany({
+    where: { isPublic: true },
+    select: { city: true },
+    distinct: ['city'],
+  });
+  return ok(res, cities.map((c) => c.city).filter(Boolean));
+}));
 
 // GET /api/djs/genres - Get all genres (uses UNNEST for efficiency)
-router.get('/genres', async (req, res) => {
-  try {
-    // Using raw SQL UNNEST to flatten the genres array column efficiently
-    // without loading all DJ profile rows into Node.js memory.
-    const rows: Array<{ genre: string }> = await prisma.$queryRaw`
-      SELECT DISTINCT UNNEST(genres) AS genre
-      FROM dj_profiles
-      WHERE "isPublic" = true
-      ORDER BY genre
-    `;
-    return res.json({ success: true, data: rows.map((r) => r.genre) });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/genres', asyncHandler(async (req, res) => {
+  // Using raw SQL UNNEST to flatten the genres array column efficiently
+  // without loading all DJ profile rows into Node.js memory.
+  const rows: Array<{ genre: string }> = await prisma.$queryRaw`
+    SELECT DISTINCT UNNEST(genres) AS genre
+    FROM dj_profiles
+    WHERE "isPublic" = true
+    ORDER BY genre
+  `;
+  return ok(res, rows.map((r) => r.genre));
+}));
 
 // GET /api/djs/me - Get current user's DJ profile
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({
-      where: { userId: req.user.id },
-      include: {
-        user: { select: { id: true, username: true } },
-        streamingPlatforms: true,
-      },
-    });
+router.get('/me', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({
+    where: { userId: req.user.id },
+    include: {
+      user: { select: { id: true, username: true } },
+      streamingPlatforms: true,
+    },
+  });
 
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
-    }
-
-    return res.json({ success: true, data: { ...dj, username: dj.user.username, userId: dj.user.id } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  if (!dj) {
+    return fail(res, 404, 'DJ profile not found');
   }
-});
+
+  return ok(res, { ...dj, username: dj.user.username, userId: dj.user.id });
+}));
 
 // POST /api/djs/verification-request - Submit passport/ID verification
-router.post('/verification-request', authMiddleware, uploadDocument.single('document'), async (req, res) => {
-  try {
-    const parsed = verificationRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
-    }
-    if (dj.subscriptionTier === 'free') {
-      return res.status(403).json({ success: false, error: 'Verification requests require a Pro subscription' });
-    }
-
-    const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = parsed.data;
-
-    if (!nationality || !idDocumentType || !fullLegalName) {
-      return res.status(400).json({ success: false, error: 'Nationality, ID document type, and full legal name are required' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ success: false, error: 'ID document file is required' });
-    }
-
-    if (dj.verificationStatus === 'pending') {
-      return res.status(409).json({ success: false, error: 'A verification request is already pending' });
-    }
-
-    const idDocumentUrl = await uploadBuffer(req.file.buffer, 'documents', {
-      contentType: req.file.mimetype,
-      ext: req.file.originalname.split('.').pop() || 'pdf',
-    });
-
-    const updated = await prisma.djProfile.update({
-      where: { id: dj.id },
-      data: {
-        nationality,
-        idDocumentType,
-        idDocumentUrl,
-        legalName: fullLegalName,
-        socialProof: socialProofLinks || '',
-        verificationReason: whyVerified || '',
-        verificationStatus: 'pending',
-        verificationNotes: `Submitted on ${new Date().toISOString()}`,
-      },
-    });
-
-    return res.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/verification-request', authMiddleware, uploadDocument.single('document'), asyncHandler(async (req, res) => {
+  const parsed = verificationRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
   }
-});
+
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 404, 'DJ profile not found');
+  }
+  if (dj.subscriptionTier === 'free') {
+    return fail(res, 403, 'Verification requests require a Pro subscription');
+  }
+
+  const { nationality, idDocumentType, fullLegalName, socialProofLinks, whyVerified } = parsed.data;
+
+  if (!nationality || !idDocumentType || !fullLegalName) {
+    return fail(res, 400, 'Nationality, ID document type, and full legal name are required');
+  }
+
+  if (!req.file) {
+    return fail(res, 400, 'ID document file is required');
+  }
+
+  if (dj.verificationStatus === 'pending') {
+    return fail(res, 409, 'A verification request is already pending');
+  }
+
+  const idDocumentUrl = await uploadBuffer(req.file.buffer, 'documents', {
+    contentType: req.file.mimetype,
+    ext: req.file.originalname.split('.').pop() || 'pdf',
+  });
+
+  const updated = await prisma.djProfile.update({
+    where: { id: dj.id },
+    data: {
+      nationality,
+      idDocumentType,
+      idDocumentUrl,
+      legalName: fullLegalName,
+      socialProof: socialProofLinks || '',
+      verificationReason: whyVerified || '',
+      verificationStatus: 'pending',
+      verificationNotes: `Submitted on ${new Date().toISOString()}`,
+    },
+  });
+
+  return ok(res, updated);
+}));
 
 // GET /api/djs/:identifier - Get single DJ by id or username
-router.get('/:identifier', async (req, res) => {
-  try {
-    const identifier = req.params.identifier;
+router.get('/:identifier', asyncHandler(async (req, res) => {
+  const identifier = req.params.identifier;
 
-    const commonInclude = {
-      user: { select: { id: true, username: true } },
-      mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
-      streamingPlatforms: true,
-      reviews: {
-        include: { user: { select: { id: true, username: true, avatar: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      },
-      photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
-      events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
-      highlights: {
-        orderBy: { sortOrder: 'asc' },
-        take: 4,
-        include: {
-          mix: {
-            select: {
-              id: true,
-              title: true,
-              coverImage: true,
-              audioUrl: true,
-              duration: true,
-              genre: true,
-              plays: true,
-              likes: true,
-            },
+  const commonInclude = {
+    user: { select: { id: true, username: true } },
+    mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
+    streamingPlatforms: true,
+    reviews: {
+      include: { user: { select: { id: true, username: true, avatar: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    },
+    photos: { where: { isPublic: true }, orderBy: { sortOrder: 'asc' } },
+    events: { where: { status: 'upcoming' }, orderBy: { date: 'asc' } },
+    highlights: {
+      orderBy: { sortOrder: 'asc' },
+      take: 4,
+      include: {
+        mix: {
+          select: {
+            id: true,
+            title: true,
+            coverImage: true,
+            audioUrl: true,
+            duration: true,
+            genre: true,
+            plays: true,
+            likes: true,
           },
         },
       },
-      _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
-    };
+    },
+    reups: {
+      orderBy: { createdAt: 'desc' },
+      include: {
+        mix: {
+          select: {
+            id: true,
+            title: true,
+            coverImage: true,
+            audioUrl: true,
+            duration: true,
+            genre: true,
+            plays: true,
+            likes: true,
+            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
+          },
+        },
+      },
+    },
+    _count: { select: { mixes: true, reviews: true, bookingsAsDj: true, followers: true, events: true } },
+  };
 
-    let dj = await prisma.djProfile.findUnique({
-      where: { id: identifier },
+  let dj = await prisma.djProfile.findUnique({
+    where: { id: identifier },
+    include: commonInclude,
+  });
+
+  if (!dj) {
+    dj = await prisma.djProfile.findFirst({
+      where: { user: { username: { equals: identifier, mode: 'insensitive' } } },
       include: commonInclude,
     });
-
-    if (!dj) {
-      dj = await prisma.djProfile.findFirst({
-        where: { user: { username: { equals: identifier, mode: 'insensitive' } } },
-        include: commonInclude,
-      });
-    }
-
-    if (!dj) {
-      dj = await prisma.djProfile.findFirst({
-        where: { userId: identifier },
-        include: commonInclude,
-      });
-    }
-
-    if (!dj) {
-      const decoded = decodeURIComponent(identifier);
-      dj = await prisma.djProfile.findFirst({
-        where: {
-          OR: [
-            { stageName: { equals: identifier, mode: 'insensitive' } },
-            { stageName: { equals: identifier.replace(/-/g, ' '), mode: 'insensitive' } },
-            { stageName: { equals: decoded, mode: 'insensitive' } },
-            { stageName: { equals: decoded.replace(/-/g, ' '), mode: 'insensitive' } },
-          ],
-        },
-        include: commonInclude,
-      });
-    }
-
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-
-    const computeTotalStreams = (dj: any) => {
-      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
-      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
-      return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
-    };
-
-    return res.json({
-      success: true,
-      data: {
-        ...dj,
-        username: dj.user.username,
-        userId: dj.user.id,
-        totalFollowers: dj._count.followers,
-        totalMixes: dj._count.mixes,
-        totalEvents: dj._count.events,
-        totalStreams: computeTotalStreams(dj),
-        monthlyListeners: dj.monthlyListeners,
-        sets: [],
-        highlights: dj.highlights || [],
-        reups: [],
-      },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+
+  if (!dj) {
+    dj = await prisma.djProfile.findFirst({
+      where: { userId: identifier },
+      include: commonInclude,
+    });
+  }
+
+  if (!dj) {
+    const decoded = decodeURIComponent(identifier);
+    dj = await prisma.djProfile.findFirst({
+      where: {
+        OR: [
+          { stageName: { equals: identifier, mode: 'insensitive' } },
+          { stageName: { equals: identifier.replace(/-/g, ' '), mode: 'insensitive' } },
+          { stageName: { equals: decoded, mode: 'insensitive' } },
+          { stageName: { equals: decoded.replace(/-/g, ' '), mode: 'insensitive' } },
+        ],
+      },
+      include: commonInclude,
+    });
+  }
+
+  if (!dj) {
+    return fail(res, 404, 'DJ not found');
+  }
+
+  const computeTotalStreams = (dj: any) => {
+    const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+    const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+    return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+  };
+
+  return ok(res, {
+      ...dj,
+      username: dj.user.username,
+      userId: dj.user.id,
+      totalFollowers: dj._count.followers,
+      totalMixes: dj._count.mixes,
+      totalEvents: dj._count.events,
+      totalStreams: computeTotalStreams(dj),
+      monthlyListeners: dj.monthlyListeners,
+      sets: [],
+      highlights: dj.highlights || [],
+      reups: (dj.reups || []).map((r: any) => ({
+        id: r.id,
+        mixId: r.mix.id,
+        createdAt: r.createdAt,
+        mix: {
+          id: r.mix.id,
+          title: r.mix.title,
+          coverImage: r.mix.coverImage || '/mix-placeholder.jpg',
+          duration: r.mix.duration,
+          genre: r.mix.genre,
+          plays: r.mix.plays,
+          likes: r.mix.likes,
+          audioUrl: r.mix.audioUrl,
+          dj: r.mix.dj,
+        },
+      })),
+    });
+}));
 
 // POST /api/djs - Create DJ profile (auth required)
-router.post('/', authMiddleware, uploadDjProfileImages, async (req, res) => {
-  try {
-    const existing = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (existing) {
-      return res.status(409).json({ success: false, error: 'DJ profile already exists' });
-    }
-
-    const parsed = createDjSchema.safeParse(parseFormFields(req.body));
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const data = parsed.data;
-
-    if (data.community) {
-      if (!data.city) {
-        return res.status(400).json({ success: false, error: 'City is required when setting a community' });
-      }
-      const validCommunities = CITY_TO_COMMUNITIES[data.city] || [];
-      if (validCommunities.length && !validCommunities.includes(data.community)) {
-        return res.status(400).json({ success: false, error: 'Selected community does not belong to the selected city' });
-      }
-    }
-
-    // Enforce genre limit
-    if (data.genres && data.genres.length > 5) {
-      return res.status(400).json({ success: false, error: 'Maximum 5 genres allowed' });
-    }
-
-    let avatarUrl = null;
-    let coverUrl = null;
-
-    if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
-      const file = req.files['avatar'][0];
-      const { buffer, contentType } = await processAvatar(file.buffer);
-      avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
-    }
-
-    if (req.files && req.files['coverBanner'] && req.files['coverBanner'][0]) {
-      const file = req.files['coverBanner'][0];
-      const { buffer, contentType } = await processCover(file.buffer);
-      coverUrl = await uploadBuffer(buffer, 'covers', { contentType });
-    }
-
-    const dj = await prisma.djProfile.create({
-      data: {
-        ...data,
-        userId: req.user.id,
-        avatar: avatarUrl,
-        coverBanner: coverUrl,
-        isPublic: true,
-      },
-    });
-
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { role: 'DJ' },
-    });
-
-    return res.status(201).json({ success: true, data: dj });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/', authMiddleware, uploadDjProfileImages, asyncHandler(async (req, res) => {
+  const existing = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (existing) {
+    return fail(res, 409, 'DJ profile already exists');
   }
-});
+
+  const parsed = createDjSchema.safeParse(parseFormFields(req.body));
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
+
+  const data = parsed.data;
+
+  if (data.community) {
+    if (!data.city) {
+      return fail(res, 400, 'City is required when setting a community');
+    }
+    const validCommunities = CITY_TO_COMMUNITIES[data.city] || [];
+    if (validCommunities.length && !validCommunities.includes(data.community)) {
+      return fail(res, 400, 'Selected community does not belong to the selected city');
+    }
+  }
+
+  // Enforce genre limit
+  if (data.genres && data.genres.length > 5) {
+    return fail(res, 400, 'Maximum 5 genres allowed');
+  }
+
+  let avatarUrl = null;
+  let coverUrl = null;
+
+  if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
+    const file = req.files['avatar'][0];
+    const { buffer, contentType } = await processAvatar(file.buffer);
+    avatarUrl = await uploadBuffer(buffer, 'avatars', { contentType });
+  }
+
+  if (req.files && req.files['coverBanner'] && req.files['coverBanner'][0]) {
+    const file = req.files['coverBanner'][0];
+    const { buffer, contentType } = await processCover(file.buffer);
+    coverUrl = await uploadBuffer(buffer, 'covers', { contentType });
+  }
+
+  const dj = await prisma.djProfile.create({
+    data: {
+      ...data,
+      userId: req.user.id,
+      avatar: avatarUrl,
+      coverBanner: coverUrl,
+      isPublic: true,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { role: 'DJ' },
+  });
+
+  return res.status(201).json({ success: true, data: dj });
+}));
 
 // POST /api/djs/switch-to-dj - Allow a fan/user to upgrade their own account to DJ
 router.post('/switch-to-dj', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'USER') {
-      return res.status(403).json({ success: false, error: 'Only fan accounts can switch to a DJ account' });
+      return fail(res, 403, 'Only fan accounts can switch to a DJ account');
     }
 
     const existing = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (existing) {
-      return res.status(409).json({ success: false, error: 'DJ profile already exists' });
+      return fail(res, 409, 'DJ profile already exists');
     }
 
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
     const stageName = user.username || user.email.split('@')[0];
@@ -717,237 +705,198 @@ router.post('/switch-to-dj', authMiddleware, async (req, res) => {
       include: { djProfile: true },
     });
 
-    return res.json({ success: true, data: { user: updatedUser, dj } });
+    return ok(res, { user: updatedUser, dj });
   } catch (error) {
     console.error('Switch to DJ error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // PUT /api/djs/:id - Update DJ profile
-router.put('/me', authMiddleware, uploadDjProfileImages, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
-    }
-    return updateDjProfile(req, res, dj.id);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.put('/me', authMiddleware, uploadDjProfileImages, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 404, 'DJ profile not found');
   }
-});
+  return updateDjProfile(req, res, dj.id);
+}));
 
-router.put('/:id', authMiddleware, uploadDjProfileImages, async (req, res) => {
-  try {
-    return updateDjProfile(req, res, req.params.id);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.put('/:id', authMiddleware, uploadDjProfileImages, asyncHandler(async (req, res) => {
+  return updateDjProfile(req, res, req.params.id);
+}));
 
 // DELETE /api/djs/:id - Delete DJ profile
-router.delete('/:id', authMiddleware, requireRole('ADMIN', 'DJ'), async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-    if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    await prisma.djProfile.delete({ where: { id: req.params.id } });
-    return res.json({ success: true, data: { message: 'DJ profile deleted' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.delete('/:id', authMiddleware, requireRole('ADMIN', 'DJ'), asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+  if (!dj) {
+    return fail(res, 404, 'DJ not found');
   }
-});
+  if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return fail(res, 403, 'Forbidden');
+  }
+
+  await prisma.djProfile.delete({ where: { id: req.params.id } });
+  return ok(res, { message: 'DJ profile deleted' });
+}));
 
 // POST /api/djs/:id/follow - Follow a DJ
-router.post('/:id/follow', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-
-    // Prevent DJs from following themselves
-    if (dj.userId === req.user.id) {
-      return res.status(400).json({ success: false, error: 'You cannot follow yourself' });
-    }
-
-    const existing = await prisma.follow.findUnique({
-      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
-    });
-
-    await prisma.follow.upsert({
-      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
-      create: { userId: req.user.id, djId: req.params.id },
-      update: {},
-    });
-
-    // Only notify on a new follow, not a duplicate upsert
-    if (!existing && dj.userId !== req.user.id) {
-      const follower = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { name: true, username: true },
-      });
-      const followerName = follower?.name || follower?.username || 'Someone';
-      createNotification({
-        userId: dj.userId,
-        type: 'NEW_FOLLOWER',
-        title: 'New follower',
-        body: `${followerName} started following you`,
-        actionUrl: `/dj/${dj.username || dj.id}`,
-        entityId: dj.id,
-        entityType: 'DJ',
-        metadata: { followerId: req.user.id },
-      }).catch(() => {});
-    }
-
-    return res.json({ success: true, data: { following: true } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/:id/follow', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+  if (!dj) {
+    return fail(res, 404, 'DJ not found');
   }
-});
+
+  // Prevent DJs from following themselves
+  if (dj.userId === req.user.id) {
+    return fail(res, 400, 'You cannot follow yourself');
+  }
+
+  const existing = await prisma.follow.findUnique({
+    where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+  });
+
+  await prisma.follow.upsert({
+    where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+    create: { userId: req.user.id, djId: req.params.id },
+    update: {},
+  });
+
+  // Only notify on a new follow, not a duplicate upsert
+  if (!existing && dj.userId !== req.user.id) {
+    const follower = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { name: true, username: true },
+    });
+    const followerName = follower?.name || follower?.username || 'Someone';
+    createNotification({
+      userId: dj.userId,
+      type: 'NEW_FOLLOWER',
+      title: 'New follower',
+      body: `${followerName} started following you`,
+      actionUrl: `/dj/${dj.username || dj.id}`,
+      entityId: dj.id,
+      entityType: 'DJ',
+      metadata: { followerId: req.user.id },
+      sendEmail: true,
+      emailSubject: 'New follower on Deck Salone',
+      emailBody: `${followerName} started following you. View your profile: https://decksalone.com/dj/${dj.username || dj.id}`,
+    }).catch(() => {});
+  }
+
+  return ok(res, { following: true });
+}));
 
 // DELETE /api/djs/:id/follow - Unfollow a DJ
-router.delete('/:id/follow', authMiddleware, async (req, res) => {
-  try {
-    const existing = await prisma.follow.findUnique({
-      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
-    });
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Not following this DJ' });
-    }
-
-    await prisma.follow.delete({
-      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
-    });
-
-    return res.json({ success: true, data: { following: false } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.delete('/:id/follow', authMiddleware, asyncHandler(async (req, res) => {
+  const existing = await prisma.follow.findUnique({
+    where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+  });
+  if (!existing) {
+    return fail(res, 404, 'Not following this DJ');
   }
-});
+
+  await prisma.follow.delete({
+    where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+  });
+
+  return ok(res, { following: false });
+}));
 
 // GET /api/djs/:id/follow-status - Check if current user follows this DJ (public, returns false if not logged in)
-router.get('/:id/follow-status', softAuthMiddleware, async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.json({ success: true, data: { following: false } });
-    }
-
-    const follow = await prisma.follow.findUnique({
-      where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
-    });
-
-    return res.json({ success: true, data: { following: !!follow } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/:id/follow-status', softAuthMiddleware, asyncHandler(async (req, res) => {
+  if (!req.user) {
+    return ok(res, { following: false });
   }
-});
+
+  const follow = await prisma.follow.findUnique({
+    where: { userId_djId: { userId: req.user.id, djId: req.params.id } },
+  });
+
+  return ok(res, { following: !!follow });
+}));
 
 // GET /api/djs/me/followers - List users who follow the current DJ
-router.get('/me/followers', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({
-      where: { userId: req.user.id },
-      select: { id: true },
-    });
+router.get('/me/followers', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({
+    where: { userId: req.user.id },
+    select: { id: true },
+  });
 
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
-    }
+  if (!dj) {
+    return fail(res, 404, 'DJ profile not found');
+  }
 
-    const { page, limit } = req.query;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
+  const { page, limit } = req.query;
+  const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit });
 
-    const [followers, total] = await Promise.all([
-      prisma.follow.findMany({
-        where: { djId: dj.id },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum,
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              email: true,
-              avatar: true,
-              location: true,
-              createdAt: true,
-            },
+  const [followers, total] = await Promise.all([
+    prisma.follow.findMany({
+      where: { djId: dj.id },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            avatar: true,
+            location: true,
+            createdAt: true,
           },
         },
-      }),
-      prisma.follow.count({ where: { djId: dj.id } }),
-    ]);
+      },
+    }),
+    prisma.follow.count({ where: { djId: dj.id } }),
+  ]);
 
-    const data = followers.map((f) => ({
-      id: f.user.id,
-      name: f.user.name || f.user.username || f.user.email.split('@')[0],
-      username: f.user.username,
-      email: f.user.email,
-      avatar: f.user.avatar,
-      location: f.user.location,
-      followedAt: f.createdAt,
-    }));
+  const data = followers.map((f) => ({
+    id: f.user.id,
+    name: f.user.name || f.user.username || f.user.email.split('@')[0],
+    username: f.user.username,
+    email: f.user.email,
+    avatar: f.user.avatar,
+    location: f.user.location,
+    followedAt: f.createdAt,
+  }));
 
-    return res.json({
-      success: true,
-      data,
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return res.json({
+    success: true,
+    data,
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 
 // POST /api/djs/:id/recalculate - Recalculate ranking for a DJ (admin or self)
-router.post('/:id/recalculate', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
-    if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-    if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-
-    const scores = await computeDjScore(req.params.id);
-    if (!scores) {
-      return res.status(500).json({ success: false, error: 'Failed to calculate score' });
-    }
-
-    const updated = await prisma.djProfile.update({
-      where: { id: req.params.id },
-      data: {
-        rankingScore: scores.rankingScore,
-        digitalScore: scores.digitalScore,
-        industryScore: scores.industryScore,
-        communityScore: scores.communityScore,
-      },
-    });
-
-    return res.json({ success: true, data: { scores, dj: updated } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/:id/recalculate', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
+  if (!dj) {
+    return fail(res, 404, 'DJ not found');
   }
-});
+  if (dj.userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return fail(res, 403, 'Forbidden');
+  }
+
+  const scores = await computeDjScore(req.params.id);
+  if (!scores) {
+    return fail(res, 500, 'Failed to calculate score');
+  }
+
+  const updated = await prisma.djProfile.update({
+    where: { id: req.params.id },
+    data: {
+      rankingScore: scores.rankingScore,
+      digitalScore: scores.digitalScore,
+      industryScore: scores.industryScore,
+      communityScore: scores.communityScore,
+    },
+  });
+
+  return ok(res, { scores, dj: updated });
+}));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HIGHLIGHTS (Pro+ only, max 4 per DJ)
@@ -960,244 +909,198 @@ const highlightSchema = z.object({
 });
 
 // GET /api/djs/me/highlights - Current DJ's highlights
-router.get('/me/highlights', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-    const djId = dj.id;
-    const highlights = await prisma.djHighlight.findMany({
-      where: { djId },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        mix: {
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-          },
+router.get('/me/highlights', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 403, 'DJ profile required');
+  }
+  const djId = dj.id;
+  const highlights = await prisma.djHighlight.findMany({
+    where: { djId },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      mix: {
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
         },
       },
-    });
-    return res.json({ success: true, data: highlights });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+    },
+  });
+  return ok(res, highlights);
+}));
 
 // GET /api/djs/:id/highlights - Public highlights for a DJ
-router.get('/:id/highlights', async (req, res) => {
-  try {
-    const highlights = await prisma.djHighlight.findMany({
-      where: { djId: req.params.id },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        mix: {
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-          },
+router.get('/:id/highlights', asyncHandler(async (req, res) => {
+  const highlights = await prisma.djHighlight.findMany({
+    where: { djId: req.params.id },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      mix: {
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
         },
       },
-    });
-    return res.json({ success: true, data: highlights });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+    },
+  });
+  return ok(res, highlights);
+}));
 
 // POST /api/djs/me/highlights - Add a mix to highlights
-router.post('/me/highlights', authMiddleware, async (req, res) => {
-  try {
-    const parsed = highlightSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
+router.post('/me/highlights', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = highlightSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
 
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-    const djId = dj.id;
-    const { mixId, sortOrder = 0 } = parsed.data;
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 403, 'DJ profile required');
+  }
+  const djId = dj.id;
+  const { mixId, sortOrder = 0 } = parsed.data;
 
-    const mix = await prisma.mix.findUnique({ where: { id: mixId } });
-    if (!mix) {
-      return res.status(404).json({ success: false, error: 'Mix not found' });
-    }
+  const mix = await prisma.mix.findUnique({ where: { id: mixId } });
+  if (!mix) {
+    return fail(res, 404, 'Mix not found');
+  }
 
-    if (!mix.isPublic) {
-      return res.status(400).json({ success: false, error: 'Cannot highlight a private mix' });
-    }
+  if (!mix.isPublic) {
+    return fail(res, 400, 'Cannot highlight a private mix');
+  }
 
-    // DJs can only highlight their own mixes or mixes they have re-upped
-    const canHighlight = mix.djId === djId || !!(await prisma.mixReup.findUnique({
-      where: { djId_mixId: { djId, mixId } },
-    }));
+  // DJs can only highlight their own mixes or mixes they have re-upped
+  const canHighlight = mix.djId === djId || !!(await prisma.mixReup.findUnique({
+    where: { djId_mixId: { djId, mixId } },
+  }));
 
-    if (!canHighlight) {
-      return res.status(403).json({ success: false, error: 'You can only highlight your own mixes or mixes you have re-upped' });
-    }
+  if (!canHighlight) {
+    return fail(res, 403, 'You can only highlight your own mixes or mixes you have re-upped');
+  }
 
-    const currentCount = await prisma.djHighlight.count({ where: { djId } });
-    if (currentCount >= MAX_HIGHLIGHTS) {
-      return res.status(403).json({ success: false, error: `You can only highlight up to ${MAX_HIGHLIGHTS} mixes` });
-    }
+  const currentCount = await prisma.djHighlight.count({ where: { djId } });
+  if (currentCount >= MAX_HIGHLIGHTS) {
+    return fail(res, 403, `You can only highlight up to ${MAX_HIGHLIGHTS} mixes`);
+  }
 
-    const highlight = await prisma.djHighlight.create({
-      data: { djId, mixId, sortOrder },
-      include: {
-        mix: {
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-          },
+  const highlight = await prisma.djHighlight.create({
+    data: { djId, mixId, sortOrder },
+    include: {
+      mix: {
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
         },
       },
-    });
+    },
+  });
 
-    return res.status(201).json({ success: true, data: highlight });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return res.status(201).json({ success: true, data: highlight });
+}));
 
 // PUT /api/djs/me/highlights/reorder - Reorder highlights
-router.put('/me/highlights/reorder', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-    const djId = dj.id;
-    const items = req.body.items;
+router.put('/me/highlights/reorder', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 403, 'DJ profile required');
+  }
+  const djId = dj.id;
+  const items = req.body.items;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, error: 'items array is required' });
-    }
+  if (!Array.isArray(items) || items.length === 0) {
+    return fail(res, 400, 'items array is required');
+  }
 
-    await prisma.$transaction(
-      items.map((item: any) =>
-        prisma.djHighlight.updateMany({
-          where: { djId, mixId: item.mixId },
-          data: { sortOrder: Number(item.sortOrder) || 0 },
-        })
-      )
-    );
+  await prisma.$transaction(
+    items.map((item: any) =>
+      prisma.djHighlight.updateMany({
+        where: { djId, mixId: item.mixId },
+        data: { sortOrder: Number(item.sortOrder) || 0 },
+      })
+    )
+  );
 
-    const highlights = await prisma.djHighlight.findMany({
-      where: { djId },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        mix: {
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-          },
+  const highlights = await prisma.djHighlight.findMany({
+    where: { djId },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      mix: {
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
         },
       },
-    });
+    },
+  });
 
-    return res.json({ success: true, data: highlights });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  return ok(res, highlights);
+}));
 
 // DELETE /api/djs/me/highlights/:mixId - Remove a highlight
-router.delete('/me/highlights/:mixId', authMiddleware, async (req, res) => {
-  try {
-    const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
-    if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
-    }
-    const djId = dj.id;
-    const mixId = req.params.mixId;
-
-    const existing = await prisma.djHighlight.findUnique({
-      where: { djId_mixId: { djId, mixId } },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Highlight not found' });
-    }
-
-    await prisma.djHighlight.delete({
-      where: { djId_mixId: { djId, mixId } },
-    });
-
-    return res.json({ success: true, data: { highlighted: false } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.delete('/me/highlights/:mixId', authMiddleware, asyncHandler(async (req, res) => {
+  const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
+  if (!dj) {
+    return fail(res, 403, 'DJ profile required');
   }
-});
+  const djId = dj.id;
+  const mixId = req.params.mixId;
+
+  const existing = await prisma.djHighlight.findUnique({
+    where: { djId_mixId: { djId, mixId } },
+  });
+
+  if (!existing) {
+    return fail(res, 404, 'Highlight not found');
+  }
+
+  await prisma.djHighlight.delete({
+    where: { djId_mixId: { djId, mixId } },
+  });
+
+  return ok(res, { highlighted: false });
+}));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/djs/me/sets - Current DJ's sets (with item counts)
-router.get('/me/sets', authMiddleware, requirePro, async (req, res) => {
-  try {
-    const djId = req.djProfile.id;
-    const sets = await prisma.djSet.findMany({
-      where: { djId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { items: true } },
-      },
-    });
-    return res.json({
-      success: true,
-      data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/me/sets', authMiddleware, requirePro, asyncHandler(async (req, res) => {
+  const djId = req.djProfile.id;
+  const sets = await prisma.djSet.findMany({
+    where: { djId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: { select: { items: true } },
+    },
+  });
+  return ok(res, sets.map((set: any) => ({ ...set, mixCount: set._count.items })));
+}));
 
 // GET /api/djs/:id/sets - Public sets for a DJ
-router.get('/:id/sets', async (req, res) => {
-  try {
-    const sets = await prisma.djSet.findMany({
-      where: { djId: req.params.id, isPublic: true },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { items: true } },
-      },
-    });
-    return res.json({
-      success: true,
-      data: sets.map((set: any) => ({ ...set, mixCount: set._count.items })),
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/:id/sets', asyncHandler(async (req, res) => {
+  const sets = await prisma.djSet.findMany({
+    where: { djId: req.params.id, isPublic: true },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: { select: { items: true } },
+    },
+  });
+  return ok(res, sets.map((set: any) => ({ ...set, mixCount: set._count.items })));
+}));
 
 // GET /api/djs/:id/reups - Public re-ups for a DJ
-router.get('/:id/reups', async (req, res) => {
-  try {
-    const reups = await prisma.mixReup.findMany({
-      where: { djId: req.params.id },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        mix: {
-          include: {
-            dj: { select: { id: true, stageName: true, avatar: true, city: true } },
-          },
+router.get('/:id/reups', asyncHandler(async (req, res) => {
+  const reups = await prisma.mixReup.findMany({
+    where: { djId: req.params.id },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      mix: {
+        include: {
+          dj: { select: { id: true, stageName: true, avatar: true, city: true } },
         },
       },
-    });
-    return res.json({ success: true, data: reups });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+    },
+  });
+  return ok(res, reups);
+}));
 
 // POST /api/djs/:id/support - Fan sends a one-time support payment of any amount to a DJ
 router.post('/:id/support', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
@@ -1208,7 +1111,7 @@ router.post('/:id/support', authMiddleware, uploadDocument.single('proof'), asyn
     const parsedAmount = parseFloat(amount);
 
     if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ success: false, error: 'Please enter a valid support amount' });
+      return fail(res, 400, 'Please enter a valid support amount');
     }
 
     const dj = await prisma.djProfile.findUnique({
@@ -1217,11 +1120,11 @@ router.post('/:id/support', authMiddleware, uploadDocument.single('proof'), asyn
     });
 
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
+      return fail(res, 404, 'DJ not found');
     }
 
     if (dj.userId === userId) {
-      return res.status(400).json({ success: false, error: 'You cannot support yourself' });
+      return fail(res, 400, 'You cannot support yourself');
     }
 
     let proofUrl = req.body.paymentProofUrl || '';
@@ -1246,14 +1149,10 @@ router.post('/:id/support', authMiddleware, uploadDocument.single('proof'), asyn
       },
     });
 
-    return res.json({
-      success: true,
-      message: `Support request sent to ${dj.stageName}. Thank you!`,
-      data: support,
-    });
+    return ok(res, support, `Support request sent to ${dj.stageName}. Thank you!`);
   } catch (error) {
     console.error('[DJ Support API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1266,20 +1165,65 @@ router.get('/me/promotion-points', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         promotionPoints: dj.promotionPoints || 0,
         subscriptionTier: dj.subscriptionTier,
         isEligible: dj.subscriptionTier === 'pro' || dj.subscriptionTier === 'legend',
-      },
-    });
+      });
   } catch (error) {
     console.error('[DJ Points API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+// GET /api/djs/my/referral - DJ referral tracking and stats
+router.get('/my/referral', authMiddleware, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        referralCode: true,
+        referredBy: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return fail(res, 404, 'User not found');
+    }
+
+    const [referrals, referrer] = await Promise.all([
+      prisma.user.count({ where: { referredBy: user.referralCode } }),
+      user.referredBy
+        ? prisma.user.findUnique({
+            where: { referralCode: user.referredBy },
+            select: { id: true, username: true, djProfile: { select: { stageName: true } } },
+          })
+        : null,
+    ]);
+
+    const frontendUrl = process.env.FRONTEND_URL?.split(',')[0] || 'https://decksalone.com';
+    const referralLink = user.referralCode ? `${frontendUrl}/signup?ref=${user.referralCode}` : null;
+
+    return ok(res, {
+        referralCode: user.referralCode,
+        referralLink,
+        totalReferrals: referrals,
+        referredBy: referrer
+          ? {
+              id: referrer.id,
+              username: referrer.username,
+              stageName: referrer.djProfile?.stageName,
+            }
+          : null,
+      });
+  } catch (error) {
+    console.error('[DJ Referral API] Error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1298,23 +1242,20 @@ router.get('/me/availability', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         blockedDates: dj.blockedDates || [],
         availabilitySchedule: dj.availabilitySchedule || {
           enabledDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
           enabledSlots: ['MORNING', 'AFTERNOON', 'EVENING_NIGHT'],
         },
         availability: dj.availability || 'AVAILABLE',
-      },
-    });
+      });
   } catch (error) {
     console.error('[DJ Availability API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1323,7 +1264,7 @@ router.put('/me/availability', authMiddleware, async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
     const { blockedDates, availabilitySchedule, availability } = req.body;
@@ -1352,10 +1293,10 @@ router.put('/me/availability', authMiddleware, async (req, res) => {
       },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
     console.error('[DJ Availability Update API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1368,13 +1309,13 @@ router.get('/me/payout-method', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
-    return res.json({ success: true, data: dj.payoutMethod || null });
+    return ok(res, dj.payoutMethod || null);
   } catch (error) {
     console.error('[DJ Payout Method GET API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1383,17 +1324,17 @@ router.put('/me/payout-method', authMiddleware, async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
     const { type, accountName, accountNumber, bankName, phone } = req.body;
 
     if (!type || !['ORANGE_MONEY', 'AFRIMONEY', 'BANK_TRANSFER'].includes(type)) {
-      return res.status(400).json({ success: false, error: 'Invalid payout method type' });
+      return fail(res, 400, 'Invalid payout method type');
     }
 
     if (!accountName || accountName.trim() === '') {
-      return res.status(400).json({ success: false, error: 'Account / Beneficiary name is required' });
+      return fail(res, 400, 'Account / Beneficiary name is required');
     }
 
     const payoutMethodData = {
@@ -1410,14 +1351,10 @@ router.put('/me/payout-method', authMiddleware, async (req, res) => {
       select: { id: true, payoutMethod: true },
     });
 
-    return res.json({
-      success: true,
-      data: updated.payoutMethod,
-      message: 'Payout method saved successfully',
-    });
+    return ok(res, updated.payoutMethod, 'Payout method saved successfully');
   } catch (error) {
     console.error('[DJ Payout Method PUT API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1430,18 +1367,18 @@ router.post('/me/payout-requests', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
     if (!dj.payoutMethod) {
-      return res.status(400).json({ success: false, error: 'Please configure a payout method first' });
+      return fail(res, 400, 'Please configure a payout method first');
     }
 
     const { amount, notes } = req.body;
     const numAmount = parseFloat(amount);
 
     if (Number.isNaN(numAmount) || numAmount < 50) {
-      return res.status(400).json({ success: false, error: 'Minimum withdrawal amount is SLE 50' });
+      return fail(res, 400, 'Minimum withdrawal amount is SLE 50');
     }
 
     const payoutRequest = await prisma.payoutRequest.create({
@@ -1455,14 +1392,10 @@ router.post('/me/payout-requests', authMiddleware, async (req, res) => {
       },
     });
 
-    return res.json({
-      success: true,
-      data: payoutRequest,
-      message: `Withdrawal request for SLE ${numAmount.toLocaleString()} submitted successfully. Our finance team will process it within 24-48 hours.`,
-    });
+    return ok(res, payoutRequest, `Withdrawal request for SLE ${numAmount.toLocaleString()} submitted successfully. Our finance team will process it within 24-48 hours.`);
   } catch (error) {
     console.error('[DJ Payout Request API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1471,7 +1404,7 @@ router.get('/me/payout-requests', authMiddleware, async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'DJ profile required' });
+      return fail(res, 403, 'DJ profile required');
     }
 
     const requests = await prisma.payoutRequest.findMany({
@@ -1480,10 +1413,10 @@ router.get('/me/payout-requests', authMiddleware, async (req, res) => {
       take: 50,
     });
 
-    return res.json({ success: true, data: requests });
+    return ok(res, requests);
   } catch (error) {
     console.error('[DJ Payout Requests History API] Error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 

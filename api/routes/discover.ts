@@ -17,6 +17,8 @@ const {
 } = require('../utils/mixDiscovery');
 const { getActiveCampaigns, applyCampaignBoost } = require('../utils/campaignBoost');
 const { withCache } = require('../utils/redis');
+const { asyncHandler } = require('../middleware/asyncHandler');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -52,335 +54,282 @@ const discoverUsersSchema = z.object({
 /* ──────────────────── Mix Discovery ──────────────────── */
 
 // GET /api/discover/mixes — Algorithmic mix discovery
-router.get('/mixes', conditionalSearchLimiter, async (req, res) => {
-  try {
-    const parsed = discoverMixesSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { genre, category, search, page, limit, sortBy } = parsed.data;
-    const result = await discoverMixes({
-      genre,
-      category,
-      search,
-      page: parseInt(page) || 1,
-      limit: parseInt(limit) || 20,
-      sortBy,
-    });
-
-    return res.json({ success: true, ...result });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/mixes', conditionalSearchLimiter, asyncHandler(async (req, res) => {
+  const parsed = discoverMixesSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
   }
-});
+
+  const { genre, category, search, page, limit, sortBy } = parsed.data;
+  const result = await discoverMixes({
+    genre,
+    category,
+    search,
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 20,
+    sortBy,
+  });
+
+  return res.json({ success: true, ...result });
+}));
 
 // GET /api/discover/mixes/trending — Trending mixes (last 7 days)
-router.get('/mixes/trending', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const result = await withCache(`discover:mixes:trending:${limitNum}`, 300, async () => {
-      const mixes = await getTrendingMixes(limitNum);
-      return { success: true, data: mixes };
-    });
-    return res.json(result);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/mixes/trending', asyncHandler(async (req, res) => {
+  const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+  const result = await withCache(`discover:mixes:trending:${limitNum}`, 300, async () => {
+    const mixes = await getTrendingMixes(limitNum);
+    return { success: true, data: mixes };
+  });
+  return res.json(result);
+}));
 
 // GET /api/discover/mixes/for-you — Personalized recommendations (auth required)
-router.get('/mixes/for-you', authMiddleware, async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const mixes = await getPersonalizedRecommendations(req.user.id, limitNum);
-    return res.json({ success: true, data: mixes });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/mixes/for-you', authMiddleware, asyncHandler(async (req, res) => {
+  const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+  const mixes = await getPersonalizedRecommendations(req.user.id, limitNum);
+  return ok(res, mixes);
+}));
 
 // GET /api/discover/mixes/hall-of-fame — High-quality mix candidates
-router.get('/mixes/hall-of-fame', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const result = await withCache(`discover:mixes:hall-of-fame:${limitNum}`, 300, async () => {
-      const mixes = await getHallOfFameCandidates(limitNum);
-      return { success: true, data: mixes };
-    });
-    return res.json(result);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/mixes/hall-of-fame', asyncHandler(async (req, res) => {
+  const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+  const result = await withCache(`discover:mixes:hall-of-fame:${limitNum}`, 300, async () => {
+    const mixes = await getHallOfFameCandidates(limitNum);
+    return { success: true, data: mixes };
+  });
+  return res.json(result);
+}));
 
 /* ──────────────────── DJ Discovery ──────────────────── */
 
 // GET /api/discover/djs — Discover DJs with enhanced ranking + campaign boost
-router.get('/djs', conditionalSearchLimiter, async (req, res) => {
-  try {
-    const parsed = discoverDjsSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
+router.get('/djs', conditionalSearchLimiter, asyncHandler(async (req, res) => {
+  const parsed = discoverDjsSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
+  }
 
-    const { city, community, genre, search, page, limit, sortBy, minFee, maxFee } = parsed.data;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
+  const { city, community, genre, search, page, limit, sortBy, minFee, maxFee } = parsed.data;
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const skip = (pageNum - 1) * limitNum;
 
-    const cacheKey = `discover:djs:${city || 'all'}:${community || 'all'}:${genre || 'all'}:${search || 'all'}:${pageNum}:${limitNum}:${sortBy || 'default'}:${minFee || '0'}:${maxFee || 'inf'}`;
+  const cacheKey = `discover:djs:${city || 'all'}:${community || 'all'}:${genre || 'all'}:${search || 'all'}:${pageNum}:${limitNum}:${sortBy || 'default'}:${minFee || '0'}:${maxFee || 'inf'}`;
 
-    const result = await withCache(cacheKey, 300, async () => {
-    const where: any = { isPublic: true };
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (community) where.community = { contains: community, mode: 'insensitive' };
-    if (genre) where.genres = { has: genre };
-    if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
-    if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
-    if (search) {
-      where.OR = [
-        { stageName: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-        { community: { contains: search, mode: 'insensitive' } },
-        { bio: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+  const result = await withCache(cacheKey, 300, async () => {
+  const where: any = { isPublic: true };
+  if (city) where.city = { contains: city, mode: 'insensitive' };
+  if (community) where.community = { contains: community, mode: 'insensitive' };
+  if (genre) where.genres = { has: genre };
+  if (minFee) where.bookingFeeMin = { gte: parseFloat(minFee) };
+  if (maxFee) where.bookingFeeMax = { lte: parseFloat(maxFee) };
+  if (search) {
+    where.OR = [
+      { stageName: { contains: search, mode: 'insensitive' } },
+      { city: { contains: search, mode: 'insensitive' } },
+      { community: { contains: search, mode: 'insensitive' } },
+      { bio: { contains: search, mode: 'insensitive' } },
+    ];
+  }
 
-    const orderBy: any = {};
-    if (sortBy === 'followers') orderBy.followers = { _count: 'desc' };
-    else if (sortBy === 'bookings') orderBy.bookingsAsDj = { _count: 'desc' };
-    else if (sortBy === 'newest') orderBy.createdAt = 'desc';
-    else if (sortBy === 'mixes') orderBy.mixes = { _count: 'desc' };
-    else if (sortBy === 'rating') orderBy.averageRating = 'desc';
-    else orderBy.rankingScore = 'desc'; // Phase 2: trust pre-computed weekly ranking score
+  const orderBy: any = {};
+  if (sortBy === 'followers') orderBy.followers = { _count: 'desc' };
+  else if (sortBy === 'bookings') orderBy.bookingsAsDj = { _count: 'desc' };
+  else if (sortBy === 'newest') orderBy.createdAt = 'desc';
+  else if (sortBy === 'mixes') orderBy.mixes = { _count: 'desc' };
+  else if (sortBy === 'rating') orderBy.averageRating = 'desc';
+  else orderBy.rankingScore = 'desc'; // Phase 2: trust pre-computed weekly ranking score
 
-    // Fetch active profile promotion campaigns and apply the same filters to promoted DJs
-    const [campaigns, promotedDjs] = await Promise.all([
-      getActiveCampaigns('profile'),
-      prisma.djProfile.findMany({
-        where: { ...where, campaigns: { some: { targetType: 'profile', status: 'active' } } },
-        include: {
-          user: { select: { username: true } },
-          mixes: { select: { plays: true } },
-          streamingPlatforms: { select: { streams: true } },
-          _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
-        },
-      }),
-    ]);
+  // Fetch active profile promotion campaigns and apply the same filters to promoted DJs
+  const [campaigns, promotedDjs] = await Promise.all([
+    getActiveCampaigns('profile'),
+    prisma.djProfile.findMany({
+      where: { ...where, campaigns: { some: { targetType: 'profile', status: 'active' } } },
+      include: {
+        user: { select: { username: true } },
+        mixes: { select: { plays: true } },
+        streamingPlatforms: { select: { streams: true } },
+        _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
+      },
+    }),
+  ]);
 
-    const [djs, total] = await Promise.all([
-      prisma.djProfile.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limitNum,
-        include: {
-          user: { select: { username: true } },
-          mixes: { select: { plays: true } },
-          streamingPlatforms: { select: { streams: true } },
-          _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
-        },
-      }),
-      prisma.djProfile.count({ where }),
-    ]);
+  const [djs, total] = await Promise.all([
+    prisma.djProfile.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limitNum,
+      include: {
+        user: { select: { username: true } },
+        mixes: { select: { plays: true } },
+        streamingPlatforms: { select: { streams: true } },
+        _count: { select: { mixes: true, bookingsAsDj: true, followers: true, events: true } },
+      },
+    }),
+    prisma.djProfile.count({ where }),
+  ]);
 
-    const enrich = (dj: any, indexOffset = 0) => {
-      const realTotalFollowers = dj._count?.followers || 0;
-      const realTotalMixes = dj._count?.mixes || (dj.mixes?.length || 0);
-      const realTotalEvents = dj._count?.events || 0;
-      const realTotalBookings = dj._count?.bookingsAsDj || 0;
-      const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
-      const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
-      const realTotalStreams = Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+  const enrich = (dj: any, indexOffset = 0) => {
+    const realTotalFollowers = dj._count?.followers || 0;
+    const realTotalMixes = dj._count?.mixes || (dj.mixes?.length || 0);
+    const realTotalEvents = dj._count?.events || 0;
+    const realTotalBookings = dj._count?.bookingsAsDj || 0;
+    const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+    const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+    const realTotalStreams = Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
 
-      // Compute a real ranking score from actual data (never trust stored fake values)
-      const followerScore = Math.min(20, realTotalFollowers / 50);
-      const mixScore = Math.min(25, realTotalMixes * 2);
-      const bookingScore = Math.min(20, realTotalBookings * 2);
-      const streamScore = Math.min(15, realTotalStreams / 1000);
-      const ratingScore = Math.min(20, (dj.averageRating || 0) * 4);
-      const realRankingScore = Math.round((followerScore + mixScore + bookingScore + streamScore + ratingScore) * 10) / 10;
-
-      return {
-        ...dj,
-        username: dj.user.username,
-        totalFollowers: realTotalFollowers,
-        totalMixes: realTotalMixes,
-        totalEvents: realTotalEvents,
-        totalBookings: realTotalBookings,
-        totalStreams: realTotalStreams,
-        mixCount: realTotalMixes,
-        bookingCount: realTotalBookings,
-        rankingScore: realRankingScore, // Override stored fake value
-      };
-    };
-
-    const enriched = djs.map((dj, index) => ({
-      ...enrich(dj),
-      position: skip + index + 1,
-    }));
-
-    // Merge promoted DJs that may not already be in the paginated result, then apply boost sort
-    const promotedEnriched = promotedDjs.map(enrich);
-    const mergedMap = new Map<string, any>();
-    for (const dj of promotedEnriched) mergedMap.set(dj.id, dj);
-    for (const dj of enriched) if (!mergedMap.has(dj.id)) mergedMap.set(dj.id, dj);
-
-    const boosted = applyCampaignBoost(Array.from(mergedMap.values()), campaigns, (dj) => dj.id);
+    // Compute a real ranking score from actual data (never trust stored fake values)
+    const followerScore = Math.min(20, realTotalFollowers / 50);
+    const mixScore = Math.min(25, realTotalMixes * 2);
+    const bookingScore = Math.min(20, realTotalBookings * 2);
+    const streamScore = Math.min(15, realTotalStreams / 1000);
+    const ratingScore = Math.min(20, (dj.averageRating || 0) * 4);
+    const realRankingScore = Math.round((followerScore + mixScore + bookingScore + streamScore + ratingScore) * 10) / 10;
 
     return {
-      success: true,
-      data: boosted.slice(0, limitNum),
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+      ...dj,
+      username: dj.user.username,
+      totalFollowers: realTotalFollowers,
+      totalMixes: realTotalMixes,
+      totalEvents: realTotalEvents,
+      totalBookings: realTotalBookings,
+      totalStreams: realTotalStreams,
+      mixCount: realTotalMixes,
+      bookingCount: realTotalBookings,
+      rankingScore: realRankingScore, // Override stored fake value
     };
-    });
+  };
 
-    return res.json(result);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+  const enriched = djs.map((dj, index) => ({
+    ...enrich(dj),
+    position: skip + index + 1,
+  }));
+
+  // Merge promoted DJs that may not already be in the paginated result, then apply boost sort
+  const promotedEnriched = promotedDjs.map(enrich);
+  const mergedMap = new Map<string, any>();
+  for (const dj of promotedEnriched) mergedMap.set(dj.id, dj);
+  for (const dj of enriched) if (!mergedMap.has(dj.id)) mergedMap.set(dj.id, dj);
+
+  const boosted = applyCampaignBoost(Array.from(mergedMap.values()), campaigns, (dj) => dj.id);
+
+  return {
+    success: true,
+    data: boosted.slice(0, limitNum),
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  };
+  });
+
+  return res.json(result);
+}));
 
 // GET /api/discover/djs/rising — Fastest rising DJs
-router.get('/djs/rising', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const result = await withCache(`discover:djs:rising:${limitNum}`, 300, async () => {
-      const djs = await getRisingDjs(limitNum);
-      return { success: true, data: djs };
-    });
-    return res.json(result);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/djs/rising', asyncHandler(async (req, res) => {
+  const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+  const result = await withCache(`discover:djs:rising:${limitNum}`, 300, async () => {
+    const djs = await getRisingDjs(limitNum);
+    return { success: true, data: djs };
+  });
+  return res.json(result);
+}));
 
 // GET /api/discover/djs/battle-leaders — DJs with most battle wins
-router.get('/djs/battle-leaders', async (req, res) => {
-  try {
-    const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-    const result = await withCache(`discover:djs:battle-leaders:${limitNum}`, 300, async () => {
-      const djs = await getBattleLeaders(limitNum);
-      return { success: true, data: djs };
-    });
-    return res.json(result);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+router.get('/djs/battle-leaders', asyncHandler(async (req, res) => {
+  const limitNum = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+  const result = await withCache(`discover:djs:battle-leaders:${limitNum}`, 300, async () => {
+    const djs = await getBattleLeaders(limitNum);
+    return { success: true, data: djs };
+  });
+  return res.json(result);
+}));
 
 /* ──────────────────── User Discovery ──────────────────── */
 
 // GET /api/discover/users — Discover platform users (non-DJs)
-router.get('/users', conditionalSearchLimiter, async (req, res) => {
-  try {
-    const parsed = discoverUsersSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
-    }
-
-    const { search, page, limit } = parsed.data;
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const where: any = {
-      role: 'USER',
-      status: 'ACTIVE',
-    };
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { username: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { location: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum,
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          avatar: true,
-          location: true,
-          bio: true,
-          favoriteGenres: true,
-          createdAt: true,
-        },
-      }),
-      prisma.user.count({ where }),
-    ]);
-
-    return res.json({
-      success: true,
-      data: users.map((u) => ({
-        ...u,
-        displayName: u.name || u.username || 'User',
-      })),
-      meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/users', conditionalSearchLimiter, asyncHandler(async (req, res) => {
+  const parsed = discoverUsersSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid filter parameters');
   }
-});
+
+  const { search, page, limit } = parsed.data;
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
+  const skip = (pageNum - 1) * limitNum;
+
+  const where: any = {
+    role: 'USER',
+    status: 'ACTIVE',
+  };
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { username: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+      { location: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum,
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        avatar: true,
+        location: true,
+        bio: true,
+        favoriteGenres: true,
+        createdAt: true,
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return res.json({
+    success: true,
+    data: users.map((u) => ({
+      ...u,
+      displayName: u.name || u.username || 'User',
+    })),
+    meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+  });
+}));
 
 /* ──────────────────── Ranking Administration ──────────────────── */
 
 // POST /api/discover/recalculate — Trigger full ranking recalculation (admin only)
-router.post('/recalculate', authMiddleware, requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
-  try {
-    const startedAt = Date.now();
-    const result = await recalculateAllRankingsV2({ sendNotifications: true });
-    const durationMs = Date.now() - startedAt;
+router.post('/recalculate', authMiddleware, requireRole('ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+  const startedAt = Date.now();
+  const result = await recalculateAllRankingsV2({ sendNotifications: true });
+  const durationMs = Date.now() - startedAt;
 
-    return res.json({
-      success: true,
-      data: {
-        message: 'Rankings recalculated successfully',
-        djsProcessed: result.length,
-        durationMs,
-        top3: result.slice(0, 3).map((dj) => ({
-          id: dj.id,
-          compositeScore: dj.compositeScore,
-          battleScore: dj.battleScore,
-        })),
-      },
+  return ok(res, {
+      message: 'Rankings recalculated successfully',
+      djsProcessed: result.length,
+      durationMs,
+      top3: result.slice(0, 3).map((dj) => ({
+        id: dj.id,
+        compositeScore: dj.compositeScore,
+        battleScore: dj.battleScore,
+      })),
     });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+}));
 
 // GET /api/discover/rankings/:djId/score — Get detailed v2 score for a DJ
-router.get('/rankings/:djId/score', async (req, res) => {
-  try {
-    const score = await computeDjScoreV2(req.params.djId);
-    if (!score) {
-      return res.status(404).json({ success: false, error: 'DJ not found' });
-    }
-    return res.json({ success: true, data: score });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.get('/rankings/:djId/score', asyncHandler(async (req, res) => {
+  const score = await computeDjScoreV2(req.params.djId);
+  if (!score) {
+    return fail(res, 404, 'DJ not found');
   }
-});
+  return ok(res, score);
+}));
 
 /* ──────────────────── Recommended DJs For User ──────────────────── */
 // GET /api/discover/djs/recommended — Smart DJ suggestions based on listening taste
@@ -443,19 +392,15 @@ router.get('/djs/recommended', softAuthMiddleware, async (req: any, res: any) =>
       },
     });
 
-    return res.json({
-      success: true,
-      preferredGenres,
-      data: djs.map((d: any) => ({
+    return ok(res, djs.map((d: any) => ({
         ...d,
         recommendationReason: preferredGenres.some((g) => d.genres?.includes(g))
           ? `Plays your favorite genres (${preferredGenres.filter((g) => d.genres?.includes(g)).join(', ')})`
           : 'Top trending verified DJ in Sierra Leone',
-      })),
-    });
+      })));
   } catch (error: any) {
     console.error('Error fetching recommended DJs:', error);
-    return res.status(500).json({ success: false, error: 'Failed to fetch DJ recommendations' });
+    return fail(res, 500, 'Failed to fetch DJ recommendations');
   }
 });
 
@@ -533,13 +478,10 @@ router.get('/playlists/for-you', softAuthMiddleware, async (req: any, res: any) 
       },
     ];
 
-    return res.json({
-      success: true,
-      data: smartPlaylists,
-    });
+    return ok(res, smartPlaylists);
   } catch (error: any) {
     console.error('Error generating for-you playlists:', error);
-    return res.status(500).json({ success: false, error: 'Failed to generate for-you playlists' });
+    return fail(res, 500, 'Failed to generate for-you playlists');
   }
 });
 
@@ -569,20 +511,17 @@ router.get('/feed/stats', softAuthMiddleware, async (req: any, res: any) => {
 
     const totalNewDrops = newMixesCount + newEventsCount;
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         since: validSince.toISOString(),
         newMixesCount,
         newEventsCount,
         totalNewDrops,
         totalMixes,
         totalDjs,
-      },
-    });
+      });
   } catch (error: any) {
     console.error('Error fetching feed stats:', error);
-    return res.status(500).json({ success: false, error: 'Failed to fetch feed stats' });
+    return fail(res, 500, 'Failed to fetch feed stats');
   }
 });
 

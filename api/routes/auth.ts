@@ -14,6 +14,8 @@ const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
 const { RESERVED_USERNAMES, isValidUsername, generateUsername } = require('../utils/username');
 const { calculateTrialStatus } = require('../utils/trial');
+const { asyncHandler } = require('../middleware/asyncHandler');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -65,202 +67,173 @@ const passwordResetConfirmSchema = z.object({
 });
 
 // POST /api/auth/register
-router.post('/register', authLimiter, async (req, res) => {
-  try {
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    let { email, password, phone, role, gender } = parsed.data;
-    let { username } = parsed.data;
-
-    email = email.toLowerCase();
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(409).json({ success: false, error: 'Email already registered' });
-    }
-
-    if (phone) {
-      const existingPhone = await prisma.user.findUnique({ where: { phone } });
-      if (existingPhone) {
-        return res.status(409).json({ success: false, error: 'Phone number already registered' });
-      }
-    }
-
-    if (username) {
-      username = username.toLowerCase();
-      if (!isValidUsername(username)) {
-        return res.status(400).json({ success: false, error: 'Invalid or reserved username' });
-      }
-      const existingUsername = await prisma.user.findUnique({ where: { username } });
-      if (existingUsername) {
-        return res.status(409).json({ success: false, error: 'Username already taken' });
-      }
-    } else {
-      username = await generateUsername(email);
-    }
-
-    const hashedPassword = await hashPassword(password);
-    const userRole = role === 'DJ' ? 'DJ' : 'USER';
-    const user = await prisma.user.create({
-      data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined },
-      select: { id: true, email: true, username: true, role: true, gender: true, createdAt: true },
-    });
-
-    // Send welcome email and in-app notification asynchronously — don't block the response
-    sendWelcomeEmail({ to: user.email, username: user.username, role: user.role }).catch((err) => {
-      console.error('[Auth] Failed to send welcome email:', err);
-    });
-    prisma.notification.create({
-      data: {
-        userId: user.id,
-        type: 'SYSTEM',
-        title: 'Welcome to Deck Salone!',
-        body: 'Your account has been created. Explore mixes, follow DJs, and book events.',
-      },
-    }).catch((err) => {
-      console.error('[Auth] Failed to create welcome notification:', err);
-    });
-
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return res.status(201).json({ success: true, data: { user, token } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/register', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
+
+  let { email, password, phone, role, gender } = parsed.data;
+  let { username } = parsed.data;
+
+  email = email.toLowerCase();
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return fail(res, 409, 'Email already registered');
+  }
+
+  if (phone) {
+    const existingPhone = await prisma.user.findUnique({ where: { phone } });
+    if (existingPhone) {
+      return fail(res, 409, 'Phone number already registered');
+    }
+  }
+
+  if (username) {
+    username = username.toLowerCase();
+    if (!isValidUsername(username)) {
+      return fail(res, 400, 'Invalid or reserved username');
+    }
+    const existingUsername = await prisma.user.findUnique({ where: { username } });
+    if (existingUsername) {
+      return fail(res, 409, 'Username already taken');
+    }
+  } else {
+    username = await generateUsername(email);
+  }
+
+  const hashedPassword = await hashPassword(password);
+  const userRole = role === 'DJ' ? 'DJ' : 'USER';
+  const user = await prisma.user.create({
+    data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined },
+    select: { id: true, email: true, username: true, role: true, gender: true, createdAt: true },
+  });
+
+  // Send welcome email and in-app notification asynchronously — don't block the response
+  sendWelcomeEmail({ to: user.email, username: user.username, role: user.role }).catch((err) => {
+    console.error('[Auth] Failed to send welcome email:', err);
+  });
+  prisma.notification.create({
+    data: {
+      userId: user.id,
+      type: 'SYSTEM',
+      title: 'Welcome to Deck Salone!',
+      body: 'Your account has been created. Explore mixes, follow DJs, and book events.',
+    },
+  }).catch((err) => {
+    console.error('[Auth] Failed to create welcome notification:', err);
+  });
+
+  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  return res.status(201).json({ success: true, data: { user, token } });
+}));
 
 // POST /api/auth/login
-router.post('/login', loginRateLimiter, async (req, res) => {
-  try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const { email, password } = parsed.data;
-    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
-
-    // Check account lockout / progressive delay
-    const { isLocked, delayMs } = checkAccountLockout(email, clientIp);
-    if (isLocked) {
-      return res.status(429).json({ success: false, error: 'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.' });
-    }
-    if (delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user || !user.password) {
-      await recordFailedAttempt(email, clientIp);
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
-
-    const valid = await verifyAndMigratePassword(password, user);
-    if (!valid) {
-      await recordFailedAttempt(email, clientIp);
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
-
-    if (user.status === 'SUSPENDED') {
-      return res.status(403).json({ success: false, error: 'Account suspended. Contact support.' });
-    }
-
-    recordSuccessfulLogin(email, clientIp);
-
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return res.json({
-      success: true,
-      data: {
-        user: { id: user.id, email: user.email, username: user.username, role: user.role },
-        token,
-      },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/login', loginRateLimiter, asyncHandler(async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
   }
-});
+
+  const { email, password } = parsed.data;
+  const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+
+  // Check account lockout / progressive delay
+  const { isLocked, delayMs } = checkAccountLockout(email, clientIp);
+  if (isLocked) {
+    return fail(res, 429, 'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.');
+  }
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (!user || !user.password) {
+    await recordFailedAttempt(email, clientIp);
+    return fail(res, 401, 'Invalid credentials');
+  }
+
+  const valid = await verifyAndMigratePassword(password, user);
+  if (!valid) {
+    await recordFailedAttempt(email, clientIp);
+    return fail(res, 401, 'Invalid credentials');
+  }
+
+  if (user.status === 'SUSPENDED') {
+    return fail(res, 403, 'Account suspended. Contact support.');
+  }
+
+  recordSuccessfulLogin(email, clientIp);
+
+  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  return ok(res, {
+      user: { id: user.id, email: user.email, username: user.username, role: user.role },
+      token,
+    });
+}));
 
 // POST /api/auth/phone/send-otp - Send OTP to phone
-router.post('/phone/send-otp', authLimiter, async (req, res) => {
-  try {
-    const parsed = phoneSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid phone number' });
-    }
-
-    const { phone } = parsed.data;
-    const result = await sendOtp(phone);
-
-    return res.json({
-      success: true,
-      data: {
-        phone: result.phone,
-        sent: result.sent,
-        ...(result.devCode && { devCode: result.devCode }), // Only in development
-      },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/phone/send-otp', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = phoneSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid phone number');
   }
-});
+
+  const { phone } = parsed.data;
+  const result = await sendOtp(phone);
+
+  return ok(res, {
+      phone: result.phone,
+      sent: result.sent,
+      ...(result.devCode && { devCode: result.devCode }), // Only in development
+    });
+}));
 
 // POST /api/auth/phone/verify - Verify OTP and login/register
-router.post('/phone/verify', authLimiter, async (req, res) => {
-  try {
-    const parsed = phoneVerifySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
+router.post('/phone/verify', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = phoneVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
+  }
 
-    const { phone, code } = parsed.data;
-    const otpResult = await verifyOtp(phone, code);
+  const { phone, code } = parsed.data;
+  const otpResult = await verifyOtp(phone, code);
 
-    if (!otpResult.valid) {
-      return res.status(400).json({ success: false, error: otpResult.error });
-    }
+  if (!otpResult.valid) {
+    return fail(res, 400, otpResult.error);
+  }
 
-    // Find or create user by phone
-    let user = await prisma.user.findUnique({ where: { phone } });
+  // Find or create user by phone
+  let user = await prisma.user.findUnique({ where: { phone } });
 
-    if (!user) {
-      // Create new user with phone — generate a real username and use correct brand domain
-      const phoneUsername = await generateUsername(`phone${Date.now()}@decksalone.com`);
-      user = await prisma.user.create({
-        data: {
-          email: `phone_${Date.now()}@decksalone.com`, // Temporary email — user can update in settings
-          username: phoneUsername,
-          phone,
-          phoneVerified: true,
-          role: 'USER',
-        },
-      });
-    } else {
-      // Mark phone as verified
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { phoneVerified: true },
-      });
-    }
-
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return res.json({
-      success: true,
+  if (!user) {
+    // Create new user with phone — generate a real username and use correct brand domain
+    const phoneUsername = await generateUsername(`phone${Date.now()}@decksalone.com`);
+    user = await prisma.user.create({
       data: {
-        user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
-        token,
-        isNewUser: !user.updatedAt || user.createdAt.getTime() === user.updatedAt.getTime(),
+        email: `phone_${Date.now()}@decksalone.com`, // Temporary email — user can update in settings
+        username: phoneUsername,
+        phone,
+        phoneVerified: true,
+        role: 'USER',
       },
     });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  } else {
+    // Mark phone as verified
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { phoneVerified: true },
+    });
   }
-});
+
+  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  return ok(res, {
+      user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
+      token,
+      isNewUser: !user.updatedAt || user.createdAt.getTime() === user.updatedAt.getTime(),
+    });
+}));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EMAIL OTP (for email verification & passwordless login)
@@ -307,192 +280,169 @@ async function incrementOtpAttempts(email: string, record: any) {
 }
 
 // POST /api/auth/email/send-otp - Send OTP to email
-router.post('/email/send-otp', authLimiter, async (req, res) => {
-  try {
-    const parsed = emailOtpSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid email' });
-    }
-
-    const { email } = parsed.data;
-    const normalizedEmail = email.toLowerCase().trim();
-    const code = generateEmailOtp();
-
-    await saveEmailOtp(normalizedEmail, code);
-
-    // Send OTP via email
-    if (isEmailConfigured()) {
-      const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-      await sendOtpEmail({
-        to: normalizedEmail,
-        code,
-        username: user?.username || user?.email?.split('@')[0],
-      });
-    } else {
-      console.log(`[Email OTP] Code for ${normalizedEmail}: ${code}`);
-    }
-
-    return res.json({
-      success: true,
-      data: { email: normalizedEmail, sent: true },
-    });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/email/send-otp', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = emailOtpSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid email');
   }
-});
+
+  const { email } = parsed.data;
+  const normalizedEmail = email.toLowerCase().trim();
+  const code = generateEmailOtp();
+
+  await saveEmailOtp(normalizedEmail, code);
+
+  // Send OTP via email
+  if (isEmailConfigured()) {
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    await sendOtpEmail({
+      to: normalizedEmail,
+      code,
+      username: user?.username || user?.email?.split('@')[0],
+    });
+  } else {
+    console.log(`[Email OTP] Code for ${normalizedEmail}: ${code}`);
+  }
+
+  return ok(res, { email: normalizedEmail, sent: true });
+}));
 
 // POST /api/auth/email/verify - Verify email OTP
-router.post('/email/verify', authLimiter, async (req, res) => {
-  try {
-    const parsed = emailOtpVerifySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const { email, code } = parsed.data;
-    const normalizedEmail = email.toLowerCase().trim();
-    const result = await getEmailOtp(normalizedEmail);
-
-    if (!result) {
-      return res.status(400).json({ success: false, error: 'OTP not found or expired. Request a new one.' });
-    }
-
-    const { record } = result;
-
-    if (Date.now() > record.expiry) {
-      await deleteEmailOtp(normalizedEmail);
-      return res.status(400).json({ success: false, error: 'OTP expired. Request a new one.' });
-    }
-
-    if (record.attempts >= EMAIL_MAX_ATTEMPTS) {
-      await deleteEmailOtp(normalizedEmail);
-      return res.status(400).json({ success: false, error: 'Too many attempts. Request a new OTP.' });
-    }
-
-    if (record.code !== code) {
-      await incrementOtpAttempts(normalizedEmail, record);
-      return res.status(400).json({ success: false, error: 'Invalid OTP code.' });
-    }
-
-    // OTP is valid — clean up
-    await deleteEmailOtp(normalizedEmail);
-
-    // Mark email as verified
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (user) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerified: true },
-      });
-    }
-
-    return res.json({ success: true, data: { message: 'Email verified successfully' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/email/verify', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = emailOtpVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
   }
-});
+
+  const { email, code } = parsed.data;
+  const normalizedEmail = email.toLowerCase().trim();
+  const result = await getEmailOtp(normalizedEmail);
+
+  if (!result) {
+    return fail(res, 400, 'OTP not found or expired. Request a new one.');
+  }
+
+  const { record } = result;
+
+  if (Date.now() > record.expiry) {
+    await deleteEmailOtp(normalizedEmail);
+    return fail(res, 400, 'OTP expired. Request a new one.');
+  }
+
+  if (record.attempts >= EMAIL_MAX_ATTEMPTS) {
+    await deleteEmailOtp(normalizedEmail);
+    return fail(res, 400, 'Too many attempts. Request a new OTP.');
+  }
+
+  if (record.code !== code) {
+    await incrementOtpAttempts(normalizedEmail, record);
+    return fail(res, 400, 'Invalid OTP code.');
+  }
+
+  // OTP is valid — clean up
+  await deleteEmailOtp(normalizedEmail);
+
+  // Mark email as verified
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (user) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true },
+    });
+  }
+
+  return ok(res, { message: 'Email verified successfully' });
+}));
 
 // POST /api/auth/forgot-password - Request password reset
-router.post('/forgot-password', authLimiter, async (req, res) => {
-  try {
-    const parsed = passwordResetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid email' });
-    }
+router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = passwordResetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid email');
+  }
 
-    const { email } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email } });
+  const { email } = parsed.data;
+  const user = await prisma.user.findUnique({ where: { email } });
 
-    // Always return the same response to prevent user enumeration
-    const successResponse = { success: true, data: { message: 'If an account exists, a reset email has been sent.' } };
+  // Always return the same response to prevent user enumeration
+  const successResponse = { success: true, data: { message: 'If an account exists, a reset email has been sent.' } };
 
-    if (!user) {
-      return res.json(successResponse);
-    }
+  if (!user) {
+    return res.json(successResponse);
+  }
 
-    // Generate a secure, random single-use token
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  // Generate a secure, random single-use token
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Persist only the hash — raw token is sent to user and never stored
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
+  // Persist only the hash — raw token is sent to user and never stored
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
+  });
+
+  const frontendUrl = getFrontendUrl();
+  const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+  // Send the reset email if SMTP is configured; otherwise log the URL in development
+  if (isEmailConfigured()) {
+    const emailResult = await sendPasswordResetEmail({
+      to: email,
+      username: user.username || 'User',
+      resetUrl,
     });
 
-    const frontendUrl = getFrontendUrl();
-    const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
-
-    // Send the reset email if SMTP is configured; otherwise log the URL in development
-    if (isEmailConfigured()) {
-      const emailResult = await sendPasswordResetEmail({
-        to: email,
-        username: user.username || 'User',
-        resetUrl,
-      });
-
-      if (!emailResult.success) {
-        // Don't expose email configuration issues to the client
-        console.error('[Auth] Failed to send password reset email:', emailResult.error);
-      }
-    } else if (process.env.NODE_ENV === 'development') {
-      console.log(`[Dev] Password reset URL for ${email}: ${resetUrl}`);
-    } else {
-      console.warn('[Auth] SMTP not configured; password reset email cannot be sent.');
+    if (!emailResult.success) {
+      // Don't expose email configuration issues to the client
+      console.error('[Auth] Failed to send password reset email:', emailResult.error);
     }
-
-    return res.json(successResponse);
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  } else if (process.env.NODE_ENV === 'development') {
+    console.log(`[Dev] Password reset URL for ${email}: ${resetUrl}`);
+  } else {
+    console.warn('[Auth] SMTP not configured; password reset email cannot be sent.');
   }
-});
+
+  return res.json(successResponse);
+}));
 
 // POST /api/auth/reset-password - Confirm password reset
-router.post('/reset-password', authLimiter, async (req, res) => {
-  try {
-    const parsed = passwordResetConfirmSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const { token, newPassword } = parsed.data;
-
-    // Hash the incoming raw token to compare against stored hash
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-    const user = await prisma.user.findFirst({
-      where: {
-        passwordResetToken: hashedToken,
-        passwordResetExpiry: { gt: new Date() }, // Must not be expired
-      },
-    });
-
-    if (!user) {
-      return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-
-    // Update password and immediately invalidate the reset token (single-use)
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        passwordResetToken: null,
-        passwordResetExpiry: null,
-      },
-    });
-
-    return res.json({ success: true, data: { message: 'Password updated successfully' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = passwordResetConfirmSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
   }
-});
+
+  const { token, newPassword } = parsed.data;
+
+  // Hash the incoming raw token to compare against stored hash
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: hashedToken,
+      passwordResetExpiry: { gt: new Date() }, // Must not be expired
+    },
+  });
+
+  if (!user) {
+    return fail(res, 400, 'Invalid or expired reset token');
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  // Update password and immediately invalidate the reset token (single-use)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    },
+  });
+
+  return ok(res, { message: 'Password updated successfully' });
+}));
 
 // Google OAuth Routes
 // Build the OAuth callback URL from the incoming request host so it always matches
@@ -684,73 +634,68 @@ router.get('/google/callback', async (req, res, next) => {
 // GET /api/auth/me
 
 // GET /api/auth/me
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        name: true,
-        avatar: true,
-        bio: true,
-        location: true,
-        role: true,
-        phone: true,
-        phoneVerified: true,
-        gender: true,
-        dateOfBirth: true,
-        favoriteGenres: true,
-        createdAt: true,
-        subscriptionTier: true,
-        subscriptionActivatedAt: true,
-        notificationPreferences: true,
-        privacyPreferences: true,
-        djProfile: {
-          select: {
-            id: true,
-            stageName: true,
-            fullName: true,
-            avatar: true,
-            coverBanner: true,
-            bio: true,
-            city: true,
-            community: true,
-            country: true,
-            genres: true,
-            verified: true,
-            isPublic: true,
-            isPro: true,
-            subscriptionTier: true,
-            subscriptionActivatedAt: true,
-            totalFollowers: true,
-            totalStreams: true,
-            totalMixes: true,
-            totalEvents: true,
-            totalBookings: true,
-            averageRating: true,
-            rankingPosition: true,
-            rankingScore: true,
-            monthlyListeners: true,
-            canReceivePayments: true,
-            canViewAnalytics: true,
-            whatsappNumber: true,
-            user: { select: { username: true } },
-          },
+router.get('/me', authMiddleware, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      avatar: true,
+      bio: true,
+      location: true,
+      role: true,
+      phone: true,
+      phoneVerified: true,
+      gender: true,
+      dateOfBirth: true,
+      favoriteGenres: true,
+      createdAt: true,
+      subscriptionTier: true,
+      subscriptionActivatedAt: true,
+      notificationPreferences: true,
+      privacyPreferences: true,
+      djProfile: {
+        select: {
+          id: true,
+          stageName: true,
+          fullName: true,
+          avatar: true,
+          coverBanner: true,
+          bio: true,
+          city: true,
+          community: true,
+          country: true,
+          genres: true,
+          verified: true,
+          isPublic: true,
+          isPro: true,
+          subscriptionTier: true,
+          subscriptionActivatedAt: true,
+          totalFollowers: true,
+          totalStreams: true,
+          totalMixes: true,
+          totalEvents: true,
+          totalBookings: true,
+          averageRating: true,
+          rankingPosition: true,
+          rankingScore: true,
+          monthlyListeners: true,
+          canReceivePayments: true,
+          canViewAnalytics: true,
+          whatsappNumber: true,
+          user: { select: { username: true } },
         },
       },
-    });
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    const trialStatus = calculateTrialStatus(user, user.djProfile);
-    return res.json({ success: true, data: { ...user, trialStatus } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    },
+  });
+  if (!user) {
+    return fail(res, 404, 'User not found');
   }
-});
+  const trialStatus = calculateTrialStatus(user, user.djProfile);
+  return ok(res, { ...user, trialStatus });
+}));
 
 const updateProfileSchema = z.object({
   username: z.string().min(3).max(30).optional(),
@@ -778,179 +723,161 @@ const confirmEmailChangeSchema = z.object({
 });
 
 // PUT /api/auth/me - Update current user's profile (username, email, gender, phone, dateOfBirth)
-router.put('/me', authMiddleware, async (req, res) => {
-  try {
-    const parsed = updateMeSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const { username, email, gender, phone, dateOfBirth } = parsed.data;
-    const updateData: any = {};
-
-    if (gender !== undefined) {
-      updateData.gender = gender === '' ? null : gender;
-    }
-
-    if (phone !== undefined) {
-      updateData.phone = phone ? phone.trim() : null;
-    }
-
-    if (dateOfBirth !== undefined) {
-      if (!dateOfBirth || dateOfBirth.trim() === '') {
-        updateData.dateOfBirth = null;
-      } else {
-        const parsedDob = new Date(dateOfBirth);
-        if (!Number.isNaN(parsedDob.getTime())) {
-          updateData.dateOfBirth = parsedDob;
-        }
-      }
-    }
-
-    if (username && username.trim() !== '') {
-      const normalized = username.toLowerCase().trim();
-      if (!isValidUsername(normalized)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved',
-        });
-      }
-      const existing = await prisma.user.findUnique({ where: { username: normalized } });
-      if (existing && existing.id !== req.user.id) {
-        return res.status(409).json({ success: false, error: 'Username already taken' });
-      }
-      updateData.username = normalized;
-    }
-
-    // Only initiate email verification flow if email actually CHANGED
-    if (email && email.trim() !== '') {
-      const normalizedEmail = email.toLowerCase().trim();
-      if (normalizedEmail !== req.user.email?.toLowerCase()) {
-        const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-        if (existing && existing.id !== req.user.id) {
-          return res.status(409).json({ success: false, error: 'Email already in use' });
-        }
-
-        // Email changes must be verified before the new address is saved.
-        // Send a one-time code to the new address and store the pending change.
-        const code = crypto.randomInt(100000, 999999).toString();
-        await setCache(`email_change:${req.user.id}`, { newEmail: normalizedEmail, code, expiry: Date.now() + 10 * 60 * 1000 }, 10 * 60);
-
-        sendOtpEmail({
-          to: normalizedEmail,
-          code,
-          username: req.user.email?.split('@')[0] || 'User',
-        }).catch((err) => console.error('[Auth] Failed to send email change OTP:', err));
-
-        // Save other non-email fields first if any were modified
-        if (Object.keys(updateData).length > 0) {
-          await prisma.user.update({
-            where: { id: req.user.id },
-            data: updateData,
-          });
-        }
-
-        return res.status(202).json({
-          success: true,
-          data: {
-            message: 'A verification code has been sent to the new email address. Use /confirm-email-change to apply the update.',
-            pendingEmail: normalizedEmail,
-          },
-        });
-      }
-    }
-
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: updateData,
-      select: {
-        id: true, email: true, username: true, role: true,
-        name: true, avatar: true, bio: true, location: true,
-        phone: true, phoneVerified: true, gender: true,
-        dateOfBirth: true, createdAt: true, djProfile: true,
-      },
-    });
-
-    return res.json({ success: true, data: user });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.put('/me', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
+
+  const { username, email, gender, phone, dateOfBirth } = parsed.data;
+  const updateData: any = {};
+
+  if (gender !== undefined) {
+    updateData.gender = gender === '' ? null : gender;
+  }
+
+  if (phone !== undefined) {
+    updateData.phone = phone ? phone.trim() : null;
+  }
+
+  if (dateOfBirth !== undefined) {
+    if (!dateOfBirth || dateOfBirth.trim() === '') {
+      updateData.dateOfBirth = null;
+    } else {
+      const parsedDob = new Date(dateOfBirth);
+      if (!Number.isNaN(parsedDob.getTime())) {
+        updateData.dateOfBirth = parsedDob;
+      }
+    }
+  }
+
+  if (username && username.trim() !== '') {
+    const normalized = username.toLowerCase().trim();
+    if (!isValidUsername(normalized)) {
+      return fail(res, 400, 'Username must be 3-30 characters with letters, numbers, hyphens, or underscores only and not reserved');
+    }
+    const existing = await prisma.user.findUnique({ where: { username: normalized } });
+    if (existing && existing.id !== req.user.id) {
+      return fail(res, 409, 'Username already taken');
+    }
+    updateData.username = normalized;
+  }
+
+  // Only initiate email verification flow if email actually CHANGED
+  if (email && email.trim() !== '') {
+    const normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail !== req.user.email?.toLowerCase()) {
+      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing && existing.id !== req.user.id) {
+        return fail(res, 409, 'Email already in use');
+      }
+
+      // Email changes must be verified before the new address is saved.
+      // Send a one-time code to the new address and store the pending change.
+      const code = crypto.randomInt(100000, 999999).toString();
+      await setCache(`email_change:${req.user.id}`, { newEmail: normalizedEmail, code, expiry: Date.now() + 10 * 60 * 1000 }, 10 * 60);
+
+      sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        username: req.user.email?.split('@')[0] || 'User',
+      }).catch((err) => console.error('[Auth] Failed to send email change OTP:', err));
+
+      // Save other non-email fields first if any were modified
+      if (Object.keys(updateData).length > 0) {
+        await prisma.user.update({
+          where: { id: req.user.id },
+          data: updateData,
+        });
+      }
+
+      return res.status(202).json({
+        success: true,
+        data: {
+          message: 'A verification code has been sent to the new email address. Use /confirm-email-change to apply the update.',
+          pendingEmail: normalizedEmail,
+        },
+      });
+    }
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: updateData,
+    select: {
+      id: true, email: true, username: true, role: true,
+      name: true, avatar: true, bio: true, location: true,
+      phone: true, phoneVerified: true, gender: true,
+      dateOfBirth: true, createdAt: true, djProfile: true,
+    },
+  });
+
+  return ok(res, user);
+}));
 
 // POST /api/auth/confirm-email-change - Verify and apply a pending email change
-router.post('/confirm-email-change', authMiddleware, async (req, res) => {
-  try {
-    const parsed = confirmEmailChangeSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
-    }
-
-    const { code } = parsed.data;
-    const cacheKey = `email_change:${req.user.id}`;
-    const pending = await getCache(cacheKey);
-
-    if (!pending || pending.code !== code || Date.now() > pending.expiry) {
-      return res.status(400).json({ success: false, error: 'Invalid or expired verification code' });
-    }
-
-    const existing = await prisma.user.findUnique({ where: { email: pending.newEmail } });
-    if (existing && existing.id !== req.user.id) {
-      await clearCache(cacheKey);
-      return res.status(409).json({ success: false, error: 'Email already in use' });
-    }
-
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { email: pending.newEmail, emailVerified: true },
-      select: { id: true, email: true, username: true, role: true, emailVerified: true },
-    });
-
-    await clearCache(cacheKey);
-    invalidateUserAuthCache(req.user.id);
-
-    return res.json({ success: true, data: user });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/confirm-email-change', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = confirmEmailChangeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
   }
-});
+
+  const { code } = parsed.data;
+  const cacheKey = `email_change:${req.user.id}`;
+  const pending = await getCache(cacheKey);
+
+  if (!pending || pending.code !== code || Date.now() > pending.expiry) {
+    return fail(res, 400, 'Invalid or expired verification code');
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email: pending.newEmail } });
+  if (existing && existing.id !== req.user.id) {
+    await clearCache(cacheKey);
+    return fail(res, 409, 'Email already in use');
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { email: pending.newEmail, emailVerified: true },
+    select: { id: true, email: true, username: true, role: true, emailVerified: true },
+  });
+
+  await clearCache(cacheKey);
+  invalidateUserAuthCache(req.user.id);
+
+  return ok(res, user);
+}));
 
 // POST /api/auth/change-password - Change current user's password
-router.post('/change-password', authMiddleware, async (req, res) => {
-  try {
-    const parsed = changePasswordSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
-    }
-
-    const { currentPassword, newPassword } = parsed.data;
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, password: true },
-    });
-
-    if (!user || !user.password) {
-      return res.status(400).json({ success: false, error: 'User not found or no password set' });
-    }
-
-    const valid = await verifyAndMigratePassword(currentPassword, user);
-    if (!valid) {
-      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { password: hashedPassword },
-    });
-
-    return res.json({ success: true, data: { message: 'Password updated successfully' } });
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+router.post('/change-password', authMiddleware, asyncHandler(async (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
-});
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, password: true },
+  });
+
+  if (!user || !user.password) {
+    return fail(res, 400, 'User not found or no password set');
+  }
+
+  const valid = await verifyAndMigratePassword(currentPassword, user);
+  if (!valid) {
+    return fail(res, 401, 'Current password is incorrect');
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { password: hashedPassword },
+  });
+
+  return ok(res, { message: 'Password updated successfully' });
+}));
 
 module.exports = router;

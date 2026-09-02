@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface MessageItem {
   id: string;
@@ -142,7 +143,7 @@ export default function Messages() {
         setConversations(res.data.data || []);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load conversations');
+      setError(getApiErrorMessage(err, 'Failed to load conversations'));
     } finally {
       setLoading(false);
     }
@@ -205,7 +206,7 @@ export default function Messages() {
         setPartner(res.data.partner || null);
       }
     } catch (err: any) {
-      if (!silent) setError(err.response?.data?.error || 'Failed to load messages');
+      if (!silent) setError(getApiErrorMessage(err, 'Failed to load messages'));
     } finally {
       if (!silent) setLoadingMessages(false);
     }
@@ -249,7 +250,7 @@ export default function Messages() {
       }
     } catch (err: any) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setError(err.response?.data?.error || 'Failed to send message');
+      setError(getApiErrorMessage(err, 'Failed to send message'));
     } finally {
       setSending(false);
     }

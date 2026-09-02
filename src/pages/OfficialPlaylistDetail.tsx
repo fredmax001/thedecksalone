@@ -13,6 +13,7 @@ import ShareButton from '@/components/ShareButton';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { formatCompactNumber } from '@/lib/formatting';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -21,10 +22,6 @@ function formatDuration(seconds: number): string {
   const s = seconds % 60;
   if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatCompact(n: number): string {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 function PlayingWaveIndicator() {
@@ -326,7 +323,7 @@ export function OfficialPlaylistDetail() {
                         <p className="text-[11px] text-text-muted truncate mt-0.5 flex items-center gap-1">
                           <span>{track.dj}</span>
                           {track.djTier === 'legend' && (
-                            <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO</span>
+                            <span className="text-[8px] px-1 rounded bg-[#f4e059]/20 text-[#f4e059] font-bold">PRO+</span>
                           )}
                         </p>
                       </div>
@@ -341,7 +338,7 @@ export function OfficialPlaylistDetail() {
 
                     {/* Stream Plays */}
                     <div className="hidden sm:block col-span-2 text-right font-mono text-xs text-text-muted">
-                      {formatCompact(track.plays || 0)}
+                      {formatCompactNumber(track.plays || 0)}
                     </div>
 
                     {/* Duration */}

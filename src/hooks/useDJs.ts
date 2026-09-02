@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface DJFilters {
   search?: string;
@@ -19,18 +20,8 @@ export function useDJs(filters: DJFilters = {}) {
   return useQuery({
     queryKey: ['djs', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (search) params.set('search', search);
-      if (city) params.set('city', city);
-      if (community) params.set('community', community);
-      if (genre) params.set('genre', genre);
-      if (sortBy) params.set('sortBy', sortBy);
-      if (minFee) params.set('minFee', String(minFee));
-      if (maxFee) params.set('maxFee', String(maxFee));
-
-      const res = await api.get(`/discover/djs?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, search, city, community, genre, sortBy, minFee, maxFee });
+      const res = await api.get(`/discover/djs${qs}`);
       const response = res.data;
 
       // Defensive: backend may return { success: false, error: '...' } on non-500 errors

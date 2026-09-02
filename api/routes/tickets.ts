@@ -4,6 +4,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const multer = require('multer');
 const { uploadBuffer } = require('../utils/storage');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router({ mergeParams: true });
 
@@ -25,21 +26,21 @@ router.post('/', authMiddleware, uploadScreenshot.single('screenshot'), async (r
   try {
     const { id: eventId } = req.params;
     const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
-    if (!event.isTicketed) return res.status(400).json({ success: false, error: 'This event does not sell tickets' });
-    if (!req.file) return res.status(400).json({ success: false, error: 'Payment screenshot is required' });
-    if (new Date(event.date) < new Date()) return res.status(400).json({ success: false, error: 'Cannot buy tickets for a past event' });
+    if (!event) return fail(res, 404, 'Event not found');
+    if (!event.isTicketed) return fail(res, 400, 'This event does not sell tickets');
+    if (!req.file) return fail(res, 400, 'Payment screenshot is required');
+    if (new Date(event.date) < new Date()) return fail(res, 400, 'Cannot buy tickets for a past event');
 
     // Check if already has a ticket (pending or approved)
     const existing = await prisma.eventTicket.findFirst({
       where: { eventId, userId: req.user.id, status: { in: ['pending', 'approved', 'scanned'] } },
     });
-    if (existing) return res.status(409).json({ success: false, error: 'You already have a ticket for this event' });
+    if (existing) return fail(res, 409, 'You already have a ticket for this event');
 
     // Check capacity
     if (event.totalTickets) {
       const sold = await prisma.eventTicket.count({ where: { eventId, status: { in: ['approved', 'scanned'] } } });
-      if (sold >= event.totalTickets) return res.status(400).json({ success: false, error: 'Event is sold out' });
+      if (sold >= event.totalTickets) return fail(res, 400, 'Event is sold out');
     }
 
     // Upload screenshot
@@ -77,7 +78,7 @@ router.post('/', authMiddleware, uploadScreenshot.single('screenshot'), async (r
 
     return res.status(201).json({ success: true, data: ticket });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -88,8 +89,8 @@ router.get('/', authMiddleware, async (req: any, res: any) => {
     const { id: eventId } = req.params;
     const { dj, event } = await getDjAndEvent(req.user.id, eventId);
     const isAdmin = req.user.role === 'ADMIN';
-    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
-    if (!isAdmin && (!dj || event.djId !== dj.id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!event) return fail(res, 404, 'Event not found');
+    if (!isAdmin && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
 
     const tickets = await prisma.eventTicket.findMany({
       where: { eventId },
@@ -97,9 +98,9 @@ router.get('/', authMiddleware, async (req: any, res: any) => {
       include: { user: { select: { id: true, name: true, username: true, avatar: true, email: true } } },
     });
 
-    return res.json({ success: true, data: tickets });
+    return ok(res, tickets);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -112,9 +113,9 @@ router.get('/my', authMiddleware, async (req: any, res: any) => {
       where: { eventId, userId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
-    return res.json({ success: true, data: ticket || null });
+    return ok(res, ticket || null);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -124,12 +125,12 @@ router.put('/:ticketId/approve', authMiddleware, async (req: any, res: any) => {
     const { id: eventId, ticketId } = req.params;
     const { dj, event } = await getDjAndEvent(req.user.id, eventId);
     const isAdmin = req.user.role === 'ADMIN';
-    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
-    if (!isAdmin && (!dj || event.djId !== dj.id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!event) return fail(res, 404, 'Event not found');
+    if (!isAdmin && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({ where: { id: ticketId } });
-    if (!ticket || ticket.eventId !== eventId) return res.status(404).json({ success: false, error: 'Ticket not found' });
-    if (ticket.status !== 'pending') return res.status(400).json({ success: false, error: `Ticket is already ${ticket.status}` });
+    if (!ticket || ticket.eventId !== eventId) return fail(res, 404, 'Ticket not found');
+    if (ticket.status !== 'pending') return fail(res, 400, `Ticket is already ${ticket.status}`);
 
     // Generate a unique QR token
     const qrCode = `DS-${eventId.slice(-6).toUpperCase()}-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
@@ -152,9 +153,9 @@ router.put('/:ticketId/approve', authMiddleware, async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -164,12 +165,12 @@ router.put('/:ticketId/decline', authMiddleware, async (req: any, res: any) => {
     const { id: eventId, ticketId } = req.params;
     const { dj, event } = await getDjAndEvent(req.user.id, eventId);
     const isAdmin = req.user.role === 'ADMIN';
-    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
-    if (!isAdmin && (!dj || event.djId !== dj.id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!event) return fail(res, 404, 'Event not found');
+    if (!isAdmin && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({ where: { id: ticketId } });
-    if (!ticket || ticket.eventId !== eventId) return res.status(404).json({ success: false, error: 'Ticket not found' });
-    if (ticket.status !== 'pending') return res.status(400).json({ success: false, error: `Ticket is already ${ticket.status}` });
+    if (!ticket || ticket.eventId !== eventId) return fail(res, 404, 'Ticket not found');
+    if (ticket.status !== 'pending') return fail(res, 400, `Ticket is already ${ticket.status}`);
 
     const { reason } = req.body;
     const updated = await prisma.eventTicket.update({
@@ -192,9 +193,9 @@ router.put('/:ticketId/decline', authMiddleware, async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -204,19 +205,20 @@ router.post('/scan', authMiddleware, async (req: any, res: any) => {
   try {
     const { id: eventId } = req.params;
     const { qrCode } = req.body;
-    if (!qrCode) return res.status(400).json({ success: false, error: 'QR code is required' });
+    if (!qrCode) return fail(res, 400, 'QR code is required');
 
     const { dj, event } = await getDjAndEvent(req.user.id, eventId);
-    const isAdmin = req.user.role === 'ADMIN';
-    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
-    if (!isAdmin && (!dj || event.djId !== dj.id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MODERATOR';
+    const isProPlus = dj && ['pro', 'legend'].includes(dj.subscriptionTier?.toLowerCase());
+    if (!event) return fail(res, 404, 'Event not found');
+    if (!isAdmin && !isProPlus && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({ where: { qrCode } });
 
-    if (!ticket) return res.status(404).json({ success: false, error: 'INVALID', message: 'QR code not found. Invalid ticket.' });
-    if (ticket.eventId !== eventId) return res.status(400).json({ success: false, error: 'WRONG_EVENT', message: 'This ticket is for a different event.' });
-    if (ticket.status === 'scanned') return res.status(409).json({ success: false, error: 'ALREADY_SCANNED', message: 'Ticket already scanned.', scannedAt: ticket.scannedAt });
-    if (ticket.status !== 'approved') return res.status(400).json({ success: false, error: 'NOT_APPROVED', message: `Ticket status is "${ticket.status}". Only approved tickets can be scanned.` });
+    if (!ticket) return fail(res, 404, 'INVALID', { message: 'QR code not found. Invalid ticket.' });
+    if (ticket.eventId !== eventId) return fail(res, 400, 'WRONG_EVENT', { message: 'This ticket is for a different event.' });
+    if (ticket.status === 'scanned') return fail(res, 409, 'ALREADY_SCANNED', { message: 'Ticket already scanned.', scannedAt: ticket.scannedAt });
+    if (ticket.status !== 'approved') return fail(res, 400, 'NOT_APPROVED', { message: `Ticket status is "${ticket.status}". Only approved tickets can be scanned.` });
 
     const updated = await prisma.eventTicket.update({
       where: { qrCode },
@@ -224,9 +226,9 @@ router.post('/scan', authMiddleware, async (req: any, res: any) => {
       include: { user: { select: { name: true, username: true, avatar: true } } },
     });
 
-    return res.json({ success: true, data: updated, message: '✅ Valid ticket! Entry granted.' });
+    return ok(res, updated, '✅ Valid ticket! Entry granted.');
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

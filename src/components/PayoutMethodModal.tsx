@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 export const SL_BANKS = [
   'Rokel Commercial Bank',
@@ -82,7 +83,7 @@ export function PayoutMethodModal({
         onClose();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save payout method');
+      toast.error(getApiErrorMessage(err, 'Failed to save payout method'));
     } finally {
       setSaving(false);
     }

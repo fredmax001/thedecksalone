@@ -9,14 +9,11 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Sun,
-  Moon,
   Loader2,
   Power,
   PowerOff,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { useThemeStore } from '@/stores/themeStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -38,14 +35,59 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+
+function NotificationToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2">
+      <div>
+        <p className="text-sm font-medium text-text-primary">{label}</p>
+        <p className="text-xs text-text-secondary">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
+    </div>
+  );
+}
 
 interface UserSettings {
   notifications: {
     emailBookings: boolean;
     emailMessages: boolean;
     emailMarketing: boolean;
+    emailLikes: boolean;
+    emailComments: boolean;
+    emailFollows: boolean;
+    emailReups: boolean;
+    emailNewMixes: boolean;
+    emailEvents: boolean;
+    emailTickets: boolean;
+    emailVerifications: boolean;
+    emailSubscriptions: boolean;
+    emailReviews: boolean;
     pushBookings: boolean;
     pushMessages: boolean;
+    pushNewMixes: boolean;
+    pushLikes: boolean;
+    pushComments: boolean;
+    pushFollows: boolean;
+    pushReups: boolean;
+    pushEvents: boolean;
+    pushTickets: boolean;
+    pushVerifications: boolean;
+    pushSubscriptions: boolean;
+    pushReviews: boolean;
   };
   privacy: {
     profilePublic: boolean;
@@ -59,8 +101,28 @@ const defaultSettings: UserSettings = {
     emailBookings: true,
     emailMessages: true,
     emailMarketing: false,
+    emailLikes: true,
+    emailComments: true,
+    emailFollows: true,
+    emailReups: true,
+    emailNewMixes: true,
+    emailEvents: true,
+    emailTickets: true,
+    emailVerifications: true,
+    emailSubscriptions: true,
+    emailReviews: true,
     pushBookings: true,
     pushMessages: true,
+    pushNewMixes: true,
+    pushLikes: true,
+    pushComments: true,
+    pushFollows: true,
+    pushReups: true,
+    pushEvents: true,
+    pushTickets: true,
+    pushVerifications: true,
+    pushSubscriptions: true,
+    pushReviews: true,
   },
   privacy: {
     profilePublic: true,
@@ -71,7 +133,6 @@ const defaultSettings: UserSettings = {
 
 export default function SettingsPage() {
   const { user, logout, fetchMe } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -152,7 +213,7 @@ export default function SettingsPage() {
         setSaveError(res.data.error || 'Failed to update profile');
       }
     } catch (error: any) {
-      setSaveError(error.response?.data?.error || 'Failed to update profile');
+      setSaveError(getApiErrorMessage(error, 'Failed to update profile'));
     } finally {
       setIsSavingProfile(false);
     }
@@ -173,7 +234,7 @@ export default function SettingsPage() {
         setShowDeleteDialog(false);
       }
     } catch (error: any) {
-      setSaveError(error.response?.data?.error || 'Failed to delete account');
+      setSaveError(getApiErrorMessage(error, 'Failed to delete account'));
       setIsDeletingAccount(false);
       setShowDeleteDialog(false);
     }
@@ -206,7 +267,7 @@ export default function SettingsPage() {
         setPasswordError(res.data.error || 'Failed to change password');
       }
     } catch (error: any) {
-      setPasswordError(error.response?.data?.error || 'Failed to change password');
+      setPasswordError(getApiErrorMessage(error, 'Failed to change password'));
     } finally {
       setIsChangingPassword(false);
     }
@@ -241,7 +302,7 @@ export default function SettingsPage() {
         setSaveError(res.data?.error || 'Failed to save settings');
       }
     } catch (err: any) {
-      setSaveError(err.response?.data?.error || 'Failed to save settings');
+      setSaveError(getApiErrorMessage(err, 'Failed to save settings'));
     }
   };
 
@@ -257,7 +318,7 @@ export default function SettingsPage() {
         toast.success(nextPublic ? 'Profile activated' : 'Profile deactivated');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update profile status');
+      toast.error(getApiErrorMessage(err, 'Failed to update profile status'));
     } finally {
       setIsDeactivating(false);
     }
@@ -284,7 +345,6 @@ export default function SettingsPage() {
           <TabsTrigger value="account" className="data-[state=active]:bg-gold data-[state=active]:text-black">Account</TabsTrigger>
           <TabsTrigger value="notifications" className="data-[state=active]:bg-gold data-[state=active]:text-black">Notifications</TabsTrigger>
           <TabsTrigger value="privacy" className="data-[state=active]:bg-gold data-[state=active]:text-black">Privacy</TabsTrigger>
-          <TabsTrigger value="appearance" className="data-[state=active]:bg-gold data-[state=active]:text-black">Appearance</TabsTrigger>
           <TabsTrigger value="danger" className="data-[state=active]:bg-red data-[state=active]:text-white">Danger Zone</TabsTrigger>
         </TabsList>
 
@@ -437,78 +497,182 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications" className="mt-4">
+        <TabsContent value="notifications" className="mt-4 space-y-4">
           <Card className="bg-black-surface border-dark-gray">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-text-primary">Email Notifications</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Booking Requests</p>
-                  <p className="text-xs text-text-secondary">Get notified when someone books you</p>
-                </div>
-                <Switch
-                  checked={settings.notifications.emailBookings}
-                  onCheckedChange={(v) => updateNotification('emailBookings', v)}
-                  disabled={settingsLoading}
-                />
-              </div>
+              <NotificationToggle
+                label="Booking Requests"
+                description="Get notified when someone books you"
+                checked={settings.notifications.emailBookings}
+                onChange={(v) => updateNotification('emailBookings', v)}
+                disabled={settingsLoading}
+              />
               <div className="border-t border-dark-gray" />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">New Messages</p>
-                  <p className="text-xs text-text-secondary">Get notified when you receive a message</p>
-                </div>
-                <Switch
-                  checked={settings.notifications.emailMessages}
-                  onCheckedChange={(v) => updateNotification('emailMessages', v)}
-                  disabled={settingsLoading}
-                />
-              </div>
+              <NotificationToggle
+                label="New Messages"
+                description="Get notified when you receive a message"
+                checked={settings.notifications.emailMessages}
+                onChange={(v) => updateNotification('emailMessages', v)}
+                disabled={settingsLoading}
+              />
               <div className="border-t border-dark-gray" />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Marketing & Updates</p>
-                  <p className="text-xs text-text-secondary">News, tips, and platform updates</p>
-                </div>
-                <Switch
-                  checked={settings.notifications.emailMarketing}
-                  onCheckedChange={(v) => updateNotification('emailMarketing', v)}
-                  disabled={settingsLoading}
-                />
-              </div>
+              <NotificationToggle
+                label="Likes on My Mixes"
+                description="When someone likes your mix"
+                checked={settings.notifications.emailLikes}
+                onChange={(v) => updateNotification('emailLikes', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Comments"
+                description="Comments and replies on your mixes"
+                checked={settings.notifications.emailComments}
+                onChange={(v) => updateNotification('emailComments', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="New Followers"
+                description="When someone follows you"
+                checked={settings.notifications.emailFollows}
+                onChange={(v) => updateNotification('emailFollows', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Re-ups / Reposts"
+                description="When someone re-ups your mix"
+                checked={settings.notifications.emailReups}
+                onChange={(v) => updateNotification('emailReups', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="New Mixes from Followed DJs"
+                description="When DJs you follow upload"
+                checked={settings.notifications.emailNewMixes}
+                onChange={(v) => updateNotification('emailNewMixes', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Events & Tickets"
+                description="Event reminders and ticket updates"
+                checked={settings.notifications.emailEvents && settings.notifications.emailTickets}
+                onChange={(v) => {
+                  updateNotification('emailEvents', v);
+                  updateNotification('emailTickets', v);
+                }}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Verification & Subscriptions"
+                description="Verification status and subscription updates"
+                checked={settings.notifications.emailVerifications && settings.notifications.emailSubscriptions}
+                onChange={(v) => {
+                  updateNotification('emailVerifications', v);
+                  updateNotification('emailSubscriptions', v);
+                }}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Marketing & Updates"
+                description="News, tips, and platform updates"
+                checked={settings.notifications.emailMarketing}
+                onChange={(v) => updateNotification('emailMarketing', v)}
+                disabled={settingsLoading}
+              />
             </CardContent>
           </Card>
 
-          <Card className="bg-black-surface border-dark-gray mt-4">
+          <Card className="bg-black-surface border-dark-gray">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-text-primary">Push Notifications</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Booking Alerts</p>
-                  <p className="text-xs text-text-secondary">Real-time alerts for bookings</p>
-                </div>
-                <Switch
-                  checked={settings.notifications.pushBookings}
-                  onCheckedChange={(v) => updateNotification('pushBookings', v)}
-                  disabled={settingsLoading}
-                />
-              </div>
+              <NotificationToggle
+                label="Booking Alerts"
+                description="Real-time alerts for bookings"
+                checked={settings.notifications.pushBookings}
+                onChange={(v) => updateNotification('pushBookings', v)}
+                disabled={settingsLoading}
+              />
               <div className="border-t border-dark-gray" />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Message Alerts</p>
-                  <p className="text-xs text-text-secondary">Real-time alerts for messages</p>
-                </div>
-                <Switch
-                  checked={settings.notifications.pushMessages}
-                  onCheckedChange={(v) => updateNotification('pushMessages', v)}
-                  disabled={settingsLoading}
-                />
-              </div>
+              <NotificationToggle
+                label="Message Alerts"
+                description="Real-time alerts for messages"
+                checked={settings.notifications.pushMessages}
+                onChange={(v) => updateNotification('pushMessages', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Likes"
+                description="When someone likes your mix"
+                checked={settings.notifications.pushLikes}
+                onChange={(v) => updateNotification('pushLikes', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Comments"
+                description="Comments and replies on your mixes"
+                checked={settings.notifications.pushComments}
+                onChange={(v) => updateNotification('pushComments', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="New Followers"
+                description="When someone follows you"
+                checked={settings.notifications.pushFollows}
+                onChange={(v) => updateNotification('pushFollows', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Re-ups / Reposts"
+                description="When someone re-ups your mix"
+                checked={settings.notifications.pushReups}
+                onChange={(v) => updateNotification('pushReups', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="New Mixes from Followed DJs"
+                description="When DJs you follow upload"
+                checked={settings.notifications.pushNewMixes}
+                onChange={(v) => updateNotification('pushNewMixes', v)}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Events & Tickets"
+                description="Event reminders and ticket updates"
+                checked={settings.notifications.pushEvents && settings.notifications.pushTickets}
+                onChange={(v) => {
+                  updateNotification('pushEvents', v);
+                  updateNotification('pushTickets', v);
+                }}
+                disabled={settingsLoading}
+              />
+              <div className="border-t border-dark-gray" />
+              <NotificationToggle
+                label="Verification & Subscriptions"
+                description="Verification status and subscription updates"
+                checked={settings.notifications.pushVerifications && settings.notifications.pushSubscriptions}
+                onChange={(v) => {
+                  updateNotification('pushVerifications', v);
+                  updateNotification('pushSubscriptions', v);
+                }}
+                disabled={settingsLoading}
+              />
             </CardContent>
           </Card>
 
@@ -576,37 +740,6 @@ export default function SettingsPage() {
               Save Privacy Settings
             </Button>
           )}
-        </TabsContent>
-
-        <TabsContent value="appearance" className="mt-4">
-          <Card className="bg-black-surface border-dark-gray">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-text-primary">Appearance</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Theme</p>
-                  <p className="text-xs text-text-secondary">Switch between light and dark mode</p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="border-dark-gray text-text-primary hover:bg-black-elevated flex items-center gap-2"
-                  onClick={toggleTheme}
-                >
-                  {theme === 'dark' ? (
-                    <>
-                      <Sun className="w-4 h-4" /> Dark
-                    </>
-                  ) : (
-                    <>
-                      <Moon className="w-4 h-4" /> Light
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="danger" className="mt-4">

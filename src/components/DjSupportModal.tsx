@@ -9,10 +9,12 @@ import {
   PhoneCall,
   Sparkles,
 } from 'lucide-react';
-import api, { getMediaUrl } from '@/lib/api';
+import api from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 interface DjSupportModalProps {
   isOpen: boolean;
@@ -81,7 +83,7 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
         setSelectedFile(null);
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Support request failed.';
+      const errorMsg = getApiErrorMessage(err, 'Support request failed.');
       toast.error('Error', { description: errorMsg });
     } finally {
       setSubmitting(false);
@@ -112,7 +114,7 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
           <div className="flex items-center gap-3.5 mb-5">
             <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-black shrink-0 border border-[#f4e059]/40">
               <img
-                src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                src={getAvatarImageUrl(dj.avatar)}
                 alt={dj.stageName}
                 className="w-full h-full object-cover"
               />

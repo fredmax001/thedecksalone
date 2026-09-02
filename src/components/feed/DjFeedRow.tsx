@@ -1,20 +1,17 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, ArrowRight } from 'lucide-react';
-import { getMediaUrl } from '@/lib/api';
+import { formatCompactNumber } from '@/lib/formatting';
 import type { FeedDJ } from './types';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 interface DjFeedRowProps {
   dj: FeedDJ;
   index?: number;
 }
 
-function formatCompact(n = 0) {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
-}
-
 export default function DjFeedRow({ dj, index = 0 }: DjFeedRowProps) {
-  const avatarUrl = getMediaUrl(dj.avatar) || '/default-avatar.jpg';
+  const avatarUrl = getAvatarImageUrl(dj.avatar);
   const stageName = dj.stageName || dj.username || 'DJ';
 
   return (
@@ -47,7 +44,7 @@ export default function DjFeedRow({ dj, index = 0 }: DjFeedRowProps) {
                 {dj.verified && <span className="text-gold text-xs">✓</span>}
                 {dj.subscriptionTier === 'legend' && (
                   <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-gold/20 text-gold border border-gold/30">
-                    PRO
+                    PRO+
                   </span>
                 )}
               </div>
@@ -69,7 +66,7 @@ export default function DjFeedRow({ dj, index = 0 }: DjFeedRowProps) {
           <div className="flex items-center gap-3 shrink-0">
             <div className="hidden lg:flex flex-col items-end text-right font-mono text-[11px] text-text-muted">
               <span>{dj._count?.mixes || dj.mixes?.length || 0} Mixes</span>
-              <span className="text-text-secondary">{formatCompact(dj._count?.followers || dj.followers?.length || 0)} fans</span>
+              <span className="text-text-secondary">{formatCompactNumber(dj._count?.followers || dj.followers?.length || 0)} fans</span>
             </div>
 
             <span className="inline-flex items-center gap-1 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-gold/10 text-gold border border-gold/30 group-hover:bg-gold group-hover:text-black font-bold text-xs uppercase tracking-wider transition-all shadow-sm">

@@ -4,6 +4,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { voteLimiter } = require('../utils/rateLimiter');
 const { calculateBattleBaseScore } = require('../utils/ranking');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/', async (req, res) => {
   try {
     const parsed = battleFilterSchema.safeParse(req.query);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filter parameters' });
+      return fail(res, 400, 'Invalid filter parameters');
     }
 
     const { status, page, limit } = parsed.data;
@@ -81,7 +82,7 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -103,7 +104,7 @@ router.get('/current', async (req, res) => {
     });
 
     if (!battle) {
-      return res.json({ success: true, data: null, message: 'No active battle' });
+      return ok(res, null, 'No active battle');
     }
 
     // Enrich entries with vote counts and positions
@@ -113,12 +114,9 @@ router.get('/current', async (req, res) => {
       voteCount: entry.votesCast.length,
     }));
 
-    return res.json({
-      success: true,
-      data: { ...battle, entries: enrichedEntries },
-    });
+    return ok(res, { ...battle, entries: enrichedEntries });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -139,7 +137,7 @@ router.get('/:id', async (req, res) => {
     });
 
     if (!battle) {
-      return res.status(404).json({ success: false, error: 'Battle not found' });
+      return fail(res, 404, 'Battle not found');
     }
 
     const enrichedEntries = battle.entries.map((entry, index) => ({
@@ -148,12 +146,9 @@ router.get('/:id', async (req, res) => {
       voteCount: entry.votesCast.length,
     }));
 
-    return res.json({
-      success: true,
-      data: { ...battle, entries: enrichedEntries },
-    });
+    return ok(res, { ...battle, entries: enrichedEntries });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -161,12 +156,12 @@ router.get('/:id', async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     if (!['ADMIN', 'MODERATOR'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const parsed = createBattleSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const { title, weekStart, weekEnd, theme, metricType } = parsed.data;
@@ -184,7 +179,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: battle });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -193,12 +188,12 @@ router.post('/:id/enter', authMiddleware, async (req, res) => {
   try {
     const parsed = enterBattleSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
+      return fail(res, 400, 'Invalid input');
     }
 
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'Must be a DJ to enter battles' });
+      return fail(res, 403, 'Must be a DJ to enter battles');
     }
 
     const battle = await prisma.battle.findUnique({
@@ -207,13 +202,13 @@ router.post('/:id/enter', authMiddleware, async (req, res) => {
     });
 
     if (!battle || battle.status !== 'ACTIVE') {
-      return res.status(400).json({ success: false, error: 'Battle is not active' });
+      return fail(res, 400, 'Battle is not active');
     }
 
     // Check if DJ already entered
     const existing = battle.entries.find((e) => e.djId === dj.id);
     if (existing) {
-      return res.status(409).json({ success: false, error: 'You already entered this battle' });
+      return fail(res, 409, 'You already entered this battle');
     }
 
     // Calculate base score from DJ metrics at time of entry
@@ -234,7 +229,7 @@ router.post('/:id/enter', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -243,7 +238,7 @@ router.post('/:id/vote', authMiddleware, voteLimiter, async (req, res) => {
   try {
     const parsed = voteSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
+      return fail(res, 400, 'Invalid input');
     }
 
     const { entryId } = parsed.data;
@@ -320,21 +315,21 @@ router.post('/:id/vote', authMiddleware, voteLimiter, async (req, res) => {
       return newVote;
     });
 
-    return res.json({ success: true, data: vote });
+    return ok(res, vote);
   } catch (error: any) {
     if (error.message === 'BATTLE_NOT_ACTIVE') {
-      return res.status(400).json({ success: false, error: 'Battle is not active' });
+      return fail(res, 400, 'Battle is not active');
     }
     if (error.message === 'ENTRY_NOT_FOUND') {
-      return res.status(404).json({ success: false, error: 'Entry not found in this battle' });
+      return fail(res, 404, 'Entry not found in this battle');
     }
     if (error.message === 'ALREADY_VOTED_ENTRY') {
-      return res.status(409).json({ success: false, error: 'You already voted for this entry' });
+      return fail(res, 409, 'You already voted for this entry');
     }
     if (error.message === 'ALREADY_VOTED_BATTLE') {
-      return res.status(409).json({ success: false, error: 'You already voted in this battle' });
+      return fail(res, 409, 'You already voted in this battle');
     }
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -343,7 +338,7 @@ router.post('/:id/vote', authMiddleware, voteLimiter, async (req, res) => {
 router.post('/:id/close', authMiddleware, async (req, res) => {
   try {
     if (!['ADMIN', 'MODERATOR'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     const battle = await prisma.battle.findUnique({
@@ -359,11 +354,11 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
     });
 
     if (!battle) {
-      return res.status(404).json({ success: false, error: 'Battle not found' });
+      return fail(res, 404, 'Battle not found');
     }
 
     if (battle.status !== 'ACTIVE') {
-      return res.status(400).json({ success: false, error: 'Battle is already closed' });
+      return fail(res, 400, 'Battle is already closed');
     }
 
     // Sort entries by final score
@@ -389,9 +384,7 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
       data: { status: 'CLOSED' },
     });
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         battle: updated,
         winners: sortedEntries.slice(0, 3).map((e, i) => ({
           position: i + 1,
@@ -399,10 +392,9 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
           score: e.finalScore,
           votes: e.votesCast.length,
         })),
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

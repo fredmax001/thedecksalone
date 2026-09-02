@@ -9,13 +9,15 @@ import {
   Users,
   RefreshCw,
 } from 'lucide-react';
-import api, { getMediaUrl } from '@/lib/api';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +68,7 @@ export function ModeratorRankings() {
         toast.success(res.data.message || 'Rankings recalculated and synced! 🏆');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to recalculate rankings');
+      toast.error(getApiErrorMessage(err, 'Failed to recalculate rankings'));
       console.error('Failed to recalculate rankings', err);
     } finally {
       setRecalculating(false);
@@ -94,7 +96,7 @@ export function ModeratorRankings() {
       fetchRankings(false);
       toast.success(`Rank adjusted for ${adjustDj.stageName}`);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to adjust ranking');
+      toast.error(getApiErrorMessage(err, 'Failed to adjust ranking'));
       console.error('Failed to adjust ranking', err);
     } finally {
       setSaving(false);
@@ -139,7 +141,7 @@ export function ModeratorRankings() {
       setDjs((prev) =>
         prev.map((item) => (item.id === dj.id ? { ...item, [key]: !nextState } : item))
       );
-      toast.error(err.response?.data?.error || 'Failed to update DJ feature state');
+      toast.error(getApiErrorMessage(err, 'Failed to update DJ feature state'));
       console.error('Failed to update DJ feature state', err);
     } finally {
       setTogglingId(null);
@@ -213,7 +215,7 @@ export function ModeratorRankings() {
                 </span>
 
                 <img
-                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                  src={getAvatarImageUrl(dj.avatar)}
                   alt={dj.stageName}
                   className="w-11 h-11 rounded-full object-cover border border-gold/30 shrink-0"
                 />

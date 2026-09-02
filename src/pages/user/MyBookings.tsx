@@ -43,6 +43,7 @@ import {
   type UserBooking,
 } from '@/hooks/useUserDashboard';
 import api, { getMediaUrl } from '@/lib/api';
+import { formatDate } from '@/lib/dateTime';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -252,7 +253,7 @@ export default function MyBookings() {
                     <div className="flex flex-wrap gap-4 mt-3 text-xs text-text-secondary">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5" />
-                        {new Date(booking.eventDate).toLocaleDateString()}
+                        {formatDate(booking.eventDate)}
                       </span>
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5" />

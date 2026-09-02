@@ -12,6 +12,7 @@ import api from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTime } from '@/lib/dateTime';
 import {
   Dialog,
   DialogContent,
@@ -131,7 +132,7 @@ export function ModeratorReports() {
                     {rep.status}
                   </Badge>
                   <span className="text-xs font-bold text-white uppercase tracking-wider">{rep.reason}</span>
-                  <span className="text-[10px] text-text-muted">• {new Date(rep.createdAt).toLocaleString()}</span>
+                  <span className="text-[10px] text-text-muted">• {formatDateTime(rep.createdAt)}</span>
                 </div>
 
                 {rep.status === 'PENDING' && (

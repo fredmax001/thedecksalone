@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -15,9 +16,9 @@ router.get('/', authMiddleware, async (req: any, res: any) => {
         ticketType: { select: { id: true, name: true, price: true, currency: true } },
       },
     });
-    return res.json({ success: true, data: tickets });
+    return ok(res, tickets);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -32,10 +33,10 @@ router.get('/:ticketId', authMiddleware, async (req: any, res: any) => {
         scanLogs: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
-    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
-    return res.json({ success: true, data: ticket });
+    if (!ticket) return fail(res, 404, 'Ticket not found');
+    return ok(res, ticket);
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -46,11 +47,11 @@ router.post('/:ticketId/resend', authMiddleware, async (req: any, res: any) => {
       where: { id: req.params.ticketId, userId: req.user.id },
       include: { event: true, ticketType: true },
     });
-    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+    if (!ticket) return fail(res, 404, 'Ticket not found');
     // Email sending can be wired here using existing sendEmail utility
-    return res.json({ success: true, data: { message: 'Confirmation resent' } });
+    return ok(res, { message: 'Confirmation resent' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

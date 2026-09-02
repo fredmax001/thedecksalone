@@ -1,9 +1,10 @@
 const express = require('express');
 const { z } = require('zod');
-const { prisma } = require('../utils/prisma');
+const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { uploadEventImage } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get('/home-board', async (req: any, res: any) => {
       },
       include: {
         advertiser: {
-          select: { id: true, stageName: true, avatar: true },
+          select: DJ_PUBLIC_SELECT,
         },
       },
       orderBy: { budget: 'desc' },
@@ -38,7 +39,7 @@ router.get('/home-board', async (req: any, res: any) => {
         publishStatus: 'published',
       },
       include: {
-        dj: { select: { id: true, stageName: true, avatar: true } },
+        dj: { select: DJ_PUBLIC_SELECT },
       },
       orderBy: { date: 'asc' },
       take: 3,
@@ -54,7 +55,7 @@ router.get('/home-board', async (req: any, res: any) => {
       take: 3,
     });
 
-    // Top 3 trending mixes by plays
+    // Top trending mixes by plays (up to 10 for home carousel)
     const mixes = await prisma.mix.findMany({
       where: { isPublic: true },
       orderBy: { plays: 'desc' },
@@ -68,15 +69,12 @@ router.get('/home-board', async (req: any, res: any) => {
           },
         },
       },
-      take: 3,
+      take: 10,
     });
 
-    return res.json({
-      success: true,
-      data: { paidAds, events, djRankings, mixes },
-    });
+    return ok(res, { paidAds, events, djRankings, mixes });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -101,18 +99,15 @@ router.get('/stats', async (req: any, res: any) => {
       ...eventsList.map((c: any) => c.city?.trim()).filter(Boolean),
     ]);
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         totalDjs,
         verifiedDjs,
         totalMixes,
         totalEvents,
         citiesCount: allCities.size || 1,
-      },
-    });
+      });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -146,7 +141,7 @@ router.get('/me', async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     const campaigns = await prisma.adCampaign.findMany({
@@ -154,9 +149,9 @@ router.get('/me', async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.json({ success: true, data: campaigns });
+    return ok(res, campaigns);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -171,22 +166,19 @@ router.get('/me/targets', async (req, res) => {
       },
     });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         profile: { id: dj.id, name: dj.stageName, avatar: dj.avatar },
         mixes: dj.mixes,
         battles: dj.battleEntries.map((e: any) => ({
           id: e.id,
           title: e.battle?.title || 'Battle Entry',
         })),
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -195,12 +187,12 @@ router.post('/', uploadEventImage.single('creativeImage'), async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     const parsed = createCampaignSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const data = parsed.data;
@@ -209,12 +201,12 @@ router.post('/', uploadEventImage.single('creativeImage'), async (req, res) => {
     if (data.targetType === 'mix' && data.targetId) {
       const mix = await prisma.mix.findUnique({ where: { id: data.targetId } });
       if (!mix || mix.djId !== dj.id) {
-        return res.status(400).json({ success: false, error: 'Selected mix does not belong to you' });
+        return fail(res, 400, 'Selected mix does not belong to you');
       }
     } else if (data.targetType === 'battle' && data.targetId) {
       const entry = await prisma.battleEntry.findUnique({ where: { id: data.targetId } });
       if (!entry || entry.djId !== dj.id) {
-        return res.status(400).json({ success: false, error: 'Selected battle entry does not belong to you' });
+        return fail(res, 400, 'Selected battle entry does not belong to you');
       }
     }
 
@@ -242,7 +234,7 @@ router.post('/', uploadEventImage.single('creativeImage'), async (req, res) => {
 
     return res.status(201).json({ success: true, data: campaign });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -251,23 +243,23 @@ router.put('/:id', uploadEventImage.single('creativeImage'), async (req, res) =>
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     const campaign = await prisma.adCampaign.findUnique({ where: { id: req.params.id } });
     if (!campaign) {
-      return res.status(404).json({ success: false, error: 'Campaign not found' });
+      return fail(res, 404, 'Campaign not found');
     }
     if (campaign.advertiserId !== dj.id) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
     if (campaign.status === 'active' || campaign.status === 'completed' || campaign.status === 'rejected') {
-      return res.status(400).json({ success: false, error: 'Campaign cannot be edited in its current state' });
+      return fail(res, 400, 'Campaign cannot be edited in its current state');
     }
 
     const parsed = updateCampaignSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const data = parsed.data;
@@ -276,12 +268,12 @@ router.put('/:id', uploadEventImage.single('creativeImage'), async (req, res) =>
     if (data.targetType === 'mix' && data.targetId) {
       const mix = await prisma.mix.findUnique({ where: { id: data.targetId } });
       if (!mix || mix.djId !== dj.id) {
-        return res.status(400).json({ success: false, error: 'Selected mix does not belong to you' });
+        return fail(res, 400, 'Selected mix does not belong to you');
       }
     } else if (data.targetType === 'battle' && data.targetId) {
       const entry = await prisma.battleEntry.findUnique({ where: { id: data.targetId } });
       if (!entry || entry.djId !== dj.id) {
-        return res.status(400).json({ success: false, error: 'Selected battle entry does not belong to you' });
+        return fail(res, 400, 'Selected battle entry does not belong to you');
       }
     }
 
@@ -309,9 +301,9 @@ router.put('/:id', uploadEventImage.single('creativeImage'), async (req, res) =>
       data: updateData,
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -320,15 +312,15 @@ router.delete('/:id', async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     const campaign = await prisma.adCampaign.findUnique({ where: { id: req.params.id } });
     if (!campaign) {
-      return res.status(404).json({ success: false, error: 'Campaign not found' });
+      return fail(res, 404, 'Campaign not found');
     }
     if (campaign.advertiserId !== dj.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     await prisma.adCampaign.delete({ where: { id: req.params.id } });
@@ -336,9 +328,9 @@ router.delete('/:id', async (req, res) => {
       await deleteFile(campaign.creativeImageUrl).catch(() => {});
     }
 
-    return res.json({ success: true, data: { id: req.params.id, message: 'Campaign deleted' } });
+    return ok(res, { id: req.params.id, message: 'Campaign deleted' });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

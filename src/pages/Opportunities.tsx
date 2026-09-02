@@ -16,6 +16,8 @@ import {
 import { toast } from 'sonner';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
+import { formatCurrency } from '@/lib/formatting';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface Opportunity {
     id: string;
@@ -59,7 +61,7 @@ export const Opportunities = () => {
                 setOpportunities(res.data.data || []);
             } catch (err: any) {
                 console.error('Failed to load opportunities', err);
-                toast.error(err.response?.data?.error || 'Failed to load opportunities');
+                toast.error(getApiErrorMessage(err, 'Failed to load opportunities'));
             } finally {
                 setLoading(false);
             }
@@ -109,7 +111,7 @@ export const Opportunities = () => {
                 );
             }
         } catch (err: any) {
-            const error = err.response?.data?.error || 'Failed to apply';
+            const error = getApiErrorMessage(err, 'Failed to apply');
             toast.error(error);
             if (err.response?.status === 403) {
                 // Tier error - open modal
@@ -234,7 +236,7 @@ export const Opportunities = () => {
                                             </p>
                                             <div className="flex items-center gap-2 text-sm text-text-secondary mt-1">
                                                 <DollarSign className="w-4 h-4 flex-shrink-0" />
-                                                {opp.budgetCurrency} {opp.budget.toLocaleString()}
+                                                {formatCurrency(opp.budget, opp.budgetCurrency)}
                                             </div>
                                         </div>
 

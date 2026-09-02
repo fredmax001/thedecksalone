@@ -177,3 +177,123 @@ export function useTicketTypeMutations(eventId?: string) {
     }),
   };
 }
+
+/* ─── On-Site Staff Tools ─────────────────────────────────────────────────── */
+
+function getOnsiteToken(eventId?: string): string | null {
+  if (!eventId) return null;
+  return sessionStorage.getItem(`onsite_token_${eventId}`);
+}
+
+export function useOnsiteAuth(eventId?: string) {
+  return useMutation({
+    mutationFn: async (password: string) => {
+      const res = await api.post(`/events/${eventId}/ticketing/onsite/auth`, { password });
+      if (res.data.success && res.data.data.token) {
+        sessionStorage.setItem(`onsite_token_${eventId}`, res.data.data.token);
+      }
+      return res.data.data;
+    },
+  });
+}
+
+export function useOnsiteDashboard(eventId?: string) {
+  return useQuery({
+    queryKey: ['onsite-dashboard', eventId],
+    queryFn: async () => {
+      const token = getOnsiteToken(eventId);
+      const res = await api.get(`/events/${eventId}/ticketing/onsite/dashboard`, {
+        headers: token ? { 'X-Onsite-Token': token } : undefined,
+      });
+      return res.data.data;
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useOnsiteGuests(
+  eventId?: string,
+  params?: { status?: string; search?: string; page?: number; limit?: number }
+) {
+  return useQuery({
+    queryKey: ['onsite-guests', eventId, params],
+    queryFn: async () => {
+      const token = getOnsiteToken(eventId);
+      const query = new URLSearchParams();
+      if (params?.status) query.set('status', params.status);
+      if (params?.search) query.set('search', params.search);
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      const res = await api.get(`/events/${eventId}/ticketing/onsite/guests?${query.toString()}`, {
+        headers: token ? { 'X-Onsite-Token': token } : undefined,
+      });
+      return res.data;
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useOnsiteCheckin(eventId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ticketId, action }: { ticketId: string; action: 'checkin' | 'undo-checkin' }) => {
+      const token = getOnsiteToken(eventId);
+      const res = await api.post(`/events/${eventId}/ticketing/onsite/guests/${ticketId}/${action}`, {}, {
+        headers: token ? { 'X-Onsite-Token': token } : undefined,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onsite-guests', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['onsite-dashboard', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['event-dashboard', eventId] });
+    },
+  });
+}
+
+export function useOnsiteWalkin(eventId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ticketTypeId: string;
+      quantity: number;
+      buyerName: string;
+      buyerEmail?: string;
+      buyerPhone?: string;
+      paymentMethod: 'cash' | 'complimentary' | 'mobile_money';
+      amount?: number;
+      notes?: string;
+    }) => {
+      const token = getOnsiteToken(eventId);
+      const res = await api.post(`/events/${eventId}/ticketing/onsite/walkin`, payload, {
+        headers: token ? { 'X-Onsite-Token': token } : undefined,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onsite-guests', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['onsite-dashboard', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['event-availability', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['event-dashboard', eventId] });
+    },
+  });
+}
+
+export function useUpdateTicketControls(eventId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ticketSalesClosed?: boolean;
+      showRemainingTickets?: boolean;
+      onsitePassword?: string;
+    }) => {
+      const res = await api.put(`/events/${eventId}`, payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['event-dashboard', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+  });
+}

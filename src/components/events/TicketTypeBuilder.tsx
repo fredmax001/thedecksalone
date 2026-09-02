@@ -4,6 +4,7 @@ import { Plus, X, Ticket, GripVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { formatCurrency } from '@/lib/formatting';
 
 export interface TicketTypeInput {
   id?: string;
@@ -97,7 +98,7 @@ export default function TicketTypeBuilder({ types, onChange, currency = 'SLE' }:
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">{type.name || 'New Ticket Type'}</p>
                 <p className="text-xs text-text-muted">
-                  {currency} {Number(type.price || 0).toLocaleString()} · {type.quantity ? `${type.quantity} available` : 'Unlimited'}
+                  {formatCurrency(Number(type.price || 0), currency)} · {type.quantity ? `${type.quantity} available` : 'Unlimited'}
                 </p>
               </div>
               <div className="flex items-center gap-2">

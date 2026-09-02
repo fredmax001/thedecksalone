@@ -22,6 +22,7 @@ import CountdownTimer from '../components/CountdownTimer';
 import { useCurrentBattle, useBattles, useVoteBattle } from '@/hooks/useBattles';
 import { useAuthStore } from '@/stores/authStore';
 import { getMediaUrl } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 /* ──────────────────────────── data ──────────────────────────── */
 
@@ -246,7 +247,7 @@ export default function Battles() {
           toast.success(`Vote cast for ${entry.dj.stageName}!`);
         },
         onError: (error: any) => {
-          toast.error(error?.response?.data?.error || 'Could not cast vote. You may have already voted.');
+          toast.error(getApiErrorMessage(error, 'Could not cast vote. You may have already voted.'));
         },
       }
     );

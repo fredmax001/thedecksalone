@@ -4,13 +4,13 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Camera, CheckCircle2, XCircle, AlertCircle, Loader2,
-  RefreshCw, User, Ticket, Clock, MapPin, CheckSquare,
+  RefreshCw, User, Ticket, Clock, MapPin,
   SwitchCamera, Keyboard, Send
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { toast } from 'sonner';
+import { formatDateTime } from '@/lib/dateTime';
 
-type ScanState = 'idle' | 'scanning' | 'valid' | 'already_used' | 'invalid' | 'error';
+type ScanState = 'idle' | 'scanning' | 'valid' | 'already_used' | 'invalid' | 'wrong_event' | 'not_approved' | 'unauthorized' | 'error';
 
 interface ScanResult {
   ticket?: any;
@@ -28,7 +28,6 @@ export default function TicketScanner() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -76,11 +75,23 @@ export default function TicketScanner() {
         throw new Error(res.data.error || 'Invalid ticket code');
       }
     } catch (err: any) {
+      const status = err.response?.status;
       const errCode = err.response?.data?.error;
       const errMsg = err.response?.data?.message || err.message || 'Ticket validation failed';
-      if (errCode === 'ALREADY_SCANNED') setScanState('already_used');
-      else setScanState('invalid');
-      setResult({ message: errMsg, error: errCode, ticket: err.response?.data?.data?.ticket });
+      const errTicket = err.response?.data?.data?.ticket;
+
+      if (errCode === 'ALREADY_SCANNED') {
+        setScanState('already_used');
+      } else if (errCode === 'WRONG_EVENT') {
+        setScanState('wrong_event');
+      } else if (errCode === 'NOT_APPROVED') {
+        setScanState('not_approved');
+      } else if (status === 403 || status === 401) {
+        setScanState('unauthorized');
+      } else {
+        setScanState('invalid');
+      }
+      setResult({ message: errMsg, error: errCode, ticket: errTicket });
     } finally {
       setIsProcessing(false);
     }
@@ -180,31 +191,27 @@ export default function TicketScanner() {
     setManualCode('');
   };
 
-  const handleCheckIn = async () => {
-    if (!result?.ticket) return;
-    setIsCheckingIn(true);
-    try {
-      const res = await api.post(`/events/${eventId}/ticketing/scan/${result.ticket.id}/checkin`);
-      toast.success('Checked in successfully');
-      setScanState('valid');
-      setResult({ ticket: res.data.data, message: 'Checked in successfully' });
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Check-in failed');
-    } finally {
-      setIsCheckingIn(false);
-    }
-  };
-
   const handleReset = () => {
     if (cooldownRef.current) clearTimeout(cooldownRef.current);
     lastScanned.current = null;
     setScanState('scanning');
     setResult(null);
-    setIsCheckingIn(false);
   };
 
-  const bgColor = scanState === 'valid' ? 'bg-green-950' : scanState === 'already_used' ? 'bg-yellow-950' : scanState === 'invalid' ? 'bg-red-950' : 'bg-black';
-  const borderColor = scanState === 'valid' ? 'border-green/30' : scanState === 'already_used' ? 'border-yellow-400/30' : scanState === 'invalid' ? 'border-red-500/30' : 'border-dark-gray';
+  const bgColor =
+    scanState === 'valid' ? 'bg-green-950' :
+    scanState === 'already_used' ? 'bg-yellow-950' :
+    scanState === 'wrong_event' ? 'bg-orange-950' :
+    scanState === 'not_approved' ? 'bg-purple-950' :
+    scanState === 'unauthorized' ? 'bg-gray-900' :
+    scanState === 'invalid' ? 'bg-red-950' : 'bg-black';
+  const borderColor =
+    scanState === 'valid' ? 'border-green/30' :
+    scanState === 'already_used' ? 'border-yellow-400/30' :
+    scanState === 'wrong_event' ? 'border-orange-400/30' :
+    scanState === 'not_approved' ? 'border-purple-400/30' :
+    scanState === 'unauthorized' ? 'border-gray-500/30' :
+    scanState === 'invalid' ? 'border-red-500/30' : 'border-dark-gray';
 
   return (
     <div className={`min-h-screen ${bgColor} flex flex-col transition-colors duration-300 select-none overscroll-none`}>
@@ -351,7 +358,7 @@ export default function TicketScanner() {
 
       {/* Result Panel */}
       <AnimatePresence>
-        {(scanState === 'valid' || scanState === 'already_used' || scanState === 'invalid') && result && (
+        {(scanState === 'valid' || scanState === 'already_used' || scanState === 'invalid' || scanState === 'wrong_event' || scanState === 'not_approved' || scanState === 'unauthorized') && result && (
           <motion.div
             initial={{ y: '100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -361,14 +368,36 @@ export default function TicketScanner() {
           >
             <div className="flex items-start gap-4">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                scanState === 'valid' ? 'bg-green/20' : scanState === 'already_used' ? 'bg-yellow-400/20' : 'bg-red-500/20'
+                scanState === 'valid' ? 'bg-green/20' :
+                scanState === 'already_used' ? 'bg-yellow-400/20' :
+                scanState === 'wrong_event' ? 'bg-orange-400/20' :
+                scanState === 'not_approved' ? 'bg-purple-400/20' :
+                scanState === 'unauthorized' ? 'bg-gray-500/20' :
+                'bg-red-500/20'
               }`}>
-                {scanState === 'valid' ? <CheckCircle2 className="w-8 h-8 text-green" /> : scanState === 'already_used' ? <AlertCircle className="w-8 h-8 text-yellow-400" /> : <XCircle className="w-8 h-8 text-red-400" />}
+                {scanState === 'valid' ? <CheckCircle2 className="w-8 h-8 text-green" /> :
+                 scanState === 'already_used' ? <AlertCircle className="w-8 h-8 text-yellow-400" /> :
+                 scanState === 'wrong_event' ? <MapPin className="w-8 h-8 text-orange-400" /> :
+                 scanState === 'not_approved' ? <Clock className="w-8 h-8 text-purple-400" /> :
+                 scanState === 'unauthorized' ? <User className="w-8 h-8 text-gray-400" /> :
+                 <XCircle className="w-8 h-8 text-red-400" />}
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className={`font-bold text-lg ${scanState === 'valid' ? 'text-green' : scanState === 'already_used' ? 'text-yellow-400' : 'text-red-300'}`}>
-                  {scanState === 'valid' ? '✅ Valid Ticket' : scanState === 'already_used' ? '⚠️ Ticket Already Used' : '❌ Invalid Ticket'}
+                <p className={`font-bold text-lg ${
+                  scanState === 'valid' ? 'text-green' :
+                  scanState === 'already_used' ? 'text-yellow-400' :
+                  scanState === 'wrong_event' ? 'text-orange-300' :
+                  scanState === 'not_approved' ? 'text-purple-300' :
+                  scanState === 'unauthorized' ? 'text-gray-300' :
+                  'text-red-300'
+                }`}>
+                  {scanState === 'valid' ? '✅ Checked In' :
+                   scanState === 'already_used' ? '⚠️ Ticket Already Used' :
+                   scanState === 'wrong_event' ? '❌ Wrong Event' :
+                   scanState === 'not_approved' ? '⏳ Ticket Not Active' :
+                   scanState === 'unauthorized' ? '🔒 Scanner Not Authorized' :
+                   '❌ Invalid Ticket'}
                 </p>
                 <p className="text-white/80 text-xs mt-1 leading-relaxed">{result.message}</p>
 
@@ -376,24 +405,14 @@ export default function TicketScanner() {
                   <div className="mt-4 space-y-2 bg-black/40 border border-white/10 rounded-xl p-3 text-xs">
                     <div className="flex items-center gap-2 text-white"><User className="w-4 h-4 text-gold shrink-0" /> <span className="font-semibold">{result.ticket.buyerName || result.ticket.user?.name || 'Guest'}</span></div>
                     <div className="flex items-center gap-2 text-white/80"><Ticket className="w-4 h-4 text-gold shrink-0" /> {result.ticket.ticketType?.name || 'General Admission'} · <span className="font-mono text-gold">{result.ticket.ticketNumber || result.ticket.id}</span></div>
-                    <div className="flex items-center gap-2 text-white/60"><Clock className="w-4 h-4 text-gold shrink-0" /> Purchased {new Date(result.ticket.createdAt || Date.now()).toLocaleString()}</div>
-                    {result.ticket.scannedAt && <div className="flex items-center gap-2 text-white/60"><MapPin className="w-4 h-4 text-gold shrink-0" /> Scanned {new Date(result.ticket.scannedAt).toLocaleString()}</div>}
+                    <div className="flex items-center gap-2 text-white/60"><Clock className="w-4 h-4 text-gold shrink-0" /> Purchased {formatDateTime(result.ticket.createdAt || Date.now())}</div>
+                    {result.ticket.scannedAt && <div className="flex items-center gap-2 text-white/60"><MapPin className="w-4 h-4 text-gold shrink-0" /> Scanned {formatDateTime(result.ticket.scannedAt)}</div>}
                   </div>
                 )}
               </div>
             </div>
 
             <div className="mt-5 flex gap-3">
-              {scanState === 'valid' && (
-                <button
-                  onClick={handleCheckIn}
-                  disabled={isCheckingIn}
-                  className="flex-1 py-3.5 rounded-xl bg-green text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-98 transition-all disabled:opacity-50"
-                >
-                  {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
-                  Complete Door Check-In
-                </button>
-              )}
               <button
                 onClick={handleReset}
                 className="flex-1 py-3.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold text-sm transition-all active:scale-98"

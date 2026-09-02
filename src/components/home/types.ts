@@ -43,16 +43,20 @@ export interface HomeEvent {
 export interface HomeAd {
   id: string;
   badge?: string;
+  name?: string;
   title?: string;
   campaignName?: string;
   subtitle?: string;
   tagline?: string;
   description?: string;
+  creativeImageUrl?: string;
   bannerImage?: string;
   imageUrl?: string;
   ctaText?: string;
   ctaLink?: string;
+  ctaUrl?: string;
   linkUrl?: string;
+  advertiser?: { id?: string; stageName?: string; avatar?: string } | null;
   dj?: { avatar?: string } | null;
 }
 

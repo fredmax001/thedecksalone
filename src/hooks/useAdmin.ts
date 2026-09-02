@@ -609,7 +609,7 @@ export function useRestoreEvent() {
 }
 
 export function useAdminUsers(
-  filters?: { role?: string; search?: string; page?: number; limit?: number }
+  filters?: { role?: string; search?: string; verificationStatus?: string; page?: number; limit?: number }
 ) {
   return useQuery<PaginatedResponse<User>>({
     queryKey: ['adminUsers', filters],
@@ -619,6 +619,7 @@ export function useAdminUsers(
       const params = new URLSearchParams();
       if (filters?.role) params.set('role', filters.role);
       if (filters?.search) params.set('search', filters.search);
+      if (filters?.verificationStatus) params.set('verificationStatus', filters.verificationStatus);
       if (filters?.page) params.set('page', String(filters.page));
       if (filters?.limit) params.set('limit', String(filters.limit));
       const query = params.toString();
@@ -906,6 +907,7 @@ export function useVerifyDj() {
       queryClient.invalidateQueries({ queryKey: ['adminDjs'] });
       queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
       queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
     },
   });
@@ -920,6 +922,7 @@ export function useRejectDjVerification() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
     },
   });
@@ -934,6 +937,7 @@ export function useRequestDjInfo() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
     },
   });
 }

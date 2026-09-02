@@ -52,7 +52,6 @@ import {
   BarChart3,
 } from 'lucide-react';
 
-import ThemeToggle from '@/components/ThemeToggle';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import { ModeratorPlaylists } from './moderator/ModeratorPlaylists';
@@ -71,7 +70,7 @@ import {
   useAdminAds, useAdminPlatforms,
   useAdminBattles, useCreateBattle, useCloseBattle,
   useVerifyDj, useToggleDjSuspend, useDeleteDj,
-  useCreateAd, useUpdateAd, useAdminVerificationRequests,
+  useCreateAd, useUpdateAd,
   useRejectDjVerification, useRequestDjInfo,
   useUpdateCampaignStatus,
   useToggleMixFeature, useToggleMixVisibility, useUpdateBookingStatus,
@@ -97,6 +96,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { formatCompactNumber, formatCurrency } from '@/lib/formatting';
+import { formatDate, formatDateTime } from '@/lib/dateTime';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 /* ─────────────────────── Types ─────────────────────── */
 
@@ -294,13 +297,7 @@ function StatCard({
   );
 }
 
-function formatCompact(value: number) {
-  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
-}
 
-function formatCurrency(value: number) {
-  return `SLE ${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0)}`;
-}
 
 /* ─────────────────────── Section 1: Dashboard ─────────────────────── */
 
@@ -314,21 +311,21 @@ function DashboardSection() {
   const priorityData = [
     { label: 'Pending Verifications', value: stats?.pendingVerifications || 0, icon: BadgeCheck, color: '#F97316', detail: 'DJ profiles waiting for review' },
     { label: 'Pending Bookings', value: stats?.pendingBookings || 0, icon: CalendarCheck, color: '#3B82F6', detail: 'Booking requests needing attention' },
-    { label: 'Monthly Revenue', value: formatCurrency(stats?.estimatedRevenue || 0), icon: DollarSign, color: '#22C55E', detail: 'Payments and subscriptions' },
-    { label: 'Visits Today', value: formatCompact(stats?.totalVisitsToday || 0), icon: Globe, color: '#EC4899', detail: `${formatCompact(stats?.uniqueVisitorsToday || 0)} unique visitors` },
+    { label: 'Monthly Revenue', value: formatCurrency(stats?.estimatedRevenue || 0, 'SLE', { compact: true }), icon: DollarSign, color: '#22C55E', detail: 'Payments and subscriptions' },
+    { label: 'Visits Today', value: formatCompactNumber(stats?.totalVisitsToday || 0), icon: Globe, color: '#EC4899', detail: `${formatCompactNumber(stats?.uniqueVisitorsToday || 0)} unique visitors` },
   ];
 
   const healthData = [
-    { label: 'DJs', value: formatCompact(stats?.totalDjs || 0), icon: Mic, color: '#f4e059' },
-    { label: 'Users', value: formatCompact(stats?.totalUsers || 0), icon: Users, color: '#3B82F6' },
-    { label: 'Mixes', value: formatCompact(stats?.totalMixes || 0), icon: Music, color: '#8B5CF6' },
-    { label: 'Playlists', value: formatCompact(stats?.totalPlaylists || 0), icon: ListMusic, color: '#EC4899' },
-    { label: 'Feed Posts', value: formatCompact(stats?.totalFeedPosts || 0), icon: Rss, color: '#10B981' },
-    { label: 'Streams', value: formatCompact(stats?.totalStreams || 0), icon: Play, color: '#F97316' },
-    { label: 'Bookings', value: formatCompact(stats?.totalBookings || 0), icon: CalendarCheck, color: '#22C55E' },
-    { label: 'Events', value: formatCompact(stats?.totalEvents || 0), icon: Calendar, color: '#06B6D4' },
-    { label: 'Monthly Visits', value: formatCompact(stats?.totalVisitsMonth || 0), icon: Globe, color: '#EC4899' },
-    { label: 'Battles', value: formatCompact(stats?.activeBattles || 0), icon: Trophy, color: '#f4e059' },
+    { label: 'DJs', value: formatCompactNumber(stats?.totalDjs || 0), icon: Mic, color: '#f4e059' },
+    { label: 'Users', value: formatCompactNumber(stats?.totalUsers || 0), icon: Users, color: '#3B82F6' },
+    { label: 'Mixes', value: formatCompactNumber(stats?.totalMixes || 0), icon: Music, color: '#8B5CF6' },
+    { label: 'Playlists', value: formatCompactNumber(stats?.totalPlaylists || 0), icon: ListMusic, color: '#EC4899' },
+    { label: 'Feed Posts', value: formatCompactNumber(stats?.totalFeedPosts || 0), icon: Rss, color: '#10B981' },
+    { label: 'Streams', value: formatCompactNumber(stats?.totalStreams || 0), icon: Play, color: '#F97316' },
+    { label: 'Bookings', value: formatCompactNumber(stats?.totalBookings || 0), icon: CalendarCheck, color: '#22C55E' },
+    { label: 'Events', value: formatCompactNumber(stats?.totalEvents || 0), icon: Calendar, color: '#06B6D4' },
+    { label: 'Monthly Visits', value: formatCompactNumber(stats?.totalVisitsMonth || 0), icon: Globe, color: '#EC4899' },
+    { label: 'Battles', value: formatCompactNumber(stats?.activeBattles || 0), icon: Trophy, color: '#f4e059' },
   ];
 
   const timelineList = useMemo(() => {
@@ -812,7 +809,7 @@ function RankingsSection() {
               onClick={() => {
                 notifyTop3Mutation.mutate(undefined, {
                   onSuccess: () => toast.success('Weekly Top 3 notification emails sent successfully!'),
-                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send notifications'),
+                  onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send notifications')),
                 });
               }}
               disabled={notifyTop3Mutation.isPending}
@@ -1117,7 +1114,7 @@ function MixesSection() {
                     </td>
 
                     <td className="p-4 text-xs text-text-muted">
-                      {mix.createdAt ? new Date(mix.createdAt).toLocaleDateString() : '--'}
+                      {formatDate(mix.createdAt)}
                     </td>
 
                     <td className="p-4">
@@ -1246,11 +1243,11 @@ function BookingsSection() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Booking Value</p>
-          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalValue.toLocaleString()}</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{formatCurrency(totalValue)}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Commission Earned</p>
-          <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">SLE {Math.round(commission).toLocaleString()}</p>
+          <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">{formatCurrency(Math.round(commission))}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Most Booked DJ</p>
@@ -1300,10 +1297,10 @@ function BookingsSection() {
                   <td className="p-4 text-text-primary">{b.client?.email || '--'}</td>
                   <td className="p-4 text-text-primary">{b.dj?.stageName || '--'}</td>
                   <td className="p-4 text-text-secondary">{b.eventType}</td>
-                  <td className="p-4 font-mono text-text-secondary">{b.eventDate ? new Date(b.eventDate).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{formatDate(b.eventDate)}</td>
                   <td className="p-4 text-text-secondary">{b.eventLocation || '--'}</td>
                   <td className="p-4"><StatusBadge status={b.status} /></td>
-                  <td className="p-4 font-mono text-text-primary">SLE {((b.finalPrice ?? b.budget) || 0).toLocaleString()}</td>
+                  <td className="p-4 font-mono text-text-primary">{formatCurrency((b.finalPrice ?? b.budget) || 0)}</td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => setViewBooking(b)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="View details"><Eye className="w-3 h-3" /> View</button>
@@ -1341,11 +1338,11 @@ function BookingsSection() {
               <div className="flex justify-between"><span className="text-text-muted">Client</span><span className="text-text-primary">{viewBooking.client?.email || '--'}</span></div>
               <div className="flex justify-between"><span className="text-text-muted">DJ</span><span className="text-text-primary">{viewBooking.dj?.stageName || '--'}</span></div>
               <div className="flex justify-between"><span className="text-text-muted">Event Type</span><span className="text-text-primary">{viewBooking.eventType}</span></div>
-              <div className="flex justify-between"><span className="text-text-muted">Date</span><span className="text-text-primary">{viewBooking.eventDate ? new Date(viewBooking.eventDate).toLocaleDateString() : '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Date</span><span className="text-text-primary">{formatDate(viewBooking.eventDate)}</span></div>
               <div className="flex justify-between"><span className="text-text-muted">Location</span><span className="text-text-primary">{viewBooking.eventLocation || '--'}</span></div>
-              <div className="flex justify-between"><span className="text-text-muted">Amount</span><span className="text-text-primary">SLE {((viewBooking.finalPrice ?? viewBooking.budget) || 0).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Amount</span><span className="text-text-primary">{formatCurrency((viewBooking.finalPrice ?? viewBooking.budget) || 0)}</span></div>
               <div className="flex justify-between"><span className="text-text-muted">Status</span><span className="text-text-primary"><StatusBadge status={viewBooking.status} /></span></div>
-              <div className="flex justify-between"><span className="text-text-muted">Created</span><span className="text-text-primary">{viewBooking.createdAt ? new Date(viewBooking.createdAt).toLocaleDateString() : '--'}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Created</span><span className="text-text-primary">{formatDate(viewBooking.createdAt)}</span></div>
             </div>
           </div>
         </div>
@@ -1407,7 +1404,7 @@ function UsersSection() {
           queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
         },
         onError: (err: any) => {
-          toast.error(err?.response?.data?.error || 'Failed to save role');
+          toast.error(getApiErrorMessage(err, 'Failed to save role'));
         },
       }
     );
@@ -1425,7 +1422,7 @@ function UsersSection() {
           queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
         },
         onError: (err: any) => {
-          toast.error(err?.response?.data?.error || 'Failed to save status');
+          toast.error(getApiErrorMessage(err, 'Failed to save status'));
         },
       }
     );
@@ -1487,7 +1484,7 @@ function UsersSection() {
                   <td className="p-4 text-text-primary">{u.email}</td>
                   <td className="p-4 text-text-primary">{u.djProfile?.stageName || u.username || '--'}</td>
                   <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
-                  <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{formatDate(u.createdAt)}</td>
                   <td className="p-4"><StatusBadge status={u.status?.toLowerCase() || 'active'} /></td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1 flex-wrap">
@@ -1583,7 +1580,7 @@ function EventsSection() {
     if (reason === null) return;
     suspendMutation.mutate({ id, reason: reason || undefined }, {
       onSuccess: () => toast.success('Event suspended'),
-      onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to suspend event'),
+      onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to suspend event')),
     });
   };
 
@@ -1591,12 +1588,12 @@ function EventsSection() {
     if (!confirm('Restore this event to published?')) return;
     restoreMutation.mutate(id, {
       onSuccess: () => toast.success('Event restored'),
-      onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to restore event'),
+      onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to restore event')),
     });
   };
 
   const formatMoney = (val?: number) =>
-    `SLE ${Math.round(val || 0).toLocaleString()}`;
+    formatCurrency(Math.round(val || 0));
 
   return (
     <div className="space-y-6">
@@ -1688,7 +1685,7 @@ function EventsSection() {
                     <tr key={e.id} className="border-b border-white/5 text-sm">
                       <td className="p-4 font-bold text-text-primary">{e.title}</td>
                       <td className="p-4 text-text-primary">{e.dj?.stageName || e.organizerName || '--'}</td>
-                      <td className="p-4 font-mono text-text-secondary">{e.date ? new Date(e.date).toLocaleDateString() : '--'}</td>
+                      <td className="p-4 font-mono text-text-secondary">{formatDate(e.date)}</td>
                       <td className="p-4"><StatusBadge status={e.publishStatus || 'draft'} /></td>
                       <td className="p-4 text-right font-mono text-text-primary">{ts.sold || 0}{ts.totalTickets ? ` / ${ts.totalTickets}` : ''}</td>
                       <td className="p-4 text-right font-mono text-text-primary">{ts.checkedIn || 0}</td>
@@ -1756,11 +1753,11 @@ function EventMonitorModal({
         <div className="p-6 border-b border-white/5 flex items-start justify-between">
           <div>
             <h3 className="font-bold text-text-primary text-lg">{event.title}</h3>
-            <p className="text-sm text-text-muted mt-1">{event.dj?.stageName || event.organizerName || '--'} • {event.city} • {event.date ? new Date(event.date).toLocaleString() : '--'}</p>
+            <p className="text-sm text-text-muted mt-1">{event.dj?.stageName || event.organizerName || '--'} • {event.city} • {formatDateTime(event.date)}</p>
             <div className="flex items-center gap-3 mt-3">
               <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Sold: <span className="text-text-primary font-mono font-bold">{ts.sold || 0}</span></div>
               <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Checked In: <span className="text-text-primary font-mono font-bold">{ts.checkedIn || 0}</span></div>
-              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Revenue: <span className="text-[#f4e059] font-mono font-bold">SLE {Math.round(ts.revenue || 0).toLocaleString()}</span></div>
+              <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Revenue: <span className="text-[#f4e059] font-mono font-bold">{formatCurrency(Math.round(ts.revenue || 0))}</span></div>
               <div className="px-3 py-1 rounded-lg bg-white/5 text-xs text-text-muted">Pending: <span className="text-[#F97316] font-mono font-bold">{ts.pending || 0}</span></div>
             </div>
           </div>
@@ -1822,8 +1819,8 @@ function EventMonitorModal({
                           <td className="p-3 text-text-primary">{t.buyerName || t.user?.name || '--'}</td>
                           <td className="p-3 text-text-secondary">{t.ticketType?.name || '--'}</td>
                           <td className="p-3"><StatusBadge status={t.status} /></td>
-                          <td className="p-3 text-right font-mono text-text-primary">SLE {Math.round(t.amount || 0).toLocaleString()}</td>
-                          <td className="p-3 text-text-secondary">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '--'}</td>
+                          <td className="p-3 text-right font-mono text-text-primary">{formatCurrency(Math.round(t.amount || 0))}</td>
+                          <td className="p-3 text-text-secondary">{formatDate(t.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1852,7 +1849,7 @@ function EventMonitorModal({
                     <tbody>
                       {scans.map((s: any) => (
                         <tr key={s.id} className="border-b border-white/5">
-                          <td className="p-3 text-text-secondary">{s.createdAt ? new Date(s.createdAt).toLocaleString() : '--'}</td>
+                          <td className="p-3 text-text-secondary">{formatDateTime(s.createdAt)}</td>
                           <td className="p-3 font-mono text-text-primary">{s.ticket?.ticketNumber || '--'}</td>
                           <td className="p-3 text-text-primary">{s.scannedBy?.slice(0, 8) || '--'}</td>
                           <td className="p-3 text-text-secondary">{s.scannerRole || '--'}</td>
@@ -1975,11 +1972,11 @@ function BattlesSection() {
                   <td className="p-4 font-bold text-text-primary">{b.title}</td>
                   <td className="p-4 text-text-secondary">{b.theme || '--'}</td>
                   <td className="p-4 font-mono text-text-secondary">
-                    {b.weekStart ? new Date(b.weekStart).toLocaleDateString() : '--'} - {b.weekEnd ? new Date(b.weekEnd).toLocaleDateString() : '--'}
+                    {formatDate(b.weekStart)} - {formatDate(b.weekEnd)}
                   </td>
                   <td className="p-4 font-mono text-text-primary">{b.entries?.length || 0}</td>
                   <td className="p-4"><StatusBadge status={b.status === 'ACTIVE' ? 'active' : 'inactive'} /></td>
-                  <td className="p-4 font-mono text-text-secondary">{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '--'}</td>
+                  <td className="p-4 font-mono text-text-secondary">{formatDate(b.createdAt)}</td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => navigate('/battles')} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10 flex items-center gap-1" title="View battles page"><Eye className="w-3 h-3" /> View</button>
@@ -2083,7 +2080,7 @@ function RevenueSection() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Total Payments"
-          value={`SLE ${Math.round(totalPayments).toLocaleString()}`}
+          value={formatCurrency(Math.round(totalPayments))}
           icon={DollarSign}
           color="#22C55E"
           change="Volume"
@@ -2091,7 +2088,7 @@ function RevenueSection() {
         />
         <StatCard
           label="Booking Commission (15%)"
-          value={`SLE ${Math.round(commission).toLocaleString()}`}
+          value={formatCurrency(Math.round(commission))}
           icon={Wallet}
           color="#f4e059"
           change="Net Revenue"
@@ -2196,12 +2193,12 @@ function RevenueSection() {
                 {payments.map((p: any) => (
                   <tr key={p.id} className="text-sm hover:bg-white/[0.02] transition-colors">
                     <td className="p-4 font-mono text-xs text-[#f4e059] font-semibold">{p.id?.slice(0, 8)}</td>
-                    <td className="p-4 font-mono font-bold text-text-primary">SLE {(p.amount || 0).toLocaleString()}</td>
+                    <td className="p-4 font-mono font-bold text-text-primary">{formatCurrency(p.amount)}</td>
                     <td className="p-4 text-xs text-text-secondary">{p.currency || 'SLE'}</td>
                     <td className="p-4 text-xs text-text-secondary capitalize">{p.type}</td>
                     <td className="p-4"><StatusBadge status={p.status || 'pending'} /></td>
                     <td className="p-4 text-xs text-text-secondary">{p.provider || '--'}</td>
-                    <td className="p-4 font-mono text-xs text-text-secondary">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '--'}</td>
+                    <td className="p-4 font-mono text-xs text-text-secondary">{formatDate(p.createdAt)}</td>
                     <td className="p-4 text-xs text-text-secondary font-mono">{p.bookingId?.slice(0, 8) || '--'}</td>
                     <td className="p-4 text-xs text-text-secondary">{p.client?.email || '--'}</td>
                   </tr>
@@ -2488,7 +2485,7 @@ function AnalyticsSection() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatCard
           label="Filtered Revenue"
-          value={`SLE ${(summary?.totalRevenue || 0).toLocaleString()}`}
+          value={formatCurrency(summary?.totalRevenue || 0)}
           icon={DollarSign}
           color="#f4e059"
           change="Real-time"
@@ -2640,7 +2637,7 @@ function AnalyticsSection() {
               <p className="text-xs font-semibold uppercase tracking-wider text-[#f4e059]">Revenue Trajectory (SLE)</p>
             </div>
             <span className="text-xs font-mono font-bold text-white">
-              Total: SLE {(summary?.totalRevenue || 0).toLocaleString()}
+              Total: {formatCurrency(summary?.totalRevenue)}
             </span>
           </div>
           {timeline.length > 0 ? (
@@ -3174,51 +3171,166 @@ function PlatformsSection() {
 /* ─────────────────────── Section 11: Verification ─────────────────────── */
 
 function VerificationSection() {
-  const { data: requestsData, isLoading, error } = useAdminVerificationRequests();
+  const [filters, setFilters] = useState({
+    role: '',
+    verificationStatus: 'all',
+    search: '',
+    page: 1,
+    limit: 20,
+  });
+  const { data, isLoading, error } = useAdminUsers(filters);
   const verifyMutation = useVerifyDj();
   const rejectMutation = useRejectDjVerification();
   const requestInfoMutation = useRequestDjInfo();
   const queryClient = useQueryClient();
+
   const [selected, setSelected] = useState<any | null>(null);
   const [action, setAction] = useState<'approve' | 'reject' | 'request' | 'badge' | null>(null);
   const [note, setNote] = useState('');
   const [badgeType, setBadgeType] = useState<'grey' | 'gold'>('grey');
   const [isSavingBadge, setIsSavingBadge] = useState(false);
 
-  const requests = requestsData || [];
+  const users = (data?.data || []) as any[];
+  const meta = data?.meta;
+
+  const updateFilter = (key: string, value: string | number) => {
+    setFilters((f) => ({ ...f, [key]: value, page: 1 }));
+  };
+
+  const onSettled = () => {
+    setSelected(null);
+    setAction(null);
+    setNote('');
+    setIsSavingBadge(false);
+    queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
+    queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+  };
 
   const handleAction = () => {
     if (!selected || !action) return;
-    const onSettled = () => {
-      setSelected(null);
-      setAction(null);
-      setNote('');
-      queryClient.invalidateQueries({ queryKey: ['adminVerificationRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['adminPendingDJs'] });
-      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
-    };
+    const djId = selected.djProfile?.id;
+    if (!djId && action !== 'badge') return toast.error('Selected user does not have a DJ profile');
+    if (action === 'badge' && !djId) return toast.error('Badge changes require a DJ profile');
 
     if (action === 'approve') {
-      verifyMutation.mutate({ id: selected.id, notes: note, badgeType }, { onSettled });
+      verifyMutation.mutate({ id: djId, notes: note, badgeType }, { onSettled });
     } else if (action === 'badge') {
       setIsSavingBadge(true);
-      api.put(`/admin/djs/${selected.id}/badge-type`, { badgeType }).then(() => {
-        toast.success('Badge type updated!');
-        onSettled();
-      }).catch(() => toast.error('Failed to update badge'))
-      .finally(() => setIsSavingBadge(false));
+      api.put(`/admin/djs/${djId}/badge-type`, { badgeType })
+        .then(() => {
+          toast.success('Badge type updated!');
+          onSettled();
+        })
+        .catch(() => toast.error('Failed to update badge'))
+        .finally(() => setIsSavingBadge(false));
     } else if (action === 'reject') {
       if (!note) return toast.error('Rejection reason is required');
-      rejectMutation.mutate({ id: selected.id, reason: note }, { onSettled });
+      rejectMutation.mutate({ id: djId, reason: note }, { onSettled });
     } else if (action === 'request') {
       if (!note) return toast.error('Request notes are required');
-      requestInfoMutation.mutate({ id: selected.id, notes: note }, { onSettled });
+      requestInfoMutation.mutate({ id: djId, notes: note }, { onSettled });
     }
   };
 
+  const openAction = (user: any, act: typeof action, defaults?: { badge?: 'grey' | 'gold' }) => {
+    setSelected(user);
+    setAction(act);
+    setNote('');
+    setBadgeType(defaults?.badge || user.djProfile?.verificationBadgeType || 'grey');
+  };
+
+
+  const roleOptions = [
+    { value: '', label: 'All Roles' },
+    { value: 'USER', label: 'Fan / User' },
+    { value: 'DJ', label: 'DJ' },
+    { value: 'ADMIN', label: 'Admin' },
+    { value: 'VERIFICATION_ADMIN', label: 'Verification Admin' },
+    { value: 'FINANCE_ADMIN', label: 'Finance Admin' },
+    { value: 'SUPPORT_ADMIN', label: 'Support Admin' },
+    { value: 'MODERATOR', label: 'Moderator' },
+  ];
+
+  const statusOptions = [
+    { value: 'all', label: 'All Verification Statuses' },
+    { value: 'verified', label: 'Verified' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'info_requested', label: 'Info Requested' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'unverified', label: 'Unverified DJs' },
+  ];
+
+  const stats = useMemo(() => {
+    const total = meta?.total || users.length;
+    const verifiedDjs = users.filter((u) => u.djProfile?.verified).length;
+    const pending = users.filter((u) =>
+      ['pending', 'info_requested'].includes(u.djProfile?.verificationStatus)
+    ).length;
+    const rejected = users.filter((u) => u.djProfile?.verificationStatus === 'rejected').length;
+    return { total, verifiedDjs, pending, rejected };
+  }, [users, meta]);
+
   return (
     <div className="space-y-6">
-      <SectionHeader title="DJ Verification" subtitle="Review passport/ID submissions and approve verified DJs" />
+      <SectionHeader
+        title="Verification Center"
+        subtitle="Review all users and DJs. Filter by role and verification status, inspect submissions, and manage badge types."
+      />
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+          <input
+            type="text"
+            value={filters.search}
+            onChange={(e) => updateFilter('search', e.target.value)}
+            placeholder="Search email or stage name..."
+            className="w-full pl-9 pr-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#f4e059]"
+          />
+        </div>
+        <select
+          value={filters.role}
+          onChange={(e) => updateFilter('role', e.target.value)}
+          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-text-primary focus:outline-none focus:border-[#f4e059]"
+        >
+          {roleOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <select
+          value={filters.verificationStatus}
+          onChange={(e) => updateFilter('verificationStatus', e.target.value)}
+          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-text-primary focus:outline-none focus:border-[#f4e059]"
+        >
+          {statusOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => setFilters({ role: '', verificationStatus: 'all', search: '', page: 1, limit: 20 })}
+          className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 text-text-muted hover:text-text-primary hover:bg-white/10 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+        >
+          <Filter className="w-3.5 h-3.5" /> Reset Filters
+        </button>
+      </div>
+
+      {/* Snapshot stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: stats.total, color: '#f4e059' },
+          { label: 'Verified DJs', value: stats.verifiedDjs, color: '#22C55E' },
+          { label: 'Pending / Info', value: stats.pending, color: '#F97316' },
+          { label: 'Rejected', value: stats.rejected, color: '#EF4444' },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-white/5 bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase font-bold text-text-muted tracking-wider">{s.label}</p>
+            <p className="text-xl font-black mt-0.5" style={{ color: s.color }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
 
       {isLoading && <LoadingCenter />}
 
@@ -3230,87 +3342,185 @@ function VerificationSection() {
       )}
 
       {!isLoading && !error && (
-        <div className="grid gap-4">
-          {requests.map((v: any) => (
-            <motion.div
-              key={v.id}
-              className="rounded-2xl p-5 border border-white/5"
-              style={{ background: 'var(--bg-card)' }}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold text-text-primary">{v.stageName}</p>
-                    <StatusBadge status={v.verificationStatus || 'pending'} />
+        <>
+          <div className="grid gap-4">
+            {users.map((u) => {
+              const dj = u.djProfile;
+              const isDj = Boolean(dj);
+              const verifStatus =
+                dj?.verificationStatus || (dj?.verified ? 'approved' : isDj ? 'unverified' : 'not_applicable');
+              const displayName = dj?.stageName || u.name || u.username || u.email;
+              const initials = (displayName || '?').slice(0, 2).toUpperCase();
+
+              return (
+                <motion.div
+                  key={u.id}
+                  className="rounded-2xl p-4 sm:p-5 border border-white/5"
+                  style={{ background: 'var(--bg-card)' }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    {/* User / DJ identity */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#f4e059]/20 to-gold/5 border border-gold/20 flex items-center justify-center text-xs font-bold text-gold shrink-0">
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-text-primary">{displayName}</p>
+                            <StatusBadge status={u.role.toLowerCase()} />
+                            {u.status && <StatusBadge status={u.status.toLowerCase()} />}
+                            {isDj && <StatusBadge status={verifStatus.toLowerCase()} />}
+                            {dj?.verificationBadgeType && dj?.verificationBadgeType !== 'null' && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/30">
+                                {dj.verificationBadgeType === 'gold' ? '🥇 Gold' : '⚪ Grey'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-text-muted mt-0.5 truncate">{u.email || '--'}</p>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-text-secondary">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-text-muted" />
+                              Joined {formatDate(u.createdAt)}
+                            </span>
+                            {u.phone && (
+                              <span className="flex items-center gap-1">
+                                <Smartphone className="w-3 h-3 text-text-muted" />
+                                {u.phone} {u.phoneVerified ? <Check className="w-3 h-3 text-green-400" /> : null}
+                              </span>
+                            )}
+                            {dj?.subscriptionTier && (
+                              <span className="flex items-center gap-1">
+                                <Crown className="w-3 h-3 text-[#f4e059]" />
+                                {dj.subscriptionTier === 'legend' ? 'Pro+' : dj.subscriptionTier === 'pro' ? 'Pro' : dj.subscriptionTier}
+                              </span>
+                            )}
+                            {dj?.isPublic === false && (
+                              <span className="text-orange-400">Hidden profile</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isDj && (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-text-secondary">
+                          <div className="flex items-center gap-2">
+                            <Globe className="w-3.5 h-3.5 text-gold" />
+                            <span className="font-semibold">Nationality:</span> {dj.nationality || '--'}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-3.5 h-3.5 text-gold" />
+                            <span className="font-semibold">ID Type:</span> {dj.idDocumentType ? dj.idDocumentType.replace(/_/g, ' ') : '--'}
+                          </div>
+                          <div className="flex items-center gap-2 md:col-span-2">
+                            <UserCheck className="w-3.5 h-3.5 text-gold" />
+                            <span className="font-semibold">Legal name:</span> {dj.legalName || '--'}
+                          </div>
+                          {dj.idDocumentUrl && (
+                            <div className="md:col-span-2">
+                              <a
+                                href={dj.idDocumentUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-text-secondary hover:bg-white/10 text-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> View Uploaded Document
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isDj && (dj.socialProof || dj.verificationReason || dj.verificationNotes) && (
+                        <div className="mt-3 space-y-2 text-xs text-text-secondary bg-white/[0.02] p-3 rounded-xl">
+                          {dj.socialProof && <p><span className="font-semibold">Social proof:</span> {dj.socialProof}</p>}
+                          {dj.verificationReason && <p><span className="font-semibold">Reason:</span> {dj.verificationReason}</p>}
+                          {dj.verificationNotes && <p><span className="font-semibold">Notes:</span> {dj.verificationNotes}</p>}
+                        </div>
+                      )}
+
+                      {isDj && (
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-text-muted">
+                          <span>Submitted: {formatDate(dj.updatedAt)}</span>
+                          {dj.verifiedAt && <span>Verified: {formatDate(dj.verifiedAt)}</span>}
+                          {dj.verified && (
+                            <span className="text-green-400 flex items-center gap-1">
+                              <BadgeCheck className="w-3 h-3" /> Verified DJ
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {isDj && !dj.verified && verifStatus !== 'approved' && verifStatus !== 'verified' && (
+                        <button
+                          onClick={() => openAction(u, 'approve')}
+                          className="px-3 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1"
+                        >
+                          <Check className="w-4 h-4" /> Approve
+                        </button>
+                      )}
+                      {isDj && (dj.verified || verifStatus === 'approved' || verifStatus === 'verified') && (
+                        <button
+                          onClick={() => openAction(u, 'badge', { badge: dj.verificationBadgeType || 'grey' })}
+                          className="px-3 py-2 bg-yellow-500/10 text-yellow-400 rounded-xl text-xs font-bold hover:bg-yellow-500/20 flex items-center gap-1"
+                        >
+                          🏅 Change Badge
+                        </button>
+                      )}
+                      {isDj && verifStatus !== 'rejected' && (
+                        <button
+                          onClick={() => openAction(u, 'reject')}
+                          className="px-3 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1"
+                        >
+                          <XIcon className="w-3.5 h-3.5" /> Reject
+                        </button>
+                      )}
+                      {isDj && !dj.verified && verifStatus !== 'approved' && verifStatus !== 'verified' && (
+                        <button
+                          onClick={() => openAction(u, 'request')}
+                          className="px-3 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1"
+                        >
+                          Request Info
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-text-muted mt-0.5">{v.user?.email || '--'}</p>
-                  <p className="text-xs text-text-muted mt-0.5">Submitted: {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString() : '--'}</p>
+                </motion.div>
+              );
+            })}
+            {users.length === 0 && <EmptyState message="No users match the current filters." />}
+          </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-xs">
-                    <div className="flex items-center gap-2 text-text-secondary">
-                      <Globe className="w-3.5 h-3.5 text-gold" />
-                      Nationality: {v.nationality || '--'}
-                    </div>
-                    <div className="flex items-center gap-2 text-text-secondary">
-                      <FileText className="w-3.5 h-3.5 text-gold" />
-                      ID Type: {v.idDocumentType ? v.idDocumentType.replace(/_/g, ' ') : '--'}
-                    </div>
-                    <div className="flex items-center gap-2 text-text-secondary md:col-span-2">
-                      <span className="font-semibold">Legal name:</span> {v.legalName || '--'}
-                    </div>
-                  </div>
-
-                  {v.idDocumentUrl && (
-                    <div className="mt-4">
-                      <a
-                        href={v.idDocumentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-text-secondary hover:bg-white/10 text-xs"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> View Uploaded Document
-                      </a>
-                    </div>
-                  )}
-
-                  {(v.socialProof || v.verificationReason) && (
-                    <div className="mt-4 space-y-2 text-xs text-text-secondary bg-white/[0.02] p-3 rounded-xl">
-                      {v.socialProof && <p><span className="font-semibold">Social proof:</span> {v.socialProof}</p>}
-                      {v.verificationReason && <p><span className="font-semibold">Reason:</span> {v.verificationReason}</p>}
-                      {v.verificationNotes && <p><span className="font-semibold">Notes:</span> {v.verificationNotes}</p>}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {!v.verified && v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
-                    <button onClick={() => { setSelected(v); setAction('approve'); setNote(''); setBadgeType('grey'); }} className="px-4 py-2 bg-green-500/10 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/20 flex items-center gap-1">
-                      <Check className="w-4 h-4" /> Approve
-                    </button>
-                  )}
-                  {(v.verified || v.verificationStatus?.toLowerCase() === 'verified' || v.verificationStatus?.toLowerCase() === 'approved') && (
-                    <button onClick={() => { setSelected(v); setAction('badge'); setBadgeType(v.verificationBadgeType || 'grey'); }} className="px-4 py-2 bg-yellow-500/10 text-yellow-400 rounded-xl text-xs font-bold hover:bg-yellow-500/20 flex items-center gap-1">
-                      🏅 Change Badge
-                    </button>
-                  )}
-                  {v.verificationStatus?.toLowerCase() !== 'rejected' && (
-                    <button onClick={() => { setSelected(v); setAction('reject'); setNote(''); }} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 flex items-center gap-1">
-                      <XIcon className="w-3.5 h-3.5" /> Reject
-                    </button>
-                  )}
-                  {!v.verified && v.verificationStatus?.toLowerCase() !== 'verified' && v.verificationStatus?.toLowerCase() !== 'approved' && (
-                    <button onClick={() => { setSelected(v); setAction('request'); setNote(''); }} className="px-4 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-bold hover:bg-white/10 flex items-center gap-1">
-                      Request Info
-                    </button>
-                  )}
-                </div>
+          {/* Pagination */}
+          {meta && meta.totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <p className="text-xs text-text-muted">
+                Page {meta.page} of {meta.totalPages} • {meta.total} total
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={meta.page <= 1}
+                  onClick={() => updateFilter('page', meta.page - 1)}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={meta.page >= meta.totalPages}
+                  onClick={() => updateFilter('page', meta.page + 1)}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
               </div>
-            </motion.div>
-          ))}
-          {requests.length === 0 && <EmptyState message="No verification requests." />}
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {selected && action && (
@@ -3322,7 +3532,9 @@ function VerificationSection() {
               </h3>
               <button onClick={() => setAction(null)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
             </div>
-            <p className="text-xs text-text-muted">DJ: <span className="text-text-primary font-semibold">{selected.stageName}</span></p>
+            <p className="text-xs text-text-muted">
+              DJ: <span className="text-text-primary font-semibold">{selected.djProfile?.stageName || selected.username || selected.email}</span>
+            </p>
 
             {(action === 'approve' || action === 'badge') && (
               <div>
@@ -3353,18 +3565,18 @@ function VerificationSection() {
             )}
 
             {action !== 'badge' && (
-            <div>
-              <label className="block text-xs text-text-muted mb-1.5">
-                {action === 'approve' ? 'Approval notes (optional)' : action === 'reject' ? 'Rejection reason (required)' : 'What information do you need? (required)'}
-              </label>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none"
-                placeholder={action === 'approve' ? 'Optional internal notes...' : 'Write your message...'}
-              />
-            </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1.5">
+                  {action === 'approve' ? 'Approval notes (optional)' : action === 'reject' ? 'Rejection reason (required)' : 'What information do you need? (required)'}
+                </label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/5 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none"
+                  placeholder={action === 'approve' ? 'Optional internal notes...' : 'Write your message...'}
+                />
+              </div>
             )}
             <button
               onClick={handleAction}
@@ -3381,6 +3593,7 @@ function VerificationSection() {
     </div>
   );
 }
+
 
 /* ─────────────────────── Section 12: Notifications ─────────────────────── */
 
@@ -3411,7 +3624,7 @@ function NotificationsSection() {
         toast.success(`✅ Test email sent to ${testEmailAddr}!`);
       },
       onError: (err: any) => {
-        toast.error(err?.response?.data?.error || 'Failed to send test email');
+        toast.error(getApiErrorMessage(err, 'Failed to send test email'));
       },
     });
   };
@@ -3439,7 +3652,7 @@ function NotificationsSection() {
         toast.success(`${data.type === 'video' ? '🎬 Video' : '🖼️ Image'} uploaded!`);
       },
       onError: (err: any) => {
-        toast.error(err?.response?.data?.error || 'Media upload failed');
+        toast.error(getApiErrorMessage(err, 'Media upload failed'));
         setMediaFile(null);
         setMediaPreview(null);
       },
@@ -3497,7 +3710,7 @@ function NotificationsSection() {
         }
       },
       onError: (err: any) => {
-        toast.error(err?.response?.data?.error || 'Failed to send notification');
+        toast.error(getApiErrorMessage(err, 'Failed to send notification'));
       },
     });
   };
@@ -3703,7 +3916,7 @@ function NotificationsSection() {
                       <p className="text-sm font-bold text-text-primary">{n.title}</p>
                       <p className="text-xs text-text-muted mt-0.5">{n.message}</p>
                       <p className="text-[10px] text-text-muted mt-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '--'}
+                        <Clock className="w-3 h-3" /> {formatDate(n.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -3739,7 +3952,7 @@ function SubscriptionsSection() {
           setReviewNotes({ ...reviewNotes, [id]: '' });
           toast.success('✓ Subscription activated! DJ has been notified.');
         },
-        onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to approve request'),
+        onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to approve request')),
       }
     );
   };
@@ -3752,7 +3965,7 @@ function SubscriptionsSection() {
           setReviewNotes({ ...reviewNotes, [id]: '' });
           toast.success('✓ Request rejected. DJ has been notified.');
         },
-        onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to reject request'),
+        onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to reject request')),
       }
     );
   };
@@ -3786,11 +3999,11 @@ function SubscriptionsSection() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Revenue</p>
-          <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">SLE {(subs?.totalRevenue || 0).toLocaleString()}</p>
+          <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">{formatCurrency(subs?.totalRevenue)}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Monthly Revenue</p>
-          <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {(subs?.mrr || 0).toLocaleString()}</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{formatCurrency(subs?.mrr)}</p>
         </div>
         <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
           <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Pro DJs</p>
@@ -3818,7 +4031,7 @@ function SubscriptionsSection() {
           >
             <div className="flex items-center justify-between mb-4">
               <p className="font-display text-lg font-bold text-text-primary">{plan.name}</p>
-              {plan.price > 0 && <p className="font-mono text-xl font-bold text-[#f4e059]">SLE {plan.price}/mo</p>}
+              {plan.price > 0 && <p className="font-mono text-xl font-bold text-[#f4e059]">{formatCurrency(plan.price)}/mo</p>}
             </div>
             <p className="text-sm text-text-muted mb-4">{plan.users} active subscriber{plan.users !== 1 ? 's' : ''}</p>
             <div className="space-y-2">
@@ -3891,10 +4104,10 @@ function SubscriptionsSection() {
                       {request.dj?.user?.email || request.user?.email || '--'} • {request.dj?.user?.phone || request.user?.phone || '--'}
                     </p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-text-secondary">
-                      <span>Amount: <span className="font-mono font-bold text-text-primary">{request.currency} {request.amount?.toLocaleString()}</span></span>
+                      <span>Amount: <span className="font-mono font-bold text-text-primary">{formatCurrency(request.amount, request.currency)}</span></span>
                       <span>Tier: <span className="font-bold text-text-primary uppercase">{request.plan || 'pro'}</span></span>
                       <span>Payment: {request.paymentMethod} {request.paymentNumber}</span>
-                      <span>Date: <span className="font-mono">{request.createdAt ? new Date(request.createdAt).toLocaleDateString() : '--'}</span></span>
+                      <span>Date: <span className="font-mono">{formatDate(request.createdAt)}</span></span>
                     </div>
                     {request.note && <p className="text-xs text-orange mt-2">💬 DJ Note: {request.note}</p>}
                     {request.adminNote && <p className="text-xs text-gold mt-2">📝 Admin Note: {request.adminNote}</p>}
@@ -3982,7 +4195,7 @@ function SecurityLogsSection() {
                 <td className="p-4 text-text-secondary">{log.user}</td>
                 <td className="p-4 text-text-secondary">{log.details}</td>
                 <td className="p-4"><StatusBadge status={log.severity} /></td>
-                <td className="p-4 font-mono text-text-secondary">{log.createdAt ? new Date(log.createdAt).toLocaleDateString() : '--'}</td>
+                <td className="p-4 font-mono text-text-secondary">{formatDate(log.createdAt)}</td>
               </tr>
             ))}
           </tbody>
@@ -4193,11 +4406,11 @@ function AdsManagerSection() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
               <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Budget</p>
-              <p className="font-mono text-2xl font-bold text-text-primary mt-2">SLE {totalBudget.toLocaleString()}</p>
+              <p className="font-mono text-2xl font-bold text-text-primary mt-2">{formatCurrency(totalBudget)}</p>
             </div>
             <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
               <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Spent</p>
-              <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">SLE {totalSpent.toLocaleString()}</p>
+              <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">{formatCurrency(totalSpent)}</p>
             </div>
             <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
               <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active Campaigns</p>
@@ -4252,7 +4465,7 @@ function AdsManagerSection() {
                     <td className="p-4 font-mono text-text-primary">{c.reachScore?.toFixed(1) || 0}</td>
                     <td className="p-4 font-mono text-text-primary">{(c.impressions || 0).toLocaleString()}</td>
                     <td className="p-4 font-mono text-text-primary">{(c.clicks || 0).toLocaleString()}</td>
-                    <td className="p-4 font-mono text-text-primary">{c.currency || 'SLE'} {(c.budget || 0).toLocaleString()}</td>
+                    <td className="p-4 font-mono text-text-primary">{formatCurrency(c.budget, c.currency || 'SLE')}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <button
@@ -4665,7 +4878,7 @@ function RolesSection() {
                     <tr key={s.id} className="border-b border-white/5 text-sm">
                       <td className="p-4 text-text-primary">{s.email}</td>
                       <td className="p-4"><StatusBadge status={s.role || 'user'} /></td>
-                      <td className="p-4 font-mono text-text-secondary">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '--'}</td>
+                      <td className="p-4 font-mono text-text-secondary">{formatDate(s.createdAt)}</td>
                       <td className="p-4">
                         <select
                           onChange={(e) => handleChangeRole(s.id, e.target.value)}
@@ -4702,7 +4915,7 @@ function RolesSection() {
                     <td className="p-4 text-text-primary">{u.email}</td>
                     <td className="p-4 text-text-primary">{u.username || '--'}</td>
                     <td className="p-4"><StatusBadge status={u.role || 'user'} /></td>
-                    <td className="p-4 font-mono text-text-secondary">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '--'}</td>
+                    <td className="p-4 font-mono text-text-secondary">{formatDate(u.createdAt)}</td>
                     <td className="p-4">
                       <select
                         onChange={(e) => handleChangeRole(u.id, e.target.value)}
@@ -4771,7 +4984,7 @@ function SubscriptionPaymentSettings() {
       toast.success('Payment settings saved.');
       setDirty(false);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'Failed to save payment settings.');
+      toast.error(getApiErrorMessage(e, 'Failed to save payment settings.'));
     }
   };
 
@@ -5107,7 +5320,7 @@ function HallOfFameSection() {
                   >
                     <div className="flex items-center gap-3">
                       <img
-                        src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                        src={getAvatarImageUrl(dj.avatar)}
                         alt={dj.stageName}
                         className="w-10 h-10 rounded-full object-cover"
                       />
@@ -5243,7 +5456,7 @@ function ViolationsSection() {
       toast.success(`User account has been ${status.toLowerCase()} and notified by email.`);
       fetchReports();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || `Failed to set user status`);
+      toast.error(getApiErrorMessage(err, `Failed to set user status`));
     } finally {
       setProcessingId(null);
     }
@@ -5317,7 +5530,7 @@ function ViolationsSection() {
                     <td className="p-4 font-mono">
                       #{r.id.slice(-6)}
                       <span className="block text-[10px] text-text-muted mt-0.5">
-                        {new Date(r.createdAt).toLocaleDateString()}
+                        {formatDate(r.createdAt)}
                       </span>
                     </td>
                     <td className="p-4">
@@ -5429,7 +5642,7 @@ function DirectEmailSenderWidget() {
           setMessage('');
         },
         onError: (err: any) => {
-          toast.error(err?.response?.data?.error || 'Failed to send custom email');
+          toast.error(getApiErrorMessage(err, 'Failed to send custom email'));
         },
       }
     );
@@ -5536,7 +5749,7 @@ function SystemBugLogsWidget() {
           onClick={() =>
             triggerDigest.mutate(undefined, {
               onSuccess: (res: any) => toast.success(res?.data?.message || 'Daily bug report email sent to support@decksalone.com!'),
-              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to dispatch bug report'),
+              onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to dispatch bug report')),
             })
           }
           disabled={triggerDigest.isPending}
@@ -5646,7 +5859,7 @@ function IncompleteProfilesWidget() {
                 { allIncomplete: true },
                 {
                   onSuccess: (res: any) => toast.success(res?.data?.message || '5-step profile nudge emails sent!'),
-                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send nudge emails'),
+                  onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send nudge emails')),
                 }
               )
             }
@@ -5689,7 +5902,7 @@ function IncompleteProfilesWidget() {
                     <td className="p-3">
                       <div className="flex items-center gap-2.5">
                         <img
-                          src={getMediaUrl(u.avatar) || '/default-avatar.jpg'}
+                          src={getAvatarImageUrl(u.avatar)}
                           alt=""
                           className="w-8 h-8 rounded-full object-cover border border-white/10"
                         />
@@ -5725,7 +5938,7 @@ function IncompleteProfilesWidget() {
                       </div>
                     </td>
                     <td className="p-3 text-text-muted">
-                      {u.lastProfileNudgeSentAt ? new Date(u.lastProfileNudgeSentAt).toLocaleDateString() : 'Never'}
+                      {u.lastProfileNudgeSentAt ? formatDate(u.lastProfileNudgeSentAt) : 'Never'}
                     </td>
                     <td className="p-3 text-right">
                       <button
@@ -5734,7 +5947,7 @@ function IncompleteProfilesWidget() {
                             { userId: u.id },
                             {
                               onSuccess: (res: any) => toast.success(res?.data?.message || `Nudge email sent to ${u.email}!`),
-                              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send nudge email'),
+                              onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send nudge email')),
                             }
                           )
                         }
@@ -5779,7 +5992,7 @@ function BirthdayWidget() {
           onClick={() =>
             triggerCron.mutate(undefined, {
               onSuccess: (data: any) => toast.success(data?.data?.message || 'Birthday emails sent!'),
-              onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to trigger birthday emails'),
+              onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to trigger birthday emails')),
             })
           }
           disabled={triggerCron.isPending}
@@ -5805,7 +6018,7 @@ function BirthdayWidget() {
                 {todaysCelebrants.map((c: any) => (
                   <div key={c.id} className="p-4 rounded-xl border border-[#f4e059]/30 bg-[#f4e059]/10 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img src={getMediaUrl(c.avatar) || '/default-avatar.jpg'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover border border-[#f4e059]" />
+                      <img src={getAvatarImageUrl(c.avatar)} alt={c.displayName} className="w-10 h-10 rounded-full object-cover border border-[#f4e059]" />
                       <div>
                         <p className="font-bold text-white text-sm">{c.displayName} <span className="text-xs font-normal text-text-muted">({c.age} yrs)</span></p>
                         <p className="text-xs text-text-muted">{c.email} • <span className="text-[#f4e059] font-medium">{c.role}</span></p>
@@ -5816,7 +6029,7 @@ function BirthdayWidget() {
                       onClick={() =>
                         sendWish.mutate(c.id, {
                           onSuccess: (data: any) => toast.success(data?.message || `Wish sent to ${c.displayName}!`),
-                          onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to send wish'),
+                          onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send wish')),
                         })
                       }
                       disabled={sendWish.isPending}
@@ -5843,7 +6056,7 @@ function BirthdayWidget() {
                 {upcomingBirthdays.map((u: any) => (
                   <div key={u.id} className="p-3 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <img src={getMediaUrl(u.avatar) || '/default-avatar.jpg'} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
+                      <img src={getAvatarImageUrl(u.avatar)} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
                       <div>
                         <p className="text-xs font-bold text-white">{u.displayName}</p>
                         <p className="text-[10px] text-text-muted">In {u.daysUntil} day{u.daysUntil > 1 ? 's' : ''} ({new Date(u.dateOfBirth).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})</p>
@@ -5899,7 +6112,7 @@ function PromoSection() {
           setGrantReason('');
         },
         onError: (err: any) => {
-          toast.error(err?.response?.data?.error || 'Failed to grant plan');
+          toast.error(getApiErrorMessage(err, 'Failed to grant plan'));
         },
       }
     );
@@ -6004,7 +6217,7 @@ function PromoSection() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                            src={getAvatarImageUrl(dj.avatar)}
                             alt={dj.stageName}
                             className="w-9 h-9 rounded-full object-cover border border-white/10"
                           />
@@ -6054,7 +6267,7 @@ function PromoSection() {
                       <td className="p-4">
                         {dj.isPromoActive ? (
                           <span className="text-xs font-bold text-green-400 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Pro+ Active (Expires {new Date(dj.promoExpiresAt).toLocaleDateString()})
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Pro+ Active (Expires {formatDate(dj.promoExpiresAt)})
                           </span>
                         ) : dj.isEligible ? (
                           <span className="text-xs font-bold text-[#f4e059] animate-pulse">
@@ -6074,7 +6287,7 @@ function PromoSection() {
                                 { djId: dj.id },
                                 {
                                   onSuccess: () => toast.success(`🎉 1 Month Free Pro+ activated for ${dj.stageName}!`),
-                                  onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to activate promo'),
+                                  onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to activate promo')),
                                 }
                               )
                             }
@@ -6174,7 +6387,7 @@ function PromoSection() {
                         : 'border-white/10 bg-white/5 text-text-muted'
                     }`}
                   >
-                    Pro+ (Legend)
+                    Pro+
                   </button>
                 </div>
               </div>
@@ -6305,7 +6518,7 @@ function AdminFeedSection() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">PUBLIC MIX</span>
-                      <span className="text-xs text-text-muted font-mono">{new Date(mix.createdAt).toLocaleDateString()}</span>
+                      <span className="text-xs text-text-muted font-mono">{formatDate(mix.createdAt)}</span>
                     </div>
                     <p className="text-sm font-bold text-white truncate mt-0.5">{mix.title}</p>
                     <p className="text-xs text-text-muted truncate">
@@ -6555,7 +6768,6 @@ export default function AdminDashboard() {
               <Search className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Search...</span>
             </button>
-            <ThemeToggle />
             <div className="relative">
               <AdminBellButton bellOpen={bellOpen} setBellOpen={setBellOpen} />
               {bellOpen && (
@@ -6668,7 +6880,7 @@ function AdminBellDropdown({ setBellOpen }: { setBellOpen: (v: boolean) => void 
               <div className="flex-1 min-w-0">
                 <p className={`text-xs truncate ${!n.read ? 'font-bold text-text-primary' : 'text-text-secondary'}`}>{n.title}</p>
                 <p className="text-[10px] text-text-muted truncate">{n.message}</p>
-                <p className="text-[10px] text-text-muted mt-0.5">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '--'}</p>
+                <p className="text-[10px] text-text-muted mt-0.5">{formatDate(n.createdAt)}</p>
               </div>
               {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#f4e059] flex-shrink-0 mt-1" />}
             </div>
@@ -6728,8 +6940,8 @@ function OpportunitiesSection() {
                     {opp.isFeatured && <StatusBadge status="featured" />}
                     <StatusBadge status={opp.status} />
                   </div>
-                  <p className="text-sm text-text-secondary">{opp.eventLocation} • {new Date(opp.eventDate).toLocaleDateString()}</p>
-                  <p className="text-sm font-mono text-[#f4e059] mt-1">{opp.budgetCurrency} {opp.budget?.toLocaleString()}</p>
+                  <p className="text-sm text-text-secondary">{opp.eventLocation} • {formatDate(opp.eventDate)}</p>
+                  <p className="text-sm font-mono text-[#f4e059] mt-1">{formatCurrency(opp.budget, opp.budgetCurrency)}</p>
                   <div className="flex items-center gap-2 mt-3">
                     <StatusBadge status={opp.requiredTier === 'legend' ? 'legend' : 'pro'} />
                     <span className="text-xs text-text-muted">{opp.applicants?.length || 0} Applicants</span>
@@ -6753,7 +6965,7 @@ function OpportunitiesSection() {
                     {opp.applicants.map((app: any) => (
                       <div key={app.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5">
                         <div className="flex items-center gap-3">
-                          <img src={getMediaUrl(app.dj?.avatar) || '/default-avatar.jpg'} alt={app.dj?.stageName} className="w-8 h-8 rounded-full border border-gold/30 object-cover" />
+                          <img src={getAvatarImageUrl(app.dj?.avatar)} alt={app.dj?.stageName} className="w-8 h-8 rounded-full border border-gold/30 object-cover" />
                           <div>
                             <p className="text-sm font-bold text-text-primary">{app.dj?.stageName}</p>
                             <StatusBadge status={app.status} />

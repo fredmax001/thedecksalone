@@ -4,6 +4,7 @@ import { Trophy, TrendingUp, TrendingDown, MapPin, ChevronUp, ChevronDown } from
 import { getMediaUrl } from '@/lib/api';
 import SectionHeader from './SectionHeader';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { formatCompactNumber } from '@/lib/formatting';
 import type { HomeDJ } from './types';
 
 interface RankingListProps {
@@ -20,10 +21,6 @@ function getRankColor(rank: number) {
 function getRankBorder(rank: number) {
   if (rank <= 3) return 'border-gold';
   return 'border-white/10';
-}
-
-function formatCompact(n = 0) {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export default function RankingList({ djs }: RankingListProps) {
@@ -99,7 +96,7 @@ export default function RankingList({ djs }: RankingListProps) {
                       {dj.city || 'Freetown'}
                     </span>
                     <span className="text-[10px] sm:text-xs text-text-muted">
-                      {formatCompact(dj.totalStreams || 0)} streams
+                      {formatCompactNumber(dj.totalStreams || 0)} streams
                     </span>
                   </div>
                 </div>

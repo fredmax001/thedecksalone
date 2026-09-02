@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { Repeat, Play } from 'lucide-react';
 import { ReupButton } from '@/components/ReupButton';
+import { getMediaUrl } from '@/lib/api';
+import { formatCompactNumber } from '@/lib/formatting';
 
 interface Mix {
   id: string;
@@ -22,11 +24,15 @@ interface ReupsTabProps {
   reups: ReupItem[];
 }
 
-function formatCompact(num: number): string {
-  return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(num);
+function formatDuration(seconds: number | string | undefined): string {
+  if (!seconds) return '';
+  const s = typeof seconds === 'string' ? parseInt(seconds, 10) : seconds;
+  if (isNaN(s)) return '';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 }
 
 export function ReupsTab({ reups }: ReupsTabProps) {
@@ -64,7 +70,7 @@ export function ReupsTab({ reups }: ReupsTabProps) {
     >
       {reups.map((item, i) => (
         <motion.div
-          key={item.mix.id}
+          key={item.id}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.08, duration: 0.4 }}
@@ -72,7 +78,7 @@ export function ReupsTab({ reups }: ReupsTabProps) {
         >
           <div className="relative aspect-square overflow-hidden">
             <img
-              src={item.mix.coverImage || '/mix-placeholder.jpg'}
+              src={item.mix.coverImage ? getMediaUrl(item.mix.coverImage) : '/mix-placeholder.jpg'}
               alt={item.mix.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
             />
@@ -88,7 +94,7 @@ export function ReupsTab({ reups }: ReupsTabProps) {
             </div>
             {item.mix.duration && (
               <div className="absolute top-3 right-3 px-2 py-1 rounded bg-gold text-black text-xs font-mono-data font-semibold">
-                {item.mix.duration}
+                {formatDuration(item.mix.duration)}
               </div>
             )}
           </div>
@@ -102,10 +108,17 @@ export function ReupsTab({ reups }: ReupsTabProps) {
                 {item.mix.dj.city && ` · ${item.mix.dj.city}`}
               </p>
             )}
+            {item.mix.dj?.avatar && (
+              <img
+                src={getMediaUrl(item.mix.dj.avatar)}
+                alt={item.mix.dj.stageName}
+                className="mt-2 w-6 h-6 rounded-full object-cover"
+              />
+            )}
             <div className="mt-3 flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs text-text-muted">
                 <Play size={12} />
-                <span className="font-mono-data">{formatCompact(item.mix.plays)}</span>
+                <span className="font-mono-data">{formatCompactNumber(item.mix.plays)}</span>
               </div>
               <ReupButton mixId={item.mix.id} size="sm" showCount={false} />
             </div>

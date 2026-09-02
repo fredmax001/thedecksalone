@@ -58,6 +58,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const quickLinks = [
   { icon: CalendarCheck, label: 'My Bookings', path: '/user/bookings', desc: 'Event bookings' },
@@ -129,7 +130,7 @@ export default function UserDashboard() {
         toast.error(res.data.error || 'Could not switch to DJ account');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Could not switch to DJ account');
+      toast.error(getApiErrorMessage(error, 'Could not switch to DJ account'));
     } finally {
       setIsSwitching(false);
       setShowDjDialog(false);

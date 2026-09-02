@@ -35,6 +35,10 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { BookingCalendar } from '@/components/BookingCalendar';
+import { formatCurrency } from '@/lib/formatting';
+import { formatDate } from '@/lib/dateTime';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 interface Booking {
   id: string;
@@ -88,7 +92,7 @@ export default function Bookings() {
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
 
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
   const djId = user?.djProfile?.id;
 
   useEffect(() => {
@@ -125,7 +129,7 @@ export default function Bookings() {
         toast.success(isAlreadyBlocked ? `Unblocked ${dateStr}` : `Blocked ${dateStr} for bookings`);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update date availability');
+      toast.error(getApiErrorMessage(err, 'Failed to update date availability'));
     } finally {
       setUpdatingAvailability(false);
     }
@@ -150,7 +154,7 @@ export default function Bookings() {
         setBookings(res.data.data || []);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load bookings');
+      setError(getApiErrorMessage(err, 'Failed to load bookings'));
     } finally {
       setLoading(false);
     }
@@ -172,7 +176,7 @@ export default function Bookings() {
       setCounterOffer('');
       setCounterNote('');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to update booking');
+      setError(getApiErrorMessage(err, 'Failed to update booking'));
     } finally {
       setProcessing(false);
     }
@@ -278,7 +282,7 @@ export default function Bookings() {
         </Card>
         <Card className="bg-black-surface border-dark-gray">
           <CardContent className="p-4">
-            <p className="text-2xl font-bold text-gold font-display">SLE {totalEarnings.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-gold font-display">{formatCurrency(totalEarnings)}</p>
             <p className="text-xs text-text-secondary mt-1">Total Earnings</p>
           </CardContent>
         </Card>
@@ -445,11 +449,11 @@ export default function Bookings() {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
-                          {new Date(booking.eventDate).toLocaleDateString()}
+                          {formatDate(booking.eventDate)}
                         </span>
                         <span>{booking.eventLocation}</span>
                         <span>{booking.duration}h</span>
-                        <span className="text-gold font-medium">SLE {booking.budget?.toLocaleString()}</span>
+                        <span className="text-gold font-medium">{formatCurrency(booking.budget)}</span>
                       </div>
                       {booking.client && (
                         <p className="text-xs text-text-muted mt-1">Client: {booking.client.email}</p>

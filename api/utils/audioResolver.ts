@@ -15,6 +15,9 @@ export interface ResolvedAudio {
   audioUrl: string;
   audioSource: Exclude<AudioPlatform, null>;
   title?: string;
+  description?: string;
+  genre?: string;
+  tags?: string[];
   duration?: number;
   coverImage?: string;
 }
@@ -172,15 +175,42 @@ function resolveHearthisTrackData(data: any): ResolvedAudio | null {
     if (!isNaN(parsed) && parsed > 0) duration = parsed;
   }
 
+  const description =
+    typeof data.description === 'string' && data.description.trim()
+      ? data.description.trim()
+      : typeof data.desc === 'string' && data.desc.trim()
+        ? data.desc.trim()
+        : undefined;
+
+  const genre =
+    typeof data.genre === 'string' && data.genre.trim()
+      ? data.genre.trim()
+      : undefined;
+
+  const tags = Array.isArray(data.tags)
+    ? data.tags.map((t: any) => String(t).trim()).filter(Boolean)
+    : typeof data.tags === 'string' && data.tags.trim()
+      ? data.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+      : undefined;
+
+  const coverImage =
+    typeof data.artwork_url_original === 'string' && data.artwork_url_original.trim()
+      ? data.artwork_url_original.trim()
+      : typeof data.artwork_url === 'string' && data.artwork_url.trim()
+        ? data.artwork_url.trim()
+        : typeof data.thumb === 'string' && data.thumb.trim()
+          ? data.thumb.trim()
+          : undefined;
+
   return {
     audioUrl: streamUrl,
     audioSource: 'hearthis',
-    title: data.title && typeof data.title === 'string' ? data.title : undefined,
+    title: data.title && typeof data.title === 'string' ? data.title.trim() : undefined,
+    description,
+    genre,
+    tags,
     duration,
-    coverImage:
-      data.artwork_url && typeof data.artwork_url === 'string'
-        ? data.artwork_url
-        : undefined,
+    coverImage,
   };
 }
 

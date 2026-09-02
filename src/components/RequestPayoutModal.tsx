@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { formatCurrency } from '@/lib/formatting';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface RequestPayoutModalProps {
   isOpen: boolean;
@@ -56,7 +58,7 @@ export function RequestPayoutModal({
     }
 
     if (numAmount > availableBalance) {
-      toast.error(`Withdrawal amount exceeds your available balance of SLE ${availableBalance.toLocaleString()}`);
+      toast.error(`Withdrawal amount exceeds your available balance of ${formatCurrency(availableBalance)}`);
       return;
     }
 
@@ -73,7 +75,7 @@ export function RequestPayoutModal({
         onClose();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to submit payout request');
+      toast.error(getApiErrorMessage(err, 'Failed to submit payout request'));
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +127,7 @@ export function RequestPayoutModal({
               <span className="text-[11px] text-gold font-semibold">SLE Currency</span>
             </div>
             <p className="text-2xl font-bold text-white font-display">
-              SLE {availableBalance.toLocaleString()}
+              {formatCurrency(availableBalance)}
             </p>
           </div>
 
@@ -177,7 +179,7 @@ export function RequestPayoutModal({
                   onClick={() => setAmount(String(availableBalance))}
                   className="text-xs text-gold hover:underline"
                 >
-                  Max: SLE {availableBalance.toLocaleString()}
+                  Max: {formatCurrency(availableBalance)}
                 </button>
               </div>
               <Input

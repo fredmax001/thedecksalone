@@ -5,6 +5,7 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadDocument } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { getSubscriptionConfig } = require('../utils/subscriptionConfig');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -41,9 +42,9 @@ function extFromMime(mimetype: string, fallbackName = '') {
 router.get('/pro-subscription/config', authMiddleware, async (_req, res) => {
   try {
     const config = await getSubscriptionConfig();
-    return res.json({ success: true, data: config });
+    return ok(res, config);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -66,20 +67,17 @@ router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         isPro: dj.isPro,
         activePlan: dj.subscriptionTier || (dj.isPro ? 'pro' : 'free'),
         subscriptionActivatedAt: dj.subscriptionActivatedAt,
         latestRequest: dj.proSubscriptionRequests[0] || null,
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -88,11 +86,11 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
   try {
     const parsed = proSubscriptionSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'Payment proof is required' });
+      return fail(res, 400, 'Payment proof is required');
     }
 
     const dj = await prisma.djProfile.findUnique({
@@ -101,7 +99,7 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
     });
 
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
 
     const requestedPlan = parsed.data.plan;
@@ -110,7 +108,7 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
     const plan = config.plans.find((p: any) => p.id === requestedPlan);
 
     if (activePlan === requestedPlan) {
-      return res.status(400).json({ success: false, error: `Your ${plan?.name || requestedPlan} subscription is already active` });
+      return fail(res, 400, `Your ${plan?.name || requestedPlan} subscription is already active`);
     }
 
     const proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
@@ -147,7 +145,7 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     return res.status(existingPending ? 200 : 201).json({ success: true, data: request });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -187,7 +185,7 @@ router.get('/', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -207,16 +205,16 @@ router.get('/:id', authMiddleware, async (req, res) => {
     });
 
     if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
+      return fail(res, 404, 'Payment not found');
     }
 
     if (payment.clientId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
-    return res.json({ success: true, data: payment });
+    return ok(res, payment);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -225,7 +223,7 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const parsed = paymentSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const { bookingId, amount, currency, type } = parsed.data;
@@ -237,11 +235,11 @@ router.post('/', authMiddleware, async (req, res) => {
     });
 
     if (!booking) {
-      return res.status(404).json({ success: false, error: 'Booking not found' });
+      return fail(res, 404, 'Booking not found');
     }
 
     if (booking.clientId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
 
     // Check if payment already exists for this booking and type
@@ -250,7 +248,7 @@ router.post('/', authMiddleware, async (req, res) => {
     });
 
     if (existingPayment) {
-      return res.status(409).json({ success: false, error: 'Payment already exists for this booking' });
+      return fail(res, 409, 'Payment already exists for this booking');
     }
 
     const payment = await prisma.payment.create({
@@ -274,7 +272,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: payment });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -285,7 +283,7 @@ router.post('/:id/process', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN'
   try {
     const parsed = paymentProcessSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
+      return fail(res, 400, 'Invalid input');
     }
 
     const { provider, providerRef } = parsed.data;
@@ -296,11 +294,11 @@ router.post('/:id/process', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN'
     });
 
     if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
+      return fail(res, 404, 'Payment not found');
     }
 
     if (payment.status === 'COMPLETED') {
-      return res.status(400).json({ success: false, error: 'Payment already completed' });
+      return fail(res, 400, 'Payment already completed');
     }
 
     const updated = await prisma.payment.update({
@@ -336,9 +334,9 @@ router.post('/:id/process', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN'
       });
     }
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -351,11 +349,11 @@ router.post('/:id/refund', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN')
     });
 
     if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
+      return fail(res, 404, 'Payment not found');
     }
 
     if (payment.status !== 'COMPLETED') {
-      return res.status(400).json({ success: false, error: 'Only completed payments can be refunded' });
+      return fail(res, 400, 'Only completed payments can be refunded');
     }
 
     const updated = await prisma.payment.update({
@@ -385,9 +383,9 @@ router.post('/:id/refund', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN')
       data: { status: 'REFUNDED' },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

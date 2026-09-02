@@ -4,6 +4,7 @@ import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
 import { cn } from '@/lib/utils';
 import type { FeedDJ, FeedEvent, FeedMix } from './types';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 interface FeedHeroProps {
   mix?: FeedMix | null;
@@ -137,7 +138,7 @@ export default function FeedHero({ mix, event, dj }: FeedHeroProps) {
   }
 
   if (dj) {
-    const avatar = getMediaUrl(dj.avatar) || '/default-avatar.jpg';
+    const avatar = getAvatarImageUrl(dj.avatar);
 
     return (
       <section className="relative overflow-hidden rounded-3xl border border-dark-gray bg-black-surface">

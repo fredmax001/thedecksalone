@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { requirePro, canApplyForOpportunity, canAccessPremiumOpportunities } = require('../middleware/permissions');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get('/', authMiddleware, async (req, res) => {
             include: { djProfile: { select: { id: true, subscriptionTier: true, city: true } } },
         });
         if (!user) {
-            return res.status(401).json({ success: false, error: 'Unauthorized' });
+            return fail(res, 401, 'Unauthorized');
         }
 
         const isAdmin = user.role === 'ADMIN' || user.role === 'FINANCE_ADMIN';
@@ -89,9 +90,9 @@ router.get('/', authMiddleware, async (req, res) => {
             })
             .sort((a, b) => Number(b.nearYou) - Number(a.nearYou));
 
-        return res.json({ success: true, data: mapped });
+        return ok(res, mapped);
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -117,22 +118,19 @@ router.get('/:id', authMiddleware, async (req, res) => {
         });
 
         if (!opportunity) {
-            return res.status(404).json({ success: false, error: 'Opportunity not found' });
+            return fail(res, 404, 'Opportunity not found');
         }
 
         const tier = user?.djProfile?.subscriptionTier || 'free';
-        return res.json({
-            success: true,
-            data: {
+        return ok(res, {
                 ...opportunity,
                 userHasApplied: isAdmin ? false : opportunity.applicants.length > 0,
                 userApplication: isAdmin ? null : (opportunity.applicants[0] || null),
                 canApply: isAdmin ? false : (tier !== 'free' && opportunity.requiredTier !== 'legend' ? true : tier === 'legend'),
                 applicants: isAdmin ? opportunity.applicants : undefined,
-            },
-        });
+            });
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -141,7 +139,7 @@ router.post('/', requireRole(['ADMIN', 'FINANCE_ADMIN']), async (req, res) => {
     try {
         const parsed = opportunitySchema.safeParse(req.body);
         if (!parsed.success) {
-            return res.status(400).json({ success: false, error: 'Invalid input', issues: parsed.error.issues });
+            return fail(res, 400, 'Invalid input', { issues: parsed.error.issues });
         }
 
         const opp = await prisma.opportunity.create({
@@ -154,7 +152,7 @@ router.post('/', requireRole(['ADMIN', 'FINANCE_ADMIN']), async (req, res) => {
 
         return res.status(201).json({ success: true, data: opp });
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -163,7 +161,7 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
     try {
         const parsed = applicationSchema.safeParse(req.body);
         if (!parsed.success) {
-            return res.status(400).json({ success: false, error: 'Invalid input' });
+            return fail(res, 400, 'Invalid input');
         }
 
         const user = await prisma.user.findUnique({
@@ -172,16 +170,12 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
         });
 
         if (!user?.djProfile) {
-            return res.status(404).json({ success: false, error: 'DJ profile not found' });
+            return fail(res, 404, 'DJ profile not found');
         }
 
         // Check if user has Pro subscription
         if (user.djProfile.subscriptionTier === 'free') {
-            return res.status(403).json({
-                success: false,
-                error: 'Upgrade to Pro to apply for opportunities',
-                requiredTier: 'pro',
-            });
+            return fail(res, 403, 'Upgrade to Pro to apply for opportunities', { requiredTier: 'pro' });
         }
 
         const opp = await prisma.opportunity.findUnique({
@@ -189,19 +183,15 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
         });
 
         if (!opp) {
-            return res.status(404).json({ success: false, error: 'Opportunity not found' });
+            return fail(res, 404, 'Opportunity not found');
         }
         if (opp.status !== 'open') {
-            return res.status(400).json({ success: false, error: 'This opportunity is no longer open' });
+            return fail(res, 400, 'This opportunity is no longer open');
         }
 
         // Check if Legend-exclusive and user isn't Legend
         if (opp.requiredTier === 'legend' && user.djProfile.subscriptionTier !== 'legend') {
-            return res.status(403).json({
-                success: false,
-                error: 'This is an exclusive opportunity for Pro+ members',
-                requiredTier: 'legend',
-            });
+            return fail(res, 403, 'This is an exclusive opportunity for Pro+ members', { requiredTier: 'legend' });
         }
 
         // Check if already applied
@@ -210,7 +200,7 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
         });
 
         if (existing) {
-            return res.status(409).json({ success: false, error: 'You have already applied for this opportunity' });
+            return fail(res, 409, 'You have already applied for this opportunity');
         }
 
         const app = await prisma.oppApplications.create({
@@ -223,7 +213,7 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
 
         return res.status(201).json({ success: true, data: app });
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -235,9 +225,9 @@ router.post('/:id/applications/:appId/accept', requireRole(['ADMIN']), async (re
             data: { status: 'accepted', respondedAt: new Date() },
         });
 
-        return res.json({ success: true, data: app });
+        return ok(res, app);
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -249,9 +239,9 @@ router.post('/:id/applications/:appId/reject', requireRole(['ADMIN']), async (re
             data: { status: 'rejected', respondedAt: new Date() },
         });
 
-        return res.json({ success: true, data: app });
+        return ok(res, app);
     } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
+        return fail(res, 500, error.message);
     }
 });
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Megaphone, Sparkles, Play, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, ExternalLink } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
+import { formatDate } from '@/lib/dateTime';
 import { usePlayerStore } from '@/stores/playerStore';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import type { HomeDJ, HomeEvent, HomeMix, HomeAd } from './types';
@@ -40,12 +41,12 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
           id: `ad-${ad.id}`,
           badge: ad.badge || 'Sponsored',
           badgeIcon: 'megaphone',
-          title: ad.title || ad.campaignName || 'Special Promotion',
-          subtitle: ad.subtitle || ad.tagline || 'Featured partner campaign on Deck Salone',
+          title: ad.name || ad.title || ad.campaignName || 'Special Promotion',
+          subtitle: ad.subtitle || ad.tagline || ad.description || 'Featured partner campaign on Deck Salone',
           description: ad.description || ad.subtitle || ad.tagline || 'Explore exclusive offers and highlights from our sponsor.',
-          image: ad.bannerImage || ad.imageUrl || '/og-banner.png',
+          image: ad.creativeImageUrl || ad.bannerImage || ad.imageUrl || ad.advertiser?.avatar || '/og-banner.png',
           cta: ad.ctaText || 'Explore',
-          link: ad.ctaLink || ad.linkUrl || '/discover',
+          link: ad.ctaUrl || ad.ctaLink || ad.linkUrl || '/discover',
           type: 'ad',
           raw: ad,
         });
@@ -94,7 +95,7 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
         badge: 'Upcoming Event',
         badgeIcon: 'sparkles',
         title: event.title,
-        subtitle: `${event.city || 'Freetown'} • ${event.date ? new Date(event.date).toLocaleDateString() : 'Live'}`,
+        subtitle: `${event.city || 'Freetown'} • ${event.date ? formatDate(event.date) : 'Live'}`,
         image: event.coverImage || event.flyerImage || '/og-banner.png',
         cta: 'Get Tickets',
         link: `/events/${event.id}`,

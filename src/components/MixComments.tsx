@@ -17,6 +17,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { useLongPress } from '@/hooks/useLongPress';
 import ModeratorBadge from '@/components/ModeratorBadge';
+import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface CommentUser {
   id: string;
@@ -54,7 +56,15 @@ function formatCommentDate(date: string) {
   });
 }
 
-export default function MixComments({ mixId, djUserId }: { mixId: string; djUserId?: string }) {
+export default function MixComments({
+  mixId,
+  djUserId,
+  className,
+}: {
+  mixId: string;
+  djUserId?: string;
+  className?: string;
+}) {
   const { user, isAuthenticated } = useAuthStore();
   const [comments, setComments] = useState<MixCommentItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -104,7 +114,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
         fetchComments();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to post comment');
+      toast.error(getApiErrorMessage(err, 'Failed to post comment'));
     } finally {
       setSubmitting(false);
     }
@@ -130,7 +140,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
         fetchComments();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to post reply');
+      toast.error(getApiErrorMessage(err, 'Failed to post reply'));
     } finally {
       setSubmitting(false);
     }
@@ -181,7 +191,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
           );
         }
       } catch (err: any) {
-        toast.error(err.response?.data?.error || 'Failed to like comment');
+        toast.error(getApiErrorMessage(err, 'Failed to like comment'));
       } finally {
         setLikingId(null);
       }
@@ -333,7 +343,7 @@ export default function MixComments({ mixId, djUserId }: { mixId: string; djUser
   };
 
   return (
-    <div id="comments" className="mt-10 pt-6 border-t border-white/10 space-y-4">
+    <div id="comments" className={cn("space-y-4", className || "mt-10 pt-6 border-t border-white/10")}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-display font-bold text-sm uppercase text-text-primary flex items-center gap-2">

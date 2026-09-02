@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
+import { passwordSchema } from '@/lib/schemas';
+import { redirectAfterAuth } from '@/lib/navigation';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 /* ─── Constants ─── */
 const CITIES = [
@@ -54,12 +57,7 @@ const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
 // DJ Step 1
 const djStep1Schema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-    .regex(/\d/, 'Must contain at least one number'),
+  password: passwordSchema,
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   stageName: z.string().min(2, 'Stage name must be at least 2 characters'),
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
@@ -91,12 +89,7 @@ const userSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
   phone: z.string().optional(),
   gender: z.string().optional(),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-    .regex(/\d/, 'Must contain at least one number'),
+  password: passwordSchema,
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   terms: z.literal(true),
 }).refine((d) => d.password === d.confirmPassword, {
@@ -141,17 +134,7 @@ export default function Register() {
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
-      if (user.role === 'MODERATOR') navigate('/moderator');
-      else if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') navigate('/admin');
-      else if (user.role === 'FINANCE_ADMIN') navigate('/finance');
-      else if (user.role === 'SUPPORT_ADMIN') navigate('/support');
-      else if (user.role === 'VERIFICATION_ADMIN') navigate('/verification');
-      else if (user.role === 'DJ') {
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        navigate(isMobile ? '/discover' : '/dashboard');
-      } else {
-        navigate('/discover');
-      }
+      redirectAfterAuth(user?.role, navigate);
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -225,7 +208,7 @@ export default function Register() {
         await useAuthStore.getState().fetchMe();
       } catch (err: any) {
         setIsSubmitting(false);
-        setError(err.response?.data?.error || 'Could not create DJ profile');
+        setError(getApiErrorMessage(err, 'Could not create DJ profile'));
         return;
       }
 

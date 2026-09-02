@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
   Pause,
@@ -12,10 +12,10 @@ import {
   Plus,
   Code2,
   Rocket,
-  Share2,
   Lock,
   ListMusic,
-  Check,
+  MessageSquare,
+  Edit2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
@@ -25,7 +25,14 @@ import { cn } from '@/lib/utils';
 import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
 import { toast } from 'sonner';
 import MixDownloadModal from '@/components/MixDownloadModal';
+import ShareButton from '@/components/ShareButton';
+import { ReupButton } from '@/components/ReupButton';
+import { RepostButton } from '@/components/RepostButton';
+import MixComments from '@/components/MixComments';
+import { formatCompactNumber } from '@/lib/formatting';
 import type { FeedMix } from './types';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { isAdminRole } from '@/constants/roles';
 
 interface MixFeedRowProps {
   mix: FeedMix;
@@ -45,10 +52,6 @@ function formatDuration(seconds = 0) {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatCompact(n = 0) {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 function formatDate(d?: string) {
@@ -79,16 +82,17 @@ export default function MixFeedRow({
   const [downloadsCount, setDownloadsCount] = useState<number>(mix.downloads || 0);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [userReactions, setUserReactions] = useState<{ pos: number; emoji: string }[]>([]);
-  const [copiedLink, setCopiedLink] = useState(false);
   const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
 
   const cover = getMediaUrl(mix.coverImage || mix.cover || mix.dj?.avatar) || '/mix-placeholder.jpg';
-  const djName = mix.dj?.stageName || mix.djName || 'Unknown DJ';
+  const djName = mix.dj?.stageName || (typeof mix.dj === 'string' ? mix.dj : '') || mix.djName || (mix as any).djProfile?.stageName || (mix as any).dj?.user?.name || (mix as any).dj?.user?.username || 'DJ Fredmax';
   const genre = mix.genre || mix.category || 'Afrobeats';
   const isCurrent = currentTrack?.id === mix.id;
   const isOwner = Boolean(user?.id && mix.dj?.userId === user.id);
   const isProDj = mix.dj?.subscriptionTier === 'pro' || mix.dj?.subscriptionTier === 'legend' || mix.djTier === 'pro';
+  const isDjUser = isAdminRole(user?.role) || user?.role === 'DJ' || Boolean(user?.djProfile);
 
   const convertedTrack: MixTrack = {
     id: mix.id,
@@ -176,23 +180,13 @@ export default function MixFeedRow({
         } else if (err.response?.data?.requiresSubscription) {
           setDownloadModalMode('subscribe');
         } else {
-          toast.error(err.response?.data?.error || 'Download failed. Please check your subscription.');
+          toast.error(getApiErrorMessage(err, 'Download failed. Please check your subscription.'));
         }
       } else if (err.response?.status === 401) {
         setDownloadModalMode('auth');
       } else {
-        toast.error(err.response?.data?.error || 'Download failed. Please check your subscription.');
+        toast.error(getApiErrorMessage(err, 'Download failed. Please check your subscription.'));
       }
-    }
-  };
-
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const url = `${window.location.origin}/mix/${mix.id}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
     }
   };
 
@@ -265,7 +259,7 @@ export default function MixFeedRow({
         <div className="flex items-center gap-3 sm:gap-4 shrink-0 text-xs font-mono text-text-muted">
           <span className="hidden sm:inline-flex items-center gap-1">
             <Eye className="w-3.5 h-3.5" />
-            {formatCompact(mix.plays)}
+            {formatCompactNumber(mix.plays)}
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 hidden sm:inline" />
@@ -297,11 +291,12 @@ export default function MixFeedRow({
           : 'bg-[#121110] hover:bg-[#161413] border-white/[0.08] hover:border-white/[0.15]'
       )}
     >
+      {/* Warm ambient background */}
       <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-gold/5 via-transparent to-transparent pointer-events-none" />
 
-      <div className="relative flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-5">
-        {/* ─── LEFT: ALBUM ARTWORK + PINNED RANK BADGE ─── */}
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-xl sm:rounded-2xl overflow-hidden bg-black shrink-0 shadow-2xl">
+      <div className="relative flex flex-col sm:flex-row sm:items-stretch gap-3.5 sm:gap-5">
+        {/* ─── DESKTOP ONLY: FULL HEIGHT COVER ARTWORK ON LEFT ─── */}
+        <div className="hidden sm:block relative sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-2xl overflow-hidden bg-black shrink-0 shadow-2xl">
           <img
             src={cover}
             alt={mix.title}
@@ -329,42 +324,79 @@ export default function MixFeedRow({
 
           {mix.isExclusive && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center">
-              <Lock className="w-6 h-6 text-gold mb-1" />
-              <span className="text-[9px] font-black uppercase text-gold tracking-wider">
-                Subscribers Only
+              <Lock className="w-5 h-5 text-gold mb-0.5" />
+              <span className="text-[8px] font-black uppercase text-gold tracking-wider">
+                VIP
               </span>
             </div>
           )}
         </div>
 
-        {/* ─── MIDDLE & RIGHT: TRACK INFO, WAVEFORM & ACTION BAR ─── */}
-        <div className="min-w-0 flex-1 w-full space-y-2.5">
-          {/* Header Row: Play Button, DJ, Title, Genre, Duration */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* ─── RIGHT CONTAINER (DESKTOP) / MAIN CONTAINER (MOBILE) ─── */}
+        <div className="min-w-0 flex-1 flex flex-col justify-between gap-2.5 sm:gap-3">
+          {/* ─── TOP HEADER: (MOBILE INCLUDES COVER) + TRACK INFO & PLAY BUTTON ─── */}
+          <div className="flex items-center sm:items-start gap-3 sm:gap-4">
+            {/* ─── MOBILE ONLY: COMPACT COVER ON LEFT ─── */}
+            <div className="sm:hidden relative w-16 h-16 min-w-[4rem] min-h-[4rem] max-w-[4rem] max-h-[4rem] rounded-xl overflow-hidden bg-black shrink-0 shadow-xl aspect-square">
+              <img
+                src={cover}
+                alt={mix.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+              />
+
+              {rank !== undefined && (
+                <div
+                  className={cn(
+                    'absolute top-0 left-0 px-1.5 py-0.5 rounded-br-lg text-[9px] font-black tracking-tighter shadow-md z-10',
+                    rank === 1
+                      ? 'bg-gold text-black'
+                      : rank === 2
+                      ? 'bg-amber-400 text-black'
+                      : rank === 3
+                      ? 'bg-amber-500 text-black'
+                      : 'bg-black/90 text-gold border-r border-b border-gold/40'
+                  )}
+                >
+                  #{rank}
+                </div>
+              )}
+
+              {mix.isExclusive && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-1 text-center">
+                  <Lock className="w-4 h-4 text-gold mb-0.5" />
+                  <span className="text-[7px] font-black uppercase text-gold">
+                    VIP
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* PLAY BUTTON, DJ, TITLE */}
+            <div className="min-w-0 flex-1 flex items-center gap-2.5 sm:gap-3.5">
               <button
                 onClick={handlePlay}
                 aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
                 className={cn(
-                  'w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center border transition-all shrink-0 shadow-lg',
+                  'w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center border transition-all shrink-0 shadow-lg',
                   isCurrent && isPlaying
                     ? 'bg-gold text-black border-gold scale-105'
                     : 'bg-black/60 hover:bg-gold text-white hover:text-black border-white/80 hover:border-gold hover:scale-105'
                 )}
               >
                 {isCurrent && isPlaying ? (
-                  <Pause className="w-5 h-5 fill-current" />
+                  <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                 ) : (
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
                 )}
               </button>
 
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+                <div className="flex items-center gap-1.5 text-xs text-text-secondary flex-wrap">
                   {mix.dj?.id || (mix as any).djId || djName ? (
                     <Link
                       to={`/dj/${(mix.dj as any)?.username || mix.dj?.id || (mix as any).djId || mix.dj?.stageName || djName}`}
-                      className="font-semibold text-white hover:text-gold hover:underline transition-colors"
+                      className="font-semibold text-white hover:text-gold hover:underline transition-colors truncate"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {djName}
@@ -387,28 +419,29 @@ export default function MixFeedRow({
 
                 <div className="flex items-baseline gap-2 mt-0.5">
                   <Link to={`/mix/${mix.id}`}>
-                    <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate hover:text-gold transition-colors">
+                    <h3 className="font-display text-xs sm:text-base md:text-lg font-bold text-white uppercase tracking-tight truncate hover:text-gold transition-colors">
                       {mix.title}
                     </h3>
                   </Link>
-                  <span className="text-[10px] font-mono text-text-muted hidden sm:inline">
+                  <span className="text-[9px] sm:text-[10px] font-mono text-text-muted hidden sm:inline">
                     320kbit/s
                   </span>
                 </div>
               </div>
             </div>
 
+            {/* GENRE & DURATION */}
             <div className="text-right shrink-0">
-              <div className="text-xs sm:text-sm font-semibold text-text-primary uppercase tracking-tight">
+              <div className="text-[10px] sm:text-xs font-semibold text-text-primary uppercase tracking-tight">
                 {genre}
               </div>
-              <div className="text-xs font-mono text-text-muted mt-0.5">
+              <div className="text-[9px] sm:text-xs font-mono text-text-muted mt-0.5">
                 {formatDuration(mix.duration)}
               </div>
             </div>
           </div>
 
-          {/* Interactive Waveform Display */}
+          {/* ─── WAVEFORM DISPLAY ─── */}
           <div className="w-full py-0.5">
             <WaveformPlayer
               trackId={mix.id}
@@ -420,37 +453,71 @@ export default function MixFeedRow({
             />
           </div>
 
-          {/* ─── BOTTOM ACTION & STATS ROW ─── */}
-          <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs">
-            {/* Left Action Buttons */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto scrollbar-hide py-0.5">
-              {/* 🚀 REACH MORE LISTENERS */}
+        {/* ─── BOTTOM ACTION & STATS ROW ─── */}
+        <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Left Action Buttons */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto scrollbar-hide py-0.5">
+            {/* If DJ Owner: Show Edit & Reach more listeners! / Promote */}
+            {user && ((user as any)?.djProfile?.id === (mix.dj?.id || (mix as any).djId) || user.id === (mix.dj?.id || (mix as any).djId) || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Link
+                  to={`/dashboard/mixes/${mix.id}/edit`}
+                  className="w-7 h-7 rounded-full bg-gold text-black flex items-center justify-center hover:brightness-110 shadow shrink-0 active:scale-95 transition-all"
+                  title="Edit Your Mix"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </Link>
+                <button
+                  onClick={() => (onOpenPromote ? onOpenPromote(convertedTrack) : null)}
+                  className="inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-gold hover:brightness-110 text-black font-bold text-[10px] sm:text-[11px] uppercase tracking-wider shadow-md shadow-gold/20 active:scale-95 transition-all shrink-0"
+                  title="Reach more listeners"
+                >
+                  <Rocket className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reach more listeners!</span>
+                  <span className="sm:hidden">Promote</span>
+                </button>
+              </div>
+            ) : (
+              /* If regular user / listener: Show Comment button dropdown toggle */
               <button
-                onClick={() => (onOpenPromote ? onOpenPromote(convertedTrack) : null)}
-                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-gold hover:brightness-110 text-black font-bold text-[10px] sm:text-[11px] uppercase tracking-wider shadow-md shadow-gold/20 active:scale-95 transition-all shrink-0"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowComments((prev) => !prev);
+                }}
+                className={cn(
+                  'inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-bold text-[10px] sm:text-[11px] uppercase tracking-wider border shadow-sm active:scale-95 transition-all shrink-0',
+                  showComments
+                    ? 'bg-gold text-black border-gold'
+                    : 'bg-white/[0.08] hover:bg-gold text-white hover:text-black border-white/10 hover:border-gold'
+                )}
+                title={showComments ? 'Hide Comments' : 'Comment on this mix'}
               >
-                <Rocket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span className="hidden sm:inline">Reach more listeners!</span>
-                <span className="sm:hidden">Promote</span>
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{showComments ? 'Hide Comments' : 'Comment'}</span>
+                <span className="sm:hidden">{showComments ? 'Hide' : 'Comment'}</span>
               </button>
+            )}
 
-              {/* </> Embed */}
-              <button
-                onClick={() => (onOpenEmbed ? onOpenEmbed(convertedTrack) : null)}
-                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
-              >
-                <Code2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Embed</span>
-              </button>
+            {/* </> Embed */}
+            <button
+              onClick={() => (onOpenEmbed ? onOpenEmbed(convertedTrack) : null)}
+              className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+              title="Embed"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Embed</span>
+            </button>
 
               {/* + Add Dropdown */}
               <div className="relative shrink-0">
                 <button
                   onClick={() => setShowAddMenu((prev) => !prev)}
-                  className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors"
+                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors"
+                  title="Add"
                 >
-                  <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Add ▾</span>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Add ▾</span>
                 </button>
 
                 {showAddMenu && (
@@ -465,14 +532,14 @@ export default function MixFeedRow({
                       <ListMusic className="w-3.5 h-3.5 text-gold" />
                       Add to Play Queue
                     </button>
-                    <Link
-                      to={`/playlists`}
-                      onClick={() => setShowAddMenu(false)}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-gold" />
-                      Save to Playlist
-                    </Link>
+                    {isDjUser && (
+                      <ReupButton
+                        mixId={mix.id}
+                        size="sm"
+                        showCount={false}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2"
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -480,10 +547,11 @@ export default function MixFeedRow({
               {/* ⬇ Download */}
               <button
                 onClick={handleDownload}
-                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+                className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+                title="Download"
               >
-                <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Download</span>
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Download</span>
               </button>
             </div>
 
@@ -539,16 +607,47 @@ export default function MixFeedRow({
                 <span>{likesCount}</span>
               </button>
 
+              {/* Repost */}
+              <RepostButton mixId={mix.id} size="sm" showCount={true} />
+
               {/* Share */}
-              <button
-                onClick={handleShare}
-                className="hover:text-white transition-colors p-1"
-                title="Share Mix"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Share2 className="w-3.5 h-3.5" />}
-              </button>
+              <ShareButton
+                url={`${window.location.origin}/mix/${mix.id}`}
+                title={mix.title}
+                preview={{
+                  type: 'mix',
+                  title: mix.title,
+                  coverImage: cover,
+                  djName,
+                  genre,
+                  plays: mix.plays,
+                  duration: mix.duration,
+                }}
+                size="sm"
+                menuPosition="top"
+              />
             </div>
           </div>
+
+          {/* ─── INLINE COMMENTS DROPDOWN DRAWER ─── */}
+          <AnimatePresence>
+            {showComments && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="w-full pt-3 mt-2 border-t border-white/10 overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MixComments
+                  mixId={mix.id}
+                  djUserId={mix.dj?.id || (mix as any).djId}
+                  className="mt-1 pt-1 border-0"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

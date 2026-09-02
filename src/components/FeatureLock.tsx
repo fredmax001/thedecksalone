@@ -95,7 +95,7 @@ export const FeatureLock: React.FC<FeatureLockProps> = ({
                 {/* Text */}
                 <div className="text-center max-w-[280px]">
                     <h4 className="font-display font-bold text-white text-lg mb-1 tracking-wide">
-                        {tier.toUpperCase()} FEATURE
+                        {tier === 'legend' ? 'PRO+' : 'PRO'} FEATURE
                     </h4>
                     <p className="text-sm text-white/60 mb-6 leading-relaxed">
                         {message || `Upgrade to ${tier === 'pro' ? 'Pro' : 'Pro+'} to unlock this feature and elevate your DJ career.`}
@@ -152,7 +152,7 @@ export const FullPageLock: React.FC<{
                 {/* Tier Badge */}
                 <div className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full border mb-6 text-xs font-semibold tracking-widest uppercase", config.bg, config.border, config.text)}>
                     <Icon className="w-3.5 h-3.5" />
-                    {tier} Exclusive
+                    {tier === 'legend' ? 'Pro+' : 'Pro'} Exclusive
                 </div>
 
                 {/* Lock Icon */}

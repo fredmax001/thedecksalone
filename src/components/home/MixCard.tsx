@@ -4,15 +4,12 @@ import { Play } from 'lucide-react';
 import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import { formatCompactNumber } from '@/lib/formatting';
 import type { HomeMix } from './types';
 
 interface MixCardProps {
   mix: HomeMix;
   index?: number;
-}
-
-function formatCompact(n = 0) {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export default function MixCard({ mix, index = 0 }: MixCardProps) {
@@ -90,7 +87,7 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
           ) : (
             <span>{mix.dj?.stageName || 'Deck Salone'}</span>
           )}
-          {' '}• {formatCompact(mix.plays || 0)} plays
+          {' '}• {formatCompactNumber(mix.plays || 0)} plays
         </p>
       </div>
     </motion.div>

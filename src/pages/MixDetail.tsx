@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag, Download } from 'lucide-react';
+import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2 } from 'lucide-react';
 import { useMix, useLikeMix } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
 import ShareButton from '@/components/ShareButton';
+import { RepostButton } from '@/components/RepostButton';
 import ReportModal from '@/components/ReportModal';
 import MixDownloadModal from '@/components/MixDownloadModal';
 import DjSupportModal from '@/components/DjSupportModal';
@@ -15,6 +16,9 @@ import MixRecommendations from '@/components/MixRecommendations';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { formatCompactNumber } from '@/lib/formatting';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -25,14 +29,10 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function formatCompact(n: number): string {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
-}
-
 export default function MixDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: mix, isLoading, error } = useMix(id);
-  const { isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const { mutate: likeMix } = useLikeMix();
   const [showReportModal, setShowReportModal] = useState(false);
   const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
@@ -105,11 +105,11 @@ export default function MixDetail() {
         if (err.response?.data?.requiresRepost) setDownloadModalMode('repost');
         else if (err.response?.data?.requiresFollow) setDownloadModalMode('follow');
         else if (err.response?.data?.requiresSubscription) setDownloadModalMode('subscribe');
-        else toast.error('Download failed', { description: err.response?.data?.error || 'Unable to download this mix.' });
+        else toast.error('Download failed', { description: getApiErrorMessage(err, 'Unable to download this mix.') });
       } else if (err.response?.status === 401) {
         setDownloadModalMode('auth');
       } else {
-        toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+        toast.error('Download failed', { description: getApiErrorMessage(err, 'Please try again.') });
       }
     } finally {
       setDownloading(false);
@@ -126,7 +126,7 @@ export default function MixDetail() {
       toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
       if (err.response?.status !== 403) {
-        toast.error('Download failed', { description: err.response?.data?.error || 'Please try again.' });
+        toast.error('Download failed', { description: getApiErrorMessage(err, 'Please try again.') });
       }
     } finally {
       setDownloading(false);
@@ -250,8 +250,8 @@ export default function MixDetail() {
                   <Clock size={14} className="text-gold" />
                   {formatDuration(mix.duration || 0)}
                 </span>
-                <span className="font-mono">{formatCompact(mix.plays || 0)} Plays</span>
-                <span className="font-mono">{formatCompact(mix.likes || 0)} Likes</span>
+                <span className="font-mono">{formatCompactNumber(mix.plays || 0)} Plays</span>
+                <span className="font-mono">{formatCompactNumber(mix.likes || 0)} Likes</span>
               </div>
 
               {mix.description && (
@@ -273,7 +273,7 @@ export default function MixDetail() {
                   onClick={handleLike}
                   className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
                 >
-                  <Heart size={15} className="mr-1.5" /> Like ({mix.likes || 0})
+                  <Heart size={15} className="mr-1.5" /> <span className="hidden sm:inline">Like</span> ({mix.likes || 0})
                 </Button>
                 <Button
                   variant="outline"
@@ -281,7 +281,7 @@ export default function MixDetail() {
                   disabled={downloading}
                   className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
                 >
-                  <Download size={15} className="mr-1.5" /> {downloading ? '...' : 'Download'}
+                  <Download size={15} className="mr-1.5" /> <span className="hidden sm:inline">{downloading ? '...' : 'Download'}</span>
                 </Button>
                 <ShareButton
                   url={mixUrl}
@@ -300,13 +300,23 @@ export default function MixDetail() {
                     duration: mix.duration,
                   }}
                 />
+                <RepostButton mixId={mix.id} size="md" showCount={true} />
+                {user && ((user as any).djProfile?.id === mix.dj?.id || user.id === mix.dj?.user?.id || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
+                  <Link
+                    to={`/dashboard/mixes/${mix.id}/edit`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#f4e059] text-black font-bold text-xs uppercase shadow hover:brightness-110 transition-all"
+                    title="Edit Your Mix"
+                  >
+                    <Edit2 size={14} /> <span>Edit Mix</span>
+                  </Link>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setShowReportModal(true)}
                   className="border-white/10 text-text-muted hover:text-red hover:border-red/40 text-xs font-semibold rounded-full px-4"
                   title="Report Mix"
                 >
-                  <Flag size={14} className="mr-1.5" /> Report
+                  <Flag size={14} className="mr-1.5" /> <span className="hidden sm:inline">Report</span>
                 </Button>
               </div>
 
@@ -359,7 +369,7 @@ export default function MixDetail() {
                     <div className="flex items-center gap-3.5">
                       <Link to={`/dj/${djIdentifier}`} className="shrink-0 relative">
                         <img
-                          src={getMediaUrl(djProfile.avatar) || '/default-avatar.jpg'}
+                          src={getAvatarImageUrl(djProfile.avatar)}
                           alt={djProfile.stageName}
                           className="w-14 h-14 rounded-full object-cover border-2 border-gold/40"
                         />
@@ -399,7 +409,9 @@ export default function MixDetail() {
           </div>
 
           {/* ─── Comments Section ─── */}
-          <MixComments mixId={mix.id} djUserId={djProfile?.userId} />
+          <div id="comments">
+            <MixComments mixId={mix.id} djUserId={djProfile?.userId} />
+          </div>
 
           {/* ─── Recommendations Section ─── */}
           <MixRecommendations mixId={mix.id} djName={djProfile?.stageName} />

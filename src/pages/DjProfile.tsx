@@ -33,18 +33,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn, imageFallback } from "@/lib/utils";
+import { formatCompactNumber } from "@/lib/formatting";
 import { api, getMediaUrl } from "@/lib/api";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useDJ, useDJs, useFollowDj, useIsFollowingDj } from "@/hooks/useDJs";
 import { HighlightsTab } from "@/components/profile/HighlightsTab";
+import { ReupsTab } from "@/components/profile/ReupsTab";
 import { useReviews } from "@/hooks/useReviews";
 import { useRankingHistory } from "@/hooks/useRankings";
 import { useCreateBooking, type BookingData } from "@/hooks/useBookings";
 import ShareButton from "@/components/ShareButton";
 import DjSupportModal from "@/components/DjSupportModal";
 import { BookingCalendar } from "@/components/BookingCalendar";
+import { getAvatarImageUrl } from '@/lib/utils';
 import {
   XAxis,
   YAxis,
@@ -181,13 +184,6 @@ interface RankingHistoryPoint {
 /* ───── Helpers ───── */
 function formatNumber(num: number): string {
   return new Intl.NumberFormat("en-US").format(num);
-}
-
-function formatCompact(num: number): string {
-  return new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(num);
 }
 
 function formatDate(dateStr: string): string {
@@ -725,7 +721,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                     </span>
                   </div>
                   <span className="font-mono-data text-sm text-gold">
-                    {formatCompact(platform.followers)}
+                    {formatCompactNumber(platform.followers)}
                   </span>
                 </div>
               ))}
@@ -970,7 +966,7 @@ function MixesTab({ dj }: { dj: DJ }) {
               <div className="mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-text-muted">
                   <Play size={12} />
-                  <span className="font-mono-data">{formatCompact(mix.plays)}</span>
+                  <span className="font-mono-data">{formatCompactNumber(mix.plays)}</span>
                 </div>
                 <button
                   onClick={() => toggleLike(mix.id)}
@@ -1227,8 +1223,8 @@ function StatsTab({ dj }: { dj: DJ }) {
   );
 
   const metrics = [
-    { label: "Total Streams", value: formatCompact(dj.totalStreams), color: "gold" },
-    { label: "Followers", value: formatCompact(dj.totalFollowers), color: "text-primary" },
+    { label: "Total Streams", value: formatCompactNumber(dj.totalStreams), color: "gold" },
+    { label: "Followers", value: formatCompactNumber(dj.totalFollowers), color: "text-primary" },
     { label: "Mixes", value: formatNumber(dj.totalMixes), color: "text-primary" },
     { label: "Bookings", value: formatNumber(dj.totalBookings), color: "text-primary" },
     { label: "Events", value: formatNumber(dj.totalEvents), color: "text-primary" },
@@ -1714,7 +1710,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
           >
             <div className="relative aspect-square overflow-hidden">
               <img
-                src={getMediaUrl(djItem.avatar) || '/default-avatar.jpg'}
+                src={getAvatarImageUrl(djItem.avatar)}
                 alt={djItem.stageName}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
               />
@@ -1745,7 +1741,7 @@ function SimilarDJsSection({ currentDj }: { currentDj: DJ }) {
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <p className="font-mono-data text-xs text-text-primary">{formatCompact(djItem.totalFollowers)}</p>
+                  <p className="font-mono-data text-xs text-text-primary">{formatCompactNumber(djItem.totalFollowers)}</p>
                   <p className="text-[9px] text-text-muted uppercase">Followers</p>
                 </div>
                 <div>
@@ -1958,6 +1954,7 @@ export default function DjProfile() {
     () => [
       { key: "overview", label: "Overview" },
       { key: "highlights", label: "Highlights", count: dj?.highlights?.length },
+      { key: "reups", label: "Re-ups", count: dj?.reups?.length },
       { key: "mixes", label: "Mixes", count: dj?.totalMixes },
       { key: "sets", label: "Sets & Playlists" },
       { key: "photos", label: "Photos", count: dj?.photos?.length },
@@ -2046,7 +2043,7 @@ export default function DjProfile() {
                 <div className="absolute inset-0 rounded-full border border-yellow-400/50 animate-ping opacity-20" style={{ animationDuration: '3s' }} />
               )}
               <img
-                src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                src={getAvatarImageUrl(dj.avatar)}
                 alt={dj.stageName}
                 onError={imageFallback}
                 className="w-full h-full object-cover"
@@ -2214,7 +2211,7 @@ export default function DjProfile() {
           {[
             { label: "NATIONAL RANK", value: `#${dj.rankingPosition}`, color: "gold" },
             { label: "RANKING SCORE", value: dj.rankingScore, color: "gold" },
-            { label: "FOLLOWERS", value: formatCompact(dj.totalFollowers), color: "text-primary" },
+            { label: "FOLLOWERS", value: formatCompactNumber(dj.totalFollowers), color: "text-primary" },
             { label: "MIXES", value: dj.totalMixes, color: "text-primary" },
             { label: "RATING", value: dj.averageRating.toFixed(1), color: "gold", showStar: true },
           ].map((stat) => (
@@ -2289,6 +2286,7 @@ export default function DjProfile() {
           >
             {activeTab === "overview" && <OverviewTab dj={dj} onBookClick={() => setIsBookingOpen(true)} />}
             {activeTab === "highlights" && <HighlightsTab highlights={dj.highlights || []} />}
+            {activeTab === "reups" && <ReupsTab reups={dj.reups || []} />}
             {activeTab === "mixes" && <MixesTab dj={dj} />}
             {activeTab === "sets" && <SetsTab djId={dj.id} />}
             {activeTab === "photos" && <PhotosTab dj={dj} />}

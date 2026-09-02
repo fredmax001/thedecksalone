@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import type { SharePreview } from "./ShareButton";
 import { cn } from "@/lib/utils";
 import { getMediaUrl } from "@/lib/api";
+import { formatCompactNumber } from "@/lib/formatting";
 
 interface StoryPosterModalProps {
   isOpen: boolean;
@@ -48,13 +49,6 @@ const PRESET_THEMES: ColorTheme[] = [
   { name: "Pink", accent: "#ec4899", accentLight: "#f472b6", accentDark: "#be185d" },
   { name: "Cyan", accent: "#06b6d4", accentLight: "#22d3ee", accentDark: "#0891b2" },
 ];
-
-function formatCompact(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(n);
-}
 
 function formatDuration(seconds: number): string {
   if (!seconds) return "0:00";
@@ -162,7 +156,7 @@ export default function StoryPosterModal({
     details.push({ label: "Now Playing on Deck Salone", icon: "🔥" });
     if (preview.duration) details.push({ label: `Duration: ${formatDuration(preview.duration)}`, icon: "⏱️" });
     if (preview.genre) details.push({ label: preview.genre, icon: "🎵" });
-    if (preview.plays) details.push({ label: `${formatCompact(preview.plays)} Plays`, icon: "▶️" });
+    if (preview.plays) details.push({ label: `${formatCompactNumber(preview.plays)} Plays`, icon: "▶️" });
     if (preview.artist) details.push({ label: preview.artist, icon: "🎤" });
     return details.slice(0, 4);
   };
@@ -173,7 +167,7 @@ export default function StoryPosterModal({
     if (preview.rankingPosition) details.push({ label: `#${preview.rankingPosition} Ranked DJ`, icon: "🏆" });
     if (preview.city) details.push({ label: preview.city, icon: "📍" });
     if (preview.genres?.length) details.push({ label: preview.genres.slice(0, 2).join(" • "), icon: "🎵" });
-    if (preview.followers) details.push({ label: `${formatCompact(preview.followers)} Followers`, icon: "⭐" });
+    if (preview.followers) details.push({ label: `${formatCompactNumber(preview.followers)} Followers`, icon: "⭐" });
     if (details.length < 4) details.push({ label: "Verified DJ", icon: "✅" });
     return details.slice(0, 4);
   };

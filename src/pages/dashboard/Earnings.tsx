@@ -30,6 +30,9 @@ import {
 } from 'recharts';
 import { PayoutMethodModal } from '@/components/PayoutMethodModal';
 import { RequestPayoutModal } from '@/components/RequestPayoutModal';
+import { formatCurrency } from '@/lib/formatting';
+import { formatDate } from '@/lib/dateTime';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 interface Payment {
   id: string;
@@ -59,7 +62,7 @@ export default function Earnings() {
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
 
   const loadData = async () => {
     try {
@@ -168,7 +171,7 @@ export default function Earnings() {
                   <Wallet className="w-4 h-4 text-gold" />
                   <span className="text-xs text-text-secondary">Total Earnings</span>
                 </div>
-                <p className="text-2xl font-bold text-text-primary font-display">SLE {totalEarnings.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-text-primary font-display">{formatCurrency(totalEarnings)}</p>
               </CardContent>
             </Card>
             <Card className="bg-black-surface border-dark-gray">
@@ -177,7 +180,7 @@ export default function Earnings() {
                   <TrendingUp className="w-4 h-4 text-green" />
                   <span className="text-xs text-text-secondary">This Month</span>
                 </div>
-                <p className="text-2xl font-bold text-text-primary font-display">SLE {thisMonthEarnings.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-text-primary font-display">{formatCurrency(thisMonthEarnings)}</p>
               </CardContent>
             </Card>
             <Card className="bg-black-surface border-dark-gray">
@@ -186,7 +189,7 @@ export default function Earnings() {
                   <Clock className="w-4 h-4 text-yellow-500" />
                   <span className="text-xs text-text-secondary">Pending Payout</span>
                 </div>
-                <p className="text-2xl font-bold text-text-primary font-display">SLE {pendingPayout.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-text-primary font-display">{formatCurrency(pendingPayout)}</p>
               </CardContent>
             </Card>
             <Card className="bg-black-surface border-dark-gray">
@@ -195,7 +198,7 @@ export default function Earnings() {
                   <ArrowUpRight className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs text-text-secondary">Available to Withdraw</span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-400 font-display">SLE {availableBalance.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-emerald-400 font-display">{formatCurrency(availableBalance)}</p>
               </CardContent>
             </Card>
           </div>
@@ -276,7 +279,7 @@ export default function Earnings() {
                 <div className="flex flex-wrap items-center justify-between gap-4 p-3.5 rounded-xl bg-black-elevated border border-white/10">
                   <div>
                     <p className="text-[11px] text-text-muted uppercase">Ready for Withdrawal</p>
-                    <p className="text-xl font-bold text-emerald-400 font-display">SLE {availableBalance.toLocaleString()}</p>
+                    <p className="text-xl font-bold text-emerald-400 font-display">{formatCurrency(availableBalance)}</p>
                   </div>
                   <Button
                     onClick={() => {
@@ -315,10 +318,10 @@ export default function Earnings() {
                     >
                       <div>
                         <p className="font-semibold text-white">
-                          Withdrawal: SLE {req.amount.toLocaleString()}
+                          Withdrawal: {formatCurrency(req.amount)}
                         </p>
                         <p className="text-[11px] text-text-muted mt-0.5">
-                          {new Date(req.createdAt).toLocaleDateString()} • {req.payoutMethod?.type || 'Payout'} ({req.payoutMethod?.accountNumber || '--'})
+                          {formatDate(req.createdAt)} • {req.payoutMethod?.type || 'Payout'} ({req.payoutMethod?.accountNumber || '--'})
                         </p>
                       </div>
                       <div className="text-right">
@@ -361,7 +364,7 @@ export default function Earnings() {
                         fontSize: '12px',
                         color: '#F5F5F5',
                       }}
-                      formatter={(value: number) => [`SLE ${value.toLocaleString()}`, 'Earnings']}
+                      formatter={(value: number) => [formatCurrency(value), 'Earnings']}
                     />
                     <Bar dataKey="earnings" fill="#f4e059" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -386,24 +389,28 @@ export default function Earnings() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {payments.map((payment) => (
+                  {payments.map((payment: any) => (
                     <div
                       key={payment.id}
                       className="flex items-center justify-between p-3 rounded-xl bg-black border border-dark-gray"
                     >
                       <div>
                         <p className="font-semibold text-text-primary text-sm">
-                          {payment.type === 'BOOKING' && payment.booking
-                            ? `Booking: ${payment.booking.eventType}`
+                          {payment.type === 'ticket_sale'
+                            ? `🎟️ Ticket: ${payment.ticket?.eventTitle || 'Event'} (${payment.ticket?.ticketTypeName || 'Pass'})`
+                            : payment.type === 'booking' || (payment.type === 'BOOKING' && payment.booking)
+                            ? `Booking: ${payment.booking?.eventType || 'Gig'}`
                             : 'Payout / VIP Fan Pass'}
                         </p>
                         <p className="text-xs text-text-muted mt-1">
-                          {new Date(payment.createdAt).toLocaleDateString()}
+                          {formatDate(payment.createdAt)}
+                          {payment.ticket?.buyer && ` · Buyer: ${payment.ticket.buyer}`}
+                          {payment.ticket?.ticketNumber && ` · #${payment.ticket.ticketNumber}`}
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-gold text-sm font-display">
-                          +SLE {payment.amount.toLocaleString()}
+                          +{formatCurrency(payment.amount, payment.currency || 'SLE')}
                         </p>
                         <Badge
                           variant="outline"
@@ -447,5 +454,3 @@ export default function Earnings() {
     </div>
   );
 }
-
-

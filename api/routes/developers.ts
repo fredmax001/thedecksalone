@@ -1,4 +1,5 @@
 const express = require('express');
+const { ok, fail } = require('../utils/response');
 const router = express.Router();
 const { z } = require('zod');
 const crypto = require('crypto');
@@ -40,11 +41,7 @@ router.post('/apply', softAuthMiddleware, async (req: any, res: any) => {
   try {
     const parsed = developerApplicationSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid application data',
-        details: parsed.error.flatten(),
-      });
+      return fail(res, 400, 'Invalid application data', { details: parsed.error.flatten() });
     }
 
     const {
@@ -137,10 +134,7 @@ router.post('/apply', softAuthMiddleware, async (req: any, res: any) => {
     });
   } catch (error: any) {
     logger.error('Error submitting developer API application', { error });
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to submit developer API application. Please try again or contact contact@decksalone.com.',
-    });
+    return fail(res, 500, 'Failed to submit developer API application. Please try again or contact contact@decksalone.com.');
   }
 });
 

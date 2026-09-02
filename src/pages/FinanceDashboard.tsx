@@ -51,6 +51,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMediaUrl } from '@/lib/api';
+import { formatCurrency } from '@/lib/formatting';
+import { formatDate, formatDateTime } from '@/lib/dateTime';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const SIDEBAR_ITEMS = [
   { id: 'overview', label: 'Financial Overview', icon: BarChart3 },
@@ -59,9 +62,6 @@ const SIDEBAR_ITEMS = [
   { id: 'reports', label: 'Financial Reports', icon: FileText },
 ];
 
-function formatCurrency(amount: number) {
-  return `SLE ${new Intl.NumberFormat('en-SL', { maximumFractionDigits: 0 }).format(amount || 0)}`;
-}
 
 function StatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
@@ -116,7 +116,7 @@ export default function FinanceDashboard() {
       await approveProRequest.mutateAsync({ id });
       toast.success('Pro subscription request approved successfully!');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to approve request');
+      toast.error(getApiErrorMessage(err, 'Failed to approve request'));
     }
   };
 
@@ -127,7 +127,7 @@ export default function FinanceDashboard() {
       await rejectProRequest.mutateAsync({ id, note: reason });
       toast.success('Subscription request rejected.');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to reject request');
+      toast.error(getApiErrorMessage(err, 'Failed to reject request'));
     }
   };
 
@@ -145,7 +145,7 @@ export default function FinanceDashboard() {
       setGrantModalDjId(null);
       setGrantReason('');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to grant plan');
+      toast.error(getApiErrorMessage(err, 'Failed to grant plan'));
     }
   };
 
@@ -431,7 +431,7 @@ export default function FinanceDashboard() {
 
                     <div>
                       <div className="flex justify-between text-xs font-semibold mb-1">
-                        <span className="text-gold">Pro+ (Legend) Tier</span>
+                        <span className="text-gold">Pro+ Tier</span>
                         <span className="text-gold">{legendCount} DJs</span>
                       </div>
                       <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
@@ -496,11 +496,11 @@ export default function FinanceDashboard() {
                               </TableCell>
                               <TableCell>
                                 <Badge className={req.plan === 'legend' ? 'bg-gold/20 text-gold border-gold/40' : 'bg-blue-500/20 text-blue-400 border-blue-500/40'}>
-                                  {req.plan?.toUpperCase()}
+                                  {req.plan === 'legend' ? 'Pro+' : req.plan?.toUpperCase()}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-xs text-text-secondary">{req.paymentMethod || 'Orange Money'}</TableCell>
-                              <TableCell className="text-xs text-text-muted font-mono">{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '--'}</TableCell>
+                              <TableCell className="text-xs text-text-muted font-mono">{formatDate(req.createdAt)}</TableCell>
                               <TableCell>
                                 {req.proofUrl ? (
                                   <Button
@@ -569,7 +569,7 @@ export default function FinanceDashboard() {
                             <TableCell className="text-xs text-text-secondary">{dj.email}</TableCell>
                             <TableCell>
                               <Badge className={dj.subscriptionTier === 'legend' ? 'bg-gold/20 text-gold border-gold/40' : dj.subscriptionTier === 'pro' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-zinc-800 text-zinc-400'}>
-                                {dj.subscriptionTier ? dj.subscriptionTier.toUpperCase() : 'FREE'}
+                                {dj.subscriptionTier === 'legend' ? 'Pro+' : dj.subscriptionTier ? dj.subscriptionTier.toUpperCase() : 'FREE'}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-xs font-mono text-gold">{dj.referralCount || 0} DJs</TableCell>
@@ -645,7 +645,7 @@ export default function FinanceDashboard() {
                             <TableCell className="text-xs text-emerald-400 font-bold">{formatCurrency(p.amount)}</TableCell>
                             <TableCell className="text-xs text-text-secondary">{p.paymentMethod || 'Orange Money'}</TableCell>
                             <TableCell><StatusBadge status={p.status || 'COMPLETED'} /></TableCell>
-                            <TableCell className="text-xs text-text-muted font-mono">{p.createdAt ? new Date(p.createdAt).toLocaleString() : '--'}</TableCell>
+                            <TableCell className="text-xs text-text-muted font-mono">{formatDateTime(p.createdAt)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -738,7 +738,7 @@ export default function FinanceDashboard() {
                   className="w-full bg-black-elevated border border-dark-gray text-white text-xs rounded-xl p-2.5 focus:border-gold outline-none"
                 >
                   <option value="pro">Pro Tier</option>
-                  <option value="legend">Pro+ (Legend) Tier</option>
+                  <option value="legend">Pro+ Tier</option>
                 </select>
               </div>
 

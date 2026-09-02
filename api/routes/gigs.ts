@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { bookingLimiter } = require('../utils/rateLimiter');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -46,13 +47,13 @@ router.post('/', bookingLimiter, async (req, res) => {
   try {
     const parsed = createGigSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const data = parsed.data;
     const eventDate = new Date(data.eventDate);
     if (Number.isNaN(eventDate.getTime())) {
-      return res.status(400).json({ success: false, error: 'Invalid event date' });
+      return fail(res, 400, 'Invalid event date');
     }
 
     const gig = await prisma.gig.create({
@@ -64,7 +65,7 @@ router.post('/', bookingLimiter, async (req, res) => {
 
     return res.status(201).json({ success: true, data: gig });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -73,7 +74,7 @@ router.get('/', authMiddleware, requireRole('DJ', 'ADMIN'), async (req, res) => 
   try {
     const parsed = gigListFilterSchema.safeParse(req.query);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid filters' });
+      return fail(res, 400, 'Invalid filters');
     }
 
     const { status = 'OPEN', city, eventType, sortBy, page, limit } = parsed.data;
@@ -111,7 +112,7 @@ router.get('/', authMiddleware, requireRole('DJ', 'ADMIN'), async (req, res) => 
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -128,12 +129,12 @@ router.get('/:id', authMiddleware, requireRole('DJ', 'ADMIN'), async (req, res) 
     });
 
     if (!gig) {
-      return res.status(404).json({ success: false, error: 'Opportunity not found' });
+      return fail(res, 404, 'Opportunity not found');
     }
 
-    return res.json({ success: true, data: gig });
+    return ok(res, gig);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -142,7 +143,7 @@ router.get('/:id/matches', authMiddleware, requireRole('DJ', 'ADMIN'), async (re
   try {
     const gig = await prisma.gig.findUnique({ where: { id: req.params.id } });
     if (!gig) {
-      return res.status(404).json({ success: false, error: 'Opportunity not found' });
+      return fail(res, 404, 'Opportunity not found');
     }
 
     const djs = await prisma.djProfile.findMany({
@@ -203,9 +204,9 @@ router.get('/:id/matches', authMiddleware, requireRole('DJ', 'ADMIN'), async (re
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
 
-    return res.json({ success: true, data: scored });
+    return ok(res, scored);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -214,30 +215,30 @@ router.post('/:id/apply', authMiddleware, requireRole('DJ'), async (req, res) =>
   try {
     const gig = await prisma.gig.findUnique({ where: { id: req.params.id } });
     if (!gig) {
-      return res.status(404).json({ success: false, error: 'Opportunity not found' });
+      return fail(res, 404, 'Opportunity not found');
     }
     if (gig.status !== 'OPEN') {
-      return res.status(400).json({ success: false, error: 'This opportunity is no longer open' });
+      return fail(res, 400, 'This opportunity is no longer open');
     }
 
     const dj = await prisma.djProfile.findUnique({ where: { userId: req.user.id } });
     if (!dj) {
-      return res.status(404).json({ success: false, error: 'DJ profile not found' });
+      return fail(res, 404, 'DJ profile not found');
     }
     if (!dj.isPro) {
-      return res.status(403).json({ success: false, error: 'Pro membership required to apply' });
+      return fail(res, 403, 'Pro membership required to apply');
     }
 
     const parsed = applySchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input' });
+      return fail(res, 400, 'Invalid input');
     }
 
     const existing = await prisma.gigApplication.findUnique({
       where: { gigId_djId: { gigId: gig.id, djId: dj.id } },
     });
     if (existing) {
-      return res.status(400).json({ success: false, error: 'You have already applied to this opportunity' });
+      return fail(res, 400, 'You have already applied to this opportunity');
     }
 
     const application = await prisma.gigApplication.create({
@@ -251,7 +252,7 @@ router.post('/:id/apply', authMiddleware, requireRole('DJ'), async (req, res) =>
 
     return res.status(201).json({ success: true, data: application });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -260,7 +261,7 @@ router.patch('/:id/applications/:appId/status', authMiddleware, async (req, res)
   try {
     const parsed = updateApplicationSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid status' });
+      return fail(res, 400, 'Invalid status');
     }
 
     const application = await prisma.gigApplication.findUnique({
@@ -269,7 +270,7 @@ router.patch('/:id/applications/:appId/status', authMiddleware, async (req, res)
     });
 
     if (!application || application.gigId !== req.params.id) {
-      return res.status(404).json({ success: false, error: 'Application not found' });
+      return fail(res, 404, 'Application not found');
     }
 
     const { status } = parsed.data;
@@ -278,12 +279,12 @@ router.patch('/:id/applications/:appId/status', authMiddleware, async (req, res)
 
     if (status === 'WITHDRAWN') {
       if (!isDj && !isAdmin) {
-        return res.status(403).json({ success: false, error: 'Forbidden' });
+        return fail(res, 403, 'Forbidden');
       }
     } else {
       // ACCEPTED / DECLINED only by admin for now (client token flow can be added later)
       if (!isAdmin) {
-        return res.status(403).json({ success: false, error: 'Forbidden' });
+        return fail(res, 403, 'Forbidden');
       }
     }
 
@@ -299,9 +300,9 @@ router.patch('/:id/applications/:appId/status', authMiddleware, async (req, res)
       });
     }
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

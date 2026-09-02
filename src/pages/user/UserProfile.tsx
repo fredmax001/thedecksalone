@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
-import api, { getMediaUrl } from '@/lib/api';
+import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 const GENRES = [
   'Amapiano',
@@ -253,7 +255,7 @@ export default function UserProfile() {
         toast.error(res.data.error || 'Failed to switch account role');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to upgrade to DJ account');
+      toast.error(getApiErrorMessage(err, 'Failed to upgrade to DJ account'));
     } finally {
       setIsSwitching(false);
     }
@@ -581,7 +583,7 @@ export default function UserProfile() {
               <div className="relative shrink-0">
                 <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] border-white/90 bg-black overflow-hidden shadow-xl">
                   <img
-                    src={avatarPreview || getMediaUrl(user?.avatar) || '/default-avatar.jpg'}
+                    src={avatarPreview || getAvatarImageUrl(user?.avatar)}
                     alt={displayName}
                     className="w-full h-full object-cover"
                     onError={(e) => {

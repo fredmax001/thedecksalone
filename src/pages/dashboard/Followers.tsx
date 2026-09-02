@@ -13,10 +13,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { formatDate } from '@/lib/dateTime';
 import api, { getMediaUrl } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface Follower {
   id: string;
@@ -97,7 +99,7 @@ export default function Followers() {
         setError(res.data.error || 'Failed to load followers');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Could not load followers');
+      setError(getApiErrorMessage(err, 'Could not load followers'));
     } finally {
       setLoading(false);
     }
@@ -273,7 +275,7 @@ function FollowerListItem({ follower }: { follower: Follower }) {
                   )}
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-text-muted" />
-                    Followed {new Date(follower.followedAt).toLocaleDateString()}
+                    Followed {formatDate(follower.followedAt)}
                   </span>
                 </div>
               </div>
@@ -322,7 +324,7 @@ function FollowerCard({ follower }: { follower: Follower }) {
               <div className="flex items-center gap-1 mt-1">
                 <Calendar className="w-3 h-3 text-text-muted" />
                 <span className="text-xs text-text-muted">
-                  Followed {new Date(follower.followedAt).toLocaleDateString()}
+                  Followed {formatDate(follower.followedAt)}
                 </span>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 /* ─── Bookings ─── */
 export interface UserBooking {
@@ -24,9 +25,8 @@ export function useUserBookings(status?: string) {
   return useQuery({
     queryKey: ['user-bookings', status],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (status && status !== 'ALL') params.set('status', status);
-      const res = await api.get(`/bookings?${params.toString()}`);
+      const qs = buildQueryString(status && status !== 'ALL' ? { status } : {});
+      const res = await api.get(`/bookings${qs}`);
       return (res.data.data || []) as UserBooking[];
     },
   });
@@ -83,7 +83,7 @@ export function useFollowing() {
 /* ─── Activity ─── */
 export interface ActivityItem {
   id: string;
-  type: 'LIKE_MIX' | 'RATE_DJ' | 'BATTLE_VOTE' | 'SAVE_EVENT' | 'FOLLOW_DJ' | 'BOOKING_CREATED';
+  type: 'LIKE_MIX' | 'REPOST_MIX' | 'RATE_DJ' | 'BATTLE_VOTE' | 'SAVE_EVENT' | 'FOLLOW_DJ' | 'BOOKING_CREATED';
   title: string;
   subtitle?: string;
   thumbnail?: string;

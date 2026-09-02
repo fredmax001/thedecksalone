@@ -24,8 +24,9 @@ import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { useUsers } from '@/hooks/useUsers';
 import { imageFallback } from '@/lib/utils';
 import ShareButton from '@/components/ShareButton';
-import { getMediaUrl } from '@/lib/api';
 import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { formatCurrency } from '@/lib/formatting';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -114,9 +115,9 @@ function formatPrice(dj: DJ) {
   const min = dj.bookingFeeMin ?? 0;
   const max = dj.bookingFeeMax;
   if (max && max > min) {
-    return `SLE ${min.toLocaleString()} - ${max.toLocaleString()}`;
+    return `${formatCurrency(min)} - ${formatCurrency(max)}`;
   }
-  return `SLE ${min.toLocaleString()}+`;
+  return `${formatCurrency(min)}+`;
 }
 
 /* ─────────────────── DJ Card ─────────────────── */
@@ -137,7 +138,7 @@ function DJCard({ dj, index }: { dj: DJ; index: number }) {
       {/* Image */}
       <div className="relative aspect-square overflow-hidden">
         <img
-          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+          src={getAvatarImageUrl(dj.avatar)}
           alt={dj.stageName}
           onError={imageFallback}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -275,7 +276,7 @@ function DJListRow({ dj, index }: { dj: DJ; index: number }) {
       {/* Avatar */}
       <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
         <img
-          src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+          src={getAvatarImageUrl(dj.avatar)}
           alt={dj.stageName}
           onError={imageFallback}
           className="w-full h-full object-cover"
@@ -359,7 +360,7 @@ function UserCard({ user, index }: { user: DiscoveredUser; index: number }) {
     >
       <div className="relative aspect-square overflow-hidden">
         <img
-          src={getMediaUrl(user.avatar) || '/default-avatar.jpg'}
+          src={getAvatarImageUrl(user.avatar)}
           alt={user.displayName}
           onError={imageFallback}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -425,7 +426,7 @@ function UserListRow({ user, index }: { user: DiscoveredUser; index: number }) {
     >
       <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
         <img
-          src={getMediaUrl(user.avatar) || '/default-avatar.jpg'}
+          src={getAvatarImageUrl(user.avatar)}
           alt={user.displayName}
           onError={imageFallback}
           className="w-full h-full object-cover"

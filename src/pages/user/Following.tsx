@@ -23,6 +23,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFollowing, type FollowingDJ } from '@/hooks/useUserDashboard';
 import { useFollowDj } from '@/hooks/useDJs';
 import { getMediaUrl } from '@/lib/api';
+import { formatDate } from '@/lib/dateTime';
 
 type LayoutMode = 'grid' | 'list';
 
@@ -147,7 +148,7 @@ function DJCard({ dj, index }: { dj: FollowingDJ; index: number }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-text-primary truncate">{dj.latestEvent.title}</p>
                   <p className="text-[10px] text-text-muted">
-                    {new Date(dj.latestEvent.eventDate).toLocaleDateString()} · {dj.latestEvent.city}
+                    {formatDate(dj.latestEvent.eventDate)} · {dj.latestEvent.city}
                   </p>
                 </div>
               </div>

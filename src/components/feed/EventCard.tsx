@@ -11,7 +11,8 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event, index = 0 }: EventCardProps) {
-  const flyer = event.flyerImage || event.coverImage ? getMediaUrl(event.flyerImage || event.coverImage) : null;
+  const rawImage = event.flyerImage || event.coverImage || (event as any).image || (event as any).banner || (event as any).poster;
+  const flyer = rawImage ? getMediaUrl(rawImage) : null;
   const eventDate = event.date ? new Date(event.date) : null;
 
   return (

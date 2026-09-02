@@ -42,7 +42,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { getMediaUrl } from '@/lib/api';
+import { formatDate } from '@/lib/dateTime';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 const SIDEBAR_ITEMS = [
   { id: 'pending', label: 'Pending Requests', icon: Clock },
@@ -84,7 +86,7 @@ export default function VerificationDashboard() {
       toast.success(`Verification badge granted to ${dj.stageName || dj.user?.email}!`);
       if (inspectDj?.id === dj.id) setInspectDj(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to approve verification');
+      toast.error(getApiErrorMessage(err, 'Failed to approve verification'));
     }
   };
 
@@ -104,7 +106,7 @@ export default function VerificationDashboard() {
       setRejectReasonText('');
       if (inspectDj?.id === rejectReasonModalDj.id) setInspectDj(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to reject verification');
+      toast.error(getApiErrorMessage(err, 'Failed to reject verification'));
     }
   };
 
@@ -318,7 +320,7 @@ export default function VerificationDashboard() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <img
-                                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                                  src={getAvatarImageUrl(dj.avatar)}
                                   alt={dj.stageName}
                                   className="w-9 h-9 rounded-full object-cover border border-gold/30"
                                 />
@@ -335,7 +337,7 @@ export default function VerificationDashboard() {
                               {dj.startYear ? `${new Date().getFullYear() - dj.startYear} Years` : '1+ Years'}
                             </TableCell>
                             <TableCell className="text-xs text-text-muted font-mono">
-                              {dj.createdAt ? new Date(dj.createdAt).toLocaleDateString() : '--'}
+                              {formatDate(dj.createdAt)}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1.5 justify-end">
@@ -418,7 +420,7 @@ export default function VerificationDashboard() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <img
-                                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                                  src={getAvatarImageUrl(dj.avatar)}
                                   alt={dj.stageName}
                                   className="w-9 h-9 rounded-full object-cover border border-emerald-500/30"
                                 />
@@ -567,7 +569,7 @@ export default function VerificationDashboard() {
             <div className="flex items-start justify-between border-b border-dark-gray pb-4">
               <div className="flex items-center gap-3">
                 <img
-                  src={getMediaUrl(inspectDj.avatar) || '/default-avatar.jpg'}
+                  src={getAvatarImageUrl(inspectDj.avatar)}
                   alt={inspectDj.stageName}
                   className="w-12 h-12 rounded-full object-cover border-2 border-gold"
                 />

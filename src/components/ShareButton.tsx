@@ -1,15 +1,9 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Share2,
-  Link as LinkIcon,
-  Check,
-  MapPin,
-  Music,
-  Calendar,
-} from "lucide-react";
+import { Share2, Link as LinkIcon, Check, MapPin, Music, Calendar } from "lucide-react";
 import StoryPosterModal from "./StoryPosterModal";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { formatCompactNumber } from "@/lib/formatting";
 import { toast } from "sonner";
 
 // ─── Preview card types ──────────────────────────────────────────────────────
@@ -68,13 +62,6 @@ export interface HallOfFamePreview {
 export type SharePreview = DjPreview | MixPreview | EventPreview | UserPreview | HallOfFamePreview;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function formatCompact(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(n);
-}
-
 function formatEventDate(dateStr: string) {
   try {
     return new Date(dateStr).toLocaleDateString("en-US", {
@@ -133,7 +120,7 @@ function DjPreviewCard({ preview }: { preview: DjPreview }) {
         {preview.followers !== undefined && (
           <div className="text-right shrink-0">
             <p className="font-mono text-sm font-bold text-gold">
-              {formatCompact(preview.followers)}
+              {formatCompactNumber(preview.followers)}
             </p>
             <p className="text-[9px] text-text-muted uppercase">followers</p>
           </div>
@@ -193,7 +180,7 @@ function MixPreviewCard({ preview }: { preview: MixPreview }) {
         {preview.plays !== undefined && (
           <div className="text-right shrink-0">
             <p className="font-mono text-sm font-bold text-text-primary">
-              {formatCompact(preview.plays)}
+              {formatCompactNumber(preview.plays)}
             </p>
             <p className="text-[9px] text-text-muted uppercase">plays</p>
           </div>
@@ -404,7 +391,7 @@ export default function ShareButton({
   size = "md",
   menuPosition = "bottom",
 }: ShareButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [posterOpen, setPosterOpen] = useState(false);
   const [posterInitialFormat, setPosterInitialFormat] = useState<"story" | "square" | "wide">("story");
@@ -527,7 +514,7 @@ export default function ShareButton({
       label: "Instagram Story",
       icon: InstagramIcon,
       action: () => {
-        setIsOpen(false);
+        setOpen(false);
         setPosterInitialFormat("story");
         setPosterOpen(true);
       },
@@ -543,7 +530,7 @@ export default function ShareButton({
         </svg>
       ),
       action: () => {
-        setIsOpen(false);
+        setOpen(false);
         setPosterInitialFormat("story");
         setPosterOpen(true);
       },
@@ -551,108 +538,88 @@ export default function ShareButton({
     },
   ];
 
-  // Open the share menu so the user can pick the right destination
-  const handleOpenMenu = () => {
-    setIsOpen(!isOpen);
-  };
-
   return (
-    <div className={cn("relative", className)}>
-      <button
-        onClick={handleOpenMenu}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2",
+            sizeClasses[size]
+          )}
+          title="Share"
+        >
+          <Share2 size={size === "sm" ? 14 : 16} />
+          {size === "lg" && <span>Share</span>}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        side={menuPosition}
+        align="end"
+        sideOffset={8}
         className={cn(
-          "rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2",
-          sizeClasses[size]
+          "w-[270px] max-w-[calc(100vw-1rem)] max-h-[80vh] overflow-y-auto bg-[#111111] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-card p-0",
+          className
         )}
-        title="Share"
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <Share2 size={size === "sm" ? 14 : 16} />
-        {size === "lg" && <span>Share</span>}
-      </button>
+        {/* Rich Preview Card */}
+        {preview?.type === "dj" && <DjPreviewCard preview={preview} />}
+        {preview?.type === "mix" && <MixPreviewCard preview={preview} />}
+        {preview?.type === "event" && <EventPreviewCard preview={preview} />}
+        {preview?.type === "user" && <UserPreviewCard preview={preview} />}
+        {preview?.type === "hall_of_fame" && <HallOfFamePreviewCard preview={preview} />}
 
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              className="fixed inset-0 z-40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-            />
-
-            {/* Share Menu */}
-            <motion.div
-              className={cn(
-                "absolute right-0 z-[110] w-[270px] bg-[#111111] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-card overflow-hidden",
-                menuPosition === "top" ? "bottom-full mb-2" : "top-full mt-2"
-              )}
-              initial={{ opacity: 0, y: -8, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.95 }}
-              transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            >
-              {/* Rich Preview Card */}
-              {preview?.type === "dj" && <DjPreviewCard preview={preview} />}
-              {preview?.type === "mix" && <MixPreviewCard preview={preview} />}
-              {preview?.type === "event" && <EventPreviewCard preview={preview} />}
-              {preview?.type === "user" && <UserPreviewCard preview={preview} />}
-              {preview?.type === "hall_of_fame" && <HallOfFamePreviewCard preview={preview} />}
-
-              {/* Header (shown when no preview) */}
-              {!preview && (
-                <div className="px-4 py-3 border-b border-[rgba(255,255,255,0.05)]">
-                  <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-                    Share
-                  </p>
-                </div>
-              )}
-
-              {/* Section label when preview is shown */}
-              {preview && (
-                <div className="px-4 py-2">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-                    Share via
-                  </p>
-                </div>
-              )}
-
-              {/* Options */}
-              <div className={cn("py-1", preview && "pt-0")}>
-                {shareOptions.map((option) => {
-                  const Icon = option.icon;
-                  return (
-                    <button
-                      key={option.key}
-                      onClick={() => {
-                        option.action();
-                        if (option.key !== "copy") {
-                          setIsOpen(false);
-                        }
-                      }}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[rgba(255,255,255,0.06)] transition-colors",
-                        option.className
-                      )}
-                    >
-                      <Icon />
-                      <span>{option.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Preview URL */}
-              <div className="px-4 py-2 border-t border-[rgba(255,255,255,0.05)] bg-black/40">
-                <p className="text-[10px] text-text-muted truncate" title={url}>
-                  {url}
-                </p>
-              </div>
-            </motion.div>
-          </>
+        {/* Header (shown when no preview) */}
+        {!preview && (
+          <div className="px-4 py-3 border-b border-[rgba(255,255,255,0.05)]">
+            <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Share
+            </p>
+          </div>
         )}
-      </AnimatePresence>
+
+        {/* Section label when preview is shown */}
+        {preview && (
+          <div className="px-4 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+              Share via
+            </p>
+          </div>
+        )}
+
+        {/* Options */}
+        <div className={cn("py-1", preview && "pt-0")}>
+          {shareOptions.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.key}
+                onClick={() => {
+                  option.action();
+                  if (option.key !== "copy") {
+                    setOpen(false);
+                  }
+                }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[rgba(255,255,255,0.06)] transition-colors",
+                  option.className
+                )}
+              >
+                <Icon />
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Preview URL */}
+        <div className="px-4 py-2 border-t border-[rgba(255,255,255,0.05)] bg-black/40">
+          <p className="text-[10px] text-text-muted truncate" title={url}>
+            {url}
+          </p>
+        </div>
+      </PopoverContent>
 
       {/* Story Poster Modal */}
       <StoryPosterModal
@@ -664,6 +631,6 @@ export default function ShareButton({
         preview={preview}
         initialFormat={posterInitialFormat}
       />
-    </div>
+    </Popover>
   );
 }

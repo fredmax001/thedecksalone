@@ -13,9 +13,10 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useUserRole } from '@/hooks/useUserRole';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface MixDownloadModalProps {
   isOpen: boolean;
@@ -46,8 +47,7 @@ export function MixDownloadModal({
   onActionComplete,
 }: MixDownloadModalProps) {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const isDj = user?.role === 'DJ';
+  const { isDj } = useUserRole();
 
   if (!isOpen) return null;
 
@@ -61,7 +61,7 @@ export function MixDownloadModal({
       onActionComplete?.();
       onClose();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to repost mix');
+      toast.error(getApiErrorMessage(err, 'Failed to repost mix'));
     }
   };
 
@@ -73,7 +73,7 @@ export function MixDownloadModal({
       onActionComplete?.();
       onClose();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to follow DJ');
+      toast.error(getApiErrorMessage(err, 'Failed to follow DJ'));
     }
   };
 

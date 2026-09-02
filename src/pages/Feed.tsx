@@ -33,6 +33,7 @@ import { ReachListenersModal } from '@/components/ReachListenersModal';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import type { FeedDJ, FeedMix, FeedEvent, FeedPlaylist } from '@/components/feed/types';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 interface FeedTabConfig {
   key: FeedTab;
@@ -315,7 +316,7 @@ export default function Feed() {
                       >
                         <Link to={`/dj/${dj.slug || dj.id}`} className="relative mb-3">
                           <img
-                            src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                            src={getAvatarImageUrl(dj.avatar)}
                             alt={dj.stageName}
                             className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-gold/40 group-hover:scale-105 transition-transform"
                           />

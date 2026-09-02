@@ -10,14 +10,11 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Sun,
-  Moon,
   Loader2,
   BellRing,
   UserX,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { useThemeStore } from '@/stores/themeStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -33,15 +30,59 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+
+function NotificationToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm text-text-primary">{label}</p>
+        <p className="text-xs text-text-muted">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
+    </div>
+  );
+}
 
 interface UserSettings {
   notifications: {
     emailBookings: boolean;
     emailMessages: boolean;
     emailMarketing: boolean;
+    emailLikes: boolean;
+    emailComments: boolean;
+    emailFollows: boolean;
+    emailReups: boolean;
+    emailNewMixes: boolean;
+    emailEvents: boolean;
+    emailTickets: boolean;
+    emailVerifications: boolean;
+    emailSubscriptions: boolean;
+    emailReviews: boolean;
     pushBookings: boolean;
     pushMessages: boolean;
     pushNewMixes: boolean;
+    pushLikes: boolean;
+    pushComments: boolean;
+    pushFollows: boolean;
+    pushReups: boolean;
+    pushEvents: boolean;
+    pushTickets: boolean;
+    pushVerifications: boolean;
+    pushSubscriptions: boolean;
+    pushReviews: boolean;
   };
   privacy: {
     profilePublic: boolean;
@@ -55,9 +96,28 @@ const defaultSettings: UserSettings = {
     emailBookings: true,
     emailMessages: true,
     emailMarketing: false,
+    emailLikes: true,
+    emailComments: true,
+    emailFollows: true,
+    emailReups: true,
+    emailNewMixes: true,
+    emailEvents: true,
+    emailTickets: true,
+    emailVerifications: true,
+    emailSubscriptions: true,
+    emailReviews: true,
     pushBookings: true,
     pushMessages: true,
     pushNewMixes: true,
+    pushLikes: true,
+    pushComments: true,
+    pushFollows: true,
+    pushReups: true,
+    pushEvents: true,
+    pushTickets: true,
+    pushVerifications: true,
+    pushSubscriptions: true,
+    pushReviews: true,
   },
   privacy: {
     profilePublic: true,
@@ -68,7 +128,6 @@ const defaultSettings: UserSettings = {
 
 export default function UserSettings() {
   const { user, logout, fetchMe } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -146,7 +205,7 @@ export default function UserSettings() {
         setSaveError(res.data?.error || 'Failed to update profile');
       }
     } catch (err: any) {
-      setSaveError(err.response?.data?.error || 'Failed to update profile');
+      setSaveError(getApiErrorMessage(err, 'Failed to update profile'));
     } finally {
       setIsSavingProfile(false);
     }
@@ -182,7 +241,7 @@ export default function UserSettings() {
         setPasswordError(res.data?.error || 'Failed to change password');
       }
     } catch (err: any) {
-      setPasswordError(err.response?.data?.error || 'Failed to change password');
+      setPasswordError(getApiErrorMessage(err, 'Failed to change password'));
     } finally {
       setIsChangingPassword(false);
     }
@@ -203,7 +262,7 @@ export default function UserSettings() {
         setShowDeleteDialog(false);
       }
     } catch (err: any) {
-      setSaveError(err.response?.data?.error || 'Failed to delete account');
+      setSaveError(getApiErrorMessage(err, 'Failed to delete account'));
       setIsDeletingAccount(false);
       setShowDeleteDialog(false);
     }
@@ -238,7 +297,7 @@ export default function UserSettings() {
         setSaveError(res.data?.error || 'Failed to save settings');
       }
     } catch (err: any) {
-      setSaveError(err.response?.data?.error || 'Failed to save settings');
+      setSaveError(getApiErrorMessage(err, 'Failed to save settings'));
     }
   };
 
@@ -409,49 +468,167 @@ export default function UserSettings() {
             Notification Preferences
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">Booking Updates</p>
-                <p className="text-xs text-text-muted">Emails about booking status changes</p>
-              </div>
-              <Switch
+        <CardContent className="space-y-6">
+          {/* Email Notifications */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Email Notifications</h4>
+            <div className="space-y-3">
+              <NotificationToggle
+                label="Booking Updates"
+                description="Booking requests and status changes"
                 checked={settings.notifications.emailBookings}
-                onCheckedChange={(v) => updateNotification('emailBookings', v)}
+                onChange={(v) => updateNotification('emailBookings', v)}
                 disabled={settingsLoading}
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">New Messages</p>
-                <p className="text-xs text-text-muted">Emails when you receive a message</p>
-              </div>
-              <Switch
+              <NotificationToggle
+                label="New Messages"
+                description="Direct messages and system alerts"
                 checked={settings.notifications.emailMessages}
-                onCheckedChange={(v) => updateNotification('emailMessages', v)}
+                onChange={(v) => updateNotification('emailMessages', v)}
                 disabled={settingsLoading}
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">New Mixes from Followed DJs</p>
-                <p className="text-xs text-text-muted">Get notified when DJs you follow upload</p>
-              </div>
-              <Switch
-                checked={settings.notifications.pushNewMixes}
-                onCheckedChange={(v) => updateNotification('pushNewMixes', v)}
+              <NotificationToggle
+                label="Likes on My Mixes"
+                description="When someone likes your mix"
+                checked={settings.notifications.emailLikes}
+                onChange={(v) => updateNotification('emailLikes', v)}
                 disabled={settingsLoading}
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">Marketing & Promotions</p>
-                <p className="text-xs text-text-muted">News, events, and special offers</p>
-              </div>
-              <Switch
+              <NotificationToggle
+                label="Comments"
+                description="Comments and replies on your mixes"
+                checked={settings.notifications.emailComments}
+                onChange={(v) => updateNotification('emailComments', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="New Followers"
+                description="When someone follows you"
+                checked={settings.notifications.emailFollows}
+                onChange={(v) => updateNotification('emailFollows', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Re-ups / Reposts"
+                description="When someone re-ups your mix"
+                checked={settings.notifications.emailReups}
+                onChange={(v) => updateNotification('emailReups', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="New Mixes from Followed DJs"
+                description="When DJs you follow upload a mix"
+                checked={settings.notifications.emailNewMixes}
+                onChange={(v) => updateNotification('emailNewMixes', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Events"
+                description="Event reminders and updates"
+                checked={settings.notifications.emailEvents}
+                onChange={(v) => updateNotification('emailEvents', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Tickets"
+                description="Ticket purchases and approvals"
+                checked={settings.notifications.emailTickets}
+                onChange={(v) => updateNotification('emailTickets', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Verification & Subscriptions"
+                description="Verification status and subscription updates"
+                checked={settings.notifications.emailVerifications && settings.notifications.emailSubscriptions}
+                onChange={(v) => {
+                  updateNotification('emailVerifications', v);
+                  updateNotification('emailSubscriptions', v);
+                }}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Marketing & Promotions"
+                description="News, events, and special offers"
                 checked={settings.notifications.emailMarketing}
-                onCheckedChange={(v) => updateNotification('emailMarketing', v)}
+                onChange={(v) => updateNotification('emailMarketing', v)}
+                disabled={settingsLoading}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-dark-gray" />
+
+          {/* Push Notifications */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Push Notifications</h4>
+            <div className="space-y-3">
+              <NotificationToggle
+                label="Booking Alerts"
+                description="Real-time alerts for bookings"
+                checked={settings.notifications.pushBookings}
+                onChange={(v) => updateNotification('pushBookings', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Message Alerts"
+                description="Real-time alerts for messages"
+                checked={settings.notifications.pushMessages}
+                onChange={(v) => updateNotification('pushMessages', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Likes"
+                description="When someone likes your mix"
+                checked={settings.notifications.pushLikes}
+                onChange={(v) => updateNotification('pushLikes', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Comments"
+                description="Comments and replies on your mixes"
+                checked={settings.notifications.pushComments}
+                onChange={(v) => updateNotification('pushComments', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="New Followers"
+                description="When someone follows you"
+                checked={settings.notifications.pushFollows}
+                onChange={(v) => updateNotification('pushFollows', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Re-ups / Reposts"
+                description="When someone re-ups your mix"
+                checked={settings.notifications.pushReups}
+                onChange={(v) => updateNotification('pushReups', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="New Mixes from Followed DJs"
+                description="When DJs you follow upload"
+                checked={settings.notifications.pushNewMixes}
+                onChange={(v) => updateNotification('pushNewMixes', v)}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Events & Tickets"
+                description="Event reminders and ticket updates"
+                checked={settings.notifications.pushEvents && settings.notifications.pushTickets}
+                onChange={(v) => {
+                  updateNotification('pushEvents', v);
+                  updateNotification('pushTickets', v);
+                }}
+                disabled={settingsLoading}
+              />
+              <NotificationToggle
+                label="Verification & Subscriptions"
+                description="Verification status and subscription updates"
+                checked={settings.notifications.pushVerifications && settings.notifications.pushSubscriptions}
+                onChange={(v) => {
+                  updateNotification('pushVerifications', v);
+                  updateNotification('pushSubscriptions', v);
+                }}
                 disabled={settingsLoading}
               />
             </div>
@@ -514,25 +691,6 @@ export default function UserSettings() {
           Save Notification & Privacy Settings
         </Button>
       )}
-
-      {/* Appearance */}
-      <Card className="bg-black-elevated border-dark-gray">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-text-primary flex items-center gap-2">
-            {theme === 'dark' ? <Moon className="w-4 h-4 text-gold" /> : <Sun className="w-4 h-4 text-gold" />}
-            Appearance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-text-primary">Dark Mode</p>
-              <p className="text-xs text-text-muted">Toggle between light and dark theme</p>
-            </div>
-            <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Danger Zone */}
       <Card className="bg-red/5 border-red/20">

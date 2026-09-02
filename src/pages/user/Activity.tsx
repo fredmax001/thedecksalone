@@ -11,6 +11,7 @@ import {
   Music,
   Clock,
   Filter,
+  Repeat,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -23,9 +24,11 @@ import {
 import { useUserActivity, type ActivityItem } from '@/hooks/useUserDashboard';
 import { imageFallback } from '@/lib/utils';
 import { getMediaUrl } from '@/lib/api';
+import { formatDate, formatTime } from '@/lib/dateTime';
 
 const activityConfig: Record<string, { icon: typeof Heart; color: string; label: string }> = {
   LIKE_MIX: { icon: Heart, color: 'text-red', label: 'Liked a mix' },
+  REPOST_MIX: { icon: Repeat, color: 'text-gold', label: 'Reposted a mix' },
   RATE_DJ: { icon: Star, color: 'text-gold', label: 'Rated a DJ' },
   BATTLE_VOTE: { icon: Trophy, color: 'text-purple', label: 'Voted in a battle' },
   SAVE_EVENT: { icon: Bookmark, color: 'text-blue', label: 'Saved an event' },
@@ -63,8 +66,8 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
           <div className="flex items-center gap-2 mt-2">
             <Clock className="w-3 h-3 text-text-muted" />
             <span className="text-[11px] text-text-muted">
-              {new Date(item.createdAt).toLocaleDateString()} at{' '}
-              {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatDate(item.createdAt)} at{' '}
+              {formatTime(item.createdAt)}
             </span>
           </div>
         </div>
@@ -125,6 +128,7 @@ export default function Activity() {
           <SelectContent className="bg-black-surface border-dark-gray">
             <SelectItem value="ALL">All Activity</SelectItem>
             <SelectItem value="LIKE_MIX">Liked Mixes</SelectItem>
+            <SelectItem value="REPOST_MIX">Reposted Mixes</SelectItem>
             <SelectItem value="RATE_DJ">Ratings</SelectItem>
             <SelectItem value="BATTLE_VOTE">Battle Votes</SelectItem>
             <SelectItem value="SAVE_EVENT">Saved Events</SelectItem>

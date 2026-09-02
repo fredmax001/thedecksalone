@@ -35,7 +35,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import ShareButton from '../components/ShareButton';
-import { getMediaUrl } from '@/lib/api';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 /* ──────────────────────────── types ──────────────────────────── */
 
@@ -591,7 +591,7 @@ export default function HallOfFame() {
                             >
                               <div className="flex items-center gap-3">
                                 <img
-                                  src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                                  src={getAvatarImageUrl(dj.avatar)}
                                   alt={dj.stageName}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
@@ -1003,7 +1003,7 @@ export default function HallOfFame() {
                       <div className="w-full md:w-5/12 relative group">
                         <div className="aspect-[4/5] rounded-2xl overflow-hidden border-2 border-white/5 group-hover:border-gold/30 transition-all duration-700 relative">
                           <img
-                            src={getMediaUrl(pioneer.avatar) || '/default-avatar.jpg'}
+                            src={getAvatarImageUrl(pioneer.avatar)}
                             alt={pioneer.stageName}
                             className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
                           />

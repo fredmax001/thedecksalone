@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { formatDate, formatTime } from '@/lib/dateTime';
 import {
   useNotifications,
   useUnreadNotificationCount,
@@ -78,8 +79,8 @@ function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavig
         </p>
         <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{item.body}</p>
         <p className="text-[10px] text-text-muted mt-1">
-          {new Date(item.createdAt).toLocaleDateString()} ·{' '}
-          {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {formatDate(item.createdAt)} ·{' '}
+          {formatTime(item.createdAt)}
         </p>
       </div>
       {!item.read && (

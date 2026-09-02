@@ -29,7 +29,7 @@ export function useHomeData() {
   const events = useQuery({
     queryKey: ['events', 'home'],
     queryFn: async () => {
-      const res = await api.get('/events?limit=3&status=upcoming');
+      const res = await api.get('/events?limit=8&status=upcoming');
       return res.data.data || [];
     },
   });
@@ -69,6 +69,15 @@ export function useHomeData() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const trendingMixes = useQuery({
+    queryKey: ['trendingMixes', 'home'],
+    queryFn: async () => {
+      const res = await api.get('/mixes/trending?limit=10');
+      return res.data.data || [];
+    },
+    staleTime: 60_000,
+  });
+
   return {
     featuredDJs,
     rankings,
@@ -78,6 +87,7 @@ export function useHomeData() {
     homeAdBoard,
     platformStats,
     officialPlaylists,
+    trendingMixes,
     isLoading:
       featuredDJs.isLoading ||
       rankings.isLoading ||

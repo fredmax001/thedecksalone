@@ -63,9 +63,11 @@ export default function AdStrip({ paidAds }: AdStripProps) {
         <CarouselContent className="-ml-3 sm:-ml-4 items-start">
           {paidAds.map((ad) => {
             const isExpanded = expandedAdId === String(ad.id);
-            const image = ad.bannerImage || ad.imageUrl ? getMediaUrl(ad.bannerImage || ad.imageUrl) : '/og-banner.png';
-            const title = ad.title || ad.campaignName || 'Featured Campaign';
+            const rawImage = ad.creativeImageUrl || ad.bannerImage || ad.imageUrl || ad.advertiser?.avatar;
+            const image = rawImage ? getMediaUrl(rawImage) : '/og-banner.png';
+            const title = ad.name || ad.title || ad.campaignName || 'Featured Campaign';
             const description = ad.description || ad.subtitle || ad.tagline || 'Special promotion on Deck Salone.';
+            const sponsorLink = ad.ctaUrl || ad.ctaLink || ad.linkUrl;
 
             return (
               <CarouselItem
@@ -157,10 +159,10 @@ export default function AdStrip({ paidAds }: AdStripProps) {
                         </p>
 
                         {/* Optional External Sponsor Link (opens in new tab only if provided) */}
-                        {(ad.ctaLink || ad.linkUrl) && (
+                        {sponsorLink && (
                           <div className="pt-2 flex items-center justify-between border-t border-white/[0.06]">
                             <a
-                              href={ad.ctaLink || ad.linkUrl}
+                              href={sponsorLink}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 text-xs font-bold text-gold hover:underline"

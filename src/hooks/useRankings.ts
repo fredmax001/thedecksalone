@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface RankingFilters {
   city?: string;
@@ -13,12 +14,8 @@ export function useRankings(filters: RankingFilters = {}) {
   return useQuery({
     queryKey: ['rankings', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('limit', String(limit));
-      if (city) params.set('city', city);
-      if (genre) params.set('genre', genre);
-
-      const res = await api.get(`/rankings?${params.toString()}`);
+      const qs = buildQueryString({ limit, city, genre });
+      const res = await api.get(`/rankings${qs}`);
       const response = res.data;
 
       if (response && typeof response === 'object' && response.success === false) {

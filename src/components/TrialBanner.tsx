@@ -49,7 +49,7 @@ export default function TrialBanner() {
             14-Day Free Trial Expired
           </p>
           <p className="text-xs text-text-muted mt-0.5">
-            Your free trial has ended. Subscribe to Pro or Legend to unlock mix uploads, DJ sets, and direct WhatsApp handles.
+            Your free trial has ended. Subscribe to Pro or Pro+ to unlock mix uploads, DJ sets, and direct WhatsApp handles.
           </p>
         </div>
       </div>

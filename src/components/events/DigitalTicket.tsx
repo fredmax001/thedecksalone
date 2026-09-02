@@ -1,5 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, MapPin, Ticket, User, Clock } from 'lucide-react';
+import { formatEventDate, formatDateTime } from '@/lib/dateTime';
 
 interface Props {
   ticket: any;
@@ -43,7 +44,7 @@ export default function DigitalTicket({ ticket, event }: Props) {
           {date && (
             <div className="flex items-center gap-2 text-xs text-text-secondary">
               <Calendar className="w-3.5 h-3.5 text-gold" />
-              {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              {formatEventDate(date)}
             </div>
           )}
           {(event?.venue || event?.location) && (
@@ -61,18 +62,32 @@ export default function DigitalTicket({ ticket, event }: Props) {
           {ticket?.scannedAt && (
             <div className="flex items-center gap-2 text-xs text-green">
               <Clock className="w-3.5 h-3.5" />
-              Checked in {new Date(ticket.scannedAt).toLocaleString()}
+              Checked in {formatDateTime(ticket.scannedAt)}
             </div>
           )}
         </div>
 
         {/* QR Code */}
-        {ticket?.qrPayload && (
+        {ticket?.status === 'pending' ? (
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-center space-y-1.5 mt-2">
+            <p className="text-xs font-bold text-yellow-400">⏳ Pending DJ Approval</p>
+            <p className="text-[11px] text-text-muted">
+              Your ticket request has been received. Your digital QR code will activate automatically once the DJ approves your order.
+            </p>
+          </div>
+        ) : (
           <div className="flex flex-col items-center pt-2">
-            <div className="p-3 bg-white rounded-xl">
-              <QRCodeSVG value={ticket.qrPayload} size={180} level="H" includeMargin={false} />
+            <div className="p-3 bg-white rounded-xl shadow-lg shadow-gold/10">
+              <QRCodeSVG
+                value={ticket?.qrPayload || `DS-TICKET:${ticket?.id}:${ticket?.ticketNumber}`}
+                size={180}
+                level="H"
+                includeMargin={false}
+              />
             </div>
-            <p className="text-[10px] text-text-muted mt-2 text-center">Show this QR code at the entrance</p>
+            <p className="text-[10px] text-text-muted mt-2 text-center">
+              {isCheckedIn ? '✅ Ticket already checked in' : 'Show this QR code at the entrance'}
+            </p>
           </div>
         )}
       </div>

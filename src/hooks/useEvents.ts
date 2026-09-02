@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface EventFilters {
   city?: string;
@@ -16,15 +17,8 @@ export function useEvents(filters: EventFilters = {}) {
   return useQuery({
     queryKey: ['events', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (city) params.set('city', city);
-      if (type) params.set('type', type);
-      if (status) params.set('status', status);
-      if (isOpenSlot !== undefined) params.set('isOpenSlot', String(isOpenSlot));
-
-      const res = await api.get(`/events?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, city, type, status, isOpenSlot });
+      const res = await api.get(`/events${qs}`);
       return res.data;
     },
   });

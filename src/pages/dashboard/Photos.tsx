@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Trash2, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface DjPhoto {
   id: string;
@@ -28,7 +29,7 @@ export default function PhotosPage() {
         setPhotos(res.data.data || []);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load photos');
+      setError(getApiErrorMessage(err, 'Failed to load photos'));
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +59,7 @@ export default function PhotosPage() {
         throw new Error(uploadRes.data.error || 'Upload failed');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Upload failed');
+      setError(getApiErrorMessage(err, 'Upload failed'));
     } finally {
       setUploading(false);
     }
@@ -70,7 +71,7 @@ export default function PhotosPage() {
       await api.delete(`/photos/${id}`);
       setPhotos((prev) => prev.filter((p) => p.id !== id));
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Delete failed');
+      setError(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 

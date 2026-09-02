@@ -37,23 +37,49 @@ async function createNotification({
     const prefs = user.notificationPreferences || {};
 
     // Map notification types to the stored preference keys used by the frontend
-    const EMAIL_PREF_MAP = {
+    const EMAIL_PREF_MAP: Record<string, string> = {
       BOOKING_CREATED: 'emailBookings',
       BOOKING_STATUS_CHANGED: 'emailBookings',
       COUNTER_OFFER: 'emailBookings',
       PAYMENT_RECEIVED: 'emailBookings',
       PAYMENT_FAILED: 'emailBookings',
       NEW_MESSAGE: 'emailMessages',
+      MIX_LIKED: 'emailLikes',
+      MIX_REUPPED: 'emailReups',
+      MIX_COMMENTED: 'emailComments',
+      COMMENT_LIKED: 'emailComments',
+      NEW_FOLLOWER: 'emailFollows',
+      NEW_MIX: 'emailNewMixes',
+      EVENT_REMINDER: 'emailEvents',
+      TICKET_PURCHASED: 'emailTickets',
+      TICKET_APPROVED: 'emailTickets',
+      TICKET_DECLINED: 'emailTickets',
+      VERIFICATION_STATUS: 'emailVerifications',
+      SUBSCRIPTION_STATUS: 'emailSubscriptions',
+      REVIEW_RECEIVED: 'emailReviews',
       SYSTEM: 'emailMessages',
     };
-    const PUSH_PREF_MAP = {
+    const PUSH_PREF_MAP: Record<string, string> = {
       BOOKING_CREATED: 'pushBookings',
       BOOKING_STATUS_CHANGED: 'pushBookings',
       COUNTER_OFFER: 'pushBookings',
       PAYMENT_RECEIVED: 'pushBookings',
       PAYMENT_FAILED: 'pushBookings',
-      NEW_MESSAGE: 'pushBookings',
-      SYSTEM: 'pushBookings',
+      NEW_MESSAGE: 'pushMessages',
+      MIX_LIKED: 'pushLikes',
+      MIX_REUPPED: 'pushReups',
+      MIX_COMMENTED: 'pushComments',
+      COMMENT_LIKED: 'pushComments',
+      NEW_FOLLOWER: 'pushFollows',
+      NEW_MIX: 'pushNewMixes',
+      EVENT_REMINDER: 'pushEvents',
+      TICKET_PURCHASED: 'pushTickets',
+      TICKET_APPROVED: 'pushTickets',
+      TICKET_DECLINED: 'pushTickets',
+      VERIFICATION_STATUS: 'pushVerifications',
+      SUBSCRIPTION_STATUS: 'pushSubscriptions',
+      REVIEW_RECEIVED: 'pushReviews',
+      SYSTEM: 'pushMessages',
     };
 
     const emailPrefKey = EMAIL_PREF_MAP[type] || null;

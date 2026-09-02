@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../utils/prisma');
 const logger = require('../utils/logger');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -42,10 +43,10 @@ router.get('/', async (req: any, res: any) => {
       },
     });
 
-    return res.json({ success: true, data: playlists });
+    return ok(res, playlists);
   } catch (error: any) {
     logger.error('Error fetching official playlists:', error.message);
-    return res.status(500).json({ success: false, error: 'Failed to load official playlists' });
+    return fail(res, 500, 'Failed to load official playlists');
   }
 });
 
@@ -85,13 +86,13 @@ router.get('/:slug', async (req: any, res: any) => {
     });
 
     if (!playlist) {
-      return res.status(404).json({ success: false, error: 'Official playlist not found' });
+      return fail(res, 404, 'Official playlist not found');
     }
 
-    return res.json({ success: true, data: playlist });
+    return ok(res, playlist);
   } catch (error: any) {
     logger.error('Error fetching official playlist detail:', error.message);
-    return res.status(500).json({ success: false, error: 'Failed to load official playlist details' });
+    return fail(res, 500, 'Failed to load official playlist details');
   }
 });
 

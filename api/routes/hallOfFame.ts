@@ -4,6 +4,7 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadHallOfFameImage } = require('../utils/upload');
 const { processHallOfFameImage } = require('../utils/imageProcessor');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -81,10 +82,10 @@ router.get('/legends', async (req, res) => {
     const legends = await prisma.hallOfFameLegend.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
-    return res.json({ success: true, data: legends });
+    return ok(res, legends);
   } catch (error) {
     console.error('[Hall of Fame Legends] GET error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -143,10 +144,10 @@ router.post(
     try {
       const input = legendInputFromBody(req.body);
       if (!input.name) {
-        return res.status(400).json({ success: false, error: 'Name is required' });
+        return fail(res, 400, 'Name is required');
       }
       if (!input.story || !input.contribution) {
-        return res.status(400).json({ success: false, error: 'Story and contribution are required' });
+        return fail(res, 400, 'Story and contribution are required');
       }
 
       const image = await handleImageUpload(req.file, req.body.imageUrl);
@@ -158,7 +159,7 @@ router.post(
       return res.status(201).json({ success: true, data: legend });
     } catch (error: any) {
       console.error('[Hall of Fame Legends] POST error:', error);
-      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+      return fail(res, 500, error.message || 'Internal server error');
     }
   }
 );
@@ -174,7 +175,7 @@ router.put(
       const { id } = req.params;
       const existing = await prisma.hallOfFameLegend.findUnique({ where: { id } });
       if (!existing) {
-        return res.status(404).json({ success: false, error: 'Legend not found' });
+        return fail(res, 404, 'Legend not found');
       }
 
       const input = legendInputFromBody(req.body);
@@ -185,10 +186,10 @@ router.put(
         data: { ...input, image: image || existing.image || generateAvatarUrl(input.name || existing.name) },
       });
 
-      return res.json({ success: true, data: updated });
+      return ok(res, updated);
     } catch (error: any) {
       console.error('[Hall of Fame Legends] PUT error:', error);
-      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+      return fail(res, 500, error.message || 'Internal server error');
     }
   }
 );
@@ -203,7 +204,7 @@ router.delete(
       const { id } = req.params;
       const existing = await prisma.hallOfFameLegend.findUnique({ where: { id } });
       if (!existing) {
-        return res.status(404).json({ success: false, error: 'Legend not found' });
+        return fail(res, 404, 'Legend not found');
       }
 
       if (existing.image) {
@@ -215,10 +216,10 @@ router.delete(
       }
 
       await prisma.hallOfFameLegend.delete({ where: { id } });
-      return res.json({ success: true, data: { id } });
+      return ok(res, { id });
     } catch (error: any) {
       console.error('[Hall of Fame Legends] DELETE error:', error);
-      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+      return fail(res, 500, error.message || 'Internal server error');
     }
   }
 );

@@ -114,6 +114,7 @@ export async function showSystemNotification(options: SystemNotificationOptions)
           body: options.body,
           channelId: CHANNEL_ID,
           smallIcon: 'ic_stat_decksalone',
+          largeIcon: 'ic_launcher',
           iconColor: '#F4E059',
           sound: 'default',
           extra: {

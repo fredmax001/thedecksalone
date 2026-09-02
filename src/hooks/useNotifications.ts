@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface NotificationItem {
   id: string;
@@ -29,11 +30,8 @@ export function useNotifications(options?: { page?: number; limit?: number; unre
   return useQuery({
     queryKey: ['notifications', page, limit, unreadOnly],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (unreadOnly) params.set('unreadOnly', 'true');
-      const res = await api.get(`/notifications?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, ...(unreadOnly ? { unreadOnly: 'true' } : {}) });
+      const res = await api.get(`/notifications${qs}`);
       return {
         items: (res.data.data || []) as NotificationItem[],
         meta: res.data.meta as NotificationMeta,

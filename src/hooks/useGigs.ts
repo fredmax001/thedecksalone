@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface Gig {
   id: string;
@@ -77,14 +78,8 @@ export function useGigs(filters: GigFilters = {}) {
   return useQuery<{ data: Gig[]; meta: { total: number; page: number; limit: number; totalPages: number } }>({
     queryKey: ['gigs', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (status) params.set('status', status);
-      if (city) params.set('city', city);
-      if (eventType) params.set('eventType', eventType);
-      if (sortBy) params.set('sortBy', sortBy);
-      const res = await api.get(`/gigs?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, status, city, eventType, sortBy });
+      const res = await api.get(`/gigs${qs}`);
       return res.data;
     },
   });

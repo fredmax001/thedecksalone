@@ -17,12 +17,13 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
+import { formatDate } from '@/lib/dateTime';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FeatureLock } from '@/components/FeatureLock';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { useRequireDj } from '@/hooks/useRequireDj';
 import {
   BarChart as ReBarChart,
   Bar,
@@ -181,13 +182,12 @@ function TabButton({
 /* ─────────────────── Main Component ─────────────────── */
 
 export default function Analytics() {
-  const { user } = useAuthStore();
   const { isFree } = useFeatureAccess();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'streams' | 'bookings' | 'audience'>('overview');
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
 
   useEffect(() => {
     if (!isDj) {
@@ -705,7 +705,7 @@ export default function Analytics() {
                           <div>
                             <p className="text-sm text-text-primary">{booking.eventType}</p>
                             <p className="text-xs text-text-muted">
-                              {new Date(booking.eventDate).toLocaleDateString()}
+                              {formatDate(booking.eventDate)}
                             </p>
                           </div>
                           <span
@@ -834,7 +834,7 @@ export default function Analytics() {
                         </div>
                         <p className="text-sm text-text-secondary line-clamp-2">{review.comment}</p>
                         <p className="text-xs text-text-muted mt-2">
-                          {new Date(review.createdAt).toLocaleDateString()}
+                          {formatDate(review.createdAt)}
                         </p>
                       </div>
                     ))}

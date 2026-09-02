@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useCreateGig } from '@/hooks/useGigs';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const EVENT_TYPES = [
   'Wedding',
@@ -365,7 +366,7 @@ export default function RequestDj() {
 
                 {createGig.isError && (
                   <p className="text-sm text-red-400">
-                    {(createGig.error as any)?.response?.data?.error || 'Failed to submit request'}
+                    {getApiErrorMessage(createGig.error, 'Failed to submit request')}
                   </p>
                 )}
 

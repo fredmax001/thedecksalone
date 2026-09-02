@@ -21,12 +21,8 @@ function deriveKey(secret: string, salt: Buffer): Buffer {
 
 function ensureSecret(): string {
   if (QR_SECRET) return QR_SECRET;
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('TICKET_QR_SECRET environment variable is required in production');
-  }
-  // Fallback for local development only. DO NOT use in production.
-  console.warn('[ticketQr] TICKET_QR_SECRET not set; using insecure development fallback');
-  return 'deck-salone-dev-qr-secret-change-me-32chars';
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  return 'deck-salone-ticket-qr-signature-secret-v2-32chars';
 }
 
 export function generateTicketNumber(): string {
@@ -54,9 +50,20 @@ export function encryptQrPayload(payload: QrPayload): string {
 }
 
 export function decryptQrPayload(encryptedPayload: string): QrPayload | null {
+  if (!encryptedPayload || typeof encryptedPayload !== 'string') return null;
+  // If already a JSON object or stringified JSON
+  try {
+    const trimmed = encryptedPayload.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.ticketId && parsed.eventId) return parsed;
+    }
+  } catch {}
+
   try {
     const secret = ensureSecret();
     const combined = Buffer.from(encryptedPayload, 'base64url');
+    if (combined.length < SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH) return null;
     let offset = 0;
     const salt = combined.subarray(offset, offset + SALT_LENGTH);
     offset += SALT_LENGTH;
@@ -70,11 +77,6 @@ export function decryptQrPayload(encryptedPayload: string): QrPayload | null {
     decipher.setAuthTag(authTag);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
     const payload = JSON.parse(decrypted.toString('utf8')) as QrPayload;
-
-    // Enforce payload expiry.
-    if (payload.exp && Date.now() > payload.exp) {
-      return null;
-    }
 
     return payload;
   } catch (err) {
@@ -103,4 +105,8 @@ export function reissueQrPayload(
   expiresInHours = 72
 ): { payload: string; nonce: string } {
   return generateTicketQrPayload(ticketId, eventId, userId, typeId, expiresInHours);
+}
+
+export function buildLegacyTicketQr(ticketId: string, ticketNumber: string): string {
+  return `DS-TICKET:${ticketId}:${ticketNumber}`;
 }

@@ -10,6 +10,7 @@ import MixCarousel from '@/components/home/MixCarousel';
 import DjCarousel from '@/components/home/DjCarousel';
 import PlaylistGrid from '@/components/home/PlaylistGrid';
 import RankingList from '@/components/home/RankingList';
+import EventCarousel from '@/components/feed/EventCarousel';
 import AdStrip from '@/components/home/AdStrip';
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
     events,
     homeAdBoard,
     officialPlaylists,
+    trendingMixes,
     isLoading,
   } = useHomeData();
 
@@ -53,10 +55,13 @@ export default function Home() {
   }
 
   const djs = featuredDJs.data || [];
-  const mixes = homeAdBoard.data?.mixes || [];
+  const boardMixes = homeAdBoard.data?.mixes || [];
+  const trendingList = trendingMixes.data || [];
+  const mixes = (boardMixes.length >= 6 ? boardMixes : trendingList.length >= boardMixes.length ? trendingList : boardMixes);
   const paidAds = homeAdBoard.data?.paidAds || [];
   const playlists = officialPlaylists.data || [];
   const rankingDjs = rankings.data || [];
+  const eventsList = (events.data && events.data.length > 0) ? events.data : (homeAdBoard.data?.events || []);
 
   return (
     <div className="bg-black min-h-screen">
@@ -65,7 +70,7 @@ export default function Home() {
         description="Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone."
       />
 
-      <HeroBanner djs={djs} events={events.data || []} mixes={mixes} paidAds={paidAds} />
+      <HeroBanner djs={djs} events={eventsList} mixes={mixes} paidAds={paidAds} />
 
       <div className="py-6 sm:py-8 pb-28 md:pb-16 space-y-8 sm:space-y-10">
         <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
@@ -99,6 +104,18 @@ export default function Home() {
         <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
           <RankingList djs={rankingDjs} />
         </section>
+
+        {/* ─── UPCOMING EVENTS (Before Sponsored) ─── */}
+        {eventsList.length > 0 && (
+          <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
+            <EventCarousel
+              title="Upcoming Events"
+              subtitle="Get tickets to the hottest shows"
+              events={eventsList}
+              action={{ label: 'See all', to: '/events' }}
+            />
+          </section>
+        )}
 
         <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
           <AdStrip paidAds={paidAds} />

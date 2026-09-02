@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
+import { redirectAfterAuth } from '@/lib/navigation';
 
 /* ─── Schema ─── */
 const loginSchema = z.object({
@@ -53,7 +54,7 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
-      handleRoleRedirect(user.role);
+      redirectAfterAuth(user?.role, navigate);
     }
   }, [isAuthenticated, user]);
 
@@ -94,25 +95,6 @@ export default function Login() {
     }
   }, [setValue]);
 
-  const handleRoleRedirect = (role?: string) => {
-    if (role === 'MODERATOR') {
-      navigate('/moderator');
-    } else if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-      navigate('/admin');
-    } else if (role === 'FINANCE_ADMIN') {
-      navigate('/finance');
-    } else if (role === 'SUPPORT_ADMIN') {
-      navigate('/support');
-    } else if (role === 'VERIFICATION_ADMIN') {
-      navigate('/verification');
-    } else if (role === 'DJ') {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-      navigate(isMobile ? '/discover' : '/dashboard');
-    } else {
-      navigate('/discover');
-    }
-  };
-
   const onSubmit = async (data: LoginForm) => {
     setError(null);
     setIsSubmitting(true);
@@ -135,7 +117,7 @@ export default function Login() {
     setIsSubmitting(false);
     if (result.success) {
       const user = useAuthStore.getState().user;
-      handleRoleRedirect(user?.role);
+      redirectAfterAuth(user?.role, navigate);
     } else {
       setError(result.error || 'Login failed');
     }

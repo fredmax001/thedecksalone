@@ -3,7 +3,8 @@ import { Home, Compass, Disc3, Rss, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getMediaUrl } from '@/lib/api';
+import { getAvatarImageUrl } from '@/lib/utils';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const baseItems = [
   { label: 'Home', path: '/', icon: Home },
@@ -14,7 +15,7 @@ const baseItems = [
 export default function BottomNav() {
   const location = useLocation();
   const { user, isAuthenticated } = useAuthStore();
-  const isDj = user?.role === 'DJ';
+  const { isDj } = useUserRole();
   const isAdmin =
     user?.role === 'ADMIN' ||
     user?.role === 'SUPER_ADMIN' ||
@@ -48,7 +49,7 @@ export default function BottomNav() {
     { label: 'Feed', path: '/feed', icon: Rss },
   ];
   const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
-  const avatarUrl = getMediaUrl(user?.djProfile?.avatar || user?.avatar) || '/default-avatar.jpg';
+  const avatarUrl = getAvatarImageUrl(user?.djProfile?.avatar || user?.avatar);
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const isMainActive = (path: string) => {

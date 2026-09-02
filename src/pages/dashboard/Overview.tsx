@@ -29,6 +29,10 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/formatting';
+import { formatDate } from '@/lib/dateTime';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 
 interface DashboardData {
@@ -80,7 +84,7 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
 
   useEffect(() => {
     if (!isDj) {
@@ -96,7 +100,7 @@ export default function Overview() {
         }
       })
       .catch((err) => {
-        setError(err.response?.data?.error || 'Could not load dashboard');
+        setError(getApiErrorMessage(err, 'Could not load dashboard'));
       })
       .finally(() => setLoading(false));
   }, [isDj]);
@@ -201,7 +205,7 @@ export default function Overview() {
         <KpiCard
           icon={Wallet}
           label="Earnings"
-          value={`SLE ${data?.payments?.reduce((sum, p) => sum + (p.amount || 0), 0)?.toLocaleString() || '0'}`}
+          value={formatCurrency(data?.payments?.reduce((sum, p) => sum + (p.amount || 0), 0))}
           change="+18%"
           trend="up"
           color="#22C55E"
@@ -302,7 +306,7 @@ export default function Overview() {
                       {b.eventType}
                     </p>
                     <p className="text-[11px] text-[#888888] mt-0.5">
-                      {new Date(b.eventDate).toLocaleDateString()} · {b.eventLocation}
+                      {formatDate(b.eventDate)} · {b.eventLocation}
                     </p>
                   </div>
                   <span
@@ -392,7 +396,7 @@ export default function Overview() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-white capitalize truncate">{e.eventType}</p>
-                    <p className="text-[11px] text-[#888888] mt-0.5">{new Date(e.eventDate).toLocaleDateString()}</p>
+                    <p className="text-[11px] text-[#888888] mt-0.5">{formatDate(e.eventDate)}</p>
                   </div>
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#22C55E]/10 text-[#22C55E]">
                     Confirmed

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flag, X, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react';
 import api from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -57,7 +58,7 @@ export default function ReportModal({
         onClose();
       }, 2500);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to submit report. Please try again.');
+      setError(getApiErrorMessage(err, 'Failed to submit report. Please try again.'));
     } finally {
       setLoading(false);
     }

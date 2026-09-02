@@ -23,8 +23,8 @@ import {
 import { useMixes, useMixGenres } from '@/hooks/useMixes';
 import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { cn } from '@/lib/utils';
-import { getMediaUrl } from '@/lib/api';
 import type { MixTrack } from '@/stores/playerStore';
+import { getAvatarImageUrl } from '@/lib/utils';
 
 type SearchTab = 'mixes' | 'djs';
 type ViewMode = 'grid' | 'list';
@@ -370,7 +370,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                     className="group text-left rounded-2xl bg-[#121110] border border-white/[0.08] hover:border-gold/40 p-4 transition-all"
                   >
                     <img
-                      src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                      src={getAvatarImageUrl(dj.avatar)}
                       alt={dj.stageName}
                       className="w-16 h-16 rounded-full object-cover border-2 border-gold/30 mx-auto mb-3 group-hover:scale-105 transition-transform"
                     />
@@ -386,7 +386,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                     className="group flex items-center gap-3 w-full text-left rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-gold/40 p-2.5 transition-all"
                   >
                     <img
-                      src={getMediaUrl(dj.avatar) || '/default-avatar.jpg'}
+                      src={getAvatarImageUrl(dj.avatar)}
                       alt={dj.stageName}
                       className="w-12 h-12 rounded-full object-cover border border-gold/30 shrink-0"
                     />

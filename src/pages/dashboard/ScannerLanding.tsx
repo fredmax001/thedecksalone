@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useRequireDj } from '@/hooks/useRequireDj';
 
 interface DJEvent {
   id: string;
@@ -19,7 +20,7 @@ export default function ScannerLanding() {
   const [loading, setLoading] = useState(true);
 
   const djId = user?.djProfile?.id;
-  const isDj = user?.role === 'DJ';
+  const isDj = useRequireDj();
 
   useEffect(() => {
     if (!isDj || !djId) {

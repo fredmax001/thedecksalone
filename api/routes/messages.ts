@@ -4,6 +4,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 
 const { createNotification } = require('../utils/notifications');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
     ]);
 
     if (partnerIds.size === 0) {
-      return res.json({ success: true, data: [] });
+      return ok(res, []);
     }
 
     // Get user details and last message for each conversation
@@ -83,9 +84,9 @@ router.get('/conversations', authMiddleware, async (req, res) => {
       })
     );
 
-    return res.json({ success: true, data: conversations.filter(Boolean) });
+    return ok(res, conversations.filter(Boolean));
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -101,7 +102,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       select: { id: true, username: true, email: true, djProfile: { select: { stageName: true, avatar: true } } },
     });
     if (!partner) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return fail(res, 404, 'User not found');
     }
 
     // Fetch messages between users
@@ -136,7 +137,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -145,7 +146,7 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const parsed = messageSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+      return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
     }
 
     const { receiverId, content, bookingId } = parsed.data;
@@ -153,13 +154,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Prevent self-messaging
     if (senderId === receiverId) {
-      return res.status(400).json({ success: false, error: 'Cannot message yourself' });
+      return fail(res, 400, 'Cannot message yourself');
     }
 
     // Verify receiver exists
     const receiver = await prisma.user.findUnique({ where: { id: receiverId } });
     if (!receiver) {
-      return res.status(404).json({ success: false, error: 'Receiver not found' });
+      return fail(res, 404, 'Receiver not found');
     }
 
     // Verify booking if provided
@@ -169,12 +170,12 @@ router.post('/', authMiddleware, async (req, res) => {
         include: { dj: { select: { userId: true } } },
       });
       if (!booking) {
-        return res.status(404).json({ success: false, error: 'Booking not found' });
+        return fail(res, 404, 'Booking not found');
       }
       const isParticipant = booking.clientId === senderId || booking.dj?.userId === senderId ||
         booking.clientId === receiverId || booking.dj?.userId === receiverId;
       if (!isParticipant) {
-        return res.status(403).json({ success: false, error: 'Not a participant in this booking' });
+        return fail(res, 403, 'Not a participant in this booking');
       }
     }
 
@@ -214,7 +215,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: message });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -223,13 +224,13 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
   try {
     const message = await prisma.message.findUnique({ where: { id: req.params.id } });
     if (!message) {
-      return res.status(404).json({ success: false, error: 'Message not found' });
+      return fail(res, 404, 'Message not found');
     }
     if (message.receiverId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return fail(res, 403, 'Forbidden');
     }
     if (message.readAt) {
-      return res.json({ success: true, data: message });
+      return ok(res, message);
     }
 
     const updated = await prisma.message.update({
@@ -237,9 +238,9 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
       data: { readAt: new Date() },
     });
 
-    return res.json({ success: true, data: updated });
+    return ok(res, updated);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 

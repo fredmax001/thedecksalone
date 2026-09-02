@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface UserFilters {
   search?: string;
@@ -25,12 +26,8 @@ export function useUsers(filters: UserFilters = {}) {
   return useQuery({
     queryKey: ['discover-users', filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (search) params.set('search', search);
-
-      const res = await api.get(`/discover/users?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, search });
+      const res = await api.get(`/discover/users${qs}`);
       const response = res.data;
 
       if (response && typeof response === 'object' && response.success === false) {

@@ -3,6 +3,7 @@ import { FileText, Settings, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import api from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTime } from '@/lib/dateTime';
 
 export function ModeratorAuditLogs() {
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,7 @@ export function ModeratorAuditLogs() {
 
                 <div className="flex items-center gap-1 text-[11px] text-text-muted">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>{new Date(log.createdAt).toLocaleString()}</span>
+                  <span>{formatDateTime(log.createdAt)}</span>
                 </div>
               </div>
 

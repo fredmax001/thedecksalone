@@ -9,6 +9,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDate } from '@/lib/dateTime';
 import {
   useMyCampaigns,
   useCampaignTargets,
@@ -33,6 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const STATUS_COLORS: Record<string, string> = {
   pending_payment: 'bg-yellow-500/10 text-yellow-500',
@@ -133,7 +135,7 @@ export default function Campaigns() {
           setOpen(false);
         },
         onError: (err: any) => {
-          toast.error(err.response?.data?.error || 'Failed to create campaign');
+          toast.error(getApiErrorMessage(err, 'Failed to create campaign'));
         },
       }
     );
@@ -143,7 +145,7 @@ export default function Campaigns() {
     if (!confirm('Are you sure you want to delete this campaign?')) return;
     deleteMutation.mutate(id, {
       onSuccess: () => toast.success('Campaign deleted'),
-      onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to delete campaign'),
+      onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to delete campaign')),
     });
   };
 
@@ -480,7 +482,7 @@ export default function Campaigns() {
                     {STATUS_LABELS[selectedCampaign.status]}
                   </span>
                   <span className="text-xs text-text-secondary">
-                    Created {new Date(selectedCampaign.createdAt).toLocaleDateString()}
+                    Created {formatDate(selectedCampaign.createdAt)}
                   </span>
                 </div>
               </div>

@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, Loader2, Plus, X, MapPin, Ticket, Trash2, Edit3, ImageIcon,
-  ScanLine, Crown, Share2, LayoutDashboard, BarChart3, Users, Eye, EyeOff,
+  ScanLine, Crown, Share2, LayoutDashboard, Users, Eye, EyeOff, Lock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { formatEventDate } from '@/lib/dateTime';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,6 +20,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import TicketTypeBuilder, { type TicketTypeInput } from '@/components/events/TicketTypeBuilder';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface DJEvent {
   id: string;
@@ -111,12 +114,19 @@ export default function DjEvents() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [shareEvent, setShareEvent] = useState<DJEvent | null>(null);
 
-  const isDj = user?.role === 'DJ';
+  const { isStaff, isDj } = useUserRole();
   const djId = user?.djProfile?.id;
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
-  const isProPlus = subscriptionTier === 'legend';
+  const isProPlus = subscriptionTier === 'pro' || subscriptionTier === 'legend' || isStaff;
 
   const [form, setForm] = useState(emptyForm);
+
+  // Auto-enable ticketing toggle when ticket types are added
+  useEffect(() => {
+    if (ticketTypes.length > 0 && !form.isTicketed) {
+      setForm((f) => ({ ...f, isTicketed: true }));
+    }
+  }, [ticketTypes.length, form.isTicketed]);
 
   useEffect(() => {
     if (!isDj || !djId) { setLoading(false); return; }
@@ -190,7 +200,7 @@ export default function DjEvents() {
       toast.success('Event deleted');
       setEvents(prev => prev.filter(e => e.id !== id));
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to delete');
+      toast.error(getApiErrorMessage(err, 'Failed to delete'));
     }
   };
 
@@ -214,39 +224,55 @@ export default function DjEvents() {
       return;
     }
 
+    const safeDate = (d?: string) => {
+      if (!d) return undefined;
+      const parsed = new Date(d);
+      return isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+    };
+
+    const eventDateIso = safeDate(form.date);
+    if (!eventDateIso) {
+      toast.error('Please enter a valid event start date and time');
+      setSubmitLoading(false);
+      return;
+    }
+
     setSubmitLoading(true);
     const formData = new FormData();
-    formData.append('title', form.title);
-    formData.append('description', form.description);
-    formData.append('type', form.type);
-    formData.append('date', new Date(form.date).toISOString());
-    if (form.endDate) formData.append('endDate', new Date(form.endDate).toISOString());
-    formData.append('location', form.location);
-    formData.append('city', form.city);
-    formData.append('venue', form.venue);
-    if (form.googleMapsUrl) formData.append('googleMapsUrl', form.googleMapsUrl);
-    if (form.organizerName) formData.append('organizerName', form.organizerName);
-    if (form.organizerContact) formData.append('organizerContact', form.organizerContact);
-    if (form.category) formData.append('category', form.category);
-    if (form.musicGenre) formData.append('musicGenre', form.musicGenre);
-    if (form.ageRestriction) formData.append('ageRestriction', form.ageRestriction);
-    if (form.capacity) formData.append('capacity', form.capacity);
-    if (form.refundPolicy) formData.append('refundPolicy', form.refundPolicy);
-    if (form.termsConditions) formData.append('termsConditions', form.termsConditions);
-    if (form.ticketSaleStartsAt) formData.append('ticketSaleStartsAt', new Date(form.ticketSaleStartsAt).toISOString());
-    if (form.ticketSaleEndsAt) formData.append('ticketSaleEndsAt', new Date(form.ticketSaleEndsAt).toISOString());
-    formData.append('approvalMode', form.approvalMode);
-    formData.append('status', form.status);
-    if (form.ticketUrl) formData.append('ticketUrl', form.ticketUrl);
+    formData.append('title', form.title.trim());
+    formData.append('description', form.description || '');
+    formData.append('type', form.type || 'Club Night');
+    formData.append('date', eventDateIso);
+    const endDateIso = safeDate(form.endDate);
+    if (endDateIso) formData.append('endDate', endDateIso);
+    formData.append('location', form.location.trim());
+    formData.append('city', (form.city || form.location || 'Freetown').trim());
+    if (form.venue) formData.append('venue', form.venue.trim());
+    if (form.googleMapsUrl) formData.append('googleMapsUrl', form.googleMapsUrl.trim());
+    if (form.organizerName) formData.append('organizerName', form.organizerName.trim());
+    if (form.organizerContact) formData.append('organizerContact', form.organizerContact.trim());
+    if (form.category) formData.append('category', form.category.trim());
+    if (form.musicGenre) formData.append('musicGenre', form.musicGenre.trim());
+    if (form.ageRestriction) formData.append('ageRestriction', form.ageRestriction.trim());
+    if (form.capacity) formData.append('capacity', form.capacity.trim());
+    if (form.refundPolicy) formData.append('refundPolicy', form.refundPolicy.trim());
+    if (form.termsConditions) formData.append('termsConditions', form.termsConditions.trim());
+    const saleStartIso = safeDate(form.ticketSaleStartsAt);
+    if (saleStartIso) formData.append('ticketSaleStartsAt', saleStartIso);
+    const saleEndIso = safeDate(form.ticketSaleEndsAt);
+    if (saleEndIso) formData.append('ticketSaleEndsAt', saleEndIso);
+    formData.append('approvalMode', form.approvalMode || 'automatic');
+    formData.append('status', form.status || 'upcoming');
+    if (form.ticketUrl) formData.append('ticketUrl', form.ticketUrl.trim());
     if (imageFile) formData.append('image', imageFile);
 
     // Pro+ ticketing fields
     formData.append('isTicketed', String(form.isTicketed));
     if (form.isTicketed) {
       if (form.ticketPrice) formData.append('ticketPrice', form.ticketPrice);
-      formData.append('ticketCurrency', form.ticketCurrency);
-      if (form.mobileMoneyNumber) formData.append('mobileMoneyNumber', form.mobileMoneyNumber);
-      if (form.mobileMoneyProvider) formData.append('mobileMoneyProvider', form.mobileMoneyProvider);
+      formData.append('ticketCurrency', form.ticketCurrency || 'SLE');
+      if (form.mobileMoneyNumber) formData.append('mobileMoneyNumber', form.mobileMoneyNumber.trim());
+      if (form.mobileMoneyProvider) formData.append('mobileMoneyProvider', form.mobileMoneyProvider.trim());
       if (form.totalTickets) formData.append('totalTickets', form.totalTickets);
     }
 
@@ -290,7 +316,15 @@ export default function DjEvents() {
         toast.error(res.data.error || 'Save failed');
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Save failed');
+      console.error('Failed to save event:', err);
+      const detailMsg = err.response?.data?.details
+        ? Object.entries(err.response.data.details)
+            .map(([k, v]) => `${k}: ${(v as any[]).join(', ')}`)
+            .join(' | ')
+        : err.response?.data?.error;
+      toast.error('Failed to save event', {
+        description: detailMsg || 'Please check your event details and try again.',
+      });
     } finally {
       setSubmitLoading(false);
     }
@@ -304,7 +338,7 @@ export default function DjEvents() {
       const listRes = await api.get(`/events?djId=${djId}&limit=100`);
       if (listRes.data.success) setEvents(listRes.data.data || []);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to update publish status');
+      toast.error(getApiErrorMessage(err, 'Failed to update publish status'));
     }
   };
 
@@ -343,7 +377,7 @@ export default function DjEvents() {
           <Button
             className="bg-gold-gradient text-black hover:opacity-90"
             onClick={() => {
-              if (!checkFeature('legend', 'Create Events')) return;
+              if (!isStaff && !checkFeature('pro', 'Create Events')) return;
               resetForm();
               setIsFormOpen(true);
             }}
@@ -362,7 +396,7 @@ export default function DjEvents() {
             <p className="text-text-secondary mb-2">No events yet</p>
             <p className="text-sm text-text-muted mb-4">Create your first event to let fans know where you're playing next.</p>
             {isDj && (
-              <Button className="bg-gold-gradient text-black" onClick={() => { if (!checkFeature('legend', 'Create Events')) return; resetForm(); setIsFormOpen(true); }}>
+              <Button className="bg-gold-gradient text-black" onClick={() => { if (!isStaff && !checkFeature('pro', 'Create Events')) return; resetForm(); setIsFormOpen(true); }}>
                 <Plus className="w-4 h-4 mr-2" /> Create Your First Event
               </Button>
             )}
@@ -398,7 +432,7 @@ export default function DjEvents() {
                     <div className="min-w-0 flex-1">
                       <h4 className="font-display text-sm font-semibold text-text-primary uppercase truncate">{event.title}</h4>
                       <p className="text-xs text-gold mt-1">
-                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        {formatEventDate(date)}
                       </p>
                       <p className="text-xs text-text-muted flex items-center gap-1 mt-1">
                         <MapPin className="w-3 h-3 flex-shrink-0" />
@@ -433,29 +467,33 @@ export default function DjEvents() {
                       to={`/dashboard/events/${event.id}`}
                       className="flex items-center justify-center gap-1.5 py-2 bg-gold/10 border border-gold/20 text-gold text-xs font-semibold rounded-lg hover:bg-gold/20 transition-colors"
                     >
-                      <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                      <LayoutDashboard className="w-3.5 h-3.5" /> Manage & Tools
                     </Link>
-                    {event.isTicketed && isProPlus && (
-                      <>
-                        <Link
-                          to={`/dashboard/events/${event.id}/tickets`}
-                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
-                        >
-                          <Users className="w-3.5 h-3.5" /> Tickets
-                        </Link>
-                        <Link
-                          to={`/dashboard/events/${event.id}/analytics`}
-                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
-                        >
-                          <BarChart3 className="w-3.5 h-3.5" /> Analytics
-                        </Link>
-                        <Link
-                          to={`/dashboard/events/${event.id}/scan`}
-                          className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
-                        >
-                          <ScanLine className="w-3.5 h-3.5" /> Scanner
-                        </Link>
-                      </>
+                    {event.isTicketed && (
+                      <Link
+                        to={`/dashboard/events/${event.id}/tickets`}
+                        className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                      >
+                        <Users className="w-3.5 h-3.5" /> Guest List
+                      </Link>
+                    )}
+                    {event.isTicketed && (
+                      <Link
+                        to={`/dashboard/events/${event.id}/scan`}
+                        className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                      >
+                        <ScanLine className="w-3.5 h-3.5" /> Door Scanner
+                      </Link>
+                    )}
+                    {event.isTicketed && (
+                      <a
+                        href={`/events/${event.id}/onsite`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-1.5 py-2 bg-white/5 border border-white/10 text-text-secondary text-xs font-semibold rounded-lg hover:border-gold/30 hover:text-gold transition-colors"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-gold" /> Staff Portal
+                      </a>
                     )}
                   </div>
 
@@ -609,7 +647,7 @@ export default function DjEvents() {
                           )}
                         </div>
 
-                        {form.isTicketed && isProPlus && (
+                        {isProPlus && (
                           <div className="space-y-4 pt-2 border-t border-white/10">
                             <div className="grid grid-cols-2 gap-4">
                               <div>

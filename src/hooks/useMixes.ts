@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { buildQueryString } from '@/lib/url';
 
 export interface MixFilters {
   category?: string;
@@ -26,16 +27,8 @@ export function useMixes(filters: MixFilters = {}) {
   return useQuery({
     queryKey,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('limit', String(limit));
-      if (category) params.set('category', category);
-      if (genre) params.set('genre', genre);
-      if (search) params.set('search', search);
-      if (sortBy) params.set('sortBy', sortBy);
-      if (djId) params.set('djId', djId);
-
-      const res = await api.get(`/mixes?${params.toString()}`);
+      const qs = buildQueryString({ page, limit, category, genre, search, sortBy, djId });
+      const res = await api.get(`/mixes${qs}`);
       return res.data;
     },
     staleTime: 0,           // Always consider data stale — refetch on mount/key change
@@ -51,10 +44,8 @@ export function useTrendingMixes(limit = 6, genre?: string) {
   return useQuery({
     queryKey,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('limit', String(limit));
-      if (genre) params.set('genre', genre);
-      const res = await api.get(`/mixes/trending?${params.toString()}`);
+      const qs = buildQueryString({ limit, genre });
+      const res = await api.get(`/mixes/trending${qs}`);
       return res.data.data || [];
     },
     staleTime: 1000 * 60 * 2, // 2 minutes — trending data can be slightly stale

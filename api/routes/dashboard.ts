@@ -3,6 +3,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { computeDjScore } = require('../utils/ranking');
 const { getMonthlyListeners } = require('../utils/monthlyListeners');
+const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'You do not have a DJ profile' });
+      return fail(res, 403, 'You do not have a DJ profile');
     }
 
     const [
@@ -31,6 +32,8 @@ router.get('/', authMiddleware, async (req, res) => {
       recentEvents,
       battleEntries,
       payments,
+      ticketRevenueAgg,
+      recentTicketSales,
     ] = await Promise.all([
       prisma.mix.count({ where: { djId: dj.id } }),
       prisma.mix.aggregate({
@@ -81,9 +84,29 @@ router.get('/', authMiddleware, async (req, res) => {
         take: 5,
       }),
       prisma.payment.findMany({
-        where: { djId: dj.id, status: 'COMPLETED' },
+        where: { djId: dj.id },
         orderBy: { createdAt: 'desc' },
-        take: 5,
+        take: 10,
+      }),
+      prisma.eventTicket.aggregate({
+        where: {
+          event: { djId: dj.id },
+          status: { in: ['approved', 'checked_in'] },
+          paymentStatus: 'paid',
+        },
+        _sum: { amount: true },
+      }),
+      prisma.eventTicket.findMany({
+        where: {
+          event: { djId: dj.id },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 15,
+        include: {
+          event: { select: { id: true, title: true } },
+          ticketType: { select: { name: true } },
+          user: { select: { name: true, email: true, username: true } },
+        },
       }),
     ]);
 
@@ -97,15 +120,43 @@ router.get('/', authMiddleware, async (req, res) => {
     const liveScores = await computeDjScore(dj.id);
     const monthlyListeners = await getMonthlyListeners(dj.id);
 
-    return res.json({
-      success: true,
-      data: {
+    const bookingEarnings = payments.filter((p: any) => p.status === 'COMPLETED').reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+    const ticketEarnings = ticketRevenueAgg._sum.amount || 0;
+    const totalEarnings = bookingEarnings + ticketEarnings;
+
+    // Merge ticket sales into unified transaction/payment list for display
+    const unifiedPayments = [
+      ...payments.map((p: any) => ({
+        ...p,
+        type: 'booking',
+      })),
+      ...recentTicketSales.map((t: any) => ({
+        id: t.id,
+        amount: t.amount,
+        currency: t.currency || 'SLE',
+        status: t.status === 'approved' || t.status === 'checked_in' ? 'COMPLETED' : t.status === 'pending' ? 'PENDING' : 'FAILED',
+        type: 'ticket_sale',
+        createdAt: t.createdAt,
+        ticket: {
+          ticketNumber: t.ticketNumber,
+          ticketTypeName: t.ticketType?.name || 'General',
+          eventTitle: t.event?.title || 'Event Ticket',
+          eventId: t.event?.id,
+          buyer: t.buyerName || t.user?.name || t.user?.username || 'Attendee',
+        },
+      })),
+    ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return ok(res, {
         overview: {
           totalMixes,
           totalStreams: totalStreams._sum.plays || 0,
           totalBookings,
           totalReviews,
           totalEvents,
+          totalEarnings,
+          bookingEarnings,
+          ticketEarnings,
           averageRating: dj.averageRating,
           rankingPosition: dj.rankingPosition,
           rankingScore: dj.rankingScore,
@@ -119,12 +170,11 @@ router.get('/', authMiddleware, async (req, res) => {
         rankingHistory,
         recentEvents,
         battleEntries,
-        payments,
+        payments: unifiedPayments,
         bookingStatusCounts,
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
@@ -136,7 +186,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     });
 
     if (!dj) {
-      return res.status(403).json({ success: false, error: 'You do not have a DJ profile' });
+      return fail(res, 403, 'You do not have a DJ profile');
     }
 
     const now = new Date();
@@ -244,9 +294,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
       ? Math.round(((totalMixesAllTime * 1000) / totalStreamsAllTime._sum.plays) * 1000) / 10
       : 0;
 
-    return res.json({
-      success: true,
-      data: {
+    return ok(res, {
         mixesThisMonth,
         bookingsThisMonth,
         newStreams: totalStreamsAllTime._sum.plays || 0,
@@ -260,10 +308,9 @@ router.get('/stats', authMiddleware, async (req, res) => {
         rankingScore: dj.rankingScore,
         monthlyActivity,
         genreBreakdown: genreData,
-      },
-    });
+      });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return fail(res, 500, error.message);
   }
 });
 
