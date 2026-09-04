@@ -174,7 +174,8 @@ router.get('/', authMiddleware, async (req, res) => {
         bookingStatusCounts,
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[dashboard.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -310,7 +311,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
         genreBreakdown: genreData,
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[dashboard.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

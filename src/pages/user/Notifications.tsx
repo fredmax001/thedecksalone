@@ -22,6 +22,9 @@ import {
   useMarkAllNotificationsRead,
   type NotificationItem,
 } from '@/hooks/useUserDashboard';
+import { useDeleteNotification } from '@/hooks/useNotifications';
+import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const notificationConfig: Record<string, { icon: typeof Bell; color: string }> = {
   BOOKING_UPDATE: { icon: Calendar, color: 'text-blue' },
@@ -35,6 +38,7 @@ const notificationConfig: Record<string, { icon: typeof Bell; color: string }> =
 function NotificationRow({ item, index }: { item: NotificationItem; index: number }) {
   const navigate = useNavigate();
   const markRead = useMarkNotificationRead();
+  const deleteNotification = useDeleteNotification();
   const [isRemoved, setIsRemoved] = useState(false);
 
   const config = notificationConfig[item.type] || notificationConfig.SYSTEM;
@@ -103,6 +107,12 @@ function NotificationRow({ item, index }: { item: NotificationItem; index: numbe
           onClick={(e) => {
             e.stopPropagation();
             setIsRemoved(true);
+            deleteNotification.mutate(item.id, {
+              onError: (err) => {
+                setIsRemoved(false);
+                toast.error(getApiErrorMessage(err, 'Failed to dismiss notification'));
+              },
+            });
           }}
         >
           <X className="w-3.5 h-3.5" />

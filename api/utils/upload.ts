@@ -27,6 +27,34 @@ Object.values(uploadDirs).forEach((dir) => {
 // Use memory storage so files can be processed (resize, validate, upload to S3) before persisting
 const memoryStorage = multer.memoryStorage();
 
+// Derive a safe file extension from the (multer-validated) mimetype instead of
+// the attacker-controlled originalname. Throws on unsupported mimetypes.
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'application/pdf': 'pdf',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/aac': 'aac',
+  'audio/webm': 'webm',
+};
+
+function extFromMime(mimetype) {
+  const ext = mimetype && MIME_TO_EXT[mimetype.toLowerCase()];
+  if (!ext) {
+    throw new Error(`Unsupported file type: ${mimetype}`);
+  }
+  return ext;
+}
+
 // File filter for general files
 function fileFilter(allowedMimes) {
   return (req, file, cb) => {
@@ -43,16 +71,14 @@ function fileFilter(allowedMimes) {
 // Downstream image processors should still validate file magic bytes.
 const ALLOWED_IMAGE_MIMES = [
   'image/jpeg',
-  'image/jpg',
   'image/png',
   'image/webp',
-  'image/heic',
-  'image/heif',
+  'image/gif',
 ];
 
 function imageFileFilter(req, file, cb) {
   const mime = (file.mimetype || '').toLowerCase();
-  if (mime.startsWith('image/') || ALLOWED_IMAGE_MIMES.includes(mime)) {
+  if (ALLOWED_IMAGE_MIMES.includes(mime)) {
     cb(null, true);
   } else {
     cb(new Error(`Invalid image format. Allowed: ${ALLOWED_IMAGE_MIMES.map((m) => m.replace('image/', '')).join(', ')}`), false);
@@ -99,10 +125,10 @@ const uploadHallOfFameImage = multer({
 const uploadDocument = multer({
   storage: memoryStorage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+    if (['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid document format. Allowed: PDF or Images'), false);
+      cb(new Error('Invalid document format. Allowed: PDF, JPG, PNG, WebP'), false);
     }
   },
   limits: { fileSize: MAX_DOCUMENT_UPLOAD_MB * MB },
@@ -185,4 +211,5 @@ module.exports = {
   uploadDocument,
   uploadAdminMedia,
   serveUploads,
+  extFromMime,
 };

@@ -19,7 +19,7 @@ require('./utils/passport'); // Initialize passport strategies
 const compression = require('compression');
 const { logger } = require('./utils/logger');
 const promClient = require('prom-client');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID: uuidv4 } = require('crypto');
 
 // Configure Prometheus default metrics
 promClient.collectDefaultMetrics();
@@ -58,6 +58,7 @@ const eventTicketingRoutes = require('./routes/eventTicketing');
 const userTicketRoutes = require('./routes/userTickets');
 const sitemapRoutes = require('./routes/sitemap');
 const reportRoutes = require('./routes/reports');
+const supportRoutes = require('./routes/support');
 const moderatorRoutes = require('./routes/moderator');
 const officialPlaylistRoutes = require('./routes/officialPlaylists');
 const developerRoutes = require('./routes/developers');
@@ -171,15 +172,22 @@ app.use(passport.initialize());
 serveUploads(app);
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Deck Salone API is running', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    return res.status(503).json({ success: false, error: 'Database unreachable' });
+  }
+  res.json({ success: true, message: 'Deck Salone API is running', database: 'up', timestamp: new Date().toISOString() });
 });
 
 // Expose Prometheus metrics endpoint (restricted to internal IPs or bearer token)
 app.get('/metrics', async (req, res) => {
   const allowedIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
   const forwarded = req.headers['x-forwarded-for'];
-  const clientIp = forwarded ? String(forwarded).split(',')[0].trim() : (req.ip || req.socket?.remoteAddress || '');
+  const clientIp = forwarded
+    ? String(forwarded).split(',').map((p) => p.trim()).filter(Boolean).pop()
+    : (req.ip || req.socket?.remoteAddress || '');
   const token = req.headers.authorization?.replace('Bearer ', '');
   const expectedToken = process.env.METRICS_TOKEN;
 
@@ -218,6 +226,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/support', authMiddleware, supportRoutes);
 app.use('/api/users', userRoutes);
 
 app.use('/api/discover', discoverRoutes);
@@ -229,6 +238,34 @@ app.use('/api/sets', setRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/developers', developerRoutes);
 app.use('/api/hall-of-fame', hallOfFameRoutes);
+
+// Safe image proxy endpoint to allow Canvas export without CORS/tainting issues
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl || typeof imageUrl !== 'string' || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+      return res.status(400).send('Invalid image URL');
+    }
+
+    const axios = require('axios');
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'DeckSalone/1.0 ImageProxy',
+      },
+    });
+
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(Buffer.from(response.data));
+  } catch (error) {
+    return res.status(500).send('Failed to proxy image');
+  }
+});
 
 // OG Meta routes for social media sharing (own file)
 app.use('/og', ogRoutes);

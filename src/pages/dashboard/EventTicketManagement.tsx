@@ -127,8 +127,26 @@ export default function EventTicketManagement() {
     }
   };
 
-  const exportCsv = () => {
-    window.open(`/api/events/${eventId}/ticketing/customers/export`, '_blank');
+  const exportCsv = async () => {
+    try {
+      const res = await api.get(`/events/${eventId}/ticketing/customers/export`, {
+        responseType: 'blob',
+      });
+      const disposition = res.headers?.['content-disposition'] || '';
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      const filename = match?.[1] || 'guest-list.csv';
+      const blobUrl = URL.createObjectURL(res.data);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to export guest list'));
+    }
   };
 
   const isLoading = activeView === 'tickets' ? ticketsLoading : customersLoading;

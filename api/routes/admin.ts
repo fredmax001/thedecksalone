@@ -49,8 +49,13 @@ async function createAuditLog(params: {
   }
 }
 
-// All routes require admin role (MODERATOR role uses /api/moderator routes)
-router.use(requireRole('ADMIN', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN'));
+// All routes require admin role (MODERATOR role uses /api/moderator routes; /reports is shared with moderators)
+router.use((req: any, res: any, next: any) => {
+  if (req.path === '/reports' || req.path.startsWith('/reports/')) {
+    return requireRole('ADMIN', 'SUPER_ADMIN', 'MODERATOR')(req, res, next);
+  }
+  return requireRole('ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'FINANCE_ADMIN')(req, res, next);
+});
 
 const userFilterSchema = z.object({
   role: z.string().optional(),
@@ -642,7 +647,7 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/mixes/:id/feature - Feature/unfeature a mix
-router.put('/mixes/:id/feature', requireRole('ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+router.put('/mixes/:id/feature', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = featureMixSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input');
@@ -682,7 +687,7 @@ router.put('/djs/:id/hall-of-fame', requireRole('ADMIN'), asyncHandler(async (re
 }));
 
 // PUT /api/admin/mixes/:id/hall-of-fame - Toggle Mix Hall of Fame status
-router.put('/mixes/:id/hall-of-fame', requireRole('ADMIN'), asyncHandler(async (req, res) => {
+router.put('/mixes/:id/hall-of-fame', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
   if (!mix) return fail(res, 404, 'Mix not found');
 
@@ -695,7 +700,7 @@ router.put('/mixes/:id/hall-of-fame', requireRole('ADMIN'), asyncHandler(async (
 }));
 
 // DELETE /api/admin/mixes/:id - Delete a mix
-router.delete('/mixes/:id', requireRole('ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+router.delete('/mixes/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const mixId = req.params.id;
   const mix = await prisma.mix.findUnique({ where: { id: mixId } });
   if (!mix) return fail(res, 404, 'Mix not found');
@@ -1436,12 +1441,12 @@ router.get('/mixes', async (req, res) => {
     });
   } catch (error: any) {
     console.error('[Admin Mixes] Error:', error);
-    return fail(res, 500, error.message);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // PUT /api/admin/mixes/:id/visibility - Toggle Mix public/private status
-router.put('/mixes/:id/visibility', requireRole('ADMIN', 'MODERATOR'), async (req, res) => {
+router.put('/mixes/:id/visibility', requireRole('ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
     const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
     if (!mix) return fail(res, 404, 'Mix not found');
@@ -1454,7 +1459,8 @@ router.put('/mixes/:id/visibility', requireRole('ADMIN', 'MODERATOR'), async (re
 
     return ok(res, { id: updated.id, isPublic: updated.isPublic, title: updated.title });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1654,7 +1660,7 @@ router.post('/notifications/clear', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/admin/battles - Admin battles list with full details
-router.get('/battles', asyncHandler(async (req, res) => {
+router.get('/battles', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { status, page, limit } = req.query;
   const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit });
 
@@ -1695,7 +1701,7 @@ router.get('/battles', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/admin/battles - Create battle (admin endpoint)
-router.post('/battles', asyncHandler(async (req, res) => {
+router.post('/battles', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { title, weekStart, weekEnd, theme, metricType } = req.body;
   if (!title || !weekStart || !weekEnd) {
     return fail(res, 400, 'title, weekStart, and weekEnd are required');
@@ -1729,7 +1735,7 @@ router.post('/battles', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/admin/battles/:id/close - Close battle (admin endpoint)
-router.post('/battles/:id/close', asyncHandler(async (req, res) => {
+router.post('/battles/:id/close', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const battleId = req.params.id;
   const battle = await prisma.battle.findUnique({
     where: { id: battleId },
@@ -1791,7 +1797,7 @@ router.post('/battles/:id/close', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/battles/:id - Update battle details
-router.put('/battles/:id', asyncHandler(async (req, res) => {
+router.put('/battles/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, weekStart, weekEnd, theme, metricType } = req.body;
 
@@ -1838,7 +1844,7 @@ router.put('/battles/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/admin/battles/:id/entries - Add a DJ to a battle
-router.post('/battles/:id/entries', asyncHandler(async (req, res) => {
+router.post('/battles/:id/entries', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { djId, mixId } = req.body;
   if (!djId) {
@@ -1895,7 +1901,7 @@ router.post('/battles/:id/entries', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/admin/battles/:id/entries/:entryId - Remove a DJ from a battle
-router.delete('/battles/:id/entries/:entryId', asyncHandler(async (req, res) => {
+router.delete('/battles/:id/entries/:entryId', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { id, entryId } = req.params;
 
   const battle = await prisma.battle.findUnique({ where: { id } });
@@ -1927,7 +1933,7 @@ router.delete('/battles/:id/entries/:entryId', asyncHandler(async (req, res) => 
 }));
 
 // POST /api/admin/notifications - Send a notification (in-memory only for now)
-router.post('/notifications', asyncHandler(async (req, res) => {
+router.post('/notifications', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { type, target, title, message, scheduled, mediaUrl, mediaType } = req.body;
   if (!type || !title || !message) {
     return fail(res, 400, 'type, title, and message are required');
@@ -2158,7 +2164,7 @@ router.put('/subscription-config', requireRole('ADMIN', 'FINANCE_ADMIN'), asyncH
 }));
 
 // GET /api/admin/ads - Ad campaign overview (alias for campaigns)
-router.get('/ads', asyncHandler(async (req, res) => {
+router.get('/ads', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const campaigns = await prisma.adCampaign.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
@@ -2180,7 +2186,7 @@ router.get('/ads', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/admin/ads - Create a new ad campaign
-router.post('/ads', asyncHandler(async (req, res) => {
+router.post('/ads', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = createAdSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -2227,7 +2233,7 @@ router.post('/ads', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/ads/:id - Update an existing ad campaign
-router.put('/ads/:id', asyncHandler(async (req, res) => {
+router.put('/ads/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = updateAdSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -2289,7 +2295,7 @@ router.put('/ads/:id', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/admin/ads/:id - Delete an ad campaign
-router.delete('/ads/:id', asyncHandler(async (req, res) => {
+router.delete('/ads/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const existing = await prisma.adCampaign.findUnique({ where: { id } });
   if (!existing) {
@@ -2347,7 +2353,7 @@ router.put('/campaigns/:id', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/campaigns/:id/status - Update campaign status (approve/reject/pause)
-router.put('/campaigns/:id/status', asyncHandler(async (req, res) => {
+router.put('/campaigns/:id/status', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = campaignStatusSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -2467,7 +2473,7 @@ router.post('/broadcast-email', requireRole('ADMIN'), asyncHandler(async (req, r
 // ───────────────────────────────────────────────────────────────────
 
 // GET /api/admin/sets - List all DJ sets with pagination and filters
-router.get('/sets', asyncHandler(async (req, res) => {
+router.get('/sets', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const { search, djId, isPublic, page, limit } = req.query;
   const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit });
 
@@ -2513,7 +2519,7 @@ router.get('/sets', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/admin/sets/:id - Get a single set with full details
-router.get('/sets/:id', asyncHandler(async (req, res) => {
+router.get('/sets/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const set = await prisma.djSet.findUnique({
     where: { id: req.params.id },
     include: {
@@ -2537,7 +2543,7 @@ router.get('/sets/:id', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/sets/:id - Update any set (admin override)
-router.put('/sets/:id', asyncHandler(async (req, res) => {
+router.put('/sets/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = updateSetSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -2566,7 +2572,7 @@ router.put('/sets/:id', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/admin/sets/:id - Delete any set (admin override)
-router.delete('/sets/:id', asyncHandler(async (req, res) => {
+router.delete('/sets/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const set = await prisma.djSet.findUnique({
     where: { id: req.params.id },
     include: { dj: { select: { id: true, stageName: true } } },
@@ -2589,7 +2595,7 @@ router.delete('/sets/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/admin/sets/:id/mixes - Add a mix to a set (admin override)
-router.post('/sets/:id/mixes', asyncHandler(async (req, res) => {
+router.post('/sets/:id/mixes', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = setItemSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -2629,7 +2635,7 @@ router.post('/sets/:id/mixes', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/admin/sets/:id/mixes/:mixId - Remove a mix from a set (admin override)
-router.delete('/sets/:id/mixes/:mixId', asyncHandler(async (req, res) => {
+router.delete('/sets/:id/mixes/:mixId', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const set = await prisma.djSet.findUnique({
     where: { id: req.params.id },
     include: { dj: { select: { id: true, stageName: true } } },
@@ -2659,7 +2665,7 @@ router.delete('/sets/:id/mixes/:mixId', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/sets/:id/reorder - Reorder items in a set (admin override)
-router.put('/sets/:id/reorder', asyncHandler(async (req, res) => {
+router.put('/sets/:id/reorder', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const set = await prisma.djSet.findUnique({
     where: { id: req.params.id },
     include: { dj: { select: { id: true, stageName: true } } },
@@ -2710,7 +2716,7 @@ router.put('/sets/:id/reorder', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/admin/sets/stats - Set statistics
-router.get('/sets/stats', asyncHandler(async (req, res) => {
+router.get('/sets/stats', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const [totalSets, publicSets, privateSets, totalItems, topDjs] = await Promise.all([
     prisma.djSet.count(),
     prisma.djSet.count({ where: { isPublic: true } }),
@@ -2747,7 +2753,7 @@ router.get('/sets/stats', asyncHandler(async (req, res) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/test-email - Send instant SMTP test email
 // ───────────────────────────────────────────────────────────────────
-router.post('/test-email', async (req: any, res: any) => {
+router.post('/test-email', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const { to } = req.body;
     if (!to || !to.includes('@')) {
@@ -2764,14 +2770,15 @@ router.post('/test-email', async (req: any, res: any) => {
     }
     return ok(res, { sentTo: to, message: `Test email sent to ${to}` });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/send-email - Send custom branded HTML email
 // ───────────────────────────────────────────────────────────────────
-router.post('/send-email', async (req: any, res: any) => {
+router.post('/send-email', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const { to, subject, body } = req.body;
     if (!to || !to.includes('@')) {
@@ -2791,7 +2798,8 @@ router.post('/send-email', async (req: any, res: any) => {
     }
     return ok(res, { sentTo: to, message: `Custom email delivered to ${to}` });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -2804,7 +2812,8 @@ router.post('/dispatch-bug-report', async (req: any, res: any) => {
     const result = await sendDailyBugSummary();
     return ok(res, result);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -2818,7 +2827,8 @@ router.post('/nudge-incomplete-profiles', async (req: any, res: any) => {
     const result = await nudgeIncompleteProfiles(userId);
     return ok(res, result);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -2858,7 +2868,8 @@ router.post('/trigger-birthday-emails', async (req: any, res: any) => {
 
     return ok(res, { totalMatched: matching.length, emailsSent: sent, message: `${sent} birthday emails dispatched!` });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[admin.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -2905,7 +2916,7 @@ router.get('/events/ticketing/stats', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/events/:id/suspend - Suspend an event
 // ───────────────────────────────────────────────────────────────────
-router.post('/events/:id/suspend', async (req: any, res: any) => {
+router.post('/events/:id/suspend', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const parsed = suspendEventSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -2938,7 +2949,7 @@ router.post('/events/:id/suspend', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/events/:id/restore - Restore a suspended event
 // ───────────────────────────────────────────────────────────────────
-router.post('/events/:id/restore', async (req: any, res: any) => {
+router.post('/events/:id/restore', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const event = await prisma.event.update({
       where: { id: req.params.id },
@@ -2999,7 +3010,7 @@ router.post('/upload-media', uploadAdminMedia.single('media'), async (req: any, 
     });
   } catch (error: any) {
     console.error('[Admin Upload Media] Error:', error.message);
-    return fail(res, 500, error.message || 'Failed to upload media');
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -3358,7 +3369,7 @@ router.post('/system-errors/digest', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/send-custom-email - Send custom email to user/DJ
 // ───────────────────────────────────────────────────────────────────
-router.post('/send-custom-email', async (req: any, res: any) => {
+router.post('/send-custom-email', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const parsed = customEmailSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -3466,6 +3477,111 @@ router.post('/profiles/nudge', async (req: any, res: any) => {
     return fail(res, 500, 'Failed to send profile nudge');
   }
 });
+
+/* ─────────────────────────────────────────────────────────────
+   VIOLATION REPORTS & EVENT SCAN LOGS
+   GET /api/admin/reports
+   PATCH /api/admin/reports/:id
+   GET /api/admin/events/:id/scan-logs
+   ───────────────────────────────────────────────────────────── */
+
+const updateReportSchema = z.object({
+  status: z.enum(['PENDING', 'INVESTIGATING', 'RESOLVED', 'DISMISSED']).optional(),
+  actionTaken: z.string().max(200).optional(),
+});
+
+// GET /api/admin/reports - Paginated violation reports (newest first)
+router.get('/reports', requireRole('ADMIN', 'SUPER_ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+  const status = req.query.status as string;
+  const { page, limit, skip } = parsePagination({ page: req.query.page as string, limit: req.query.limit as string });
+
+  const where: any = {};
+  if (status && status !== 'ALL') where.status = status;
+
+  const [reports, total] = await Promise.all([
+    prisma.violationReport.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        reporter: { select: { id: true, username: true, email: true, avatar: true } },
+        targetUser: { select: { id: true, username: true, email: true, avatar: true, status: true } },
+        mix: { select: { id: true, title: true, coverImage: true, isPublic: true } },
+        event: { select: { id: true, title: true } },
+        comment: { select: { id: true, content: true } },
+      },
+    }),
+    prisma.violationReport.count({ where }),
+  ]);
+
+  return res.json({
+    success: true,
+    data: reports,
+    meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
+}));
+
+// PATCH /api/admin/reports/:id - Update report status/action and audit-log it
+router.patch('/reports/:id', requireRole('ADMIN', 'SUPER_ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+  const parsed = updateReportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
+  }
+
+  const report = await prisma.violationReport.findUnique({ where: { id: req.params.id } });
+  if (!report) return fail(res, 404, 'Report not found');
+
+  const updateData: any = {};
+  if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
+  if (parsed.data.actionTaken !== undefined) updateData.actionTaken = parsed.data.actionTaken;
+  if (updateData.status === 'RESOLVED' || updateData.status === 'DISMISSED') {
+    updateData.resolvedBy = req.user.id;
+    updateData.resolvedAt = new Date();
+  }
+
+  const updated = await prisma.violationReport.update({
+    where: { id: report.id },
+    data: updateData,
+  });
+
+  await prisma.moderatorAuditLog.create({
+    data: {
+      moderatorId: req.user.id,
+      moderatorName: req.user.username || req.user.email,
+      action: `REPORT_UPDATE_${updateData.status || 'ACTION'}`,
+      targetType: 'REPORT',
+      targetId: report.id,
+      targetName: report.reason,
+      previousData: { status: report.status, actionTaken: report.actionTaken },
+      newData: updateData,
+    },
+  }).catch((err: any) => console.error('ModeratorAuditLog write failed:', err.message));
+
+  return ok(res, updated);
+}));
+
+// GET /api/admin/events/:id/scan-logs - Recent scan activity for an event
+router.get('/events/:id/scan-logs', asyncHandler(async (req, res) => {
+  const logs = await prisma.eventScanLog.findMany({
+    where: { eventId: req.params.id },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: {
+      ticket: {
+        select: {
+          id: true,
+          ticketNumber: true,
+          buyerName: true,
+          buyerEmail: true,
+          user: { select: { id: true, name: true, username: true } },
+        },
+      },
+    },
+  });
+
+  return ok(res, logs);
+}));
 
 module.exports = router;
 

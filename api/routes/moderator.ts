@@ -279,7 +279,8 @@ router.post('/mixes/:id/flag', async (req: any, res: any) => {
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -317,7 +318,8 @@ router.get('/playlists', async (req: any, res: any) => {
 
     return ok(res, playlists);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -365,7 +367,8 @@ router.post('/playlists', uploadCover.single('coverImageFile'), async (req: any,
     return ok(res, playlist);
   } catch (error: any) {
     logger.error('Error creating official playlist:', error);
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -409,7 +412,8 @@ router.put('/playlists/:id', uploadCover.single('coverImageFile'), async (req: a
     return ok(res, updated);
   } catch (error: any) {
     logger.error('Error updating official playlist:', error);
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -432,7 +436,8 @@ router.delete('/playlists/:id', async (req: any, res: any) => {
 
     return res.json({ success: true, message: 'Playlist deleted' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -479,7 +484,8 @@ router.post('/playlists/:id/items', async (req: any, res: any) => {
     return ok(res, item);
   } catch (error: any) {
     logger.error('Error adding mix to playlist:', error);
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -534,7 +540,8 @@ router.post('/playlists/:id/items/bulk', async (req: any, res: any) => {
     return res.json({ success: true, addedCount: newMixIds.length });
   } catch (error: any) {
     logger.error('Error bulk adding mixes to playlist:', error);
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -568,7 +575,8 @@ router.put('/playlists/:id/reorder', async (req: any, res: any) => {
     return res.json({ success: true, message: 'Playlist reordered successfully' });
   } catch (error: any) {
     logger.error('Error reordering playlist:', error);
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -604,7 +612,8 @@ router.delete('/playlists/:id/items/:itemId', async (req: any, res: any) => {
 
     return res.json({ success: true, message: 'Item removed from playlist' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -652,7 +661,8 @@ router.get('/rankings', async (req: any, res: any) => {
 
     return ok(res, deduplicated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -704,7 +714,8 @@ router.post('/rankings/recalculate', async (req: any, res: any) => {
 
     return ok(res, deduplicated, 'All platform rankings successfully recalculated and synchronized!');
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -760,7 +771,8 @@ router.post('/rankings/adjust', async (req: any, res: any) => {
 
     return ok(res, updated, `Ranking updated for ${dj.stageName}. Adjustment logged in audit trail.`);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -814,7 +826,8 @@ router.post('/djs/:id/feature', async (req: any, res: any) => {
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -843,7 +856,8 @@ router.get('/reports', async (req: any, res: any) => {
 
     return ok(res, reports);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -905,7 +919,8 @@ router.post('/reports/:id/action', async (req: any, res: any) => {
 
     return ok(res, updatedReport);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -933,7 +948,8 @@ router.get('/audit-logs', async (req: any, res: any) => {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

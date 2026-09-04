@@ -65,7 +65,8 @@ router.post('/', bookingLimiter, async (req, res) => {
 
     return res.status(201).json({ success: true, data: gig });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -112,7 +113,8 @@ router.get('/', authMiddleware, requireRole('DJ', 'ADMIN'), async (req, res) => 
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -134,7 +136,8 @@ router.get('/:id', authMiddleware, requireRole('DJ', 'ADMIN'), async (req, res) 
 
     return ok(res, gig);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -206,7 +209,8 @@ router.get('/:id/matches', authMiddleware, requireRole('DJ', 'ADMIN'), async (re
 
     return ok(res, scored);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -252,7 +256,8 @@ router.post('/:id/apply', authMiddleware, requireRole('DJ'), async (req, res) =>
 
     return res.status(201).json({ success: true, data: application });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -302,7 +307,8 @@ router.patch('/:id/applications/:appId/status', authMiddleware, async (req, res)
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[gigs.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

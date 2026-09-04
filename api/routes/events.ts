@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
@@ -304,6 +305,9 @@ router.post('/', authMiddleware, uploadEventImage.single('image'), asyncHandler(
 
   const data: any = { ...parsed.data };
   delete data.djId;
+  if (data.onsitePassword !== undefined) {
+    data.onsitePassword = data.onsitePassword ? await bcrypt.hash(data.onsitePassword, 12) : null;
+  }
 
   let imageUrl = null;
   if (req.file) {
@@ -357,6 +361,9 @@ router.put('/:id', authMiddleware, uploadEventImage.single('image'), asyncHandle
 
   const updateData: any = { ...parsed.data };
   delete updateData.djId;
+  if (updateData.onsitePassword !== undefined) {
+    updateData.onsitePassword = updateData.onsitePassword ? await bcrypt.hash(updateData.onsitePassword, 12) : null;
+  }
 
   if (req.file) {
     const { buffer, contentType, ext } = await processEventImage(req.file.buffer);

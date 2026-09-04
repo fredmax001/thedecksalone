@@ -388,6 +388,7 @@ export default function MixHub() {
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'waveform' | 'grid' | 'list'>('waveform');
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Accumulate loaded pages for true "Load More" behavior
   const [allMixes, setAllMixes] = useState<MixTrack[]>([]);
@@ -398,7 +399,7 @@ export default function MixHub() {
   const [embedModalMix, setEmbedModalMix] = useState<MixTrack | null>(null);
   const [downloadModalData, setDownloadModalData] = useState<{ mix: any; mode: 'auth' | 'subscribe' | 'repost' | 'follow' } | null>(null);
 
-  // Sync URL genre param
+  // Sync URL genre & search params (deep links from Feed / Official Playlists)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const rawParam = params.get('genre') || params.get('category');
@@ -407,6 +408,7 @@ export default function MixHub() {
       const matched = GENRES.find((g) => g.toLowerCase() === normalized);
       setActiveGenre(matched || rawParam);
     }
+    setSearchQuery(params.get('search') || '');
   }, []);
 
   useEffect(() => {
@@ -417,8 +419,13 @@ export default function MixHub() {
     } else {
       url.searchParams.set('genre', activeGenre);
     }
+    if (searchQuery) {
+      url.searchParams.set('search', searchQuery);
+    } else {
+      url.searchParams.delete('search');
+    }
     window.history.replaceState({}, '', url.toString());
-  }, [activeGenre]);
+  }, [activeGenre, searchQuery]);
 
   const { data: genres = [] } = useMixGenres();
   const { data: trendingData = [] } = useTrendingMixes(
@@ -428,6 +435,7 @@ export default function MixHub() {
 
   const { data: latestData, isLoading: latestLoading, refetch: refetchLatest } = useMixes({
     genre: activeGenre !== 'all' ? activeGenre : undefined,
+    search: searchQuery || undefined,
     sortBy,
     page,
     limit: 16,

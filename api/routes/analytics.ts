@@ -43,7 +43,8 @@ router.post('/visit', softAuthMiddleware, async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[analytics.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

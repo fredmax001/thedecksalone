@@ -6,7 +6,7 @@ const { authMiddleware, softAuthMiddleware, requireRole } = require('../middlewa
 const { playLimiter, conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthlyListeners');
-const { uploadMix } = require('../utils/upload');
+const { uploadMix, extFromMime } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processMixCover } = require('../utils/imageProcessor');
 const { withCache, clearCache } = require('../utils/cache');
@@ -792,7 +792,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, asyncHan
   if (audioFile) {
     audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', {
       contentType: audioFile.mimetype,
-      ext: audioFile.originalname.split('.').pop() || 'mp3',
+      ext: extFromMime(audioFile.mimetype),
     });
     audioSource = 'upload';
   } else if (data.audioUrl) {
@@ -908,7 +908,7 @@ router.put('/:id', authMiddleware, uploadMix, asyncHandler(async (req, res) => {
   if (audioFile) {
     updateData.audioUrl = await uploadBuffer(audioFile.buffer, 'mixes', {
       contentType: audioFile.mimetype,
-      ext: audioFile.originalname.split('.').pop() || 'mp3',
+      ext: extFromMime(audioFile.mimetype),
     });
     updateData.audioSource = 'upload';
     updateData.originalUrl = null;
@@ -1232,6 +1232,62 @@ router.get('/:id/repost-status', softAuthMiddleware, asyncHandler(async (req, re
   ]);
 
   return ok(res, { reposted: !!repost, count });
+}));
+
+// POST /api/mixes/:id/reactions - Toggle an emoji reaction on a mix
+const reactionSchema = z.object({
+  emoji: z.string().min(1).max(16),
+});
+
+router.post('/:id/reactions', authMiddleware, asyncHandler(async (req, res) => {
+  const mixId = req.params.id;
+  const userId = req.user.id;
+
+  const parsed = reactionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid reaction data', { details: parsed.error.flatten() });
+  }
+  const { emoji } = parsed.data;
+
+  const mix = await prisma.mix.findUnique({
+    where: { id: mixId },
+    select: { id: true },
+  });
+
+  if (!mix) {
+    return fail(res, 404, 'Mix not found');
+  }
+
+  const existing = await prisma.mixReaction.findUnique({
+    where: { mixId_userId_emoji: { mixId, userId, emoji } },
+  });
+
+  if (existing) {
+    await prisma.mixReaction.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.mixReaction.create({ data: { mixId, userId, emoji } });
+  }
+
+  const [grouped, mine] = await Promise.all([
+    prisma.mixReaction.groupBy({
+      by: ['emoji'],
+      where: { mixId },
+      _count: { _all: true },
+    }),
+    prisma.mixReaction.findMany({
+      where: { mixId, userId },
+      select: { emoji: true },
+    }),
+  ]);
+  const mineSet = new Set(mine.map((r: any) => r.emoji));
+
+  const reactions = grouped.map((g: any) => ({
+    emoji: g.emoji,
+    count: g._count._all,
+    reacted: mineSet.has(g.emoji),
+  }));
+
+  return ok(res, { reactions });
 }));
 
 // POST /api/mixes/:id/promote - Promote mix using DJ Promotion Points (Pro / Pro+ DJs only)

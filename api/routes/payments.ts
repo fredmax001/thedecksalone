@@ -44,7 +44,8 @@ router.get('/pro-subscription/config', authMiddleware, async (_req, res) => {
     const config = await getSubscriptionConfig();
     return ok(res, config);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -77,7 +78,8 @@ router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
         latestRequest: dj.proSubscriptionRequests[0] || null,
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -145,7 +147,8 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     return res.status(existingPending ? 200 : 201).json({ success: true, data: request });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -185,7 +188,8 @@ router.get('/', authMiddleware, async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -208,13 +212,14 @@ router.get('/:id', authMiddleware, async (req, res) => {
       return fail(res, 404, 'Payment not found');
     }
 
-    if (payment.clientId !== req.user.id && req.user.role !== 'ADMIN') {
+    if (payment.clientId !== req.user.id && !['ADMIN', 'FINANCE_ADMIN', 'SUPER_ADMIN'].includes(req.user.role)) {
       return fail(res, 403, 'Forbidden');
     }
 
     return ok(res, payment);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -272,7 +277,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: payment });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -336,7 +342,8 @@ router.post('/:id/process', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN'
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -385,7 +392,8 @@ router.post('/:id/refund', authMiddleware, requireRole('ADMIN', 'FINANCE_ADMIN')
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[payments.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

@@ -159,8 +159,6 @@ function DeepLinkHandler() {
 
     const handleAuthUrl = async (rawUrl: string) => {
       try {
-        console.log('[DeepLink] Raw URL received:', rawUrl);
-
         // Always close any open in-app browser tab when deep link arrives
         await Browser.close().catch(() => {});
 
@@ -182,7 +180,6 @@ function DeepLinkHandler() {
         }
 
         if (token) {
-          console.log('[DeepLink] Extracted token successfully');
           try {
             localStorage.setItem('token', token);
           } catch (e) {}
@@ -225,7 +222,6 @@ function DeepLinkHandler() {
 
     // Listen for app being resumed via deep link while running
     CapacitorApp.addListener('appUrlOpen', (event) => {
-      console.log('[DeepLink] appUrlOpen event:', event.url);
       handleAuthUrl(event.url);
     }).then((l) => {
       listener = l;
@@ -234,7 +230,6 @@ function DeepLinkHandler() {
     // Also handle the URL that launched the app (cold start)
     CapacitorApp.getLaunchUrl().then((launchUrl) => {
       if (launchUrl?.url) {
-        console.log('[DeepLink] Launch URL:', launchUrl.url);
         handleAuthUrl(launchUrl.url);
       }
     }).catch((e) => {

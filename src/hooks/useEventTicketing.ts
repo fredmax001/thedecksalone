@@ -285,6 +285,7 @@ export function useUpdateTicketControls(eventId?: string) {
     mutationFn: async (payload: {
       ticketSalesClosed?: boolean;
       showRemainingTickets?: boolean;
+      onsiteUsername?: string;
       onsitePassword?: string;
     }) => {
       const res = await api.put(`/events/${eventId}`, payload);

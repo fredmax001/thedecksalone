@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Search, ChevronDown, MessageSquare, BookOpen, Wrench, Music, CreditCard } from 'lucide-react';
+import { HelpCircle, Search, ChevronDown, MessageSquare, BookOpen, Wrench, Music, CreditCard, Send, Loader2 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import { useAuthStore } from '@/stores/authStore';
+import { useCreateSupportTicket } from '@/hooks/useSupport';
 
 const faqs = [
   {
@@ -112,6 +115,114 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+const inputClass =
+  'w-full bg-black border border-dark-gray rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:ring-1 focus:ring-gold/10 outline-none transition-colors';
+
+function ContactSupport() {
+  const isAuthenticated = useAuthStore((s) => !!s.token);
+  const createTicket = useCreateSupportTicket();
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+
+  const canSubmit = subject.trim().length > 0 && message.trim().length > 0 && !createTicket.isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    createTicket.mutate(
+      { subject: subject.trim(), message: message.trim(), priority },
+      { onSuccess: () => { setSubject(''); setMessage(''); setPriority('medium'); } }
+    );
+  };
+
+  return (
+    <FadeIn delay={0.5}>
+      <div className="mt-12 max-w-3xl mx-auto p-6 sm:p-8 bg-black-elevated rounded-2xl border border-white/5">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+            <MessageSquare className="w-4 h-4 text-gold" />
+          </div>
+          <h3 className="font-display text-lg font-semibold text-text-primary uppercase">
+            Contact Support
+          </h3>
+        </div>
+        <p className="text-sm text-text-secondary mb-6">
+          Can&apos;t find what you&apos;re looking for? Send us a message and our support team will reply as soon as possible.
+        </p>
+
+        {isAuthenticated ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="support-subject" className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                Subject
+              </label>
+              <input
+                id="support-subject"
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="What do you need help with?"
+                className={inputClass}
+                maxLength={200}
+              />
+            </div>
+            <div>
+              <label htmlFor="support-message" className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                Message
+              </label>
+              <textarea
+                id="support-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Describe your issue in detail..."
+                rows={5}
+                className={`${inputClass} resize-none`}
+                maxLength={5000}
+              />
+            </div>
+            <div>
+              <label htmlFor="support-priority" className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                Priority
+              </label>
+              <select
+                id="support-priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+                className={inputClass}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-full hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Send Request
+            </button>
+          </form>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-text-secondary mb-4">
+              Log in to submit a support request.
+            </p>
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-full hover:scale-[1.02] transition-transform"
+            >
+              Log In
+            </Link>
+          </div>
+        )}
+      </div>
+    </FadeIn>
   );
 }
 
@@ -273,6 +384,8 @@ export default function Help() {
               </div>
             </div>
           </FadeIn>
+
+          <ContactSupport />
         </div>
       </section>
     </div>

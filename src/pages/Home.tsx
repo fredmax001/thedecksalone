@@ -97,7 +97,7 @@ export default function Home() {
           <PlaylistGrid
             title="Official Playlists"
             playlists={playlists}
-            action={{ label: 'Browse all', to: '/official-playlists' }}
+            action={{ label: 'Browse all', to: '/playlists' }}
           />
         </section>
 

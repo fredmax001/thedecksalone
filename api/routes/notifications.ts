@@ -56,7 +56,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('[Notifications] List error:', error);
-    return fail(res, 500, error.message);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -66,7 +66,8 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
     const count = await getUnreadCount(req.user.id);
     return ok(res, { count });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -92,7 +93,8 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -102,7 +104,8 @@ router.patch('/read-all', authMiddleware, async (req, res) => {
     const result = await markAllAsRead(req.user.id);
     return ok(res, { updated: result.count });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -114,7 +117,8 @@ router.delete('/clear-all', authMiddleware, async (req, res) => {
     });
     return ok(res, { deleted: result.count });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -136,7 +140,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     await prisma.notification.delete({ where: { id: req.params.id } });
     return ok(res, { deleted: true });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -167,7 +172,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: notification });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[notifications.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

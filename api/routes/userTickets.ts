@@ -18,7 +18,8 @@ router.get('/', authMiddleware, async (req: any, res: any) => {
     });
     return ok(res, tickets);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[userTickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -36,7 +37,8 @@ router.get('/:ticketId', authMiddleware, async (req: any, res: any) => {
     if (!ticket) return fail(res, 404, 'Ticket not found');
     return ok(res, ticket);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[userTickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -51,7 +53,8 @@ router.post('/:ticketId/resend', authMiddleware, async (req: any, res: any) => {
     // Email sending can be wired here using existing sendEmail utility
     return ok(res, { message: 'Confirmation resent' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[userTickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

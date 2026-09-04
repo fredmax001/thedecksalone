@@ -20,6 +20,27 @@ import { cn } from "@/lib/utils";
 import { getMediaUrl } from "@/lib/api";
 import { formatCompactNumber } from "@/lib/formatting";
 
+// Instagram brand icon
+function InstagramIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
+
 interface StoryPosterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,9 +94,9 @@ function formatEventDate(dateStr: string) {
 
 function hexToRgba(hex: string, alpha: number): string {
   const sanitized = hex.replace("#", "");
-  const r = parseInt(sanitized.substring(0, 2), 16);
-  const g = parseInt(sanitized.substring(2, 4), 16);
-  const b = parseInt(sanitized.substring(4, 6), 16);
+  const r = parseInt(sanitized.substring(0, 2), 16) || 244;
+  const g = parseInt(sanitized.substring(2, 4), 16) || 224;
+  const b = parseInt(sanitized.substring(4, 6), 16) || 89;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
@@ -270,29 +291,35 @@ export default function StoryPosterModal({
     borderColor: string,
     borderWidth: number
   ) => {
-    const fullSrc = src.startsWith("http") || src.startsWith("data:") || src.startsWith("blob:") ? src : getMediaUrl(src);
+    let fullSrc = src.startsWith("http") || src.startsWith("data:") || src.startsWith("blob:") ? src : getMediaUrl(src);
 
-    const loadImage = (url: string, useCors = true): Promise<HTMLImageElement> => {
+    // If external cross-origin HTTP URL, route through image proxy so canvas is never tainted
+    if (fullSrc.startsWith("http://") || fullSrc.startsWith("https://")) {
+      try {
+        const urlObj = new URL(fullSrc);
+        if (urlObj.hostname !== window.location.hostname && !urlObj.hostname.includes("localhost")) {
+          fullSrc = `/api/proxy-image?url=${encodeURIComponent(fullSrc)}`;
+        }
+      } catch {}
+    }
+
+    const loadImage = (imgUrl: string): Promise<HTMLImageElement> => {
       return new Promise((resolve, reject) => {
         const img = new Image();
-        if (useCors) img.crossOrigin = "anonymous";
+        img.crossOrigin = "anonymous";
         img.onload = () => resolve(img);
         img.onerror = (e) => reject(e);
-        img.src = url;
+        img.src = imgUrl;
       });
     };
 
     let loadedImg: HTMLImageElement | null = null;
     try {
-      loadedImg = await loadImage(fullSrc, true);
+      loadedImg = await loadImage(fullSrc);
     } catch {
       try {
-        loadedImg = await loadImage(fullSrc, false);
-      } catch {
-        try {
-          loadedImg = await loadImage("/default-avatar.jpg", false);
-        } catch {}
-      }
+        loadedImg = await loadImage("/default-avatar.jpg");
+      } catch {}
     }
 
     if (loadedImg && loadedImg.naturalWidth > 0) {
@@ -385,10 +412,10 @@ export default function StoryPosterModal({
     const qrSvg = qrContainerRef.current?.querySelector("svg");
     if (!qrSvg) return;
     const xml = new XMLSerializer().serializeToString(qrSvg);
-    const svg64 = btoa(xml);
-    const image64 = "data:image/svg+xml;base64," + svg64;
+    const image64 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
 
     const qrImg = new Image();
+    qrImg.crossOrigin = "anonymous";
     qrImg.src = image64;
     await new Promise((resolve) => {
       qrImg.onload = resolve;
@@ -429,31 +456,20 @@ export default function StoryPosterModal({
     ctx.fillStyle = activeAccent;
     ctx.fillText(getSubtitle(), padding, subY);
 
-    drawPills(ctx, details, padding, subY + 60, width - padding * 2, 2);
+    const pillsY = subY + 50;
+    drawPills(ctx, details, padding, pillsY, width - padding * 2, 2);
 
-    const qrY = height - 320;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding, qrY - 40);
-    ctx.lineTo(width - padding, qrY - 40);
-    ctx.stroke();
+    const qrY = height - 260;
+    await drawQr(ctx, padding, qrY, 190);
 
-    await drawQr(ctx, padding, qrY, 220);
-
-    const textX = padding + 260;
     ctx.textAlign = "left";
-    ctx.font = "900 40px sans-serif";
+    ctx.font = "900 38px sans-serif";
     ctx.fillStyle = "#FFFFFF";
-    ctx.fillText("Scan to Listen", textX, qrY + 75);
+    ctx.fillText("Listen on Deck Salone", padding + 225, qrY + 80);
 
-    ctx.font = "600 26px sans-serif";
+    ctx.font = "600 28px sans-serif";
     ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-    ctx.fillText("Available live on decksalone.com", textX, qrY + 125);
-
-    ctx.font = "bold 24px sans-serif";
-    ctx.fillStyle = activeAccent;
-    ctx.fillText(url.replace(/^https?:\/\//, ""), textX, qrY + 170);
+    ctx.fillText("decksalone.com", padding + 225, qrY + 130);
   };
 
   const drawSquare = async (ctx: CanvasRenderingContext2D, width: number, height: number) => {
@@ -467,33 +483,33 @@ export default function StoryPosterModal({
     const isDj = preview?.type === "dj";
 
     if (isMix) {
-      // Mix square layout: cover left, info right
-      const imgSize = 520;
+      // Square mix layout: cover left, details right
+      const imgSize = 420;
       const imgX = padding;
-      const imgY = 200;
+      const imgY = 170;
       await drawRoundedImage(ctx, getImage(), imgX, imgY, imgSize, imgSize, 32, activeAccent, 5);
 
-      const infoX = imgX + imgSize + 60;
-      const infoW = width - infoX - padding;
+      const contentX = imgX + imgSize + 40;
+      const contentW = width - contentX - padding;
 
-      drawBadge(ctx, getCategoryTag(), infoX, imgY + 20);
+      drawBadge(ctx, getCategoryTag(), contentX, imgY + 10);
 
-      ctx.font = "900 52px sans-serif";
+      ctx.font = "900 46px sans-serif";
       ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "left";
       const mainTitle = getMainTitle();
-      const titleLines = wrapText(ctx, mainTitle, infoW);
-      titleLines.slice(0, 3).forEach((line, i) => ctx.fillText(line, infoX, imgY + 120 + i * 66));
+      const titleLines = wrapText(ctx, mainTitle, contentW);
+      titleLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, contentX, imgY + 95 + i * 56));
 
-      const subY = imgY + 120 + Math.min(titleLines.length, 3) * 66 + 30;
-      ctx.font = "600 28px sans-serif";
+      const subY = imgY + 95 + Math.min(titleLines.length, 2) * 56 + 15;
+      ctx.font = "600 24px sans-serif";
       ctx.fillStyle = activeAccent;
-      ctx.fillText(getSubtitle(), infoX, subY);
+      ctx.fillText(getSubtitle(), contentX, subY);
 
-      drawPills(ctx, details, infoX, subY + 50, infoW, 1);
+      drawPills(ctx, details.slice(0, 2), contentX, subY + 30, contentW, 1);
 
-      const qrY = height - 220;
+      const qrY = height - 230;
       await drawQr(ctx, padding, qrY, 170);
-
       ctx.textAlign = "left";
       ctx.font = "900 34px sans-serif";
       ctx.fillStyle = "#FFFFFF";
@@ -648,6 +664,8 @@ export default function StoryPosterModal({
       const contentX = imgX + imgSize + 50;
       const contentW = width - contentX - padding;
 
+      drawBadge(ctx, getCategoryTag(), contentX, imgY + 10);
+
       ctx.font = "900 48px sans-serif";
       ctx.fillStyle = "#FFFFFF";
       const mainTitle = getMainTitle();
@@ -669,7 +687,7 @@ export default function StoryPosterModal({
     }
   };
 
-  const drawCanvasPoster = useCallback(async (): Promise<string | null> => {
+  const getCanvasBlob = useCallback(async (): Promise<{ blob: Blob; dataUrl: string } | null> => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const ctx = canvas.getContext("2d");
@@ -683,27 +701,101 @@ export default function StoryPosterModal({
     else if (format === "square") await drawSquare(ctx, width, height);
     else await drawWide(ctx, width, height);
 
-    return canvas.toDataURL("image/png");
+    let dataUrl = "";
+    try {
+      dataUrl = canvas.toDataURL("image/png");
+    } catch {
+      // In case of any browser security block
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/png", 1.0);
+    });
+
+    if (!blob) return null;
+    return { blob, dataUrl: dataUrl || URL.createObjectURL(blob) };
   }, [preview, title, url, format, activeAccent]);
 
   // Handle Download PNG
   const handleDownload = async () => {
     setIsGenerating(true);
     try {
-      const dataUrl = await drawCanvasPoster();
-      if (!dataUrl) {
+      const result = await getCanvasBlob();
+      if (!result) {
         toast.error("Failed to generate share card");
         return;
       }
+      const { blob } = result;
+      const filename = `DeckSalone_${format}_${getMainTitle().replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
+
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.download = `DeckSalone_${format}_${getMainTitle().replace(/\s+/g, "_")}.png`;
-      link.href = dataUrl;
+      link.download = filename;
+      link.href = objectUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success(`HD ${format} card downloaded! 📸`);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 8000);
+
+      toast.success(`HD ${formatLabels[format].label} card downloaded! 📸`);
+    } catch (err) {
+      console.error("Download card error:", err);
+      toast.error("Error downloading share card");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Handle Instagram Stories & Native Share
+  const handleInstagramShare = async () => {
+    setIsGenerating(true);
+    try {
+      // First copy link so user can paste the link sticker on Instagram
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      } catch {}
+
+      const result = await getCanvasBlob();
+      if (!result) {
+        toast.error("Failed to generate Instagram Story card");
+        return;
+      }
+
+      const { blob } = result;
+      const filename = `DeckSalone_Story_${getMainTitle().replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      // If Web Share API supports file sharing (iOS Safari, Android Chrome, Capacitor Native)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Check out ${getMainTitle()} on Deck Salone!`,
+          text: `Listen on Deck Salone: ${url}`,
+          url,
+        });
+        toast.success("Ready! Link copied to clipboard 📎");
+      } else {
+        // Desktop / Non-file share fallback: auto download image + copy link + open Instagram
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = objectUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 8000);
+
+        toast.success("📸 Story Card downloaded & Link copied! Upload to your Instagram Story 🚀", {
+          duration: 6000,
+        });
+
+        // Open Instagram in new window/tab
+        window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
+      }
     } catch {
-      toast.error("Error generating share card");
+      // User cancelled share dialog
     } finally {
       setIsGenerating(false);
     }
@@ -713,11 +805,10 @@ export default function StoryPosterModal({
   const handleNativeShare = async () => {
     setIsGenerating(true);
     try {
-      const dataUrl = await drawCanvasPoster();
-      if (!dataUrl) return;
-
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], `DeckSalone_${format}_${getMainTitle().replace(/\s+/g, "_")}.png`, { type: "image/png" });
+      const result = await getCanvasBlob();
+      if (!result) return;
+      const { blob } = result;
+      const file = new File([blob], `DeckSalone_${format}_${getMainTitle().replace(/[^a-zA-Z0-9_-]/g, "_")}.png`, { type: "image/png" });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -728,10 +819,7 @@ export default function StoryPosterModal({
         });
         toast.success("Shared successfully!");
       } else {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-        toast.info("Share card ready! Paste link on your story 📎", { duration: 5000 });
+        await handleDownload();
       }
     } catch {
       // User cancelled share
@@ -766,7 +854,7 @@ export default function StoryPosterModal({
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="relative w-full max-w-sm sm:max-w-md sm:rounded-3xl rounded-t-3xl bg-[#121110] border border-gold/40 shadow-2xl p-4 sm:p-5 text-left max-h-[82vh] overflow-y-auto mb-safe"
+            className="relative w-full max-w-sm sm:max-w-md sm:rounded-3xl rounded-t-3xl bg-[#121110] border border-gold/40 shadow-2xl p-4 sm:p-5 text-left max-h-[85vh] overflow-y-auto mb-safe"
           >
             {/* Close button */}
             <button
@@ -981,10 +1069,25 @@ export default function StoryPosterModal({
 
             {/* Action Buttons */}
             <div className="mt-4 space-y-2">
+              {/* Instagram Stories Direct Share */}
+              <button
+                onClick={handleInstagramShare}
+                disabled={isGenerating}
+                className="w-full py-2.5 bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white font-bold text-xs uppercase tracking-wide rounded-xl flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 shadow-lg shadow-pink-500/20 cursor-pointer"
+              >
+                {isGenerating ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <InstagramIcon size={15} />
+                )}
+                Share to Instagram Story
+              </button>
+
+              {/* Download HD PNG */}
               <button
                 onClick={handleDownload}
                 disabled={isGenerating}
-                className="w-full py-2.5 bg-gold-gradient text-black font-bold text-xs uppercase tracking-wide rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-transform disabled:opacity-50 shadow-lg shadow-gold/20"
+                className="w-full py-2.5 bg-gold-gradient text-black font-bold text-xs uppercase tracking-wide rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-50 shadow-lg shadow-gold/20 cursor-pointer"
               >
                 {isGenerating ? (
                   <Loader2 size={14} className="animate-spin" />
@@ -998,7 +1101,7 @@ export default function StoryPosterModal({
                 <button
                   onClick={handleNativeShare}
                   disabled={isGenerating}
-                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Share2 size={13} />
                   Share Image
@@ -1011,7 +1114,7 @@ export default function StoryPosterModal({
                     setTimeout(() => setCopied(false), 2000);
                     toast.success("Link copied!");
                   }}
-                  className="px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   {copied ? <Check size={13} className="text-green" /> : <Smartphone size={13} />}
                   {copied ? "Copied" : "Copy Link"}

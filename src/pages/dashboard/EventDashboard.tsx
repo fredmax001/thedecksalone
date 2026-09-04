@@ -76,7 +76,11 @@ export default function EventDashboard() {
     try {
       await controlsMutation.mutateAsync(payload);
       await refetchEvent();
-      toast.success('Staff credentials saved');
+      toast.success(
+        payload.onsitePassword !== undefined || payload.onsiteUsername !== undefined
+          ? 'Staff credentials saved'
+          : 'Settings saved'
+      );
     } catch (err: any) {
       toast.error(getApiErrorMessage(err, 'Failed to update'));
     }

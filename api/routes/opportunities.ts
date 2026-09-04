@@ -92,7 +92,8 @@ router.get('/', authMiddleware, async (req, res) => {
 
         return ok(res, mapped);
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 
@@ -130,7 +131,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 applicants: isAdmin ? opportunity.applicants : undefined,
             });
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 
@@ -152,7 +154,8 @@ router.post('/', requireRole(['ADMIN', 'FINANCE_ADMIN']), async (req, res) => {
 
         return res.status(201).json({ success: true, data: opp });
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 
@@ -213,7 +216,8 @@ router.post('/:id/apply', authMiddleware, async (req, res) => {
 
         return res.status(201).json({ success: true, data: app });
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 
@@ -227,7 +231,8 @@ router.post('/:id/applications/:appId/accept', requireRole(['ADMIN']), async (re
 
         return ok(res, app);
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 
@@ -241,7 +246,8 @@ router.post('/:id/applications/:appId/reject', requireRole(['ADMIN']), async (re
 
         return ok(res, app);
     } catch (error) {
-        return fail(res, 500, error.message);
+        console.error('[opportunities.ts] Unhandled error:', error);
+        return fail(res, 500, 'Internal server error');
     }
 });
 

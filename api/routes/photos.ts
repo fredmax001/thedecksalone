@@ -2,6 +2,7 @@ const express = require('express');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { uploadBuffer } = require('../utils/storage');
+const { extFromMime } = require('../utils/upload');
 const multer = require('multer');
 const { ok, fail } = require('../utils/response');
 
@@ -39,7 +40,7 @@ router.post('/', authMiddleware, uploadPhoto.single('photo'), async (req, res) =
 
     const imageUrl = await uploadBuffer(req.file.buffer, 'photos', {
       contentType: req.file.mimetype,
-      ext: req.file.originalname.split('.').pop() || 'webp',
+      ext: extFromMime(req.file.mimetype),
     });
 
     const { caption } = req.body;
@@ -54,7 +55,8 @@ router.post('/', authMiddleware, uploadPhoto.single('photo'), async (req, res) =
 
     return res.status(201).json({ success: true, data: photo });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[photos.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -74,7 +76,8 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     return ok(res, photos);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[photos.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -101,7 +104,8 @@ router.get('/dj/:identifier', async (req, res) => {
 
     return ok(res, photos);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[photos.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -123,7 +127,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     return res.json({ success: true, message: 'Photo deleted' });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[photos.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

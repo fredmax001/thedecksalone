@@ -33,13 +33,13 @@ router.post('/', authMiddleware, uploadScreenshot.single('screenshot'), async (r
 
     // Check if already has a ticket (pending or approved)
     const existing = await prisma.eventTicket.findFirst({
-      where: { eventId, userId: req.user.id, status: { in: ['pending', 'approved', 'scanned'] } },
+      where: { eventId, userId: req.user.id, status: { in: ['pending', 'approved', 'checked_in'] } },
     });
     if (existing) return fail(res, 409, 'You already have a ticket for this event');
 
     // Check capacity
     if (event.totalTickets) {
-      const sold = await prisma.eventTicket.count({ where: { eventId, status: { in: ['approved', 'scanned'] } } });
+      const sold = await prisma.eventTicket.count({ where: { eventId, status: { in: ['approved', 'checked_in'] } } });
       if (sold >= event.totalTickets) return fail(res, 400, 'Event is sold out');
     }
 
@@ -78,7 +78,8 @@ router.post('/', authMiddleware, uploadScreenshot.single('screenshot'), async (r
 
     return res.status(201).json({ success: true, data: ticket });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -100,7 +101,8 @@ router.get('/', authMiddleware, async (req: any, res: any) => {
 
     return ok(res, tickets);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -115,7 +117,8 @@ router.get('/my', authMiddleware, async (req: any, res: any) => {
     });
     return ok(res, ticket || null);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -155,7 +158,8 @@ router.put('/:ticketId/approve', authMiddleware, async (req: any, res: any) => {
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -175,7 +179,7 @@ router.put('/:ticketId/decline', authMiddleware, async (req: any, res: any) => {
     const { reason } = req.body;
     const updated = await prisma.eventTicket.update({
       where: { id: ticketId },
-      data: { status: 'declined', declineReason: reason || null },
+      data: { status: 'rejected', declineReason: reason || null },
     });
 
     // Notify user
@@ -195,7 +199,8 @@ router.put('/:ticketId/decline', authMiddleware, async (req: any, res: any) => {
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -217,18 +222,19 @@ router.post('/scan', authMiddleware, async (req: any, res: any) => {
 
     if (!ticket) return fail(res, 404, 'INVALID', { message: 'QR code not found. Invalid ticket.' });
     if (ticket.eventId !== eventId) return fail(res, 400, 'WRONG_EVENT', { message: 'This ticket is for a different event.' });
-    if (ticket.status === 'scanned') return fail(res, 409, 'ALREADY_SCANNED', { message: 'Ticket already scanned.', scannedAt: ticket.scannedAt });
+    if (ticket.status === 'checked_in') return fail(res, 409, 'ALREADY_SCANNED', { message: 'Ticket already scanned.', scannedAt: ticket.scannedAt });
     if (ticket.status !== 'approved') return fail(res, 400, 'NOT_APPROVED', { message: `Ticket status is "${ticket.status}". Only approved tickets can be scanned.` });
 
     const updated = await prisma.eventTicket.update({
       where: { qrCode },
-      data: { status: 'scanned', scannedAt: new Date() },
+      data: { status: 'checked_in', scannedAt: new Date() },
       include: { user: { select: { name: true, username: true, avatar: true } } },
     });
 
     return ok(res, updated, '✅ Valid ticket! Entry granted.');
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[tickets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

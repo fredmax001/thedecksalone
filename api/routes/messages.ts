@@ -86,7 +86,8 @@ router.get('/conversations', authMiddleware, async (req, res) => {
 
     return ok(res, conversations.filter(Boolean));
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[messages.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -137,7 +138,8 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[messages.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -215,7 +217,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: message });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[messages.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -240,7 +243,8 @@ router.patch('/:id/read', authMiddleware, async (req, res) => {
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[messages.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

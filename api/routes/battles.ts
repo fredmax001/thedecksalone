@@ -82,7 +82,8 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -116,7 +117,8 @@ router.get('/current', async (req, res) => {
 
     return ok(res, { ...battle, entries: enrichedEntries });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -148,7 +150,8 @@ router.get('/:id', async (req, res) => {
 
     return ok(res, { ...battle, entries: enrichedEntries });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -179,7 +182,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: battle });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -229,7 +233,8 @@ router.post('/:id/enter', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -329,7 +334,8 @@ router.post('/:id/vote', authMiddleware, voteLimiter, async (req, res) => {
     if (error.message === 'ALREADY_VOTED_BATTLE') {
       return fail(res, 409, 'You already voted in this battle');
     }
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -394,7 +400,8 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
         })),
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[battles.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

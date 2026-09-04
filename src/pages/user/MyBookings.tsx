@@ -44,6 +44,8 @@ import {
 } from '@/hooks/useUserDashboard';
 import api, { getMediaUrl } from '@/lib/api';
 import { formatDate } from '@/lib/dateTime';
+import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -113,6 +115,8 @@ export default function MyBookings() {
       setReviewRating(0);
       setReviewText('');
       refetch();
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to submit review'));
     } finally {
       setReviewSubmitting(false);
     }

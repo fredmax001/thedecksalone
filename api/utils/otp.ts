@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 import redisClient from './redis';
+const { sendSentDmSms, formatPhoneNumber } = require('./sms');
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_EXPIRY_SECONDS = OTP_EXPIRY_MS / 1000;
@@ -21,30 +22,45 @@ function getOtpKey(phone: string): string {
 }
 
 /**
- * Send OTP to a phone number.
- * In production, this calls an SMS provider API.
- * For now, we log to console and return the code (dev mode).
+ * Send OTP to a phone number via Sent.dm SMS.
  */
-async function sendOtp(phone) {
+async function sendOtp(phone: string) {
   if (!redisClient) {
     throw new Error('Redis is not configured. OTP service unavailable.');
   }
 
-  const normalizedPhone = phone.trim().replace(/\s/g, '');
+  const normalizedPhone = formatPhoneNumber(phone) || phone.trim().replace(/\s/g, '');
   const code = generateOtp();
   const expiry = Date.now() + OTP_EXPIRY_MS;
 
   await redisClient.setex(
-    getOtpKey(phone),
+    getOtpKey(normalizedPhone),
     OTP_EXPIRY_SECONDS,
     JSON.stringify({ code, expiry, attempts: 0 })
   );
 
-  // TODO: Replace with actual SMS provider (Termii, Twilio, etc.)
-  // For Sierra Leone, Termii or Twilio are good options
-  console.log(`[OTP] Sent code ${code} to ${normalizedPhone}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[OTP] Generated code ${code} for ${normalizedPhone}`);
+  }
 
-  return { phone: normalizedPhone, sent: true, devCode: process.env.NODE_ENV === 'development' ? code : undefined };
+  // Dispatch SMS via Sent.dm API template
+  const smsResult = await sendSentDmSms({
+    to: normalizedPhone,
+    parameters: {
+      var_1: code,
+    },
+  });
+
+  if (!smsResult.success) {
+    console.error(`[OTP] SMS delivery error for ${normalizedPhone}:`, smsResult.error);
+  }
+
+  return {
+    phone: normalizedPhone,
+    sent: smsResult.success,
+    smsError: smsResult.error,
+    devCode: process.env.NODE_ENV === 'development' ? code : undefined,
+  };
 }
 
 /**

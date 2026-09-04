@@ -179,7 +179,7 @@ export default function Pricing() {
         setSelectedPlan(null);
         setPaymentReference('');
         setSelectedFile(null);
-        navigate(user?.role === 'DJ' ? '/dashboard/subscription' : '/user/subscription');
+        navigate(user?.role === 'DJ' ? '/dashboard/subscription' : '/user/dashboard');
       }
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to submit upgrade request.');

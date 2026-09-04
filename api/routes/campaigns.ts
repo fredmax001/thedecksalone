@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
-const { uploadEventImage } = require('../utils/upload');
+const { uploadEventImage, extFromMime } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { ok, fail } = require('../utils/response');
 
@@ -74,7 +74,8 @@ router.get('/home-board', async (req: any, res: any) => {
 
     return ok(res, { paidAds, events, djRankings, mixes });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -107,7 +108,8 @@ router.get('/stats', async (req: any, res: any) => {
         citiesCount: allCities.size || 1,
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -151,7 +153,8 @@ router.get('/me', async (req, res) => {
 
     return ok(res, campaigns);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -178,7 +181,8 @@ router.get('/me/targets', async (req, res) => {
         })),
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -212,7 +216,7 @@ router.post('/', uploadEventImage.single('creativeImage'), async (req, res) => {
 
     let creativeImageUrl = null;
     if (req.file) {
-      creativeImageUrl = await uploadBuffer(req.file.buffer, 'campaigns', { contentType: req.file.mimetype, ext: req.file.originalname.split('.').pop() || 'webp' });
+      creativeImageUrl = await uploadBuffer(req.file.buffer, 'campaigns', { contentType: req.file.mimetype, ext: extFromMime(req.file.mimetype) });
     }
 
     const campaign = await prisma.adCampaign.create({
@@ -234,7 +238,8 @@ router.post('/', uploadEventImage.single('creativeImage'), async (req, res) => {
 
     return res.status(201).json({ success: true, data: campaign });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -289,7 +294,7 @@ router.put('/:id', uploadEventImage.single('creativeImage'), async (req, res) =>
     };
 
     if (req.file) {
-      const url = await uploadBuffer(req.file.buffer, 'campaigns', { contentType: req.file.mimetype, ext: req.file.originalname.split('.').pop() || 'webp' });
+      const url = await uploadBuffer(req.file.buffer, 'campaigns', { contentType: req.file.mimetype, ext: extFromMime(req.file.mimetype) });
       if (campaign.creativeImageUrl) {
         await deleteFile(campaign.creativeImageUrl).catch(() => {});
       }
@@ -303,7 +308,8 @@ router.put('/:id', uploadEventImage.single('creativeImage'), async (req, res) =>
 
     return ok(res, updated);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -330,7 +336,8 @@ router.delete('/:id', async (req, res) => {
 
     return ok(res, { id: req.params.id, message: 'Campaign deleted' });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[campaigns.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

@@ -135,14 +135,6 @@ export default function Bookings() {
     }
   };
 
-  useEffect(() => {
-    if (!isDj) {
-      setLoading(false);
-      return;
-    }
-    fetchBookings();
-  }, [isDj, filter]);
-
   const fetchBookings = async () => {
     try {
       setLoading(true);

@@ -28,8 +28,6 @@ export default function AuthCallback() {
       searchParams.get('error') ||
       (location.state as any)?.error;
 
-    console.log('[AuthCallback] Received callback:', { hasToken: !!token, error, locationSearch: location.search, locationHash: location.hash });
-
     if (error) {
       console.error('[Google Auth Error]:', error);
       setErrorMessage(error);

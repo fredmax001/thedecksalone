@@ -1,4 +1,5 @@
 const { prisma } = require('../utils/prisma');
+const { sendSentDmSms } = require('./sms');
 
 /**
  * Create a notification for a user.
@@ -16,6 +17,8 @@ async function createNotification({
   sendEmail = false,
   emailSubject,
   emailBody,
+  sendSms = true,
+  smsBody,
 }) {
   try {
     // Check user's notification preferences
@@ -24,6 +27,8 @@ async function createNotification({
       select: {
         id: true,
         email: true,
+        phone: true,
+        phoneVerified: true,
         notificationPreferences: true,
       },
     });
@@ -82,8 +87,20 @@ async function createNotification({
       SYSTEM: 'pushMessages',
     };
 
+    // SMS is only offered for a small, high-value set of notification types
+    // (SMS costs money per message). All sms* prefs default to false (opt-in).
+    const SMS_PREF_MAP: Record<string, string> = {
+      BOOKING_CREATED: 'smsBookings',
+      BOOKING_STATUS_CHANGED: 'smsBookings',
+      COUNTER_OFFER: 'smsBookings',
+      PAYMENT_RECEIVED: 'smsPayments',
+      TICKET_PURCHASED: 'smsTickets',
+      TICKET_APPROVED: 'smsTickets',
+    };
+
     const emailPrefKey = EMAIL_PREF_MAP[type] || null;
     const pushPrefKey = PUSH_PREF_MAP[type] || null;
+    const smsPrefKey = SMS_PREF_MAP[type] || null;
 
     // Default to enabled if not set (or if no specific preference key exists)
     const emailEnabled = emailPrefKey ? prefs[emailPrefKey] !== false : true;
@@ -121,6 +138,32 @@ async function createNotification({
       }
     }
 
+    // Send SMS if requested, user has a verified phone, and the sms pref is enabled.
+    // The sms* preference itself is the switch (opt-in, default false).
+    const smsEnabled = smsPrefKey ? prefs[smsPrefKey] === true : false;
+    const sentDmConfigured = Boolean(
+      process.env.SENTDM_API_KEY || process.env.SENT_DM_API_KEY || process.env.SENT_API_KEY
+    );
+    if (sendSms && smsEnabled && user.phoneVerified && user.phone && sentDmConfigured) {
+      try {
+        const rawBody = smsBody || body || title || '';
+        const textBody = smsBody
+          ? rawBody
+          : `${String(rawBody).substring(0, 140)} — Deck Salone`;
+        // Fire-and-forget: mirror otp.ts sendSentDmSms usage (template body var `var_1`)
+        sendSentDmSms({
+          to: user.phone,
+          parameters: {
+            var_1: textBody,
+          },
+        }).catch((smsErr) => {
+          console.warn('[Notification] Failed to send SMS:', smsErr?.message || smsErr);
+        });
+      } catch (smsErr) {
+        console.warn('[Notification] Failed to send SMS:', smsErr.message);
+      }
+    }
+
     return notification;
   } catch (error) {
     console.error('[Notification] createNotification error:', error.message);
@@ -143,6 +186,8 @@ async function createNotificationForDj({
   sendEmail = false,
   emailSubject,
   emailBody,
+  sendSms = true,
+  smsBody,
 }) {
   const dj = await prisma.djProfile.findUnique({
     where: { id: djId },
@@ -166,6 +211,8 @@ async function createNotificationForDj({
     sendEmail,
     emailSubject,
     emailBody,
+    sendSms,
+    smsBody,
   });
 }
 

@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
+import PhoneOtpForm from '@/components/PhoneOtpForm';
+import { toast } from 'sonner';
 import { passwordSchema } from '@/lib/schemas';
 import { redirectAfterAuth } from '@/lib/navigation';
 import { getApiErrorMessage } from '@/lib/apiErrors';
@@ -121,7 +123,7 @@ const iconCls = 'absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-text-mu
 /* ─── Register Page ─── */
 export default function Register() {
   // Which account type the user chose: null = not chosen yet, 'DJ' or 'USER'
-  const [accountType, setAccountType] = useState<'DJ' | 'USER' | null>(null);
+  const [accountType, setAccountType] = useState<'DJ' | 'USER' | 'PHONE' | null>(null);
   const [step, setStep] = useState(1); // only relevant for DJ flow
   const [direction, setDirection] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -244,6 +246,20 @@ export default function Register() {
       setTimeout(() => navigate('/discover'), 1500);
     },
     [register, navigate]
+  );
+
+  /* ─── Phone OTP Registration ─── */
+  // The backend finds OR creates the account on first successful verification.
+  const onPhoneVerified = useCallback(
+    async (phoneUser: { id: string; email: string; phone?: string; role: string }, token: string) => {
+      const { setAuth, fetchMe } = useAuthStore.getState();
+      setAuth(phoneUser as never, token);
+      fetchMe();
+      toast.success('Welcome to Deck Salone!');
+      setCompleted(true);
+      setTimeout(() => navigate('/discover'), 1500);
+    },
+    [navigate]
   );
 
   const toggleGenre = useCallback(
@@ -406,9 +422,61 @@ export default function Register() {
               </svg>
               <span>Continue with Google</span>
             </button>
+
+            {/* Phone signup */}
+            <button
+              type="button"
+              onClick={() => setAccountType('PHONE')}
+              className="mt-3 w-full h-[48px] rounded-xl bg-black-elevated hover:bg-gold/5 text-text-primary text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-md active:scale-95 border border-dark-gray hover:border-gold"
+            >
+              <Phone className="w-5 h-5 text-gold" />
+              <span>Sign up with Phone</span>
+            </button>
           </div>
 
           <p className="mt-6 text-center text-sm text-text-secondary">
+            Already have an account?{' '}
+            <Link to="/login" className="text-gold hover:text-gold-light font-medium transition-colors">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  /* ─── PHONE Sign Up (OTP — account created automatically on first verification) ─── */
+  if (accountType === 'PHONE') {
+    return (
+      <AuthLayout quote="Your stage is waiting. Create your profile and let the world hear your sound.">
+        <div className="bg-black-surface border border-dark-gray rounded-2xl p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gold/15 flex items-center justify-center mx-auto mb-4">
+              <Phone className="w-6 h-6 text-gold" />
+            </div>
+            <h1 className="text-[26px] sm:text-[32px] font-semibold uppercase tracking-tight text-text-primary font-display">
+              Sign Up with Phone
+            </h1>
+            <p className="mt-2 text-sm text-text-muted">
+              We&apos;ll text you a verification code — no password needed
+            </p>
+          </div>
+
+          <div className="mb-6 p-3 rounded-lg bg-gold/10 border border-gold/30 text-text-secondary text-sm text-center">
+            An account is created automatically the first time you verify your phone number.
+          </div>
+
+          <PhoneOtpForm onVerified={onPhoneVerified} verifyLabel="Verify & Create Account" />
+
+          <button
+            type="button"
+            onClick={() => setAccountType(null)}
+            className="w-full h-[44px] mt-6 text-sm text-text-muted hover:text-text-primary transition-colors"
+          >
+            ← Back
+          </button>
+
+          <p className="text-center text-sm text-text-secondary mt-2">
             Already have an account?{' '}
             <Link to="/login" className="text-gold hover:text-gold-light font-medium transition-colors">
               Sign in

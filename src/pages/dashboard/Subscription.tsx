@@ -167,10 +167,19 @@ export default function Subscription() {
     return basePlanId;
   };
 
+  // Config prices are authoritative for monthly billing when present and valid.
+  const getConfigPlanPrice = (planId: string): number | null => {
+    const fromPlans = paymentConfig?.plans?.find((p) => p.id === planId)?.price;
+    const fallback = planId === 'pro' ? paymentConfig?.proPrice : planId === 'legend' ? paymentConfig?.legendPrice : undefined;
+    const n = Number(fromPlans ?? fallback);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
   // Get price for selected plan based on billing period
   const getPlanPrice = (plan: Plan) => {
     if (plan.monthlyPrice === 0) return 0;
-    return billingPeriod === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+    if (billingPeriod === 'annual') return plan.annualPrice;
+    return getConfigPlanPrice(plan.id) ?? plan.monthlyPrice;
   };
 
   useEffect(() => {
@@ -182,7 +191,12 @@ export default function Subscription() {
       .then(([statusRes, configRes]) => {
         if (!mounted) return;
         setStatus(statusRes.data.data);
-        setPaymentConfig(configRes.data.data);
+        const cfg = configRes.data.data;
+        setPaymentConfig({
+          ...DEFAULT_PAYMENT_CONFIG,
+          ...(cfg || {}),
+          plans: Array.isArray(cfg?.plans) && cfg.plans.length > 0 ? cfg.plans : DEFAULT_PAYMENT_CONFIG.plans,
+        });
         if (statusRes.data.data?.latestRequest) {
           setSelectedPlanId(statusRes.data.data.latestRequest.plan);
         } else if (statusRes.data.data?.activePlan && statusRes.data.data.activePlan !== 'free') {
@@ -203,13 +217,10 @@ export default function Subscription() {
   useEffect(() => {
     if (latestRequest?.status !== 'pending' || status?.isPro) return;
 
-    console.log('Starting subscription status poll...');
     const intervalId = window.setInterval(async () => {
       try {
         const res = await api.get('/payments/pro-subscription/current');
         const nextStatus = res.data.data;
-
-        console.log('Poll result:', nextStatus);
 
         setStatus(nextStatus);
 
@@ -449,7 +460,7 @@ export default function Subscription() {
                         </p>
                         <p className="font-mono text-2xl text-text-primary mt-1">{paymentConfig.paymentNumber}</p>
                         <p className="text-xs text-text-muted mt-2">
-                          Amount: {paymentConfig.currency} {(billingPeriod === 'annual' ? selectedPlan?.annualPrice : selectedPlan?.monthlyPrice) || paymentConfig.proPrice}
+                          Amount: {paymentConfig.currency} {selectedPlan ? getPlanPrice(selectedPlan) : (getConfigPlanPrice('pro') ?? paymentConfig.proPrice)}
                         </p>
                       </div>
                       <p className="text-sm font-medium text-text-primary">Next Step:</p>

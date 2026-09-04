@@ -437,10 +437,12 @@ export function useAdminGeography() {
 }
 
 export function useAdminDjs(
-  filters?: { search?: string; verified?: boolean | string; status?: string; page?: number; limit?: number }
+  filters?: { search?: string; verified?: boolean | string; status?: string; page?: number; limit?: number },
+  options?: { enabled?: boolean }
 ) {
   return useQuery<PaginatedResponse<AdminDj>>({
     queryKey: ['adminDjs', filters],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.search) params.set('search', filters.search);
@@ -468,10 +470,12 @@ export function useAdminRankings() {
 }
 
 export function useAdminMixes(
-  filters?: { featured?: boolean | string; isPublic?: boolean | string; hallOfFame?: boolean | string; search?: string; page?: number; limit?: number }
+  filters?: { featured?: boolean | string; isPublic?: boolean | string; hallOfFame?: boolean | string; search?: string; page?: number; limit?: number },
+  options?: { enabled?: boolean }
 ) {
   return useQuery<PaginatedResponse<Mix>>({
     queryKey: ['adminMixes', filters],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.featured !== undefined && filters.featured !== '') {

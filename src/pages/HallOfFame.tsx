@@ -418,12 +418,12 @@ export default function HallOfFame() {
     search: djSearch,
     page: 1,
     limit: 100,
-  });
+  }, { enabled: isAdmin });
   const { data: adminMixesData, isLoading: adminMixesLoading } = useAdminMixes({
     search: mixSearch,
     page: 1,
     limit: 100,
-  });
+  }, { enabled: isAdmin });
   const toggleDjHof = useToggleDjHallOfFame();
   const toggleMixHof = useToggleMixHallOfFame();
 

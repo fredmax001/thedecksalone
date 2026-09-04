@@ -66,7 +66,7 @@ export default function AccountPage() {
       label: 'Notifications',
       description: 'Alerts & messages',
       icon: Bell,
-      path: isDj ? '/dashboard/notifications' : '/user/notifications',
+      path: '/user/notifications',
     },
   ];
 

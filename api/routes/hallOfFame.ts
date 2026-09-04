@@ -159,7 +159,7 @@ router.post(
       return res.status(201).json({ success: true, data: legend });
     } catch (error: any) {
       console.error('[Hall of Fame Legends] POST error:', error);
-      return fail(res, 500, error.message || 'Internal server error');
+      return fail(res, 500, 'Internal server error');
     }
   }
 );
@@ -189,7 +189,7 @@ router.put(
       return ok(res, updated);
     } catch (error: any) {
       console.error('[Hall of Fame Legends] PUT error:', error);
-      return fail(res, 500, error.message || 'Internal server error');
+      return fail(res, 500, 'Internal server error');
     }
   }
 );
@@ -219,7 +219,7 @@ router.delete(
       return ok(res, { id });
     } catch (error: any) {
       console.error('[Hall of Fame Legends] DELETE error:', error);
-      return fail(res, 500, error.message || 'Internal server error');
+      return fail(res, 500, 'Internal server error');
     }
   }
 );

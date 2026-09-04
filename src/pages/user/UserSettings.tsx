@@ -71,6 +71,9 @@ interface UserSettings {
     emailVerifications: boolean;
     emailSubscriptions: boolean;
     emailReviews: boolean;
+    smsBookings: boolean;
+    smsTickets: boolean;
+    smsPayments: boolean;
     pushBookings: boolean;
     pushMessages: boolean;
     pushNewMixes: boolean;
@@ -106,6 +109,9 @@ const defaultSettings: UserSettings = {
     emailVerifications: true,
     emailSubscriptions: true,
     emailReviews: true,
+    smsBookings: false,
+    smsTickets: false,
+    smsPayments: false,
     pushBookings: true,
     pushMessages: true,
     pushNewMixes: true,
@@ -128,6 +134,7 @@ const defaultSettings: UserSettings = {
 
 export default function UserSettings() {
   const { user, logout, fetchMe } = useAuthStore();
+  const hasVerifiedPhone = !!(user?.phone && user?.phoneVerified);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -195,7 +202,7 @@ export default function UserSettings() {
     setIsSavingProfile(true);
 
     try {
-      const res = await api.put('/users/profile', { username, email, gender, dateOfBirth });
+      const res = await api.put('/users/profile', { username, gender, dateOfBirth });
       if (res.data?.success) {
         setSaved(true);
         toast.success('Profile updated successfully');
@@ -332,9 +339,10 @@ export default function UserSettings() {
             <Input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bg-black-surface border-dark-gray text-text-primary"
+              disabled
+              className="bg-black-surface border-dark-gray text-text-muted opacity-70 cursor-not-allowed"
             />
+            <p className="text-xs text-text-muted">Email can only be changed through the secure verification flow. Contact support to update it.</p>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
@@ -552,6 +560,44 @@ export default function UserSettings() {
                 checked={settings.notifications.emailMarketing}
                 onChange={(v) => updateNotification('emailMarketing', v)}
                 disabled={settingsLoading}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-dark-gray" />
+
+          {/* SMS Notifications */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">SMS Notifications</h4>
+            <p className="text-xs text-text-muted mb-3">
+              Receive SMS to your verified phone number. Standard message rates apply.
+            </p>
+            {!hasVerifiedPhone && (
+              <p className="text-xs text-gold mb-3">
+                Add and verify a phone number to enable SMS notifications.
+              </p>
+            )}
+            <div className="space-y-3">
+              <NotificationToggle
+                label="Booking Updates"
+                description="Booking requests and status changes"
+                checked={settings.notifications.smsBookings}
+                onChange={(v) => updateNotification('smsBookings', v)}
+                disabled={settingsLoading || !hasVerifiedPhone}
+              />
+              <NotificationToggle
+                label="Tickets"
+                description="Ticket purchases and approvals"
+                checked={settings.notifications.smsTickets}
+                onChange={(v) => updateNotification('smsTickets', v)}
+                disabled={settingsLoading || !hasVerifiedPhone}
+              />
+              <NotificationToggle
+                label="Payments"
+                description="Payment and payout updates"
+                checked={settings.notifications.smsPayments}
+                onChange={(v) => updateNotification('smsPayments', v)}
+                disabled={settingsLoading || !hasVerifiedPhone}
               />
             </div>
           </div>

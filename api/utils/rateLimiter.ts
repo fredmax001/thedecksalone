@@ -15,7 +15,10 @@ try {
 function getClientIp(req: any): string {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
+    // Behind exactly one trusted nginx proxy, the rightmost XFF entry is the
+    // real peer IP — the first entry is client-spoofable.
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
   }
   return req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || 'unknown';
 }

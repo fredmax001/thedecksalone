@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Ticket, X, Calendar, MapPin, QrCode, Download, Share2 } from 'lucide-react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { QRCodeSVG } from 'qrcode.react';
 import { useMyTickets } from '@/hooks/useEventTicketing';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +11,85 @@ import { Badge } from '@/components/ui/badge';
 import DigitalTicket from '@/components/events/DigitalTicket';
 import { formatEventDate } from '@/lib/dateTime';
 import { toast } from 'sonner';
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+// Opens a standalone printable ticket card in a new tab (user can print / save as PDF).
+function printTicket(ticket: any) {
+  const event = ticket.event;
+  const qrValue = ticket.qrPayload || `DS-TICKET:${ticket.id}:${ticket.ticketNumber}`;
+  const qrSvg = renderToStaticMarkup(
+    <QRCodeSVG value={qrValue} size={200} level="H" includeMargin={false} />
+  );
+  const date = event?.date ? formatEventDate(new Date(event.date)) : '';
+  const venue = [event?.venue || event?.location, event?.city].filter(Boolean).join(', ');
+  const attendee = ticket.buyerName || ticket.user?.name || '';
+  const organizer = event?.dj?.stageName || 'Deck Salone';
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ticket ${escapeHtml(ticket.ticketNumber || '')} — ${escapeHtml(event?.title || 'Deck Salone')}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f4f4f4; color: #111; display: flex; flex-direction: column; align-items: center; padding: 24px; }
+  .no-print { margin-bottom: 16px; }
+  .no-print button { background: #111; color: #fff; border: 0; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ticket { width: 340px; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+  .ticket img.banner { width: 100%; height: 140px; object-fit: cover; display: block; }
+  .body { padding: 20px; }
+  .label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #777; }
+  .title { font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 4px 0 12px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .row .value { font-weight: 600; text-align: right; word-break: break-word; }
+  .qr { text-align: center; padding: 16px 0 8px; }
+  .qr svg { width: 200px; height: 200px; }
+  .hint { font-size: 11px; color: #777; text-align: center; }
+  .divider { border-top: 2px dashed #ddd; margin: 12px 0; }
+  .footer { text-align: center; font-size: 11px; color: #777; padding: 0 20px 16px; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .no-print { display: none; }
+    .ticket { box-shadow: none; border: 1px solid #ddd; }
+  }
+</style>
+</head>
+<body>
+  <div class="no-print"><button onclick="window.print()">Print / Save as PDF</button></div>
+  <div class="ticket">
+    ${event?.image ? `<img class="banner" src="${escapeHtml(event.image)}" alt="" />` : ''}
+    <div class="body">
+      <p class="label">${escapeHtml(ticket.ticketType?.name || 'Ticket')}</p>
+      <h1 class="title">${escapeHtml(event?.title || 'Deck Salone Event')}</h1>
+      <div class="row"><span class="label">Ticket No.</span><span class="value" style="font-family: monospace;">${escapeHtml(ticket.ticketNumber || '')}</span></div>
+      ${attendee ? `<div class="row"><span class="label">Attendee</span><span class="value">${escapeHtml(attendee)}</span></div>` : ''}
+      ${date ? `<div class="row"><span class="label">Date</span><span class="value">${escapeHtml(date)}</span></div>` : ''}
+      ${venue ? `<div class="row"><span class="label">Venue</span><span class="value">${escapeHtml(venue)}</span></div>` : ''}
+      <div class="row"><span class="label">Status</span><span class="value">${escapeHtml(ticket.status === 'checked_in' ? 'Checked In' : ticket.status || '')}</span></div>
+      <div class="divider"></div>
+      <div class="qr">${qrSvg}</div>
+      <p class="hint">${ticket.status === 'pending' ? 'Pending approval — this code activates once the organizer approves your order.' : 'Show this QR code at the entrance'}</p>
+    </div>
+    <div class="footer">Deck Salone · ${escapeHtml(organizer)}</div>
+  </div>
+  <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));</script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    URL.revokeObjectURL(url);
+    toast.error('Unable to open the ticket. Please allow pop-ups for this site and try again.');
+    return;
+  }
+  // Give the new tab time to load before releasing the blob URL.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 const statusColor: Record<string, string> = {
   pending: 'bg-orange/15 text-orange border-orange/30',
@@ -136,7 +217,7 @@ export default function MyTickets() {
                 </Button>
                 <Button
                   className="flex-1 bg-gold-gradient text-black"
-                  onClick={() => toast.info('Download feature coming soon')}
+                  onClick={() => printTicket(selectedTicket)}
                 >
                   <Download className="w-4 h-4 mr-2" /> Download
                 </Button>

@@ -15,8 +15,6 @@ import {
   Trophy,
   Music,
   Loader2,
-  ArrowUpRight,
-  ArrowDownRight,
   Wallet,
   Headphones,
   TrendingUp,
@@ -174,40 +172,30 @@ export default function Overview() {
           icon={CalendarCheck}
           label="Total Bookings"
           value={overview?.totalBookings?.toLocaleString() || '0'}
-          change="+12%"
-          trend="up"
           color="#f4e059"
         />
         <KpiCard
           icon={Trophy}
           label="Ranking Position"
           value={`#${overview?.rankingPosition || '-'}`}
-          change="Top 5%"
-          trend="up"
           color="#f4e059"
         />
         <KpiCard
           icon={Headphones}
           label="Total Streams"
           value={overview?.totalStreams?.toLocaleString() || '0'}
-          change="-2%"
-          trend="down"
           color="#f4e059"
         />
         <KpiCard
           icon={Users}
           label="Total Followers"
           value={overview?.totalFollowers?.toLocaleString() || '0'}
-          change="+5%"
-          trend="up"
           color="#f4e059"
         />
         <KpiCard
           icon={Wallet}
           label="Earnings"
           value={formatCurrency(data?.payments?.reduce((sum, p) => sum + (p.amount || 0), 0))}
-          change="+18%"
-          trend="up"
           color="#22C55E"
         />
       </motion.div>
@@ -513,15 +501,11 @@ function KpiCard({
   icon: Icon,
   label,
   value,
-  change,
-  trend,
   color = '#f4e059',
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
-  change: string;
-  trend: 'up' | 'down' | 'neutral';
   color?: string;
 }) {
   return (
@@ -540,16 +524,9 @@ function KpiCard({
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}1A` }}>
               <Icon className="w-5 h-5" style={{ color }} />
             </div>
-            {trend !== 'neutral' && (
-              <div className={cn('flex items-center gap-0.5 font-bold', trend === 'up' ? 'text-[#22C55E]' : 'text-[#EF4444]')}>
-                {trend === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                <span className="text-xs">{change}</span>
-              </div>
-            )}
           </div>
           <p className="font-mono text-2xl font-bold text-white mt-3">{value}</p>
           <p className="text-[10px] uppercase tracking-wider text-[#888888] font-semibold mt-1">{label}</p>
-          <p className="text-[10px] text-[#666666] mt-2">vs last period</p>
         </div>
       </div>
     </motion.div>

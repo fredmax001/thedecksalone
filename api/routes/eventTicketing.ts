@@ -1,4 +1,6 @@
 const express = require('express');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const multer = require('multer');
 const { prisma } = require('../utils/prisma');
@@ -6,6 +8,7 @@ const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { purchaseLimiter } = require('../utils/rateLimiter');
 const { requireProOrAdmin } = require('../middleware/permissions');
 const { uploadBuffer } = require('../utils/storage');
+const { extFromMime } = require('../utils/upload');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { sendTicketApprovalEmail } = require('../utils/email');
 const {
@@ -16,6 +19,7 @@ const {
   buildLegacyTicketQr,
 } = require('../utils/ticketQr');
 const { parsePagination } = require('../utils/pagination');
+const { getCache, setCache, clearCache } = require('../utils/redis');
 const { ok, fail } = require('../utils/response');
 
 const router = express.Router({ mergeParams: true });
@@ -128,6 +132,30 @@ function onsiteAuthMiddleware(req: any, res: any, next: any) {
     }
   }
   next();
+}
+
+/**
+ * Middleware: allow either a regular user JWT (via authMiddleware) or an
+ * X-Onsite-Token issued by /onsite/auth. This lets on-site staff (who only
+ * have the onsite token) reach the scan/onsite routes.
+ */
+function authOrOnsiteMiddleware(req: any, res: any, next: any) {
+  const token = req.headers['x-onsite-token'] || req.headers['x_onsite_token'];
+  if (token && typeof token === 'string') {
+    const decoded = verifyOnsiteToken(token);
+    if (!decoded || !decoded.eventId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid on-site token' });
+    }
+    req.onsiteEventId = decoded.eventId;
+    req.user = {
+      id: decoded.userId || `staff_${decoded.eventId}`,
+      role: 'onsite_staff',
+      username: decoded.staffUsername || 'Staff',
+    };
+    return next();
+  }
+  // No onsite token — fall back to regular user JWT auth.
+  return authMiddleware(req, res, next);
 }
 
 /**
@@ -280,7 +308,8 @@ router.post('/ticket-types', authMiddleware, requireProOrAdmin, async (req: any,
     });
     return res.status(201).json({ success: true, data: type });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -304,7 +333,8 @@ router.put('/ticket-types/:typeId', authMiddleware, requireProOrAdmin, async (re
     });
     return ok(res, type);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -321,7 +351,8 @@ router.delete('/ticket-types/:typeId', authMiddleware, requireProOrAdmin, async 
     await prisma.eventTicketType.delete({ where: { id: req.params.typeId, eventId: event.id } });
     return ok(res, { message: 'Ticket type deleted' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -340,7 +371,8 @@ router.post('/publish', authMiddleware, requireProOrAdmin, async (req: any, res:
     });
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -357,7 +389,8 @@ router.post('/unpublish', authMiddleware, requireProOrAdmin, async (req: any, re
     });
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -384,9 +417,13 @@ router.get('/availability', async (req: any, res: any) => {
       available: t.quantity ? Math.max(0, t.quantity - t.sold) : null,
     }));
 
-    return ok(res, { event, ticketTypes: types });
+    // Never expose on-site staff credentials on the public endpoint.
+    const { onsitePassword, onsiteUsername, ...publicEvent } = event;
+
+    return ok(res, { event: publicEvent, ticketTypes: types });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -395,7 +432,7 @@ router.get('/availability', async (req: any, res: any) => {
 const uploadPurchaseProof = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req: any, file: any, cb: any) => {
-    if (file.mimetype && (file.mimetype.startsWith('image/') || ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'].includes(file.mimetype.toLowerCase()))) {
+    if (file.mimetype && ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype.toLowerCase())) {
       cb(null, true);
     } else {
       cb(new Error('Only image files (JPG, PNG, WebP) are allowed for payment proof'), false);
@@ -444,7 +481,7 @@ router.post('/purchase', authMiddleware, purchaseLimiter, uploadPurchaseProof.si
 
     let screenshotUrl: string | null = null;
     if (req.file && !isFree) {
-      const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+      const ext = extFromMime(req.file.mimetype);
       screenshotUrl = await uploadBuffer(req.file.buffer, 'tickets', { contentType: req.file.mimetype, ext });
     }
 
@@ -538,7 +575,8 @@ router.post('/purchase', authMiddleware, purchaseLimiter, uploadPurchaseProof.si
     if (error.message === 'Not enough tickets available') {
       return fail(res, 400, error.message);
     }
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -608,7 +646,8 @@ router.get('/dashboard', authMiddleware, requireProOrAdmin, async (req: any, res
         totalTickets,
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -671,7 +710,8 @@ router.get('/tickets', authMiddleware, requireProOrAdmin, async (req: any, res: 
       },
     });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -766,7 +806,8 @@ router.post('/guest-list', authMiddleware, requireProOrAdmin, async (req: any, r
       message: `${quantity} guest ticket(s) added successfully!`,
     });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -816,7 +857,8 @@ router.post('/tickets/:ticketId/approve', authMiddleware, requireProOrAdmin, asy
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -870,7 +912,8 @@ router.post('/tickets/approve-all', authMiddleware, requireProOrAdmin, async (re
     await updateEventAggregates(event.id);
     return ok(res, { approvedCount: updatedIds.length });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -913,7 +956,8 @@ router.post('/tickets/:ticketId/reject', authMiddleware, requireProOrAdmin, asyn
 
     return ok(res, { message: 'Ticket rejected' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -938,7 +982,8 @@ router.post('/tickets/:ticketId/cancel', authMiddleware, requireProOrAdmin, asyn
     await updateEventAggregates(event.id);
     return ok(res, { message: 'Ticket cancelled' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -957,7 +1002,8 @@ router.post('/tickets/:ticketId/reissue-qr', authMiddleware, requireProOrAdmin, 
     const updated = await prisma.eventTicket.update({ where: { id: ticket.id }, data: { qrPayload: payload, status: 'approved', scannedAt: null, checkedInBy: null } });
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -978,7 +1024,8 @@ router.post('/tickets/:ticketId/edit-attendee', authMiddleware, requireProOrAdmi
     const updated = await prisma.eventTicket.update({ where: { id: ticket.id }, data: parsed.data });
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1019,7 +1066,8 @@ router.get('/customers', authMiddleware, requireProOrAdmin, async (req: any, res
 
     return res.json({ success: true, data: customers, meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) } });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1058,7 +1106,8 @@ router.get('/customers/export', authMiddleware, requireProOrAdmin, async (req: a
     res.setHeader('Content-Disposition', `attachment; filename="attendees-${event.id}.csv"`);
     return res.send(csv);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1115,14 +1164,15 @@ router.get('/analytics', authMiddleware, requireProOrAdmin, async (req: any, res
         conversionRate,
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 /* ─── SCANNER ─────────────────────────────────────────────────────────────── */
 
 // POST /api/events/:id/ticketing/scan
-router.post('/scan', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.post('/scan', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const { qrPayload } = req.body;
     if (!qrPayload) return fail(res, 400, 'QR payload is required');
@@ -1253,12 +1303,13 @@ router.post('/scan', authMiddleware, onsiteAuthMiddleware, async (req: any, res:
 
     return ok(res, ticket, 'Valid ticket! Entry granted.');
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // POST /api/events/:id/ticketing/scan/:ticketId/checkin
-router.post('/scan/:ticketId/checkin', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.post('/scan/:ticketId/checkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const { event } = await getEventWithAuth(req.user.id, req.params.id);
     if (!event) return fail(res, 404, 'Event not found');
@@ -1292,7 +1343,8 @@ router.post('/scan/:ticketId/checkin', authMiddleware, onsiteAuthMiddleware, asy
 
     return ok(res, ticket);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1332,8 +1384,41 @@ router.post('/onsite/auth', softAuthMiddleware, async (req: any, res: any) => {
         }
       }
 
-      if (event.onsitePassword !== parsed.data.password) {
+      // Lockout: max 5 failed attempts per event/username within 15 minutes
+      const lockKey = `onsite_lock:${event.id}:${(parsed.data.username || '-').trim().toLowerCase()}`;
+      const lockData = await getCache(lockKey);
+      if (lockData && lockData.count >= 5) {
+        return fail(res, 429, 'Too many attempts, try again later');
+      }
+
+      let passwordOk = false;
+      let needsRehash = false;
+      if (event.onsitePassword.startsWith('$2')) {
+        passwordOk = await bcrypt.compare(parsed.data.password, event.onsitePassword);
+      } else {
+        const expected = Buffer.from(String(event.onsitePassword));
+        const given = Buffer.from(parsed.data.password);
+        passwordOk = expected.length === given.length && crypto.timingSafeEqual(expected, given);
+        needsRehash = passwordOk;
+      }
+
+      if (!passwordOk) {
+        const newCount = ((lockData && lockData.count) || 0) + 1;
+        await setCache(lockKey, { count: newCount }, 900);
+        if (newCount >= 5) {
+          return fail(res, 429, 'Too many attempts, try again later');
+        }
         return fail(res, 403, 'Incorrect event staff password');
+      }
+
+      await clearCache(lockKey);
+
+      // Transparently upgrade legacy plaintext passwords to bcrypt
+      if (needsRehash) {
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { onsitePassword: await bcrypt.hash(parsed.data.password, 12) },
+        });
       }
     }
 
@@ -1351,12 +1436,13 @@ router.post('/onsite/auth', softAuthMiddleware, async (req: any, res: any) => {
         event: { id: event.id, title: event.title, date: event.date, location: event.location, city: event.city, eventCode: event.eventCode },
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // GET /api/events/:id/onsite/dashboard
-router.get('/onsite/dashboard', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.get('/onsite/dashboard', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
@@ -1392,12 +1478,13 @@ router.get('/onsite/dashboard', authMiddleware, onsiteAuthMiddleware, async (req
         },
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // GET /api/events/:id/onsite/guests
-router.get('/onsite/guests', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.get('/onsite/guests', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
@@ -1436,12 +1523,13 @@ router.get('/onsite/guests', authMiddleware, onsiteAuthMiddleware, async (req: a
 
     return res.json({ success: true, data: guests, meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) } });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // POST /api/events/:id/onsite/guests/:ticketId/checkin
-router.post('/onsite/guests/:ticketId/checkin', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.post('/onsite/guests/:ticketId/checkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
@@ -1468,12 +1556,13 @@ router.post('/onsite/guests/:ticketId/checkin', authMiddleware, onsiteAuthMiddle
 
     return ok(res, ticket);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
 // POST /api/events/:id/onsite/guests/:ticketId/undo-checkin
-router.post('/onsite/guests/:ticketId/undo-checkin', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.post('/onsite/guests/:ticketId/undo-checkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
@@ -1498,7 +1587,8 @@ router.post('/onsite/guests/:ticketId/undo-checkin', authMiddleware, onsiteAuthM
 
     return ok(res, { message: 'Check-in undone' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1514,7 +1604,7 @@ const walkinSchema = z.object({
 });
 
 // POST /api/events/:id/onsite/walkin
-router.post('/onsite/walkin', authMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
+router.post('/onsite/walkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: any, res: any) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
@@ -1575,7 +1665,8 @@ router.post('/onsite/walkin', authMiddleware, onsiteAuthMiddleware, async (req: 
     if (error.message === 'Not enough tickets available') {
       return fail(res, 400, error.message);
     }
-    return fail(res, 500, error.message);
+    console.error('[eventTicketing.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

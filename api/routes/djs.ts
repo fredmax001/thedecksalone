@@ -265,7 +265,7 @@ router.put('/cover', authMiddleware, uploadCover.single('coverBanner'), async (r
     return ok(res, { coverBanner: coverUrl, dj: updated });
   } catch (err: any) {
     console.error('Error uploading cover:', err);
-    return fail(res, 500, err.message || 'Failed to upload cover');
+    return fail(res, 500, 'Internal server error');
   }
 });
 

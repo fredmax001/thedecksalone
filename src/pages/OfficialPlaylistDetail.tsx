@@ -304,7 +304,7 @@ export function OfficialPlaylistDetail() {
                     {/* Track info & thumbnail */}
                     <div className="col-span-8 sm:col-span-6 flex items-center gap-3 min-w-0">
                       <img
-                        src={track.cover || '/placeholder-mix.jpg'}
+                        src={track.cover || '/mix-placeholder.jpg'}
                         alt={track.title}
                         className="w-11 h-11 rounded-lg object-cover bg-black shrink-0 border border-white/[0.06]"
                         loading="lazy"

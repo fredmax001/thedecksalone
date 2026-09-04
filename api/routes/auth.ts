@@ -300,7 +300,7 @@ router.post('/email/send-otp', authLimiter, asyncHandler(async (req, res) => {
       code,
       username: user?.username || user?.email?.split('@')[0],
     });
-  } else {
+  } else if (process.env.NODE_ENV !== 'production') {
     console.log(`[Email OTP] Code for ${normalizedEmail}: ${code}`);
   }
 

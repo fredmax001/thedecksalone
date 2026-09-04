@@ -67,6 +67,8 @@ model User {
   targetedReports         ViolationReport[] @relation("TargetedReports")
   djSupports              DjSupport[]
   proSubscriptionRequests ProSubscriptionRequest[]
+  supportTickets          SupportTicket[]
+  mixReactions            MixReaction[]
 
   @@index([email])
   @@index([username])
@@ -344,6 +346,7 @@ model Mix {
   mixPlays    MixPlay[]
   reposts     MixRepost[]
   reups       MixReup[]
+  reactions   MixReaction[]
   violationReports ViolationReport[]
   officialItems OfficialPlaylistItem[]
   dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
@@ -469,6 +472,48 @@ model MixRepost {
   @@index([mixId])
   @@index([userId])
   @@map("mix_reposts")
+}
+
+model MixReaction {
+  id        String   @id @default(cuid())
+  mixId     String
+  mix       Mix      @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([mixId, userId, emoji])
+  @@index([mixId])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  subject    String
+  message    String   @db.Text
+  status     String   @default("open")      // open, pending, resolved, closed
+  priority   String   @default("medium")    // low, medium, high
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  resolvedAt DateTime?
+  replies    SupportTicketReply[]
+
+  @@index([userId, status])
+  @@index([status, updatedAt])
+}
+
+model SupportTicketReply {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  message   String        @db.Text
+  isStaff   Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
 }
 
 model DjHighlight {
@@ -1146,6 +1191,7 @@ enum Role {
   MODERATOR
   FINANCE_ADMIN
   VERIFICATION_ADMIN
+  SUPPORT_ADMIN
   SUPER_ADMIN
 }
 

@@ -22,7 +22,7 @@ function deriveKey(secret: string, salt: Buffer): Buffer {
 function ensureSecret(): string {
   if (QR_SECRET) return QR_SECRET;
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
-  return 'deck-salone-ticket-qr-signature-secret-v2-32chars';
+  throw new Error('TICKET_QR_SECRET or JWT_SECRET must be set');
 }
 
 export function generateTicketNumber(): string {

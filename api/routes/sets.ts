@@ -83,7 +83,8 @@ router.get('/mine', authMiddleware, requireDjProfile, async (req: any, res: any)
 
     return ok(res, formatted);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -125,7 +126,8 @@ router.get('/dj/:djId', async (req: any, res: any) => {
 
     return ok(res, formatted);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -161,7 +163,8 @@ router.get('/:id', async (req: any, res: any) => {
         mixCount: set.items.length,
       });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -194,7 +197,8 @@ router.post('/', authMiddleware, requireTrialOrSubscription, requireDjProfile, u
 
     return res.status(201).json({ success: true, data: set });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -236,7 +240,8 @@ router.put('/:id', authMiddleware, requireDjProfile, uploadCover.single('coverIm
 
     return ok(res, updated);
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -257,7 +262,8 @@ router.delete('/:id', authMiddleware, requireDjProfile, async (req: any, res: an
 
     return ok(res, { message: 'Set deleted' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -301,7 +307,8 @@ router.post('/:id/mixes', authMiddleware, requireDjProfile, async (req: any, res
 
     return res.status(201).json({ success: true, data: item });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -323,7 +330,8 @@ router.delete('/:id/mixes/:mixId', authMiddleware, requireDjProfile, async (req:
 
     return ok(res, { removed: true });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -355,7 +363,8 @@ router.put('/:id/reorder', authMiddleware, requireDjProfile, async (req: any, re
 
     return res.json({ success: true, message: 'Set reordered successfully' });
   } catch (error: any) {
-    return fail(res, 500, error.message);
+    console.error('[sets.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

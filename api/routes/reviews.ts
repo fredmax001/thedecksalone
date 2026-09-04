@@ -58,7 +58,8 @@ router.get('/', async (req, res) => {
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[reviews.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -121,7 +122,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     return res.status(201).json({ success: true, data: review });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[reviews.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -152,7 +154,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     return ok(res, { message: 'Review deleted' });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[reviews.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

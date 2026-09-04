@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import { redirectAfterAuth } from '@/lib/navigation';
+import PhoneOtpForm from '@/components/PhoneOtpForm';
+import { toast } from 'sonner';
 
 /* ─── Schema ─── */
 const loginSchema = z.object({
@@ -44,6 +46,7 @@ const fadeUpItem = {
 
 export default function Login() {
   const [searchParams] = useSearchParams();
+  const [authTab, setAuthTab] = useState<'email' | 'phone'>('email');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,9 +89,7 @@ export default function Login() {
       if (savedRemember === 'true') {
         setRememberMe(true);
         const savedEmail = localStorage.getItem('deck_salone_saved_email');
-        const savedPassword = localStorage.getItem('deck_salone_saved_password');
         if (savedEmail) setValue('email', savedEmail);
-        if (savedPassword) setValue('password', savedPassword);
       }
     } catch (e) {
       console.warn('LocalStorage error reading saved credentials:', e);
@@ -100,14 +101,14 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
+      // Never persist the raw password — clean up any previously saved one.
+      localStorage.removeItem('deck_salone_saved_password');
       if (rememberMe) {
         localStorage.setItem('deck_salone_remember_me', 'true');
         localStorage.setItem('deck_salone_saved_email', data.email);
-        localStorage.setItem('deck_salone_saved_password', data.password);
       } else {
         localStorage.removeItem('deck_salone_remember_me');
         localStorage.removeItem('deck_salone_saved_email');
-        localStorage.removeItem('deck_salone_saved_password');
       }
     } catch (e) {
       console.warn('LocalStorage error saving credentials:', e);
@@ -132,6 +133,18 @@ export default function Login() {
     }
   };
 
+  // Phone OTP login: verify endpoint finds or creates the account and returns a token
+  const handlePhoneVerified = async (
+    user: { id: string; email: string; phone?: string; role: string },
+    token: string
+  ) => {
+    const { setAuth, fetchMe } = useAuthStore.getState();
+    setAuth(user as never, token);
+    await fetchMe();
+    toast.success('Welcome back!');
+    redirectAfterAuth(user?.role, navigate);
+  };
+
   return (
     <AuthLayout
       quote="Join verified DJs shaping the sound of Sierra Leone."
@@ -153,6 +166,27 @@ export default function Login() {
           </p>
         </div>
 
+        {/* Tabs: Email / Phone */}
+        <div className="flex bg-black-elevated border border-dark-gray rounded-full p-1 mb-6">
+          {(['email', 'phone'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => {
+                setAuthTab(tab);
+                setError(null);
+              }}
+              className={`flex-1 h-[40px] rounded-full text-sm font-medium uppercase tracking-wide transition-all duration-200 ${
+                authTab === tab
+                  ? 'bg-gold-gradient text-black'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {tab === 'email' ? 'Email' : 'Phone'}
+            </button>
+          ))}
+        </div>
+
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
@@ -163,6 +197,9 @@ export default function Login() {
           </motion.div>
         )}
 
+        {authTab === 'phone' ? (
+          <PhoneOtpForm onVerified={handlePhoneVerified} verifyLabel="Verify & Sign In" />
+        ) : (
         <motion.form
           onSubmit={handleSubmit(onSubmit)}
           variants={staggerContainer}
@@ -343,6 +380,7 @@ export default function Login() {
             </Link>
           </motion.p>
         </motion.form>
+        )}
       </motion.div>
     </AuthLayout>
   );

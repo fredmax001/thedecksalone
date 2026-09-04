@@ -192,7 +192,8 @@ router.get('/', async (req, res) => {
 
     return res.json(result);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[rankings.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -277,7 +278,8 @@ router.get('/overview', async (req, res) => {
 
     return res.json(result);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[rankings.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -291,7 +293,8 @@ router.get('/:djId/history', async (req, res) => {
 
     return ok(res, history);
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[rankings.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 

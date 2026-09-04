@@ -378,7 +378,6 @@ const GENDER_VALUES = ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_S
 
 const updateProfileSchema = z.object({
   username: z.string().max(50).optional().nullable().or(z.literal('')),
-  email: z.string().optional().nullable().or(z.literal('')),
   name: z.string().max(100).optional().nullable().or(z.literal('')),
   bio: z.string().max(2000).optional().nullable().or(z.literal('')),
   location: z.string().max(100).optional().nullable().or(z.literal('')),
@@ -430,7 +429,7 @@ router.put('/profile', authMiddleware, asyncHandler(async (req, res) => {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
 
-  const { username, email, name, bio, location, gender, dateOfBirth, avatar, favoriteGenres, social } = parsed.data;
+  const { username, name, bio, location, gender, dateOfBirth, avatar, favoriteGenres, social } = parsed.data;
   const updateData: any = {};
 
   if (gender !== undefined) {
@@ -447,15 +446,6 @@ router.put('/profile', authMiddleware, asyncHandler(async (req, res) => {
       return fail(res, 409, 'Username already taken');
     }
     updateData.username = normalized;
-  }
-
-  if (email && email.trim() !== '') {
-    const normalizedEmail = email.toLowerCase().trim();
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existing && existing.id !== req.user.id) {
-      return fail(res, 409, 'Email already in use');
-    }
-    updateData.email = normalizedEmail;
   }
 
   if (dateOfBirth !== undefined) {
@@ -797,6 +787,9 @@ const notificationPrefsSchema = z.object({
   pushVerifications: z.boolean().optional(),
   pushSubscriptions: z.boolean().optional(),
   pushReviews: z.boolean().optional(),
+  smsBookings: z.boolean().optional(),
+  smsPayments: z.boolean().optional(),
+  smsTickets: z.boolean().optional(),
 });
 
 const privacyPrefsSchema = z.object({
@@ -853,6 +846,9 @@ router.get('/settings', authMiddleware, asyncHandler(async (req, res) => {
     pushVerifications: true,
     pushSubscriptions: true,
     pushReviews: true,
+    smsBookings: false,
+    smsPayments: false,
+    smsTickets: false,
   };
 
   const defaultPrivacy = {
@@ -976,7 +972,8 @@ router.get('/public/:username', async (req, res) => {
         djProfile: user.role === 'DJ' && user.djProfile?.isPublic ? user.djProfile : null,
       });
   } catch (error) {
-    return fail(res, 500, error.message);
+    console.error('[users.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1025,7 +1022,7 @@ router.get('/subscription/status', authMiddleware, async (req, res) => {
       });
   } catch (error) {
     console.error('[User Subscription Status API] Error:', error);
-    return fail(res, 500, error.message);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
@@ -1104,7 +1101,7 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
     return ok(res, subRequest, 'Upgrade request submitted successfully! Your subscription is pending admin confirmation.');
   } catch (error) {
     console.error('[User Subscription Request API] Error:', error);
-    return fail(res, 500, error.message);
+    return fail(res, 500, 'Internal server error');
   }
 });
 
