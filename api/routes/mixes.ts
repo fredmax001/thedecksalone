@@ -16,6 +16,7 @@ const { createNotification, createNotificationForDj } = require('../utils/notifi
 const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
+const { generateUniqueMixSlug, slugify } = require('../utils/slug');
 
 const router = express.Router();
 
@@ -559,9 +560,13 @@ router.post('/import-hearthis', authMiddleware, asyncHandler(async (req, res) =>
             continue;
           }
 
+          const mixTitle = resolved.title || 'Imported Mix';
+          const slug = await generateUniqueMixSlug(prisma, djId, mixTitle);
+
           const mix = await prisma.mix.create({
             data: {
-              title: resolved.title || 'Imported Mix',
+              title: mixTitle,
+              slug,
               description: resolved.description || `Imported from Hearthis.at`,
               genre: resolved.genre || defaultGenre,
               category: defaultCategory,
@@ -605,9 +610,13 @@ router.post('/import-hearthis', authMiddleware, asyncHandler(async (req, res) =>
         continue;
       }
 
+      const mixTitle = resolved.title || 'Imported Mix';
+      const slug = await generateUniqueMixSlug(prisma, djId, mixTitle);
+
       const mix = await prisma.mix.create({
         data: {
-          title: resolved.title || 'Imported Mix',
+          title: mixTitle,
+          slug,
           description: resolved.description || `Imported from Hearthis.at`,
           genre: resolved.genre || defaultGenre,
           category: defaultCategory,
@@ -637,10 +646,100 @@ router.post('/import-hearthis', authMiddleware, asyncHandler(async (req, res) =>
   return ok(res, { imported, count: imported.length, errors, errorCount: errors.length });
 }));
 
-// GET /api/mixes/:id - Get single mix
+// GET /api/mixes/by-slug/:djIdentifier/:slug - Get mix by DJ identifier and mix slug
+router.get('/by-slug/:djIdentifier/:slug', softAuthMiddleware, asyncHandler(async (req, res) => {
+  const { djIdentifier, slug } = req.params;
+
+  // 1. Try finding DJ first by username, id, or stageName
+  const dj = await prisma.djProfile.findFirst({
+    where: {
+      OR: [
+        { id: djIdentifier },
+        { user: { username: { equals: djIdentifier, mode: 'insensitive' } } },
+        { stageName: { equals: djIdentifier.replace(/-/g, ' '), mode: 'insensitive' } },
+        { stageName: { equals: djIdentifier, mode: 'insensitive' } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  let mix = null;
+  if (dj) {
+    mix = await prisma.mix.findFirst({
+      where: {
+        djId: dj.id,
+        OR: [
+          { slug: { equals: slug, mode: 'insensitive' } },
+          { id: slug },
+        ],
+      },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            city: true,
+            country: true,
+            subscriptionTier: true,
+            user: { select: { id: true, username: true } },
+          },
+        },
+      },
+    });
+  }
+
+  // Fallback: search globally by slug/id
+  if (!mix) {
+    mix = await prisma.mix.findFirst({
+      where: {
+        OR: [
+          { slug: { equals: slug, mode: 'insensitive' } },
+          { id: slug },
+        ],
+      },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            avatar: true,
+            city: true,
+            country: true,
+            subscriptionTier: true,
+            user: { select: { id: true, username: true } },
+          },
+        },
+      },
+    });
+  }
+
+  if (!mix) {
+    return fail(res, 404, 'Mix not found');
+  }
+
+  // Private mixes are only visible to the owner or an admin
+  if (!mix.isPublic) {
+    const isOwner = req.user?.id && mix.dj?.user?.id === req.user.id;
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!isOwner && !isAdmin) {
+      return fail(res, 404, 'Mix not found');
+    }
+  }
+
+  return ok(res, mix);
+}));
+
+// GET /api/mixes/:id - Get single mix (by ID or Slug)
 router.get('/:id', softAuthMiddleware, asyncHandler(async (req, res) => {
-  const mix = await prisma.mix.findUnique({
-    where: { id: req.params.id },
+  const identifier = req.params.id;
+  const mix = await prisma.mix.findFirst({
+    where: {
+      OR: [
+        { id: identifier },
+        { slug: { equals: identifier, mode: 'insensitive' } },
+      ],
+    },
     include: {
       dj: {
         select: {
@@ -831,9 +930,12 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, asyncHan
   });
   const nextSortOrder = (maxOrder._max.sortOrder || 0) + 1;
 
+  const slug = await generateUniqueMixSlug(prisma, djId, data.title || 'mix');
+
   const mix = await prisma.mix.create({
     data: {
       ...data,
+      slug,
       djId,
       audioUrl,
       audioSource,
@@ -894,6 +996,12 @@ router.put('/:id', authMiddleware, uploadMix, asyncHandler(async (req, res) => {
   }
 
   const updateData = { ...parsed.data };
+  if (updateData.title && updateData.title !== mix.title) {
+    updateData.slug = await generateUniqueMixSlug(prisma, mix.djId, updateData.title, mix.id);
+  } else if (!mix.slug) {
+    updateData.slug = await generateUniqueMixSlug(prisma, mix.djId, mix.title || 'mix', mix.id);
+  }
+
   if (updateData.releaseDate) {
     try {
       const d = new Date(updateData.releaseDate);

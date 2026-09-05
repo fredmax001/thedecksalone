@@ -19,6 +19,7 @@ import api, { getMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import ShareButton from '@/components/ShareButton';
+import { getMixShareUrl } from '@/lib/slug';
 
 function isEmbedSource(source?: string, audioUrl?: string): boolean {
   const sourceLower = (source || '').toLowerCase();
@@ -787,7 +788,7 @@ export default function MixPlayer() {
 
                 {currentTrack && (
                   <ShareButton
-                    url={`${window.location.origin}/mix/${currentTrack.id}`}
+                    url={getMixShareUrl(currentTrack as any)}
                     title={`${currentTrack.title} by ${currentTrack.dj} — Deck Salone`}
                     description={`Listen to ${currentTrack.title} on Deck Salone.`}
                     size="sm"
@@ -1004,7 +1005,7 @@ export default function MixPlayer() {
                   </button>
                   {currentTrack && (
                     <ShareButton
-                      url={`${window.location.origin}/mix/${currentTrack.id}`}
+                      url={getMixShareUrl(currentTrack as any)}
                       title={`${currentTrack.title} by ${currentTrack.dj} — Deck Salone`}
                       description={`Listen to ${currentTrack.title} on Deck Salone.`}
                       size="md"

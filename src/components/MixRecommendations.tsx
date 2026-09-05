@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Play, Radio, Disc } from 'lucide-react';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import api from '@/lib/api';
+import { getMixUrl } from '@/lib/slug';
 
 interface RecMixItem {
   id: string;
@@ -118,7 +119,7 @@ export default function MixRecommendations({
                 </div>
 
                 <div className="p-3 space-y-1">
-                  <Link to={`/mix/${item.id}`} className="block truncate">
+                  <Link to={getMixUrl(item as any)} className="block truncate">
                     <h4 className="font-display font-bold text-xs uppercase text-text-primary hover:text-gold transition-colors truncate">
                       {item.title}
                     </h4>
@@ -167,7 +168,7 @@ export default function MixRecommendations({
                   </div>
 
                   <div className="truncate">
-                    <Link to={`/mix/${item.id}`}>
+                    <Link to={getMixUrl(item as any)}>
                       <h4 className="font-display font-bold text-xs uppercase text-text-primary hover:text-gold transition-colors truncate">
                         {item.title}
                       </h4>

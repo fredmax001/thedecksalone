@@ -28,6 +28,7 @@ import MixDownloadModal from '@/components/MixDownloadModal';
 import ShareButton from '@/components/ShareButton';
 import { ReupButton } from '@/components/ReupButton';
 import { RepostButton } from '@/components/RepostButton';
+import { getMixUrl, getMixShareUrl } from '@/lib/slug';
 import MixComments from '@/components/MixComments';
 import { formatCompactNumber } from '@/lib/formatting';
 import type { FeedMix } from './types';
@@ -236,7 +237,7 @@ export default function MixFeedRow({
 
           <div className="min-w-0 flex-1">
             <Link
-              to={`/mix/${mix.id}`}
+              to={getMixUrl(mix as any)}
               onClick={(e) => e.stopPropagation()}
               className="font-display text-xs sm:text-sm font-bold uppercase tracking-tight text-white hover:text-gold transition-colors truncate block"
             >
@@ -418,7 +419,7 @@ export default function MixFeedRow({
                 </div>
 
                 <div className="flex items-baseline gap-2 mt-0.5">
-                  <Link to={`/mix/${mix.id}`}>
+                  <Link to={getMixUrl(mix as any)}>
                     <h3 className="font-display text-xs sm:text-base md:text-lg font-bold text-white uppercase tracking-tight truncate hover:text-gold transition-colors">
                       {mix.title}
                     </h3>
@@ -612,7 +613,7 @@ export default function MixFeedRow({
 
               {/* Share */}
               <ShareButton
-                url={`${window.location.origin}/mix/${mix.id}`}
+                url={getMixShareUrl(mix as any)}
                 title={mix.title}
                 preview={{
                   type: 'mix',

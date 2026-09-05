@@ -38,6 +38,7 @@ import ReachListenersModal from '@/components/ReachListenersModal';
 import DjSupportModal from '@/components/DjSupportModal';
 import MixDownloadModal from '@/components/MixDownloadModal';
 import EmbedMixModal from '@/components/EmbedMixModal';
+import { getMixUrl } from '@/lib/slug';
 import MixFeedRow from '@/components/feed/MixFeedRow';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/apiErrors';
@@ -202,7 +203,7 @@ function MixGridCard({
 
         {/* Title & DJ */}
         <div className="space-y-1">
-          <Link to={`/mix/${mix.id}`}>
+          <Link to={getMixUrl(mix as any)}>
             <h4 className="font-display text-sm font-bold text-text-primary uppercase tracking-tight truncate hover:text-[#f4e059] transition-colors">
               {mix.title}
             </h4>
@@ -325,7 +326,7 @@ function MixTracklistRow({
       {/* Title & DJ */}
       <div className="min-w-0 flex-1">
         <Link
-          to={`/mix/${mix.id}`}
+          to={getMixUrl(mix as any)}
           onClick={(e) => e.stopPropagation()}
           className="font-display text-xs sm:text-sm font-bold uppercase tracking-tight text-text-primary hover:text-[#f4e059] transition-colors truncate block"
         >

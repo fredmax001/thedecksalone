@@ -6,6 +6,7 @@ import { getMediaUrl } from '@/lib/api';
 import { formatDate } from '@/lib/dateTime';
 import { usePlayerStore } from '@/stores/playerStore';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import { getMixUrl } from '@/lib/slug';
 import type { HomeDJ, HomeEvent, HomeMix, HomeAd } from './types';
 
 interface HeroBannerProps {
@@ -64,7 +65,7 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
         subtitle: `${mix.dj?.stageName || 'Deck Salone'} • ${mix.plays || 0} plays`,
         image: mix.coverImage || mix.dj?.avatar || '/mix-placeholder.jpg',
         cta: 'Listen Now',
-        link: `/mix/${mix.id}`,
+        link: getMixUrl(mix as any),
         type: 'mix',
         raw: mix,
       });

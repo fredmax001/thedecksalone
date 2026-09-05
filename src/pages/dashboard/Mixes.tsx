@@ -42,6 +42,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { getMixShareUrl } from '@/lib/slug';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -388,7 +389,7 @@ export default function Mixes() {
   const [shareMixId, setShareMixId] = useState<string | null>(null);
 
   const handleShare = async (mix: Mix) => {
-    const shareUrl = `${window.location.origin}/mix/${mix.id}`;
+    const shareUrl = getMixShareUrl(mix as any);
     const djName = user?.djProfile?.stageName || 'DJ';
     const shareData = {
       title: mix.title,
@@ -1718,7 +1719,7 @@ export default function Mixes() {
         {shareMixId && (() => {
           const mix = mixes.find(m => m.id === shareMixId);
           if (!mix) return null;
-          const shareUrl = `${window.location.origin}/mix/${mix.id}`;
+          const shareUrl = getMixShareUrl(mix as any);
           const djName = user?.djProfile?.stageName || 'DJ';
           return (
             <motion.div

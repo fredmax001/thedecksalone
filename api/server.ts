@@ -351,22 +351,63 @@ async function serveAppWithMeta(req, res) {
     pageUrl = cached.pageUrl;
   } else {
     try {
-      // 1. Mix Detail Route: /mix/:id
-      const mixMatch = req.path.match(/^\/mix\/([a-zA-Z0-9_-]+)/);
-      if (mixMatch) {
-        const mixId = mixMatch[1];
-        const mix = await prisma.mix.findUnique({
-          where: { id: mixId },
-          include: { dj: true },
+      // 1. Mix Detail Route: /mix/:dj/:slug or /:dj/:slug or /mix/:id
+      const mixTwoSegMatch = req.path.match(/^\/(?:mix|mixes)\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/) ||
+        req.path.match(/^\/(?!(?:api|assets|dashboard|user|events|login|register|playlists|playlist|discover|rankings|booking|pricing|help|blog|about|terms|privacy|install|developers|dj|hall-of-fame|battles|feed|account)(?:\/|$))([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
+      const mixSingleSegMatch = req.path.match(/^\/(?:mix|mixes)\/([a-zA-Z0-9_-]+)$/);
+
+      let mix = null;
+      if (mixTwoSegMatch) {
+        const djId = mixTwoSegMatch[1];
+        const mixSlug = mixTwoSegMatch[2];
+        mix = await prisma.mix.findFirst({
+          where: {
+            OR: [
+              { slug: { equals: mixSlug, mode: 'insensitive' } },
+              { id: mixSlug },
+            ],
+            dj: {
+              OR: [
+                { id: djId },
+                { user: { username: { equals: djId, mode: 'insensitive' } } },
+                { stageName: { equals: djId.replace(/-/g, ' '), mode: 'insensitive' } },
+                { stageName: { equals: djId, mode: 'insensitive' } },
+              ],
+            },
+          },
+          include: { dj: { select: { stageName: true, avatar: true, user: { select: { username: true } } } } },
         });
-        if (mix) {
-          const djName = mix.dj?.stageName || 'DJ';
-          title = `🎵 ${mix.title} by ${djName} — Deck Salone`;
-          description = mix.description
-            ? mix.description.slice(0, 160)
-            : `Listen to "${mix.title}" by ${djName} (${mix.genre || 'Mix'}). ${mix.plays || 0} plays on Deck Salone.`;
-          image = makeAbsoluteUrl(mix.coverImage || mix.dj?.avatar);
+        if (!mix) {
+          mix = await prisma.mix.findFirst({
+            where: {
+              OR: [
+                { slug: { equals: mixSlug, mode: 'insensitive' } },
+                { id: mixSlug },
+              ],
+            },
+            include: { dj: { select: { stageName: true, avatar: true, user: { select: { username: true } } } } },
+          });
         }
+      } else if (mixSingleSegMatch) {
+        const identifier = mixSingleSegMatch[1];
+        mix = await prisma.mix.findFirst({
+          where: {
+            OR: [
+              { id: identifier },
+              { slug: { equals: identifier, mode: 'insensitive' } },
+            ],
+          },
+          include: { dj: { select: { stageName: true, avatar: true, user: { select: { username: true } } } } },
+        });
+      }
+
+      if (mix) {
+        const djName = mix.dj?.stageName || 'DJ';
+        title = `🎵 ${mix.title} by ${djName} — Deck Salone`;
+        description = mix.description
+          ? mix.description.slice(0, 160)
+          : `Listen to "${mix.title}" by ${djName} (${mix.genre || 'Mix'}). ${mix.plays || 0} plays on Deck Salone.`;
+        image = makeAbsoluteUrl(mix.coverImage || mix.dj?.avatar);
       }
 
       // 2. DJ Profile Route: /dj/:identifier

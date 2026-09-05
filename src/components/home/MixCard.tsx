@@ -5,6 +5,7 @@ import { getMediaUrl } from '@/lib/api';
 import { usePlayerStore } from '@/stores/playerStore';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { formatCompactNumber } from '@/lib/formatting';
+import { getMixUrl } from '@/lib/slug';
 import type { HomeMix } from './types';
 
 interface MixCardProps {
@@ -34,6 +35,7 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
   };
 
   const djIdentifier = (mix.dj as any)?.username || mix.dj?.id || (mix as any).djId || mix.dj?.stageName || '';
+  const mixHref = getMixUrl(mix as any);
 
   return (
     <motion.div
@@ -44,7 +46,7 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
       className="group block"
     >
       <div className="relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-black-surface border border-dark-gray group-hover:border-gold/50 transition-all duration-300 shadow-card">
-        <Link to={`/mix/${mix.id}`} className="block w-full h-full">
+        <Link to={mixHref} className="block w-full h-full">
           <OptimizedImage
             src={mix.coverImage ? getMediaUrl(mix.coverImage) : '/mix-placeholder.jpg'}
             alt={mix.title}
@@ -70,7 +72,7 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
       </div>
 
       <div className="mt-2.5 sm:mt-3 min-w-0">
-        <Link to={`/mix/${mix.id}`}>
+        <Link to={mixHref}>
           <h3 className="font-display font-bold text-xs sm:text-sm text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
             {mix.title}
           </h3>

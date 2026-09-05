@@ -25,6 +25,7 @@ import { useDJs, useDJGenres } from '@/hooks/useDJs';
 import { cn } from '@/lib/utils';
 import type { MixTrack } from '@/stores/playerStore';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { getMixUrl } from '@/lib/slug';
 
 type SearchTab = 'mixes' | 'djs';
 type ViewMode = 'grid' | 'list';
@@ -143,7 +144,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
   }, [open]);
 
   const handleMixClick = (mix: MixTrack) => {
-    navigate(`/mix/${mix.id}`);
+    navigate(getMixUrl(mix as any));
     onOpenChange(false);
   };
 

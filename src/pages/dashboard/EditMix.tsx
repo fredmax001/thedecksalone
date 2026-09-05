@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { getMixShareUrl } from '@/lib/slug';
 
 const SUGGESTED_TAGS = [
   'Krio Fusion',
@@ -93,6 +94,9 @@ export default function EditMix() {
   const [releaseDate, setReleaseDate] = useState('');
   const [license, setLicense] = useState('All Rights Reserved');
 
+  const [mixSlug, setMixSlug] = useState<string>('');
+  const [djInfo, setDjInfo] = useState<any>(null);
+
   // File Uploads
   const [coverImage, setCoverImage] = useState<string>('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -116,6 +120,8 @@ export default function EditMix() {
         if (res.data.success && res.data.data) {
           const mix = res.data.data;
           setTitle(mix.title || '');
+          setMixSlug(mix.slug || '');
+          setDjInfo(mix.dj || null);
           setGenre(mix.genre || 'Afrobeats');
           setCategory(mix.category || 'Mixtape');
           setSubGenres(Array.isArray(mix.secondaryGenres) ? mix.secondaryGenres.join(', ') : '');
@@ -316,7 +322,7 @@ export default function EditMix() {
     );
   }
 
-  const mixUrl = `${window.location.origin}/mix/${id}`;
+  const mixUrl = getMixShareUrl({ id, slug: mixSlug, title, dj: djInfo } as any);
   const currentCover = coverPreview || coverImage || '/mix-placeholder.jpg';
 
   return (

@@ -79,15 +79,19 @@ export function useMixGenres() {
   });
 }
 
-export function useMix(id: string | undefined) {
+export function useMix(identifier: string | undefined, djIdentifier?: string) {
   return useQuery({
-    queryKey: ['mix', id],
+    queryKey: ['mix', identifier, djIdentifier],
     queryFn: async () => {
-      if (!id) return null;
-      const res = await api.get(`/mixes/${id}`);
+      if (!identifier) return null;
+      if (djIdentifier) {
+        const res = await api.get(`/mixes/by-slug/${encodeURIComponent(djIdentifier)}/${encodeURIComponent(identifier)}`);
+        return res.data.data;
+      }
+      const res = await api.get(`/mixes/${encodeURIComponent(identifier)}`);
       return res.data.data;
     },
-    enabled: !!id,
+    enabled: !!identifier,
     staleTime: 1000 * 60 * 5,
   });
 }

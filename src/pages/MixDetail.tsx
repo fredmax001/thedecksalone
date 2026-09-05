@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { formatCompactNumber } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { getMixShareUrl } from '@/lib/slug';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -30,8 +31,9 @@ function formatDuration(seconds: number): string {
 }
 
 export default function MixDetail() {
-  const { id } = useParams<{ id: string }>();
-  const { data: mix, isLoading, error } = useMix(id);
+  const { id, djIdentifier: routeDj, slug } = useParams<{ id?: string; djIdentifier?: string; slug?: string }>();
+  const mixIdentifier = slug || id;
+  const { data: mix, isLoading, error } = useMix(mixIdentifier, routeDj);
   const { user, isAuthenticated } = useAuthStore();
   const { mutate: likeMix } = useLikeMix();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -40,7 +42,7 @@ export default function MixDetail() {
   const [downloading, setDownloading] = useState(false);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const mixUrl = `${baseUrl}/mix/${id}`;
+  const mixUrl = mix ? getMixShareUrl(mix, baseUrl) : `${baseUrl}/mix/${mixIdentifier || ''}`;
 
   const title = useMemo(
     () => (mix ? `${mix.title} by ${mix.dj?.stageName || 'DJ'} — Deck Salone` : 'Mix — Deck Salone'),

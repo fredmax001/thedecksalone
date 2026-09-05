@@ -296,6 +296,7 @@ model Mix {
   id          String        @id @default(cuid())
   djId        String
   title       String
+  slug        String?
   description String?
   coverImage  String?
   audioUrl    String?
@@ -351,6 +352,8 @@ model Mix {
   officialItems OfficialPlaylistItem[]
   dj          DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
 
+  @@index([slug])
+  @@index([djId, slug])
   @@index([djId])
   @@index([djId, sortOrder])
   @@index([djId, isPublic, createdAt])

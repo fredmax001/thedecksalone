@@ -399,6 +399,8 @@ export default function App() {
             <Route path="mix/:id/edit" element={<EditMix />} />
             <Route path="mixes/:id" element={<MixDetail />} />
             <Route path="mixes/:id/edit" element={<EditMix />} />
+            <Route path="mix/:djIdentifier/:slug" element={<MixDetail />} />
+            <Route path="mixes/:djIdentifier/:slug" element={<MixDetail />} />
             <Route path="playlists" element={<OfficialPlaylists />} />
             <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
             <Route path="pricing" element={<Pricing />} />
@@ -421,6 +423,8 @@ export default function App() {
             <Route path="install" element={<InstallApp />} />
             <Route path="developers" element={<Developers />} />
             <Route path="api" element={<Developers />} />
+            {/* Hearthis-style direct mix route: /:djIdentifier/:slug (e.g. /djfredmax/salone-mix-vol-xvi) */}
+            <Route path=":djIdentifier/:slug" element={<MixDetail />} />
           </Route>
         </Routes>
         <MixPlayer />
