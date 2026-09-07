@@ -251,6 +251,7 @@ export default function EventDetail() {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [localRsvp, setLocalRsvp] = useState<boolean | null>(null);
+  const [localRsvpCount, setLocalRsvpCount] = useState<number | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   const date = event ? new Date(event.date) : new Date();
@@ -262,7 +263,14 @@ export default function EventDetail() {
 
   const handleRsvp = async () => {
     if (!user) { toast.error('Please log in to RSVP'); return; }
+    if (rsvpLoading) return; // prevent double-toggle while in flight
+    // Optimistic update: flip attending state and count immediately
+    const previousRsvp = localRsvp !== null ? localRsvp : !!event?.userRsvp;
+    const previousCount = localRsvpCount !== null ? localRsvpCount : (event?._count?.rsvps ?? 0);
+    const nextRsvp = !previousRsvp;
     setRsvpLoading(true);
+    setLocalRsvp(nextRsvp);
+    setLocalRsvpCount(Math.max(0, previousCount + (nextRsvp ? 1 : -1)));
     try {
       const res = await api.post(`/events/${id}/rsvp`);
       const rsvped = res.data.data.rsvped;
@@ -270,7 +278,10 @@ export default function EventDetail() {
       toast.success(rsvped ? '✅ RSVP confirmed!' : 'RSVP cancelled');
       refetch?.();
     } catch (e: any) {
-      toast.error(getApiErrorMessage(e, 'Failed to RSVP'));
+      // Restore previous state on failure
+      setLocalRsvp(previousRsvp);
+      setLocalRsvpCount(previousCount);
+      toast.error('Could not update RSVP: ' + getApiErrorMessage(e, 'Failed to RSVP'));
     } finally {
       setRsvpLoading(false);
     }
@@ -306,7 +317,7 @@ export default function EventDetail() {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   });
 
-  const rsvpCount = event._count?.rsvps ?? 0;
+  const rsvpCount = localRsvpCount !== null ? localRsvpCount : (event._count?.rsvps ?? 0);
   const gallery = event.gallery ?? [];
 
   const isOrganizer = !!(
@@ -600,8 +611,7 @@ export default function EventDetail() {
                 <h3 className="font-display text-sm font-semibold text-text-primary uppercase mb-4 flex items-center gap-2"><Bell size={14} className="text-gold" /> RSVP to This Event</h3>
                 <p className="text-xs text-text-muted mb-4">{rsvpCount > 0 ? `${rsvpCount} people are going. ` : ''}Let the organizer know you're attending.</p>
                 {user ? (
-                  <button onClick={handleRsvp} disabled={rsvpLoading} className={`w-full py-3 text-sm font-bold uppercase rounded-xl flex items-center justify-center gap-2 transition-all ${userRsvped ? 'bg-green/15 border border-green/30 text-green hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30' : 'bg-gold-gradient text-black hover:opacity-90'}`}>
-                    {rsvpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  <button onClick={handleRsvp} disabled={rsvpLoading} className={`w-full py-3 text-sm font-bold uppercase rounded-xl flex items-center justify-center gap-2 transition-all ${rsvpLoading ? 'opacity-70' : ''} ${userRsvped ? 'bg-green/15 border border-green/30 text-green hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30' : 'bg-gold-gradient text-black hover:opacity-90'}`}>
                     {userRsvped ? '✓ You\'re Going (click to cancel)' : 'RSVP – I\'m Going!'}
                   </button>
                 ) : (
