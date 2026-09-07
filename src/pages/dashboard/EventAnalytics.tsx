@@ -1,6 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEventAnalytics } from '@/hooks/useEventTicketing';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { useEvent } from '@/hooks/useEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatting';
@@ -20,13 +22,14 @@ export default function EventAnalytics() {
   const navigate = useNavigate();
   const { data: event } = useEvent(eventId);
   const { data: analytics, isLoading } = useEventAnalytics(eventId);
+  const showSkeleton = useDelayedLoading(isLoading);
 
-  if (isLoading || !analytics) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+  if (isLoading) {
+    return showSkeleton ? <DashboardSkeleton cards={3} /> : null;
+  }
+
+  if (!analytics) {
+    return null;
   }
 
   return (
