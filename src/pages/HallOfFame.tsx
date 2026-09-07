@@ -19,6 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { useHallOfFameDJs, useHallOfFameLegends, type HallOfFameLegend } from '../hooks/useDJs';
 import { useHallOfFameMixes } from '../hooks/useMixes';
 import {
@@ -412,6 +414,9 @@ export default function HallOfFame() {
   /* Real data hooks */
   const { data: pioneers = [], isLoading: pioneersLoading } = useHallOfFameDJs(6);
   const { data: legendaryMixes = [], isLoading: mixesLoading } = useHallOfFameMixes(6);
+  const showLegendsSkeleton = useDelayedLoading(legendsLoading);
+  const showPioneersSkeleton = useDelayedLoading(pioneersLoading);
+  const showMixesSkeleton = useDelayedLoading(mixesLoading);
 
   /* Admin data hooks */
   const { data: adminDjsData, isLoading: adminDjsLoading } = useAdminDjs({
@@ -866,9 +871,9 @@ export default function HallOfFame() {
           </div>
 
           {legendsLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 text-gold animate-spin" />
-            </div>
+            showLegendsSkeleton ? (
+              <FeedSectionSkeleton />
+            ) : null
           ) : legends.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-text-secondary text-lg">No legacy legends recorded yet.</p>
@@ -979,9 +984,9 @@ export default function HallOfFame() {
           </div>
 
           {pioneersLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 text-gold animate-spin" />
-            </div>
+            showPioneersSkeleton ? (
+              <FeedSectionSkeleton />
+            ) : null
           ) : pioneers.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-text-secondary text-lg">
@@ -1139,9 +1144,9 @@ export default function HallOfFame() {
           </div>
 
           {mixesLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 text-gold animate-spin" />
-            </div>
+            showMixesSkeleton ? (
+              <FeedSectionSkeleton />
+            ) : null
           ) : legendaryMixes.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-text-secondary text-lg">
