@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, MapPin, Music, ArrowLeft, User, Calendar } from 'lucide-react';
+import { MapPin, Music, ArrowLeft, User, Calendar } from 'lucide-react';
 import { usePublicUser } from '@/hooks/usePublicUser';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import ShareButton from '@/components/ShareButton';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -30,13 +32,9 @@ export default function UserPublicProfile() {
 
   usePageMeta(title, description, image, profileUrl);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (error || !profile) {
     return (
