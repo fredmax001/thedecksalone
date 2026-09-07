@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Loader2,
   Music2,
   Headphones,
   Calendar,
@@ -36,6 +35,8 @@ import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import type { FeedDJ, FeedMix, FeedEvent, FeedPlaylist } from '@/components/feed/types';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface FeedTabConfig {
   key: FeedTab;
@@ -198,6 +199,8 @@ export default function Feed() {
     (activeTab === 'for-you' &&
       (djsQuery.isLoading || mixesQuery.isLoading || eventsQuery.isLoading || playlistsLoading));
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   return (
     <div className="min-h-screen bg-black text-text-primary pb-32">
       <SEOHead
@@ -322,9 +325,7 @@ export default function Feed() {
       {/* ═══════════════ MAIN CONTENT BODY ═══════════════ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-gold animate-spin" />
-          </div>
+          showSkeleton ? <FeedSectionSkeleton sections={2} /> : null
         ) : activeTab === 'for-you' ? (
           /* ─── TAB: FOR YOU / SMART PERSONALIZED FEED ─── */
           <div className="space-y-12">
