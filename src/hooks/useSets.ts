@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 export interface SetSummary {
   id: string;
@@ -127,7 +129,39 @@ export function useUpdateSet() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, variables) => {
+    onMutate: async (variables) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['set', variables.id] }),
+        queryClient.cancelQueries({ queryKey: ['my-sets'] }),
+        queryClient.cancelQueries({ queryKey: ['dj-sets'] }),
+      ]);
+      const previousSet = queryClient.getQueryData<SetDetail>(['set', variables.id]);
+      const previousMySets = queryClient.getQueryData<SetSummary[]>(['my-sets']);
+      const previousDjSets = queryClient.getQueryData<SetSummary[]>(['dj-sets']);
+      queryClient.setQueryData<SetDetail>(['set', variables.id], (old) =>
+        old ? { ...old, ...variables.payload } : old
+      );
+      queryClient.setQueryData<SetSummary[]>(['my-sets'], (old) =>
+        old?.map((s) => (s.id === variables.id ? { ...s, ...variables.payload } : s))
+      );
+      queryClient.setQueryData<SetSummary[]>(['dj-sets'], (old) =>
+        old?.map((s) => (s.id === variables.id ? { ...s, ...variables.payload } : s))
+      );
+      return { previousSet, previousMySets, previousDjSets };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousSet) {
+        queryClient.setQueryData(['set', variables.id], context.previousSet);
+      }
+      if (context?.previousMySets) {
+        queryClient.setQueryData(['my-sets'], context.previousMySets);
+      }
+      if (context?.previousDjSets) {
+        queryClient.setQueryData(['dj-sets'], context.previousDjSets);
+      }
+      toast.error('Could not update set: ' + getApiErrorMessage(error, 'Failed to update set'));
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['my-sets'] });
       queryClient.invalidateQueries({ queryKey: ['dj-sets'] });
       queryClient.invalidateQueries({ queryKey: ['set', variables.id] });
@@ -147,9 +181,34 @@ export function useDeleteSet() {
       }
       return res.data.data;
     },
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['my-sets'] }),
+        queryClient.cancelQueries({ queryKey: ['dj-sets'] }),
+      ]);
+      const previousMySets = queryClient.getQueryData<SetSummary[]>(['my-sets']);
+      const previousDjSets = queryClient.getQueryData<SetSummary[]>(['dj-sets']);
+      queryClient.setQueryData<SetSummary[]>(['my-sets'], (old) =>
+        old?.filter((s) => s.id !== id)
+      );
+      queryClient.setQueryData<SetSummary[]>(['dj-sets'], (old) =>
+        old?.filter((s) => s.id !== id)
+      );
+      return { previousMySets, previousDjSets };
+    },
+    onError: (error, _id, context) => {
+      if (context?.previousMySets) {
+        queryClient.setQueryData(['my-sets'], context.previousMySets);
+      }
+      if (context?.previousDjSets) {
+        queryClient.setQueryData(['dj-sets'], context.previousDjSets);
+      }
+      toast.error('Could not remove: ' + getApiErrorMessage(error, 'Failed to delete set'));
+    },
+    onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ['my-sets'] });
       queryClient.invalidateQueries({ queryKey: ['dj-sets'] });
+      queryClient.invalidateQueries({ queryKey: ['set', id] });
       queryClient.invalidateQueries({ queryKey: ['dj'] });
     },
   });
@@ -167,6 +226,7 @@ export function useAddMixToSet() {
       setId: string;
       mixId: string;
       sortOrder?: number;
+      mix?: SetItem['mix'];
     }) => {
       const res = await api.post(`/sets/${setId}/mixes`, { mixId, sortOrder });
       if (res.data?.success === false) {
@@ -174,7 +234,45 @@ export function useAddMixToSet() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, variables) => {
+    onMutate: async (variables) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['set', variables.setId] }),
+        queryClient.cancelQueries({ queryKey: ['my-sets'] }),
+      ]);
+      const previousSet = queryClient.getQueryData<SetDetail>(['set', variables.setId]);
+      const previousMySets = queryClient.getQueryData<SetSummary[]>(['my-sets']);
+      if (variables.mix) {
+        const newItem: SetItem = {
+          id: `temp-${variables.mixId}`,
+          setId: variables.setId,
+          mixId: variables.mixId,
+          sortOrder: variables.sortOrder ?? previousSet?.items?.length ?? 0,
+          createdAt: new Date().toISOString(),
+          mix: variables.mix,
+        };
+        queryClient.setQueryData<SetDetail>(['set', variables.setId], (old) =>
+          old
+            ? { ...old, mixCount: (old.mixCount || 0) + 1, items: [...(old.items || []), newItem] }
+            : old
+        );
+        queryClient.setQueryData<SetSummary[]>(['my-sets'], (old) =>
+          old?.map((s) =>
+            s.id === variables.setId ? { ...s, mixCount: (s.mixCount || 0) + 1 } : s
+          )
+        );
+      }
+      return { previousSet, previousMySets };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousSet) {
+        queryClient.setQueryData(['set', variables.setId], context.previousSet);
+      }
+      if (context?.previousMySets) {
+        queryClient.setQueryData(['my-sets'], context.previousMySets);
+      }
+      toast.error('Could not add mix to set: ' + getApiErrorMessage(error, 'Failed to add mix to set'));
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['set', variables.setId] });
       queryClient.invalidateQueries({ queryKey: ['my-sets'] });
       queryClient.invalidateQueries({ queryKey: ['dj-sets'] });
@@ -194,7 +292,41 @@ export function useRemoveMixFromSet() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, variables) => {
+    onMutate: async (variables) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['set', variables.setId] }),
+        queryClient.cancelQueries({ queryKey: ['my-sets'] }),
+      ]);
+      const previousSet = queryClient.getQueryData<SetDetail>(['set', variables.setId]);
+      const previousMySets = queryClient.getQueryData<SetSummary[]>(['my-sets']);
+      queryClient.setQueryData<SetDetail>(['set', variables.setId], (old) =>
+        old
+          ? {
+              ...old,
+              mixCount: Math.max(0, (old.mixCount || 0) - 1),
+              items: (old.items || []).filter((item) => item.mixId !== variables.mixId),
+            }
+          : old
+      );
+      queryClient.setQueryData<SetSummary[]>(['my-sets'], (old) =>
+        old?.map((s) =>
+          s.id === variables.setId
+            ? { ...s, mixCount: Math.max(0, (s.mixCount || 0) - 1) }
+            : s
+        )
+      );
+      return { previousSet, previousMySets };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousSet) {
+        queryClient.setQueryData(['set', variables.setId], context.previousSet);
+      }
+      if (context?.previousMySets) {
+        queryClient.setQueryData(['my-sets'], context.previousMySets);
+      }
+      toast.error('Could not remove: ' + getApiErrorMessage(error, 'Failed to remove mix from set'));
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['set', variables.setId] });
       queryClient.invalidateQueries({ queryKey: ['my-sets'] });
       queryClient.invalidateQueries({ queryKey: ['dj-sets'] });
@@ -220,7 +352,33 @@ export function useReorderSetItems() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, variables) => {
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['set', variables.setId] });
+      const previousSet = queryClient.getQueryData<SetDetail>(['set', variables.setId]);
+      const orderByMixId = new Map(variables.items.map((i) => [i.mixId, i.sortOrder]));
+      queryClient.setQueryData<SetDetail>(['set', variables.setId], (old) =>
+        old
+          ? {
+              ...old,
+              items: (old.items || [])
+                .map((item) =>
+                  orderByMixId.has(item.mixId)
+                    ? { ...item, sortOrder: orderByMixId.get(item.mixId)! }
+                    : item
+                )
+                .sort((a, b) => a.sortOrder - b.sortOrder),
+            }
+          : old
+      );
+      return { previousSet };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousSet) {
+        queryClient.setQueryData(['set', variables.setId], context.previousSet);
+      }
+      toast.error('Could not reorder: ' + getApiErrorMessage(error, 'Failed to reorder set items'));
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['set', variables.setId] });
       queryClient.invalidateQueries({ queryKey: ['my-sets'] });
       queryClient.invalidateQueries({ queryKey: ['dj-sets'] });

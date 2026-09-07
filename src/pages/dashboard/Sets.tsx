@@ -162,66 +162,100 @@ export default function Sets() {
 
   const handleDeleteSet = async (setId: string) => {
     if (!confirm('Are you sure you want to delete this set?')) return;
+    // Optimistic removal with snapshot-then-rollback
+    const previousSets = sets;
+    setSets((prev) => prev.filter((s) => s.id !== setId));
     try {
       const res = await api.delete(`/sets/${setId}`);
-      if (res.data.success) {
-        toast.success('Set deleted');
-        fetchSets();
+      if (!res.data.success) {
+        throw new Error(res.data.error || 'Failed to delete set');
       }
-    } catch {
-      toast.error('Failed to delete set');
+      toast.success('Set deleted');
+    } catch (err: any) {
+      setSets(previousSets);
+      toast.error('Could not remove: ' + getApiErrorMessage(err, 'Failed to delete set'));
     }
   };
 
   const handleAddMixToSet = async (setId: string, mix: MixItem) => {
     setAddingMixId(mix.id);
+
+    // Optimistic add with snapshot-then-rollback: show the mix in the set immediately
+    const previousSets = sets;
+    const previousSelectedSet = selectedSet;
+    const newItem: SetItem = {
+      id: `temp-${mix.id}`,
+      setId,
+      mixId: mix.id,
+      sortOrder: selectedSet?.items?.length || 0,
+      mix,
+    };
+    setSets((prev) =>
+      prev.map((s) =>
+        s.id === setId
+          ? { ...s, mixCount: (s.mixCount || 0) + 1, items: [...(s.items || []), newItem] }
+          : s
+      )
+    );
+    if (selectedSet && selectedSet.id === setId) {
+      setSelectedSet({
+        ...selectedSet,
+        mixCount: (selectedSet.mixCount || 0) + 1,
+        items: [...(selectedSet.items || []), newItem],
+      });
+    }
+
     try {
       const res = await api.post(`/sets/${setId}/mixes`, { mixId: mix.id });
-      if (res.data.success) {
-        toast.success(`Added "${mix.title}" to set!`);
-        
-        // Optimistically update selectedSet state immediately so button changes to "✓ ADDED"
-        if (selectedSet && selectedSet.id === setId) {
-          const newItem: SetItem = {
-            id: res.data.data?.id || `temp-${Date.now()}`,
-            setId,
-            mixId: mix.id,
-            sortOrder: selectedSet.items?.length || 0,
-            mix,
-          };
-          setSelectedSet({
-            ...selectedSet,
-            mixCount: (selectedSet.mixCount || 0) + 1,
-            items: [...(selectedSet.items || []), newItem],
-          });
-        }
-        fetchSets();
+      if (!res.data.success) {
+        throw new Error(res.data.error || 'Failed to add mix to set');
       }
+      toast.success(`Added "${mix.title}" to set!`);
+      // Reconcile with server data (e.g. real item id, mixCount)
+      fetchSets();
     } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to add mix to set'));
+      setSets(previousSets);
+      setSelectedSet(previousSelectedSet);
+      toast.error('Could not add mix to set: ' + getApiErrorMessage(err, 'Failed to add mix to set'));
     } finally {
       setAddingMixId(null);
     }
   };
 
   const handleRemoveMixFromSet = async (setId: string, mixId: string) => {
+    // Optimistic removal with snapshot-then-rollback
+    const previousSets = sets;
+    const previousSelectedSet = selectedSet;
+    setSets((prev) =>
+      prev.map((s) =>
+        s.id === setId
+          ? {
+              ...s,
+              mixCount: Math.max(0, (s.mixCount || 0) - 1),
+              items: (s.items || []).filter((i) => i.mixId !== mixId),
+            }
+          : s
+      )
+    );
+    if (selectedSet && selectedSet.id === setId) {
+      setSelectedSet({
+        ...selectedSet,
+        mixCount: Math.max(0, (selectedSet.mixCount || 0) - 1),
+        items: selectedSet.items.filter((i) => i.mixId !== mixId),
+      });
+    }
+
     try {
       const res = await api.delete(`/sets/${setId}/mixes/${mixId}`);
-      if (res.data.success) {
-        toast.success('Mix removed from set');
-        
-        if (selectedSet && selectedSet.id === setId) {
-          const updatedItems = selectedSet.items.filter((i) => i.mixId !== mixId);
-          setSelectedSet({
-            ...selectedSet,
-            mixCount: Math.max(0, (selectedSet.mixCount || 0) - 1),
-            items: updatedItems,
-          });
-        }
-        fetchSets();
+      if (!res.data.success) {
+        throw new Error(res.data.error || 'Failed to remove mix');
       }
-    } catch {
-      toast.error('Failed to remove mix');
+      toast.success('Mix removed from set');
+      fetchSets();
+    } catch (err: any) {
+      setSets(previousSets);
+      setSelectedSet(previousSelectedSet);
+      toast.error('Could not remove: ' + getApiErrorMessage(err, 'Failed to remove mix'));
     }
   };
 
