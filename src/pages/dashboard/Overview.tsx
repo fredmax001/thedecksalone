@@ -14,7 +14,6 @@ import {
   CalendarCheck,
   Trophy,
   Music,
-  Loader2,
   Wallet,
   Headphones,
   TrendingUp,
@@ -31,6 +30,8 @@ import { formatCurrency } from '@/lib/formatting';
 import { formatDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { useRequireDj } from '@/hooks/useRequireDj';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 
 interface DashboardData {
@@ -103,12 +104,9 @@ export default function Overview() {
       .finally(() => setLoading(false));
   }, [isDj]);
 
+  const showSkeleton = useDelayedLoading(loading);
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-[#f4e059] animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton cards={5} /> : null;
   }
 
   if (!isDj) {
