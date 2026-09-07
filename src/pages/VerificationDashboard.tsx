@@ -45,6 +45,8 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { formatDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 const SIDEBAR_ITEMS = [
   { id: 'pending', label: 'Pending Requests', icon: Clock },
@@ -64,6 +66,8 @@ export default function VerificationDashboard() {
   const [rejectReasonText, setRejectReasonText] = useState('');
   const { data: pendingRequests, isLoading: pendingLoading } = useAdminVerificationRequests();
   const { data: verifiedDjsData, isLoading: verifiedLoading } = useAdminDjs({ verified: true, limit: 100 });
+  const showPendingSkeleton = useDelayedLoading(pendingLoading);
+  const showVerifiedSkeleton = useDelayedLoading(verifiedLoading);
   const { data: allDjsData } = useAdminDjs({ limit: 100 });
   const { data: stats } = useAdminStats();
 
@@ -297,7 +301,7 @@ export default function VerificationDashboard() {
 
               <CardContent className="p-0">
                 {pendingLoading ? (
-                  <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-gold mx-auto" /></div>
+                  showPendingSkeleton ? <ListSkeleton /> : null
                 ) : pendingList.length === 0 ? (
                   <div className="py-12 text-center text-xs text-text-muted bg-black-elevated rounded-xl border border-dark-gray">
                     No pending DJ verification requests right now.
@@ -396,7 +400,7 @@ export default function VerificationDashboard() {
 
               <CardContent className="p-0">
                 {verifiedLoading ? (
-                  <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-gold mx-auto" /></div>
+                  showVerifiedSkeleton ? <ListSkeleton /> : null
                 ) : verifiedList.length === 0 ? (
                   <div className="py-12 text-center text-xs text-text-muted bg-black-elevated rounded-xl border border-dark-gray">
                     No verified DJs found.
