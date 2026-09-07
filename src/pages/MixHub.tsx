@@ -629,7 +629,7 @@ export default function MixHub() {
                   setPage(1);
                 }}
                 className={cn(
-                  'px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all',
+                  'btn-press-subtle px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all',
                   activeGenre === 'all'
                     ? 'bg-[#f4e059] text-black shadow-md shadow-[#f4e059]/20'
                     : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
@@ -646,7 +646,7 @@ export default function MixHub() {
                     setPage(1);
                   }}
                   className={cn(
-                    'px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5',
+                    'btn-press-subtle px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5',
                     activeGenre === g.name
                       ? 'bg-[#f4e059] text-black shadow-md shadow-[#f4e059]/20'
                       : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
@@ -670,7 +670,7 @@ export default function MixHub() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="h-9 px-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-[#f4e059]/50 text-xs font-bold text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                    className="btn-press-subtle h-9 px-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-[#f4e059]/50 text-xs font-bold text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-sm"
                     aria-label="Sort mixes"
                   >
                     {(() => {
@@ -721,7 +721,7 @@ export default function MixHub() {
                   type="button"
                   onClick={() => setViewMode('waveform')}
                   className={cn(
-                    'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
+                    'btn-press-subtle px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
                     viewMode === 'waveform' ? 'bg-[#f4e059] text-black shadow' : 'text-text-muted hover:text-white'
                   )}
                   title="Full Waveform Cards"
@@ -734,7 +734,7 @@ export default function MixHub() {
                   type="button"
                   onClick={() => setViewMode('grid')}
                   className={cn(
-                    'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
+                    'btn-press-subtle px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
                     viewMode === 'grid' ? 'bg-[#f4e059] text-black shadow' : 'text-text-muted hover:text-white'
                   )}
                   title="Grid Cards"
@@ -747,7 +747,7 @@ export default function MixHub() {
                   type="button"
                   onClick={() => setViewMode('list')}
                   className={cn(
-                    'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
+                    'btn-press-subtle px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
                     viewMode === 'list' ? 'bg-[#f4e059] text-black shadow' : 'text-text-muted hover:text-white'
                   )}
                   title="Compact Tracklist"

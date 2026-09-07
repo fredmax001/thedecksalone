@@ -476,7 +476,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-gold/40 text-gold bg-gold/5"
     >
       {label}
-      <button onClick={onRemove} className="hover:text-text-primary transition-colors">
+      <button onClick={onRemove} className="btn-press-subtle hover:text-text-primary transition-colors">
         <X className="w-3 h-3" />
       </button>
     </motion.span>
@@ -694,7 +694,7 @@ export default function Discover() {
               <div className="inline-flex items-center bg-black-surface border border-dark-gray rounded-full p-1">
                 <button
                   onClick={() => { setActiveTab('djs'); setCurrentPage(1); }}
-                  className={`px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                  className={`btn-press-subtle px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
                     activeTab === 'djs'
                       ? 'bg-gold-gradient text-black'
                       : 'text-text-secondary hover:text-text-primary'
@@ -704,7 +704,7 @@ export default function Discover() {
                 </button>
                 <button
                   onClick={() => { setActiveTab('people'); setCurrentPage(1); }}
-                  className={`px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                  className={`btn-press-subtle px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
                     activeTab === 'people'
                       ? 'bg-gold-gradient text-black'
                       : 'text-text-secondary hover:text-text-primary'
@@ -726,7 +726,7 @@ export default function Discover() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 + i * 0.04, ease: easeSmooth }}
                   onClick={() => handleGenreClick(genre)}
-                  className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
+                  className={`btn-press-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
                     activeGenre === genre
                       ? 'bg-gold-gradient text-black'
                       : 'bg-transparent border border-white/20 text-text-secondary hover:text-text-primary hover:border-white/40'
@@ -745,7 +745,7 @@ export default function Discover() {
             <div className="md:hidden mt-5" ref={genreDropdownRef}>
               <button
                 onClick={() => setGenreDropdownOpen(!genreDropdownOpen)}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold uppercase tracking-wide rounded-full border transition-all duration-200 ${
+                className={`btn-press-subtle w-full flex items-center justify-between px-4 py-3 text-sm font-semibold uppercase tracking-wide rounded-full border transition-all duration-200 ${
                   activeGenre !== 'All'
                     ? 'bg-gold-gradient text-black border-gold'
                     : 'bg-transparent border-white/20 text-text-secondary'
@@ -794,7 +794,7 @@ export default function Discover() {
             <div className="flex justify-center mt-4">
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
-                className="inline-flex items-center gap-2 text-gold text-sm font-medium hover:text-gold-light transition-colors"
+                className="btn-press-subtle inline-flex items-center gap-2 text-gold text-sm font-medium hover:text-gold-light transition-colors"
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 Advanced Filters
@@ -895,7 +895,7 @@ export default function Discover() {
                               setRatingMin(r);
                               setCurrentPage(1);
                             }}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            className={`btn-press-subtle flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                               ratingMin === r
                                 ? 'bg-gold/15 text-gold border border-gold'
                                 : 'bg-transparent text-text-muted border border-dark-gray hover:border-white/20'
@@ -991,7 +991,7 @@ export default function Discover() {
           <div className="relative">
             <button
               onClick={() => setSortOpen(!sortOpen)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-text-secondary bg-black-surface border border-dark-gray rounded-full hover:border-white/20 transition-colors"
+              className="btn-press-subtle inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-text-secondary bg-black-surface border border-dark-gray rounded-full hover:border-white/20 transition-colors"
             >
               Sort: {sortLabel}
               <ChevronDown className={`w-3 h-3 transition-transform ${sortOpen ? 'rotate-180' : ''}`} />
@@ -1026,14 +1026,14 @@ export default function Discover() {
           <div className="flex items-center gap-1 bg-black-surface border border-dark-gray rounded-full p-0.5 shrink-0">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              className={`btn-press-subtle p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
               title="List view"
             >
               <List className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
+              className={`btn-press-subtle p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
               title="Grid view"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
