@@ -2013,10 +2013,15 @@ router.post('/notifications', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
     }
 
     const frontendUrl = getFrontendUrl();
-    const mediaHtml = mediaUrl
+    // Email clients need an absolute URL — uploads are stored as
+    // "/uploads/..." (relative) when S3 is not configured.
+    const absoluteMediaUrl = mediaUrl
+      ? (/^https?:\/\//.test(mediaUrl) ? mediaUrl : `${getFrontendUrl()}${mediaUrl}`)
+      : null;
+    const mediaHtml = absoluteMediaUrl
       ? mediaType === 'video'
-        ? `<div style="text-align:center;margin:20px 0"><video src="${mediaUrl}" controls style="max-width:100%;border-radius:12px"></video></div>`
-        : `<div style="text-align:center;margin:20px 0"><img src="${mediaUrl}" alt="Notification media" style="max-width:100%;border-radius:12px;object-fit:cover" /></div>`
+        ? `<div style="text-align:center;margin:20px 0"><video src="${absoluteMediaUrl}" controls style="max-width:100%;border-radius:12px"></video></div>`
+        : `<div style="text-align:center;margin:20px 0"><img src="${absoluteMediaUrl}" alt="Notification media" style="max-width:100%;border-radius:12px;object-fit:cover" /></div>`
       : '';
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
