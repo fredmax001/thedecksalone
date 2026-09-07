@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Loader2,
   Heart,
   Star,
   Trophy,
@@ -22,6 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserActivity, type ActivityItem } from '@/hooks/useUserDashboard';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { imageFallback } from '@/lib/utils';
 import { getMediaUrl } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/dateTime';
@@ -103,12 +104,10 @@ export default function Activity() {
     return acc;
   }, {} as Record<string, ActivityItem[]>);
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
