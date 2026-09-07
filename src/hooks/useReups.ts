@@ -1,5 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiErrors';
+
+interface ReupStatus {
+  reupped: boolean;
+  count: number;
+}
+
+const REUP_STATUS_FALLBACK = 'Request failed';
 
 export function useReupStatus(mixId: string | undefined) {
   return useQuery({
@@ -25,7 +34,22 @@ export function useReupMix() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, mixId) => {
+    onMutate: async (mixId) => {
+      await queryClient.cancelQueries({ queryKey: ['reup-status', mixId] });
+      const previousStatus = queryClient.getQueryData<ReupStatus>(['reup-status', mixId]);
+      queryClient.setQueryData<ReupStatus>(['reup-status', mixId], {
+        reupped: true,
+        count: (previousStatus?.count || 0) + 1,
+      });
+      return { previousStatus };
+    },
+    onError: (error, mixId, context) => {
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['reup-status', mixId], context.previousStatus);
+      }
+      toast.error('Could not re-up: ' + getApiErrorMessage(error, REUP_STATUS_FALLBACK));
+    },
+    onSettled: (_data, _error, mixId) => {
       queryClient.invalidateQueries({ queryKey: ['reup-status', mixId] });
       queryClient.invalidateQueries({ queryKey: ['dj'] });
       queryClient.invalidateQueries({ queryKey: ['my-highlights'] });
@@ -45,7 +69,22 @@ export function useUnreupMix() {
       }
       return res.data.data;
     },
-    onSuccess: (_data, mixId) => {
+    onMutate: async (mixId) => {
+      await queryClient.cancelQueries({ queryKey: ['reup-status', mixId] });
+      const previousStatus = queryClient.getQueryData<ReupStatus>(['reup-status', mixId]);
+      queryClient.setQueryData<ReupStatus>(['reup-status', mixId], {
+        reupped: false,
+        count: Math.max(0, (previousStatus?.count || 1) - 1),
+      });
+      return { previousStatus };
+    },
+    onError: (error, mixId, context) => {
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['reup-status', mixId], context.previousStatus);
+      }
+      toast.error('Could not remove re-up: ' + getApiErrorMessage(error, REUP_STATUS_FALLBACK));
+    },
+    onSettled: (_data, _error, mixId) => {
       queryClient.invalidateQueries({ queryKey: ['reup-status', mixId] });
       queryClient.invalidateQueries({ queryKey: ['dj'] });
       queryClient.invalidateQueries({ queryKey: ['my-highlights'] });
