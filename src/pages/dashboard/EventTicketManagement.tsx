@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatting';
 import { formatDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -150,6 +152,7 @@ export default function EventTicketManagement() {
   };
 
   const isLoading = activeView === 'tickets' ? ticketsLoading : customersLoading;
+  const showSkeleton = useDelayedLoading(isLoading);
   const items = activeView === 'tickets' ? ticketsData?.data || [] : customersData?.data || [];
   const meta = activeView === 'tickets' ? ticketsData?.meta : customersData?.meta;
   const summary = (ticketsData as any)?.summary || {
@@ -276,9 +279,7 @@ export default function EventTicketManagement() {
       <Card className="bg-black-surface border-dark-gray">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 text-gold animate-spin" />
-            </div>
+            showSkeleton ? <ListSkeleton rows={8} /> : null
           ) : items.length === 0 ? (
             <div className="text-center py-16">
               <QrCode className="w-10 h-10 text-text-muted mx-auto mb-3 opacity-40" />
