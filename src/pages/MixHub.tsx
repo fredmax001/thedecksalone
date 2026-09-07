@@ -548,7 +548,7 @@ export default function MixHub() {
 
                 <button
                   onClick={handleShufflePlay}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-white font-bold text-xs uppercase tracking-wider transition-all"
+                  className="btn-ghost border border-white/[0.08] font-bold"
                 >
                   <Shuffle className="w-4 h-4 text-[#f4e059]" />
                   Shuffle Play
@@ -887,7 +887,7 @@ export default function MixHub() {
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={latestLoading}
-              className="px-8 py-3 bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.08] text-white text-xs font-bold uppercase rounded-full hover:border-[#f4e059] transition-all inline-flex items-center gap-2"
+              className="btn-ghost border border-white/[0.08] font-bold hover:border-[#f4e059] disabled:cursor-not-allowed" style={{ padding: '0.75rem 2rem' }}
             >
               {latestLoading ? (
                 <>
