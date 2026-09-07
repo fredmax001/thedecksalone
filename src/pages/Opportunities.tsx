@@ -93,8 +93,14 @@ export const Opportunities = () => {
             return;
         }
 
+        // Optimistic update: mark as applied immediately, snapshot previous state for rollback
+        const previousOpportunities = opportunities;
+        setApplying(opp.id);
+        setOpportunities((prev) =>
+            prev.map((o) => (o.id === opp.id ? { ...o, userHasApplied: true } : o))
+        );
+
         try {
-            setApplying(opp.id);
             const res = await api.post(`/opportunities/${opp.id}/apply`, {
                 message: 'Interested in this opportunity. Please share the organizer contact details.',
             });
@@ -111,8 +117,9 @@ export const Opportunities = () => {
                 );
             }
         } catch (err: any) {
-            const error = getApiErrorMessage(err, 'Failed to apply');
-            toast.error(error);
+            // Rollback optimistic update
+            setOpportunities(previousOpportunities);
+            toast.error('Could not submit application: ' + getApiErrorMessage(err, 'Failed to submit application'));
             if (err.response?.status === 403) {
                 // Tier error - open modal
                 open('Apply for Opportunities', err.response?.data?.requiredTier || 'pro');
