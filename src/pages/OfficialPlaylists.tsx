@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import {
   ListMusic,
   Play,
-  Loader2,
   Music,
   Flame,
   Radio,
@@ -16,6 +15,8 @@ import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { useForYouPlaylists } from '@/hooks/useRecommendations';
 import { motion } from 'framer-motion';
 import SEOHead from '@/components/SEOHead';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface PlaylistRowSectionProps {
   title: string;
@@ -196,6 +197,7 @@ function PlaylistRowSection({
 export function OfficialPlaylists() {
   const [loading, setLoading] = useState(true);
   const [playlists, setPlaylists] = useState<any[]>([]);
+  const showSkeleton = useDelayedLoading(loading);
   const { data: forYouPlaylists } = useForYouPlaylists();
 
   useEffect(() => {
@@ -320,9 +322,9 @@ export function OfficialPlaylists() {
 
       {/* Loading state */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? (
+          <FeedSectionSkeleton />
+        ) : null
       ) : playlists.length === 0 ? (
         <div className="rounded-3xl border border-white/[0.06] bg-[#101010] p-12 text-center max-w-md mx-auto">
           <ListMusic className="w-12 h-12 text-text-muted mx-auto mb-3" />
