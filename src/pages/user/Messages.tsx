@@ -27,6 +27,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface MessageItem {
   id: string;
@@ -277,12 +279,10 @@ export default function Messages() {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  const showSkeleton = useDelayedLoading(loading);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <ListSkeleton /> : null;
   }
 
   return (
