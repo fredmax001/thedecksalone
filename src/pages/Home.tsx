@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { useHomeData } from '@/hooks/useHomeData';
 import { useAuthStore } from '@/stores/authStore';
@@ -12,6 +11,8 @@ import PlaylistGrid from '@/components/home/PlaylistGrid';
 import RankingList from '@/components/home/RankingList';
 import EventCarousel from '@/components/feed/EventCarousel';
 import AdStrip from '@/components/home/AdStrip';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 export default function Home() {
   const { user, isAuthenticated } = useAuthStore();
@@ -45,11 +46,12 @@ export default function Home() {
   }
 
   const showLoader = isLoading && !forceShow;
+  const showSkeleton = useDelayedLoading(isLoading);
 
   if (showLoader) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <Loader2 className="h-10 w-10 animate-spin text-gold" />
+      <div className="min-h-screen bg-black">
+        {showSkeleton ? <FeedSectionSkeleton sections={2} /> : null}
       </div>
     );
   }
