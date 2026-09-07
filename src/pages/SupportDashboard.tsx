@@ -39,6 +39,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { formatEventDate } from '@/lib/dateTime';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   useSupportTicketCounts,
   useSupportTickets,
@@ -123,6 +125,8 @@ export default function SupportDashboard() {
   });
 
   const { data: detail, isLoading: detailLoading } = useSupportTicket(selectedTicketId);
+  const showTicketsSkeleton = useDelayedLoading(ticketsLoading);
+  const showDetailSkeleton = useDelayedLoading(detailLoading);
   const replyMutation = useReplySupportTicket();
   const statusMutation = useUpdateSupportTicketStatus();
 
@@ -270,9 +274,7 @@ export default function SupportDashboard() {
           {/* ─── TICKET DETAIL VIEW ─── */}
           {selectedTicketId ? (
             detailLoading ? (
-              <div className="flex items-center justify-center py-24">
-                <Loader2 className="w-8 h-8 text-gold animate-spin" />
-              </div>
+              showDetailSkeleton ? <ListSkeleton /> : null
             ) : !detail ? (
               <Card className="bg-black-surface border-dark-gray">
                 <CardContent className="py-12 text-center">
@@ -368,9 +370,7 @@ export default function SupportDashboard() {
               <Card className="bg-black-surface border-dark-gray">
                 <CardContent className="p-0">
                   {ticketsLoading ? (
-                    <div className="flex items-center justify-center py-16">
-                      <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                    </div>
+                    showTicketsSkeleton ? <ListSkeleton /> : null
                   ) : ticketsError ? (
                     <div className="py-16 text-center">
                       <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
