@@ -107,6 +107,7 @@ export default function DjEvents() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('details');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -331,14 +332,27 @@ export default function DjEvents() {
   };
 
   const handlePublishToggle = async (event: DJEvent) => {
+    if (publishingId) return; // double-submit protection
+    const publish = event.publishStatus !== 'published';
+    const previousStatus = event.publishStatus;
+    // Optimistic flip
+    setEvents(prev =>
+      prev.map(e => (e.id === event.id ? { ...e, publishStatus: publish ? 'published' : 'draft' } : e))
+    );
+    setPublishingId(event.id);
     try {
-      const publish = event.publishStatus !== 'published';
       await api.post(`/events/${event.id}/ticketing/${publish ? 'publish' : 'unpublish'}`);
       toast.success(publish ? 'Event published' : 'Event unpublished');
       const listRes = await api.get(`/events?djId=${djId}&limit=100`);
       if (listRes.data.success) setEvents(listRes.data.data || []);
-    } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to update publish status'));
+    } catch (err: unknown) {
+      // Restore previous state on failure
+      setEvents(prev =>
+        prev.map(e => (e.id === event.id ? { ...e, publishStatus: previousStatus } : e))
+      );
+      toast.error('Could not update event: ' + getApiErrorMessage(err, 'Failed to update publish status'));
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -500,9 +514,14 @@ export default function DjEvents() {
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => handlePublishToggle(event)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors ${isPublished ? 'bg-red/10 border border-red/30 text-red-400 hover:bg-red/20' : 'bg-green/10 border border-green/30 text-green hover:bg-green/20'}`}
+                      disabled={publishingId === event.id}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isPublished ? 'bg-red/10 border border-red/30 text-red-400 hover:bg-red/20' : 'bg-green/10 border border-green/30 text-green hover:bg-green/20'}`}
                     >
-                      {isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {publishingId === event.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />
+                      )}
                       {isPublished ? 'Unpublish' : 'Publish'}
                     </button>
                   </div>
