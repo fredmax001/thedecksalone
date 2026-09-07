@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,8 @@ export default function Messages() {
   const [partner, setPartner] = useState<PartnerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const showSkeleton = useDelayedLoading(loading);
+  const showMessagesSkeleton = useDelayedLoading(loadingMessages);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,9 +319,7 @@ export default function Messages() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-gold animate-spin" />
-              </div>
+              showSkeleton ? <ListSkeleton rows={6} /> : null
             ) : filteredConversations.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="w-8 h-8 text-text-muted mx-auto mb-2" />
@@ -376,9 +378,7 @@ export default function Messages() {
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {loadingMessages ? (
-                  <div className="flex items-center justify-center h-full">
-                    <Loader2 className="w-6 h-6 text-gold animate-spin" />
-                  </div>
+                  showMessagesSkeleton ? <ListSkeleton /> : null
                 ) : messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-sm text-text-muted">No messages yet. Start a conversation!</p>
