@@ -5,7 +5,6 @@ import {
   Play,
   Pause,
   ArrowLeft,
-  Loader2,
   Shuffle,
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
@@ -14,6 +13,8 @@ import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { formatCompactNumber } from '@/lib/formatting';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -126,12 +127,14 @@ export function OfficialPlaylistDetail() {
     play(targetTrack);
   };
 
+  const showSkeleton = useDelayedLoading(loading);
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#080808] flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
+    return showSkeleton ? (
+      <div className="min-h-screen bg-[#080808] py-8 px-4 sm:px-6 max-w-7xl mx-auto">
+        <ListSkeleton rows={10} />
       </div>
-    );
+    ) : null;
   }
 
   if (!playlist) {
