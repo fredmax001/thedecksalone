@@ -4,6 +4,7 @@ import './index.css';
 import App from './App.tsx';
 import { queryClient } from '@/lib/queryClient';
 import { setupQueryPersistence } from '@/lib/queryPersistence';
+import { initOfflineQueue } from '@/lib/offline-queue';
 import { useAuthStore } from '@/stores/authStore';
 import { ErrorBoundary } from 'react-error-boundary';
 import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
@@ -26,6 +27,7 @@ if (!isNativeApp) {
 // Restore the allowlisted public query cache from disk before first render,
 // so cold starts render content instantly and refresh behind it.
 setupQueryPersistence();
+initOfflineQueue();
 
 useAuthStore.getState().init();
 

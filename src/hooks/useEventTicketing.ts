@@ -263,6 +263,7 @@ export function useOnsiteWalkin(eventId?: string) {
       paymentMethod: 'cash' | 'complimentary' | 'mobile_money';
       amount?: number;
       notes?: string;
+      idempotencyKey: string; // generated once per logical sale, retained across retries
     }) => {
       const token = getOnsiteToken(eventId);
       const res = await api.post(`/events/${eventId}/ticketing/onsite/walkin`, payload, {

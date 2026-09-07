@@ -14,6 +14,10 @@ import { formatEventDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { DashboardSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import {
+  getQueuedWalkinsForEvent, subscribeToQueueChanges, drainWalkinQueue,
+  enqueueWalkinSale, removeQueueItem, isNetworkError, type QueuedWalkin,
+} from '@/lib/offline-queue';
 
 type View = 'home' | 'scanner' | 'guests' | 'walkin' | 'stats';
 type ScanState = 'idle' | 'scanning' | 'valid' | 'already_used' | 'invalid' | 'wrong_event' | 'not_approved' | 'unauthorized';
@@ -641,6 +645,13 @@ function WalkinTab({ eventId }: { eventId: string }) {
   const { data: availability } = useEventAvailability(eventId);
   const walkin = useOnsiteWalkin(eventId);
   const ticketTypes = availability?.ticketTypes || [];
+  const [queue, setQueue] = useState<QueuedWalkin[]>(() => getQueuedWalkinsForEvent(eventId));
+
+  // refresh the queue panel on storage/online changes, and try to drain on mount
+  useEffect(() => subscribeToQueueChanges(() => setQueue(getQueuedWalkinsForEvent(eventId))), [eventId]);
+  useEffect(() => {
+    if (navigator.onLine) drainWalkinQueue();
+  }, [eventId]);
 
   const [ticketTypeId, setTicketTypeId] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -666,7 +677,7 @@ function WalkinTab({ eventId }: { eventId: string }) {
       return;
     }
 
-    walkin.mutate({
+    const payload = {
       ticketTypeId,
       quantity,
       buyerName: buyerName.trim(),
@@ -675,21 +686,102 @@ function WalkinTab({ eventId }: { eventId: string }) {
       paymentMethod,
       amount: paymentMethod === 'complimentary' ? 0 : computedAmount,
       notes: notes.trim() || undefined,
-    }, {
-      onSuccess: () => {
-        toast.success('Walk-in ticket created');
-        setBuyerName('');
-        setBuyerPhone('');
-        setBuyerEmail('');
-        setNotes('');
-        setQuantity(1);
-      },
-      onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to create ticket')),
-    });
+    };
+    // One key per logical sale: offline retry reuses it, backend dedupes on it.
+    const idempotencyKey = crypto.randomUUID();
+
+    const clearForm = () => {
+      setBuyerName('');
+      setBuyerPhone('');
+      setBuyerEmail('');
+      setNotes('');
+      setQuantity(1);
+    };
+
+    walkin.mutate(
+      { ...payload, idempotencyKey },
+      {
+        onSuccess: () => {
+          toast.success('Walk-in ticket created');
+          clearForm();
+        },
+        onError: (err: any) => {
+          if (isNetworkError(err)) {
+            // No HTTP answer — network is down. Queue it; it replays in order
+            // when connectivity returns, and the server dedupes by key.
+            enqueueWalkinSale(eventId, payload, idempotencyKey);
+            toast.info(`Offline — sale for ${payload.buyerName} queued. It will sync automatically.`);
+            clearForm();
+          } else {
+            // Server answered and refused — do NOT queue; show the real reason.
+            toast.error(getApiErrorMessage(err, 'Failed to create ticket'));
+          }
+        },
+      }
+    );
   };
+
+  const pendingItems = queue.filter((i) => i.state === 'queued' || i.state === 'syncing');
+  const rejectedItems = queue.filter((i) => i.state === 'rejected');
 
   return (
     <div className="p-4 space-y-4">
+      {pendingItems.length > 0 && (
+        <div className="bg-[#111] border border-white/10 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <Clock size={16} className="text-gold" /> Pending Sync ({pendingItems.length})
+            </h3>
+            {navigator.onLine && (
+              <button
+                onClick={() => drainWalkinQueue()}
+                className="text-xs text-gold flex items-center gap-1 active:opacity-70"
+              >
+                <RefreshCw size={12} /> Sync now
+              </button>
+            )}
+          </div>
+          <ul className="space-y-2">
+            {pendingItems.map((item) => (
+              <li key={item.id} className="text-sm text-text-secondary flex items-center gap-2">
+                {item.state === 'syncing'
+                  ? <Loader2 className="w-4 h-4 animate-spin text-gold shrink-0" />
+                  : <Clock className="w-4 h-4 text-gold shrink-0" />}
+                <span className="truncate">
+                  {item.payload.buyerName} — {item.payload.quantity}× {item.payload.paymentMethod}
+                  {' '}({item.state === 'syncing' ? 'syncing…' : 'queued — will sync when online'})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {rejectedItems.map((item) => (
+        <div key={item.id} className="bg-[#1a1111] border border-red-500/40 rounded-2xl p-4">
+          <h3 className="font-bold text-red-400 flex items-center gap-2 mb-2">
+            <AlertCircle size={16} /> Payment needs attention
+          </h3>
+          <p className="text-sm text-white mb-1">
+            {item.payload.buyerName} — {item.payload.quantity}×, {' '}
+            {item.payload.paymentMethod === 'complimentary'
+              ? 'complimentary'
+              : formatCurrency(item.payload.amount ?? 0)}
+          </p>
+          {item.payload.buyerPhone && <p className="text-xs text-text-secondary">{item.payload.buyerPhone}</p>}
+          {item.error && <p className="text-xs text-red-400 mt-1">{item.error}</p>}
+          <p className="text-xs text-text-muted mt-2">
+            Cash may already have been taken for this sale — reconcile with the buyer before dismissing.
+          </p>
+          <button
+            onClick={() => removeQueueItem(item.id)}
+            className="mt-3 text-xs text-text-secondary underline active:opacity-70"
+          >
+            Dismiss (after reconciling)
+          </button>
+        </div>
+      ))}
+
       <div className="bg-[#111] border border-white/10 rounded-2xl p-4">
         <h2 className="font-bold text-white flex items-center gap-2 mb-4">
           <Ticket size={18} className="text-gold" /> Walk-In / Complimentary Ticket
