@@ -46,6 +46,8 @@ import api, { getMediaUrl } from '@/lib/api';
 import { formatDate } from '@/lib/dateTime';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -126,12 +128,10 @@ export default function MyBookings() {
   const confirmedCount = bookings.filter((b) => b.status === 'CONFIRMED' || b.status === 'DEPOSIT_PAID').length;
   const completedCount = bookings.filter((b) => b.status === 'COMPLETED').length;
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
