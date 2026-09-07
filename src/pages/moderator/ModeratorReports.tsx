@@ -13,6 +13,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime } from '@/lib/dateTime';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,7 @@ import {
 
 export function ModeratorReports() {
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayedLoading(loading);
   const [reports, setReports] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -104,9 +107,7 @@ export function ModeratorReports() {
 
       {/* Reports List */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? <ListSkeleton /> : null
       ) : reports.length === 0 ? (
         <Card className="bg-black-elevated border-dark-gray p-12 text-center">
           <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
