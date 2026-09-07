@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  ArrowLeft, Loader2, Users, BarChart3, ScanLine,
+  ArrowLeft, Users, BarChart3, ScanLine,
   DollarSign, Ticket, UserCheck, Clock, Calendar,
   Eye, EyeOff, Crown, Lock, Copy, Check,
 } from 'lucide-react';
@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatting';
 import { formatDateTime, formatEventDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 function KPICard({ icon: Icon, label, value, subtext, color = 'gold' }: any) {
   const colorMap: any = {
@@ -95,12 +97,9 @@ export default function EventDashboard() {
     toast.success('Staff invite copied! (Event Link - Username - Password)');
   };
 
+  const showSkeleton = useDelayedLoading(isLoading || !dashboard);
   if (isLoading || !dashboard) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   const { summary, typeBreakdown, recentSales } = dashboard;
