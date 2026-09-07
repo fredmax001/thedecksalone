@@ -216,7 +216,7 @@ export default function MixFeedRow({
             onClick={handlePlay}
             aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
             className={cn(
-              'w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-transform shadow-md',
+              'btn-press w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-transform shadow-md',
               isCurrent && isPlaying
                 ? 'bg-gold text-black scale-105'
                 : 'bg-white/[0.08] group-hover:bg-gold text-white group-hover:text-black group-hover:scale-105'
@@ -271,7 +271,7 @@ export default function MixFeedRow({
           </span>
           <button
             onClick={handleLike}
-            className="p-1.5 rounded-full hover:bg-white/[0.08] transition-colors"
+            className="btn-press p-1.5 rounded-full hover:bg-white/[0.08] transition-colors"
           >
             <Heart className={cn('w-3.5 h-3.5', liked ? 'text-red-500 fill-red-500' : 'text-text-muted')} />
           </button>
@@ -382,7 +382,7 @@ export default function MixFeedRow({
                 onClick={handlePlay}
                 aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
                 className={cn(
-                  'w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center border transition-all shrink-0 shadow-lg',
+                  'btn-press w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center border transition-all shrink-0 shadow-lg',
                   isCurrent && isPlaying
                     ? 'bg-gold text-black border-gold scale-105'
                     : 'bg-black/60 hover:bg-gold text-white hover:text-black border-white/80 hover:border-gold hover:scale-105'
@@ -506,7 +506,7 @@ export default function MixFeedRow({
             {/* </> Embed */}
             <button
               onClick={() => (onOpenEmbed ? onOpenEmbed(convertedTrack) : null)}
-              className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+              className="btn-press inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
               title="Embed"
             >
               <Code2 className="w-3.5 h-3.5" />
@@ -517,7 +517,7 @@ export default function MixFeedRow({
               <div className="relative shrink-0">
                 <button
                   onClick={() => setShowAddMenu((prev) => !prev)}
-                  className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors"
+                  className="btn-press inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors"
                   title="Add"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -551,7 +551,7 @@ export default function MixFeedRow({
               {/* ⬇ Download */}
               <button
                 onClick={handleDownload}
-                className="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
+                className="btn-press inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary hover:text-white text-[10px] sm:text-[11px] font-medium transition-colors shrink-0"
                 title="Download"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -605,7 +605,7 @@ export default function MixFeedRow({
               {/* Heart Like */}
               <button
                 onClick={handleLike}
-                className="flex items-center gap-1 hover:text-white transition-colors"
+                className="btn-press flex items-center gap-1 hover:text-white transition-colors"
               >
                 <Heart className={cn('w-3.5 h-3.5', liked ? 'text-red-500 fill-red-500' : '')} />
                 <span>{likesCount}</span>

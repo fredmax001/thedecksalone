@@ -278,7 +278,7 @@ export default function Feed() {
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={cn(
-                      'px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5',
+                      'btn-press-subtle px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5',
                       isActive
                         ? 'bg-gold text-black shadow-md shadow-gold/20 font-bold'
                         : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
@@ -297,7 +297,7 @@ export default function Feed() {
                 type="button"
                 onClick={() => setViewMode('waveform')}
                 className={cn(
-                  'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                  'btn-press-subtle px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                   viewMode === 'waveform' ? 'bg-gold text-black shadow' : 'text-text-muted hover:text-white'
                 )}
                 title="Mix Hub Waveform View"
@@ -309,7 +309,7 @@ export default function Feed() {
                 type="button"
                 onClick={() => setViewMode('compact')}
                 className={cn(
-                  'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                  'btn-press-subtle px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                   viewMode === 'compact' ? 'bg-gold text-black shadow' : 'text-text-muted hover:text-white'
                 )}
                 title="Compact List View"
@@ -380,7 +380,7 @@ export default function Feed() {
                         <button
                           onClick={(e) => handleFollowDj(dj.id, e)}
                           className={cn(
-                            'mt-3 w-full py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1',
+                            'btn-press mt-3 w-full py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1',
                             isFollowed
                               ? 'bg-white/10 text-text-secondary hover:bg-red-500/20 hover:text-red-400'
                               : 'bg-gold hover:brightness-110 text-black shadow-md shadow-gold/20'
