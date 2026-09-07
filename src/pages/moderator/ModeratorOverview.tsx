@@ -7,11 +7,12 @@ import {
   AlertTriangle,
   ListMusic,
   ArrowRight,
-  Loader2,
   Sparkles,
 } from 'lucide-react';
 
 import api, { getMediaUrl } from '@/lib/api';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { Button } from '@/components/ui/button';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { getAvatarImageUrl } from '@/lib/utils';
@@ -20,6 +21,7 @@ import { getAvatarImageUrl } from '@/lib/utils';
 export function ModeratorOverview() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
+  const showSkeleton = useDelayedLoading(loading);
 
   useEffect(() => {
     fetchStats();
@@ -40,11 +42,7 @@ export function ModeratorOverview() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   const statCards = [
