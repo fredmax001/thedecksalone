@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Users,
-  Loader2,
   MapPin,
   Calendar,
   ChevronLeft,
@@ -19,6 +18,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface Follower {
   id: string;
@@ -105,12 +106,10 @@ export default function Followers() {
     }
   };
 
+  const showSkeleton = useDelayedLoading(loading && followers.length === 0);
+
   if (loading && followers.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
