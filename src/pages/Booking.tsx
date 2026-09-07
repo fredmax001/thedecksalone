@@ -38,6 +38,8 @@ import { BookingCalendar } from "@/components/BookingCalendar";
 import { formatCurrency } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 
 const EVENT_TYPES = [
   'Wedding',
@@ -670,6 +672,7 @@ export default function Booking() {
     page: 1,
     limit: 50,
   });
+  const showSkeleton = useDelayedLoading(djsLoading);
   const { data: citiesData = [] } = useDJCities();
   const { data: genresData = [] } = useDJGenres();
   const { data: eventTypesData = [] } = useEventTypes();
@@ -1187,11 +1190,7 @@ export default function Booking() {
             </AnimatePresence>
           </div>
 
-          {djsLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={40} className="text-gold animate-spin" />
-            </div>
-          )}
+          {djsLoading && showSkeleton && <FeedSectionSkeleton />}
           {!djsLoading && filteredDJs.length === 0 && (
             <div className="text-center py-16 text-text-muted">
               <Search size={48} className="mx-auto mb-4 opacity-50" />
