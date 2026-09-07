@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Ticket, X, Calendar, MapPin, QrCode, Download, Share2 } from 'lucide-react';
+import { Ticket, X, Calendar, MapPin, QrCode, Download, Share2 } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QRCodeSVG } from 'qrcode.react';
 import { useMyTickets } from '@/hooks/useEventTicketing';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -104,12 +106,10 @@ export default function MyTickets() {
   const { data: tickets, isLoading } = useMyTickets();
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
