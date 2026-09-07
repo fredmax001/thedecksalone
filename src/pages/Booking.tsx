@@ -374,7 +374,7 @@ function BookingRequestModal({
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors btn-press-subtle"
           >
             <X size={20} className="text-text-muted" />
           </button>
@@ -413,7 +413,7 @@ function BookingRequestModal({
                     type="button"
                     onClick={() => toggleArray('eventTypes', et)}
                     className={cn(
-                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors btn-press',
                       form.eventTypes.includes(et)
                         ? 'bg-gold/20 border-gold text-gold font-semibold'
                         : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
@@ -517,7 +517,7 @@ function BookingRequestModal({
                     type="button"
                     onClick={() => toggleArray('musicStyles', style)}
                     className={cn(
-                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors btn-press',
                       form.musicStyles.includes(style)
                         ? 'bg-gold/20 border-gold text-gold'
                         : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
@@ -541,7 +541,7 @@ function BookingRequestModal({
                     type="button"
                     onClick={() => toggleArray('equipmentNeeded', eq)}
                     className={cn(
-                      'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                      'px-3 py-1.5 rounded-full text-xs border transition-colors btn-press',
                       form.equipmentNeeded.includes(eq)
                         ? 'bg-gold/20 border-gold text-gold'
                         : 'bg-black-surface border-dark-gray text-text-secondary hover:border-gold/30'
@@ -628,7 +628,7 @@ function BookingRequestModal({
               <button
                 type="submit"
                 disabled={createBooking.isPending}
-                className="w-full py-3.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform disabled:opacity-70 flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform disabled:opacity-70 flex items-center justify-center gap-2 btn-press"
               >
                 {createBooking.isPending && <Loader2 size={16} className="animate-spin" />}
                 {createBooking.isPending ? "Sending..." : "Submit Booking Request"}

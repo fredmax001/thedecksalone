@@ -193,7 +193,7 @@ export function BookingCalendar({
           <button
             type="button"
             onClick={prevMonth}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors"
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors btn-press-subtle"
             title="Previous Month"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -201,7 +201,7 @@ export function BookingCalendar({
           <button
             type="button"
             onClick={nextMonth}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors"
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors btn-press-subtle"
             title="Next Month"
           >
             <ChevronRight className="w-4 h-4" />
@@ -274,7 +274,7 @@ export function BookingCalendar({
                     }
                   }
                 }}
-                className={`group relative flex flex-col items-center justify-between p-1 sm:p-1.5 rounded-xl border transition-all aspect-square text-left ${
+                className={`btn-press group relative flex flex-col items-center justify-between p-1 sm:p-1.5 rounded-xl border transition-all aspect-square text-left ${
                   isSelected
                     ? 'bg-gold text-black font-bold border-gold shadow-[0_0_15px_rgba(244,224,89,0.3)] scale-[1.03] z-10'
                     : isDisabled
@@ -345,7 +345,7 @@ export function BookingCalendar({
                       key={slot.id}
                       disabled={isBooked}
                       onClick={() => onSelectSlot(slot.id)}
-                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition-all relative overflow-hidden ${
+                      className={`btn-press p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition-all relative overflow-hidden ${
                         isBooked
                           ? 'bg-white/[0.02] border-white/5 opacity-40 cursor-not-allowed text-text-muted'
                           : isSlotSelected
