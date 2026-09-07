@@ -13,11 +13,12 @@ import {
   ChevronUp,
   Music2,
   Globe,
-  Loader2,
 } from 'lucide-react';
 import FadeIn from '@/components/FadeIn';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useRankings } from '@/hooks/useRankings';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
 /* ─────────────────── Easing ─────────────────── */
 
 const easeSmooth = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -421,13 +422,9 @@ export default function Rankings() {
   const [activeCategory, setActiveCategory] = useState('Global');
   const { data: globalDjs = [], isLoading, error } = useRankings({ limit: 50 });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-black flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (error) {
     return (
