@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Loader2,
   Bell,
   CheckCheck,
   Calendar,
@@ -23,6 +22,8 @@ import {
   type NotificationItem,
 } from '@/hooks/useUserDashboard';
 import { useDeleteNotification } from '@/hooks/useNotifications';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 const notificationConfig: Record<string, { icon: typeof Bell; color: string }> = {
   BOOKING_UPDATE: { icon: Calendar, color: 'text-blue' },
@@ -119,12 +120,10 @@ export default function Notifications() {
   const filtered = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <ListSkeleton /> : null;
   }
 
   return (
