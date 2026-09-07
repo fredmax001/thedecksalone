@@ -18,6 +18,8 @@ import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
 import { formatCurrency } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 
 interface Opportunity {
     id: string;
@@ -129,15 +131,10 @@ export const Opportunities = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="text-center">
-                    <Clock className="w-8 h-8 animate-spin text-gold mx-auto mb-2" />
-                    <p className="text-text-secondary">Loading opportunities...</p>
-                </div>
-            </div>
-        );
+    const showSkeleton = useDelayedLoading(loading);
+
+    if (loading && showSkeleton) {
+        return <FeedSectionSkeleton />;
     }
 
     return (
