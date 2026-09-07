@@ -1601,6 +1601,9 @@ const walkinSchema = z.object({
   paymentMethod: z.enum(['cash', 'complimentary', 'mobile_money']).default('cash'),
   amount: z.number().min(0).optional(),
   notes: z.string().max(1000).optional(),
+  // Client-generated idempotency key (UUID per logical sale). A replayed key
+  // returns the original ticket — this is what makes offline retry safe.
+  idempotencyKey: z.string().min(8).max(64).optional(),
 });
 
 // POST /api/events/:id/onsite/walkin
@@ -1623,6 +1626,15 @@ router.post('/onsite/walkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, asyn
 
     const finalAmount = parsed.data.amount !== undefined ? parsed.data.amount : ticketType.price * qty;
     const paymentStatus = parsed.data.paymentMethod === 'complimentary' ? 'paid' : 'pending';
+
+    // Idempotent replay: if this sale was already recorded (e.g. the device was
+    // offline and retried), return the original ticket instead of double-selling.
+    if (parsed.data.idempotencyKey) {
+      const existing = await prisma.eventTicket.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
+      if (existing) {
+        return res.status(200).json({ success: true, data: existing, replayed: true });
+      }
+    }
 
     const ticket = await prisma.$transaction(async (tx: any) => {
       const incrementResult = await tx.$executeRawUnsafe(
@@ -1648,6 +1660,7 @@ router.post('/onsite/walkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, asyn
           buyerEmail: parsed.data.buyerEmail || null,
           buyerPhone: parsed.data.buyerPhone || null,
           notes: parsed.data.notes || null,
+          idempotencyKey: parsed.data.idempotencyKey || null,
           approvedAt: new Date(),
         },
       });

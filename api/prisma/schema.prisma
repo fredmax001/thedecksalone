@@ -871,6 +871,7 @@ model EventTicket {
   checkedInBy       String?         // scanner userId
   declineReason     String?         // legacy declined reason
   transferredFrom   String?
+  idempotencyKey    String?         @unique  // client-generated: replays return the original ticket instead of double-selling
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   event             Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
