@@ -87,6 +87,8 @@ interface Mix {
 import { GENRES } from '@/constants/genres';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { useRequireDj } from '@/hooks/useRequireDj';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 function ToggleRow({
   icon,
@@ -465,12 +467,10 @@ export default function Mixes() {
     window.dispatchEvent(new CustomEvent('play-mix', { detail: { track, queue } }));
   };
 
+  const showSkeleton = useDelayedLoading(loading);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   if (!isDj) {
