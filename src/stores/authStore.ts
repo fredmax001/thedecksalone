@@ -65,6 +65,7 @@ interface AuthState {
 
 import { usePlayerStore } from '@/stores/playerStore';
 import { queryClient } from '@/lib/queryClient';
+import { clearPersistedQueryCache } from '@/lib/queryPersistence';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 
 export const useAuthStore = create<AuthState>()(
@@ -76,8 +77,9 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
 
       setAuth: (user, token) => {
-        // Clear stale query cache before establishing new user session
+        // Clear stale query cache (memory + disk) before establishing new user session
         queryClient.clear();
+        clearPersistedQueryCache();
         set({ user, token, isAuthenticated: true });
         usePlayerStore.getState().setCurrentUserId(user.id);
       },
@@ -87,8 +89,9 @@ export const useAuthStore = create<AuthState>()(
           const res = await api.post('/auth/login', { email, password });
           if (res.data.success) {
             const { user, token } = res.data.data;
-            // Purge any guest or prior user query cache
+            // Purge any guest or prior user query cache (memory + disk)
             queryClient.clear();
+            clearPersistedQueryCache();
             set({ user, token, isAuthenticated: true });
             usePlayerStore.getState().setCurrentUserId(user.id);
             // Fetch full profile (including djProfile) immediately after login
@@ -107,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
           if (res.data.success) {
             const { user, token } = res.data.data;
             queryClient.clear();
+            clearPersistedQueryCache();
             set({ user, token, isAuthenticated: true });
             usePlayerStore.getState().setCurrentUserId(user.id);
             return { success: true };
@@ -121,13 +125,16 @@ export const useAuthStore = create<AuthState>()(
         // 1. Reset player state and detach user
         usePlayerStore.getState().setCurrentUserId(null);
 
-        // 2. Clear all cached API queries from memory to prevent data leakage to other users
+        // 2. Clear all cached API queries (memory + disk persister) to prevent
+        //    data leakage to the next account on this device
         queryClient.clear();
+        clearPersistedQueryCache();
 
         // 3. Clear auth tokens
         try {
           localStorage.removeItem('decksalone-auth');
           localStorage.removeItem('soundit-auth');
+          localStorage.removeItem('token');
         } catch (e) {}
 
         // 4. Reset auth store state
@@ -139,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
         if (!token) {
           usePlayerStore.getState().setCurrentUserId(null);
           queryClient.clear();
+          clearPersistedQueryCache();
           set({ isLoading: false });
           return;
         }
@@ -153,6 +161,7 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           usePlayerStore.getState().setCurrentUserId(null);
           queryClient.clear();
+          clearPersistedQueryCache();
           set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
@@ -175,6 +184,7 @@ export const useAuthStore = create<AuthState>()(
         } else {
           usePlayerStore.getState().setCurrentUserId(null);
           queryClient.clear();
+          clearPersistedQueryCache();
           set({ isLoading: false });
         }
       },
