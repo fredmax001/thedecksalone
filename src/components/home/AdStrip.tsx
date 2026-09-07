@@ -108,7 +108,7 @@ export default function AdStrip({ paidAds }: AdStripProps) {
                             type="button"
                             onClick={(e) => toggleExpand(String(ad.id), e)}
                             className={cn(
-                              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-md active:scale-95',
+                              'btn-press inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-md active:scale-95',
                               isExpanded
                                 ? 'bg-gold text-black'
                                 : 'bg-black/70 hover:bg-gold text-white hover:text-black border border-white/20 hover:border-gold'

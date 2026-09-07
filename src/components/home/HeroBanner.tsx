@@ -248,7 +248,7 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
                   <button
                     type="button"
                     onClick={handleCta}
-                    className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full bg-gold hover:brightness-110 active:scale-95 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-[0_0_24px_rgba(244,224,89,0.35)]"
+                    className="btn-press inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full bg-gold hover:brightness-110 active:scale-95 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-[0_0_24px_rgba(244,224,89,0.35)]"
                   >
                     {currentSlide.type === 'mix' ? (
                       <Play className="w-4 h-4 fill-black" />
