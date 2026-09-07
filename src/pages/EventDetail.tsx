@@ -5,6 +5,8 @@ import {
   Smartphone, X, Users, Images, Bell, Minus, Plus, LayoutDashboard, ScanLine, Lock, Copy, Check
 } from 'lucide-react';
 import { useEvent } from '@/hooks/useEvents';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
 import { imageFallback } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { api, getMediaUrl } from '@/lib/api';
@@ -292,13 +294,9 @@ export default function EventDetail() {
   const userTickets = event?.userTickets || (event?.userTicket ? [event.userTicket] : []);
   const primaryTicket = userTickets[0];
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-black flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (error || !event) {
     return (
