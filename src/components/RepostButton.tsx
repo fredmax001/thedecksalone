@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRepostStatus, useRepostMix, useUnrepostMix } from '@/hooks/useReposts';
@@ -18,11 +17,10 @@ export function RepostButton({ mixId, size = 'md', showCount = true, className }
   const { data: status, isLoading: statusLoading } = useRepostStatus(mixId);
   const repost = useRepostMix();
   const unrepost = useUnrepostMix();
-  const [isPending, setIsPending] = useState(false);
-
   const reposted = status?.reposted || false;
   const count = status?.count || 0;
-  const isLoading = statusLoading || isPending || repost.isPending || unrepost.isPending;
+  const isPending = repost.isPending || unrepost.isPending;
+  const isLoading = statusLoading || isPending;
 
   const handleClick = async () => {
     if (!isAuthenticated) {
@@ -30,17 +28,10 @@ export function RepostButton({ mixId, size = 'md', showCount = true, className }
       return;
     }
 
-    setIsPending(true);
-    try {
-      if (reposted) {
-        await unrepost.mutateAsync(mixId);
-      } else {
-        await repost.mutateAsync(mixId);
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message || 'Failed to repost');
-    } finally {
-      setIsPending(false);
+    if (reposted) {
+      unrepost.mutate(mixId);
+    } else {
+      repost.mutate(mixId);
     }
   };
 
@@ -56,11 +47,7 @@ export function RepostButton({ mixId, size = 'md', showCount = true, className }
       )}
       title={reposted ? 'Remove repost' : 'Repost this mix'}
     >
-      {isLoading ? (
-        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-      ) : (
-        <Repeat size={size === 'sm' ? 12 : 14} className={cn(reposted && 'fill-current')} />
-      )}
+      <Repeat size={size === 'sm' ? 12 : 14} className={cn(reposted && 'fill-current')} />
       {showCount && <span>{formatCompactNumber(count)}</span>}
     </button>
   );
