@@ -239,15 +239,16 @@ export default function Battles() {
     if (!entry || !currentBattle) return;
     if (hasVoted === side) return;
 
+    setHasVoted(side);
     voteBattle.mutate(
       { battleId: currentBattle.id, entryId: entry.id },
       {
         onSuccess: () => {
-          setHasVoted(side);
           toast.success(`Vote cast for ${entry.dj.stageName}!`);
         },
         onError: (error: any) => {
-          toast.error(getApiErrorMessage(error, 'Could not cast vote. You may have already voted.'));
+          setHasVoted(null);
+          toast.error('Vote failed: ' + getApiErrorMessage(error, 'Your vote did not count. You may have already voted.'));
         },
       }
     );
@@ -454,7 +455,7 @@ export default function Battles() {
                         <VoteButton
                           djName={leftEntry.dj.stageName}
                           color="gold"
-                          disabled={hasVoted === 'right' || !isAuthenticated}
+                          disabled={!!hasVoted || !isAuthenticated}
                           loading={voteBattle.isPending && hasVoted !== 'right'}
                           onVote={() => handleVote('left')}
                         />
@@ -561,7 +562,7 @@ export default function Battles() {
                         <VoteButton
                           djName={rightEntry.dj.stageName}
                           color="purple"
-                          disabled={hasVoted === 'left' || !isAuthenticated}
+                          disabled={!!hasVoted || !isAuthenticated}
                           loading={voteBattle.isPending && hasVoted !== 'left'}
                           onVote={() => handleVote('right')}
                         />
