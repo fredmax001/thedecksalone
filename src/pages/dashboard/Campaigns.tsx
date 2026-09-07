@@ -18,6 +18,8 @@ import {
 } from '@/hooks/useCampaigns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -54,6 +56,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function Campaigns() {
   const { data: campaigns, isLoading, error } = useMyCampaigns();
+  const showSkeleton = useDelayedLoading(isLoading);
   const { data: targets } = useCampaignTargets();
   const createMutation = useCreateCampaign();
   const deleteMutation = useDeleteCampaign();
@@ -306,11 +309,7 @@ export default function Campaigns() {
         </Dialog>
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-10 h-10 text-gold animate-spin" />
-        </div>
-      )}
+      {isLoading && showSkeleton && <DashboardSkeleton />}
 
       {error && (
         <div className="p-4 rounded-xl bg-red/10 border border-red/30 text-red text-sm">
