@@ -18,6 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ import {
 
 export function ModeratorRankings() {
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayedLoading(loading);
   const [recalculating, setRecalculating] = useState(false);
   const [djs, setDjs] = useState<any[]>([]);
   const [search, setSearch] = useState('');
@@ -194,9 +197,7 @@ export function ModeratorRankings() {
 
       {/* Rankings List Table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? <ListSkeleton /> : null
       ) : filteredDjs.length === 0 ? (
         <Card className="bg-black-elevated border-dark-gray p-12 text-center">
           <Users className="w-12 h-12 text-text-muted mx-auto mb-3" />
