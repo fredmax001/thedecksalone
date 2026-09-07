@@ -31,7 +31,9 @@ import EventCarousel from '@/components/feed/EventCarousel';
 import FeedHero from '@/components/feed/FeedHero';
 import { ReachListenersModal } from '@/components/ReachListenersModal';
 import { useAuthStore } from '@/stores/authStore';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 import type { FeedDJ, FeedMix, FeedEvent, FeedPlaylist } from '@/components/feed/types';
 import { getAvatarImageUrl } from '@/lib/utils';
 
@@ -85,6 +87,8 @@ export default function Feed() {
   const [playlists, setPlaylists] = useState<FeedPlaylist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
   const [followedDjIds, setFollowedDjIds] = useState<Set<string>>(new Set());
+  const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const fetchPlaylists = async () => {
@@ -132,22 +136,50 @@ export default function Feed() {
       toast.error('Please login to follow DJs and customize your feed.');
       return;
     }
+    // Ignore re-clicks while a follow/unfollow request is in flight
+    if (pendingFollowIds.has(djId)) return;
+
+    // Compute next state from current state at click time
+    const wasFollowing = followedDjIds.has(djId);
+
+    // Optimistic update: flip the followed state immediately
+    setFollowedDjIds((prev) => {
+      const next = new Set(prev);
+      if (wasFollowing) next.delete(djId);
+      else next.add(djId);
+      return next;
+    });
+    setPendingFollowIds((prev) => new Set(prev).add(djId));
+
     try {
-      if (followedDjIds.has(djId)) {
+      if (wasFollowing) {
         await api.delete(`/djs/${djId}/follow`);
-        setFollowedDjIds((prev) => {
-          const next = new Set(prev);
-          next.delete(djId);
-          return next;
-        });
         toast.info('Unfollowed DJ');
       } else {
         await api.post(`/djs/${djId}/follow`);
-        setFollowedDjIds((prev) => new Set(prev).add(djId));
         toast.success('Following DJ! Their newest mixes will appear in your feed.');
       }
-    } catch {
-      toast.error('Could not update follow status.');
+      queryClient.invalidateQueries({ queryKey: ['djs'] });
+      queryClient.invalidateQueries({ queryKey: ['recommended-djs'] });
+      queryClient.invalidateQueries({ queryKey: ['dj-follow-status'] });
+    } catch (error) {
+      // Rollback to the previous state
+      setFollowedDjIds((prev) => {
+        const next = new Set(prev);
+        if (wasFollowing) next.add(djId);
+        else next.delete(djId);
+        return next;
+      });
+      toast.error(
+        (wasFollowing ? 'Could not unfollow: ' : 'Could not follow: ') +
+          getApiErrorMessage(error, 'Unknown error')
+      );
+    } finally {
+      setPendingFollowIds((prev) => {
+        const next = new Set(prev);
+        next.delete(djId);
+        return next;
+      });
     }
   };
 
