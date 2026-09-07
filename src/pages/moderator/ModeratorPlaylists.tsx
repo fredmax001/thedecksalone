@@ -26,6 +26,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 const PRESET_PLAYLIST_NAMES = [
   '🔥 Deck Salone Top Mixes',
@@ -43,6 +45,7 @@ const PRESET_PLAYLIST_NAMES = [
 
 export function ModeratorPlaylists() {
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayedLoading(loading);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [editingPlaylist, setEditingPlaylist] = useState<any | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -348,9 +351,7 @@ export function ModeratorPlaylists() {
 
       {/* Playlists List */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? <DashboardSkeleton /> : null
       ) : playlists.length === 0 ? (
         <Card className="bg-black-elevated border-dark-gray p-12 text-center">
           <ListMusic className="w-12 h-12 text-text-muted mx-auto mb-3" />
