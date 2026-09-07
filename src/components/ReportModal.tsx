@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flag, X, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Flag, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import api from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 
@@ -26,7 +27,6 @@ export default function ReportModal({
   const [reason, setReason] = useState<string>('terms_violation');
   const [details, setDetails] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -38,27 +38,31 @@ export default function ReportModal({
       return;
     }
 
+    if (loading) return;
+
     setLoading(true);
     setError(null);
 
-    try {
-      await api.post('/reports', {
-        targetUserId,
-        mixId,
-        eventId,
-        commentId,
-        reason,
-        details,
-      });
+    const payload = {
+      targetUserId,
+      mixId,
+      eventId,
+      commentId,
+      reason,
+      details,
+    };
 
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        setDetails('');
-        onClose();
-      }, 2500);
+    // Close the modal and confirm immediately — the request completes in the background.
+    setDetails('');
+    onClose();
+    toast.success(
+      'Report submitted. Thank you for helping keep Deck Salone safe. An urgent Admin Alert has been dispatched to our compliance team.'
+    );
+
+    try {
+      await api.post('/reports', payload);
     } catch (err: any) {
-      setError(getApiErrorMessage(err, 'Failed to submit report. Please try again.'));
+      toast.error('Could not submit report: ' + getApiErrorMessage(err, 'Failed to submit report. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -106,18 +110,7 @@ export default function ReportModal({
             </div>
           </div>
 
-          {success ? (
-            <div className="py-8 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-green-500/20 border border-green-500/40 text-green-400 mx-auto flex items-center justify-center">
-                <CheckCircle size={28} />
-              </div>
-              <h4 className="font-bold text-white text-base">Report Submitted</h4>
-              <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                Thank you for helping keep Deck Salone safe. An urgent Admin Alert has been dispatched to our compliance team.
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 rounded-lg bg-red/10 border border-red/30 text-red text-xs flex items-center gap-2">
                   <AlertTriangle size={14} className="shrink-0" />
@@ -176,7 +169,6 @@ export default function ReportModal({
                 </button>
               </div>
             </form>
-          )}
         </motion.div>
       </div>
     </AnimatePresence>
