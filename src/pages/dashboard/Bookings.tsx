@@ -39,6 +39,8 @@ import { formatCurrency } from '@/lib/formatting';
 import { formatDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { useRequireDj } from '@/hooks/useRequireDj';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface Booking {
   id: string;
@@ -201,12 +203,9 @@ export default function Bookings() {
     );
   }
 
+  const showSkeleton = useDelayedLoading(loading);
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
