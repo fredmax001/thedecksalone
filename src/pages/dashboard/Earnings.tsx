@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
   Wallet,
-  Loader2,
   Clock,
   ArrowUpRight,
   TrendingUp,
@@ -19,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FeatureLock } from '@/components/FeatureLock';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   BarChart,
   Bar,
@@ -130,12 +131,10 @@ export default function Earnings() {
 
   const thisMonthEarnings = realMonthlyEarnings[5].earnings;
 
+  const showSkeleton = useDelayedLoading(loading);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
