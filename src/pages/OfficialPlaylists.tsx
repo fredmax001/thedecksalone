@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   ListMusic,
@@ -195,28 +196,15 @@ function PlaylistRowSection({
 }
 
 export function OfficialPlaylists() {
-  const [loading, setLoading] = useState(true);
-  const [playlists, setPlaylists] = useState<any[]>([]);
-  const showSkeleton = useDelayedLoading(loading);
-  const { data: forYouPlaylists } = useForYouPlaylists();
-
-  useEffect(() => {
-    fetchPlaylists();
-  }, []);
-
-  const fetchPlaylists = async () => {
-    try {
-      setLoading(true);
+  const { data: playlists = [], isPending } = useQuery({
+    queryKey: ['officialPlaylists'],
+    queryFn: async () => {
       const res = await api.get('/official-playlists');
-      if (res.data.success) {
-        setPlaylists(res.data.data || []);
-      }
-    } catch (err) {
-      console.error('Failed to load playlists', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return (res.data?.data || []) as any[];
+    },
+  });
+  const showSkeleton = useDelayedLoading(isPending);
+  const { data: forYouPlaylists } = useForYouPlaylists();
 
   // Group Official Playlists into Curated Shelves
   const trendingPlaylists = useMemo(() => {
@@ -321,7 +309,7 @@ export function OfficialPlaylists() {
       )}
 
       {/* Loading state */}
-      {loading ? (
+      {isPending ? (
         showSkeleton ? (
           <FeedSectionSkeleton />
         ) : null

@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import {
   ListMusic,
@@ -49,27 +50,15 @@ function PlayingWaveIndicator() {
 
 export function OfficialPlaylistDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const [loading, setLoading] = useState(true);
-  const [playlist, setPlaylist] = useState<any | null>(null);
-  const { play, pause, setQueue, currentTrack, isPlaying } = usePlayerStore();
-
-  useEffect(() => {
-    if (slug) fetchPlaylistDetail();
-  }, [slug]);
-
-  const fetchPlaylistDetail = async () => {
-    try {
-      setLoading(true);
+  const { data: playlist, isPending } = useQuery({
+    queryKey: ['officialPlaylist', slug],
+    queryFn: async () => {
       const res = await api.get(`/official-playlists/${slug}`);
-      if (res.data.success) {
-        setPlaylist(res.data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load playlist detail', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data?.data ?? null;
+    },
+    enabled: !!slug,
+  });
+  const { play, pause, setQueue, currentTrack, isPlaying } = usePlayerStore();
 
   const tracks: MixTrack[] = useMemo(() => {
     if (!playlist?.items || playlist.items.length === 0) return [];
@@ -127,9 +116,9 @@ export function OfficialPlaylistDetail() {
     play(targetTrack);
   };
 
-  const showSkeleton = useDelayedLoading(loading);
+  const showSkeleton = useDelayedLoading(isPending);
 
-  if (loading) {
+  if (isPending) {
     return showSkeleton ? (
       <div className="min-h-screen bg-[#080808] py-8 px-4 sm:px-6 max-w-7xl mx-auto">
         <ListSkeleton rows={10} />
