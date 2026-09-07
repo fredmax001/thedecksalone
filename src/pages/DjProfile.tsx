@@ -380,7 +380,7 @@ function BookingModal({
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#1E1E1E] transition-colors btn-press-subtle"
           >
             <X size={20} className="text-text-muted" />
           </button>
@@ -588,14 +588,14 @@ function BookingModal({
                 type="button"
                 onClick={onClose}
                 disabled={createBooking.isPending}
-                className="px-6 py-3 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-semibold text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors disabled:opacity-50"
+                className="px-6 py-3 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-semibold text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors disabled:opacity-50 btn-press-subtle"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={createBooking.isPending}
-                className="flex-1 px-6 py-3 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform disabled:opacity-70 flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform disabled:opacity-70 flex items-center justify-center gap-2 btn-press"
               >
                 {createBooking.isPending && <Loader2 size={16} className="animate-spin" />}
                 {createBooking.isPending ? "Sending..." : "Send Request"}
@@ -867,7 +867,7 @@ function OverviewTab({ dj, onBookClick }: { dj: DJ; onBookClick?: () => void }) 
                 </p>
                 <button
                   onClick={() => onBookClick?.()}
-                  className="w-full mt-1 bg-gold-gradient text-black font-bold uppercase text-[10px] py-2 rounded-full"
+                  className="w-full mt-1 bg-gold-gradient text-black font-bold uppercase text-[10px] py-2 rounded-full btn-press"
                 >
                   Book DJ via Deck Salone
                 </button>
@@ -902,7 +902,7 @@ function MixesTab({ dj }: { dj: DJ }) {
             <button
               key={platform}
               className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                "px-4 py-2 rounded-full text-sm font-medium transition-all btn-press-subtle",
                 i === 0
                   ? "bg-[rgba(244,224,89,0.15)] text-gold border border-gold/30"
                   : "border border-[rgba(255,255,255,0.1)] text-text-muted hover:text-text-primary hover:border-[rgba(255,255,255,0.3)]"
@@ -943,7 +943,7 @@ function MixesTab({ dj }: { dj: DJ }) {
                       }));
                     }
                   }}
-                  className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
+                  className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50 btn-press"
                   disabled={!mix.audioUrl}
                 >
                   <Play size={20} className="text-black ml-0.5" fill="black" />
@@ -972,7 +972,7 @@ function MixesTab({ dj }: { dj: DJ }) {
                 </div>
                 <button
                   onClick={() => toggleLike(mix.id)}
-                  className="p-1.5 rounded-full hover:bg-[#1E1E1E] transition-colors"
+                  className="p-1.5 rounded-full hover:bg-[#1E1E1E] transition-colors btn-press-subtle"
                 >
                   <Heart
                     size={16}
@@ -1095,7 +1095,7 @@ function PhotosTab({ dj }: { dj: DJ }) {
                     e.stopPropagation();
                     handleDownload(photo.url, `DJ_${dj.stageName.replace(/\s+/g, '_')}_Photo_${i + 1}.jpg`);
                   }}
-                  className="p-2 rounded-xl bg-black/70 hover:bg-gold text-white hover:text-black transition-all shadow-lg backdrop-blur-sm"
+                  className="p-2 rounded-xl bg-black/70 hover:bg-gold text-white hover:text-black transition-all shadow-lg backdrop-blur-sm btn-press-subtle"
                   title="Download Photo"
                 >
                   <Download className="w-4 h-4" />
@@ -1131,7 +1131,7 @@ function PhotosTab({ dj }: { dj: DJ }) {
             <button
               type="button"
               onClick={() => setSelectedPhotoIndex(null)}
-              className="absolute top-5 right-5 z-20 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute top-5 right-5 z-20 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors btn-press-subtle"
             >
               <X className="w-6 h-6" />
             </button>
@@ -1144,7 +1144,7 @@ function PhotosTab({ dj }: { dj: DJ }) {
                   e.stopPropagation();
                   setSelectedPhotoIndex((selectedPhotoIndex - 1 + photos.length) % photos.length);
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors btn-press-subtle"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -1158,7 +1158,7 @@ function PhotosTab({ dj }: { dj: DJ }) {
                   e.stopPropagation();
                   setSelectedPhotoIndex((selectedPhotoIndex + 1) % photos.length);
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors btn-press-subtle"
               >
                 <ChevronRight className="w-6 h-6" />
               </button>
@@ -1464,7 +1464,7 @@ function ReviewsTab({ dj }: { dj: DJ }) {
                 <button
                   onClick={() => toggleHelpful(review.id)}
                   className={cn(
-                    "mt-3 flex items-center gap-1.5 text-xs transition-colors",
+                    "mt-3 flex items-center gap-1.5 text-xs transition-colors btn-press-subtle",
                     helpfulReviews.includes(review.id)
                       ? "text-gold"
                       : "text-text-muted hover:text-text-secondary"
@@ -1484,7 +1484,7 @@ function ReviewsTab({ dj }: { dj: DJ }) {
             )}
 
             {reviews.length > 0 && (
-              <button className="w-full py-3 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-semibold text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+              <button className="w-full py-3 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-semibold text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors btn-press-subtle">
                 Load More Reviews
               </button>
             )}
@@ -1532,7 +1532,7 @@ function ReviewsTab({ dj }: { dj: DJ }) {
           </div>
 
           {/* Write Review */}
-          <button className="mt-6 w-full py-3 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform">
+          <button className="mt-6 w-full py-3 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform btn-press">
             Write a Review
           </button>
         </div>
@@ -1572,7 +1572,7 @@ function EventsTab({ dj }: { dj: DJ }) {
             key={tab}
             onClick={() => setEventsSubTab(tab)}
             className={cn(
-              "pb-3 text-sm font-medium capitalize transition-colors relative",
+              "pb-3 text-sm font-medium capitalize transition-colors relative btn-press-subtle",
               eventsSubTab === tab ? "text-gold" : "text-text-muted hover:text-text-primary"
             )}
           >
@@ -1807,7 +1807,7 @@ function DjFollowButton({ djId, djUserId }: { djId: string; djUserId?: string })
         onClick={handleClick}
         disabled={isLoading}
         className={cn(
-          "flex-1 sm:flex-auto px-4 py-2.5 rounded-full text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 disabled:opacity-70",
+          "flex-1 sm:flex-auto px-4 py-2.5 rounded-full text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 disabled:opacity-70 btn-press-subtle",
           isFollowing
             ? "bg-[rgba(244,224,89,0.15)] text-gold border border-gold/30"
             : "border border-[rgba(255,255,255,0.2)] text-text-primary hover:bg-[rgba(255,255,255,0.05)]"
@@ -1908,7 +1908,7 @@ function SetsTab({ djId }: { djId: string }) {
                 }
               }
             }}
-            className="mt-4 w-full bg-gold-gradient text-black font-bold uppercase text-xs py-2 rounded-full flex items-center justify-center gap-1.5"
+            className="mt-4 w-full bg-gold-gradient text-black font-bold uppercase text-xs py-2 rounded-full flex items-center justify-center gap-1.5 btn-press"
           >
             <Play size={14} className="fill-black" /> Play Set
           </button>
@@ -2143,7 +2143,7 @@ export default function DjProfile() {
             {user?.id && dj.userId && user.id === dj.userId ? null : (
               <button
                 onClick={() => setIsSupportOpen(true)}
-                className="flex-1 sm:flex-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-[#f4e059] to-yellow-300 text-black text-xs font-black uppercase hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f4e059]/20"
+                className="flex-1 sm:flex-auto px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-[#f4e059] to-yellow-300 text-black text-xs font-black uppercase hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f4e059]/20 btn-press"
               >
                 <Heart size={15} />
                 <span>Support DJ</span>
@@ -2152,7 +2152,7 @@ export default function DjProfile() {
 
             <button
               onClick={() => setIsBookingOpen(true)}
-              className="flex-1 sm:flex-auto px-6 py-2.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-auto px-6 py-2.5 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 btn-press"
             >
               <Calendar size={16} />
               Book Now
@@ -2163,7 +2163,7 @@ export default function DjProfile() {
                   href={`https://wa.me/${dj.whatsappNumber.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2 btn-press-subtle"
                 >
                   <Phone size={16} />
                   <span className="hidden sm:inline">WhatsApp</span>
@@ -2171,7 +2171,7 @@ export default function DjProfile() {
               ) : user?.id && dj.userId && user.id === dj.userId ? null : (
                 <button
                   onClick={handleMessageClick}
-                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 sm:flex-auto px-4 py-2.5 rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2 btn-press-subtle"
                 >
                   <MessageCircle size={16} />
                   <span className="hidden sm:inline">Message</span>
@@ -2244,7 +2244,7 @@ export default function DjProfile() {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "relative px-4 py-3 sm:px-6 text-sm font-medium whitespace-nowrap transition-colors",
+                  "relative px-4 py-3 sm:px-6 text-sm font-medium whitespace-nowrap transition-colors btn-press-subtle",
                   activeTab === tab.key ? "text-gold" : "text-text-muted hover:text-text-primary"
                 )}
               >
