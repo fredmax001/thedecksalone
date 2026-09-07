@@ -41,7 +41,7 @@ export function EmbedMixModal({ isOpen, onClose, mix }: EmbedMixModalProps) {
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors"
+            className="btn-press-subtle absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -74,7 +74,7 @@ export function EmbedMixModal({ isOpen, onClose, mix }: EmbedMixModalProps) {
           <div className="flex gap-3">
             <button
               onClick={handleCopy}
-              className="flex-1 py-3 px-4 rounded-full bg-[#f4e059] hover:brightness-110 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#f4e059]/20 flex items-center justify-center gap-2 transition-all"
+              className="btn-press flex-1 py-3 px-4 rounded-full bg-[#f4e059] hover:brightness-110 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#f4e059]/20 flex items-center justify-center gap-2 transition-all"
             >
               {copied ? (
                 <>
@@ -88,7 +88,7 @@ export function EmbedMixModal({ isOpen, onClose, mix }: EmbedMixModalProps) {
             </button>
             <button
               onClick={onClose}
-              className="px-5 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-bold text-white uppercase"
+              className="btn-ghost"
             >
               Done
             </button>

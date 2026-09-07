@@ -105,7 +105,7 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors z-10"
+            className="btn-press-subtle absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors z-10"
           >
             <X className="w-5 h-5" />
           </button>
@@ -211,7 +211,7 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
             <button
               disabled={submitting}
               onClick={handleSupport}
-              className="flex-1 py-3 px-4 rounded-full bg-[#f4e059] hover:brightness-110 disabled:opacity-50 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#f4e059]/20 flex items-center justify-center gap-2 transition-all"
+              className="btn-press flex-1 py-3 px-4 rounded-full bg-[#f4e059] hover:brightness-110 disabled:opacity-50 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-[#f4e059]/20 flex items-center justify-center gap-2 transition-all"
             >
               {submitting ? (
                 <>
@@ -226,7 +226,7 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-bold text-white uppercase"
+              className="btn-ghost"
             >
               Cancel
             </button>

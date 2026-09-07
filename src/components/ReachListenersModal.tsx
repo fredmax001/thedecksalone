@@ -120,7 +120,7 @@ export function ReachListenersModal({
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors"
+            className="btn-press-subtle absolute top-5 right-5 p-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-muted hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -184,13 +184,13 @@ export function ReachListenersModal({
               <div className="flex gap-3">
                 <Link
                   to="/dashboard/subscription"
-                  className="flex-1 py-3 px-4 rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-[#f4e059] text-black font-extrabold text-xs uppercase tracking-wider text-center hover:brightness-110 shadow-lg shadow-red-600/20 transition-all"
+                  className="btn-press flex-1 py-3 px-4 rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-[#f4e059] text-black font-extrabold text-xs uppercase tracking-wider text-center hover:brightness-110 shadow-lg shadow-red-600/20 transition-all"
                 >
                   Upgrade to Pro Now →
                 </Link>
                 <button
                   onClick={onClose}
-                  className="px-5 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-bold text-white uppercase"
+                  className="btn-ghost"
                 >
                   Cancel
                 </button>
@@ -254,7 +254,7 @@ export function ReachListenersModal({
                 <button
                   disabled={!hasEnoughPoints || loading || fetchingPoints}
                   onClick={handlePromote}
-                  className="flex-1 py-3 px-4 rounded-full bg-gradient-to-r from-red-600 to-orange-500 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 transition-all"
+                  className="btn-press flex-1 py-3 px-4 rounded-full bg-gradient-to-r from-red-600 to-orange-500 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 transition-all"
                 >
                   {loading ? (
                     <>
@@ -268,7 +268,7 @@ export function ReachListenersModal({
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-5 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-bold text-white uppercase"
+                  className="btn-ghost"
                 >
                   Close
                 </button>
