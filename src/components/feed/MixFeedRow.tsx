@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
-import { useLikeMix } from '@/hooks/useMixes';
+import { useLikeMix, useMixLike } from '@/hooks/useMixes';
 import { WaveformPlayer } from '@/components/WaveformPlayer';
 import { cn } from '@/lib/utils';
 import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
@@ -78,8 +78,9 @@ export default function MixFeedRow({
   const { currentTrack, isPlaying, currentTime, play, pause, setCurrentTime, addToQueue } = usePlayerStore();
   const { mutate: likeMix } = useLikeMix();
 
-  const [liked, setLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState<number>(mix.likes || 0);
+  const { data: likeState } = useMixLike(mix.id, mix.likes || 0);
+  const liked = likeState?.liked ?? false;
+  const likesCount = likeState?.likes ?? mix.likes ?? 0;
   const [downloadsCount, setDownloadsCount] = useState<number>(mix.downloads || 0);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -140,11 +141,13 @@ export default function MixFeedRow({
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setLiked((prev) => !prev);
-      setLikesCount((prev: number) => (liked ? Math.max(0, prev - 1) : prev + 1));
-      if (isAuthenticated) likeMix(mix.id);
+      if (!isAuthenticated) {
+        toast.info('Sign in to like mixes');
+        return;
+      }
+      likeMix(mix.id);
     },
-    [mix.id, liked, isAuthenticated, likeMix]
+    [mix.id, isAuthenticated, likeMix]
   );
 
   const handleAddReaction = (emoji: string, e: React.MouseEvent) => {

@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { buildQueryString } from '@/lib/url';
+import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 export interface MixFilters {
   category?: string;
@@ -96,6 +98,25 @@ export function useMix(identifier: string | undefined, djIdentifier?: string) {
   });
 }
 
+export interface MixLikeState {
+  liked: boolean;
+  likes: number;
+}
+
+// Reactive, cache-driven like state for a single mix. Shared across all
+// surfaces (MixDetail, MixFeedRow, MixHub) so optimistic updates and
+// rollbacks propagate everywhere. Seeded from the mix's `likes` count on
+// first read; afterwards the cache value is the source of truth.
+export function useMixLike(mixId: string | undefined, initialLikes = 0) {
+  return useQuery<MixLikeState>({
+    queryKey: ['mixLike', mixId],
+    queryFn: () => ({ liked: false, likes: initialLikes }),
+    enabled: !!mixId,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 30,
+  });
+}
+
 export function useLikeMix() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -103,7 +124,27 @@ export function useLikeMix() {
       const res = await api.post(`/mixes/${mixId}/like`);
       return res.data;
     },
-    onSuccess: () => {
+    onMutate: async (mixId) => {
+      await queryClient.cancelQueries({ queryKey: ['mixLike', mixId] });
+      const previous = queryClient.getQueryData<MixLikeState>(['mixLike', mixId]);
+      const current: MixLikeState = previous ?? { liked: false, likes: 0 };
+      // Compute the next state from the current cache value (not a prop
+      // captured at click time) so rapid toggles from any surface stay in sync
+      queryClient.setQueryData<MixLikeState>(['mixLike', mixId], {
+        liked: !current.liked,
+        likes: Math.max(0, current.likes + (current.liked ? -1 : 1)),
+      });
+      return { previous };
+    },
+    onError: (error, mixId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['mixLike', mixId], context.previous);
+      } else {
+        queryClient.removeQueries({ queryKey: ['mixLike', mixId] });
+      }
+      toast.error('Could not update like: ' + getApiErrorMessage(error, 'Please try again.'));
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['mixes'] });
       queryClient.invalidateQueries({ queryKey: ['trendingMixes'] });
       queryClient.invalidateQueries({ queryKey: ['mix'] });

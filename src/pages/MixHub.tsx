@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import api, { downloadMixFile } from '@/lib/api';
 import { type MixTrack } from '@/stores/playerStore';
-import { useMixes, useTrendingMixes, useLikeMix, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
+import { useMixes, useTrendingMixes, useLikeMix, useMixLike, useMixGenres, type GenreWithCount } from '@/hooks/useMixes';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { GENRES } from '@/constants/genres';
@@ -125,14 +125,18 @@ function MixGridCard({
   isPlaying?: boolean;
   onOpenSubscribe: (mix: MixTrack) => void;
 }) {
-  const [liked, setLiked] = useState(false);
+  const { data: likeState } = useMixLike(mix.id, mix.likes || 0);
+  const liked = likeState?.liked ?? false;
   const { mutate: likeMix } = useLikeMix();
   const { isAuthenticated } = useAuthStore();
 
   const handleLike = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setLiked((prev) => !prev);
-    if (isAuthenticated) likeMix(mix.id);
+    if (!isAuthenticated) {
+      toast.info('Sign in to like mixes');
+      return;
+    }
+    likeMix(mix.id);
   }, [mix.id, isAuthenticated, likeMix]);
 
   const handleCardPlay = () => {
@@ -266,14 +270,18 @@ function MixTracklistRow({
   genreRank?: number;
   onOpenSubscribe: (mix: MixTrack) => void;
 }) {
-  const [liked, setLiked] = useState(false);
+  const { data: likeState } = useMixLike(mix.id, mix.likes || 0);
+  const liked = likeState?.liked ?? false;
   const { mutate: likeMix } = useLikeMix();
   const { isAuthenticated } = useAuthStore();
 
   const handleLike = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setLiked((prev) => !prev);
-    if (isAuthenticated) likeMix(mix.id);
+    if (!isAuthenticated) {
+      toast.info('Sign in to like mixes');
+      return;
+    }
+    likeMix(mix.id);
   }, [mix.id, isAuthenticated, likeMix]);
 
   const handleRowClick = () => {

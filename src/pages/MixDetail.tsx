@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2 } from 'lucide-react';
-import { useMix, useLikeMix } from '@/hooks/useMixes';
+import { useMix, useLikeMix, useMixLike } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
 import ShareButton from '@/components/ShareButton';
@@ -36,6 +36,7 @@ export default function MixDetail() {
   const { data: mix, isLoading, error } = useMix(mixIdentifier, routeDj);
   const { user, isAuthenticated } = useAuthStore();
   const { mutate: likeMix } = useLikeMix();
+  const { data: likeState } = useMixLike(mix?.id, mix?.likes || 0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
@@ -275,7 +276,11 @@ export default function MixDetail() {
                   onClick={handleLike}
                   className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
                 >
-                  <Heart size={15} className="mr-1.5" /> <span className="hidden sm:inline">Like</span> ({mix.likes || 0})
+                  <Heart
+                    size={15}
+                    className={`mr-1.5 ${likeState?.liked ? 'text-red-500 fill-red-500' : ''}`}
+                  />{' '}
+                  <span className="hidden sm:inline">Like</span> ({likeState?.likes ?? mix.likes ?? 0})
                 </Button>
                 <Button
                   variant="outline"
