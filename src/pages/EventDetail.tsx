@@ -159,11 +159,11 @@ function BuyTicketModal({
         <div className="flex items-center justify-between mb-5">
           <p className="text-sm text-text-secondary">Quantity</p>
           <div className="flex items-center gap-3">
-            <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
+            <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="btn-press-subtle w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
               <Minus className="w-3 h-3" />
             </button>
             <span className="w-8 text-center text-text-primary font-bold">{quantity}</span>
-            <button onClick={() => setQuantity(q => Math.min(selectedType.maxPerOrder, q + 1))} className="w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
+            <button onClick={() => setQuantity(q => Math.min(selectedType.maxPerOrder, q + 1))} className="btn-press-subtle w-8 h-8 rounded-lg bg-black-elevated border border-dark-gray text-text-primary flex items-center justify-center hover:border-gold/50">
               <Plus className="w-3 h-3" />
             </button>
           </div>
@@ -345,7 +345,7 @@ export default function EventDetail() {
     <div className="min-h-[100dvh] bg-black">
       {/* Back button & Share */}
       <div className="max-w-container mx-auto px-6 pt-6 flex items-center justify-between">
-        <button onClick={() => navigate('/events')} className="flex items-center gap-2 text-text-muted hover:text-gold transition-colors text-sm">
+        <button onClick={() => navigate('/events')} className="btn-press-subtle flex items-center gap-2 text-text-muted hover:text-gold transition-colors text-sm">
           <ArrowLeft size={16} /> Back to Events
         </button>
         <ShareButton

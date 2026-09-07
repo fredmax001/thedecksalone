@@ -543,7 +543,7 @@ export default function ShareButton({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2",
+            "btn-press-subtle rounded-full border border-[rgba(255,255,255,0.2)] text-sm font-medium text-text-primary hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center justify-center gap-2",
             sizeClasses[size]
           )}
           title="Share"
