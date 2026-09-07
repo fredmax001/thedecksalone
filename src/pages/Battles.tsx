@@ -18,6 +18,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import CountdownTimer from '../components/CountdownTimer';
 import { useCurrentBattle, useBattles, useVoteBattle } from '@/hooks/useBattles';
 import { useAuthStore } from '@/stores/authStore';
@@ -202,6 +204,9 @@ export default function Battles() {
     isLoading: boolean;
   };
   const voteBattle = useVoteBattle();
+  const showCurrentSkeleton = useDelayedLoading(currentLoading);
+  const showLeaderboardSkeleton = useDelayedLoading(allBattlesLoading);
+  const showPastSkeleton = useDelayedLoading(pastBattlesLoading);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const [hasVoted, setHasVoted] = useState<'left' | 'right' | null>(null);
@@ -384,9 +389,9 @@ export default function Battles() {
           </div>
 
           {currentLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-10 h-10 text-gold animate-spin" />
-            </div>
+            showCurrentSkeleton ? (
+              <FeedSectionSkeleton />
+            ) : null
           ) : !currentBattle || activeEntries.length < 2 ? (
             <FadeIn>
               <div className="text-center py-16 bg-black-elevated rounded-2xl border border-white/5">
@@ -699,9 +704,9 @@ export default function Battles() {
 
           <FadeIn delay={0.2}>
             {allBattlesLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="w-10 h-10 text-gold animate-spin" />
-              </div>
+              showLeaderboardSkeleton ? (
+                <FeedSectionSkeleton />
+              ) : null
             ) : leaderboardData.length === 0 ? (
               <div className="text-center py-12 bg-black-elevated rounded-2xl border border-white/5">
                 <p className="text-text-secondary text-sm">No battle history yet.</p>
@@ -852,9 +857,9 @@ export default function Battles() {
           </div>
 
           {pastBattlesLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-10 h-10 text-gold animate-spin" />
-            </div>
+            showPastSkeleton ? (
+              <FeedSectionSkeleton />
+            ) : null
           ) : pastBattles.length === 0 ? (
             <FadeIn>
               <div className="text-center py-12 bg-black rounded-2xl border border-white/5">
