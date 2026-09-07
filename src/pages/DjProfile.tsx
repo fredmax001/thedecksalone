@@ -48,6 +48,8 @@ import ShareButton from "@/components/ShareButton";
 import DjSupportModal from "@/components/DjSupportModal";
 import { BookingCalendar } from "@/components/BookingCalendar";
 import { getAvatarImageUrl } from '@/lib/utils';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   XAxis,
   YAxis,
@@ -1976,16 +1978,9 @@ export default function DjProfile() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-text-muted">
-          <Loader2 size={48} className="animate-spin text-gold" />
-          <p className="text-sm uppercase tracking-wider">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (isError || !dj) {
     return (
