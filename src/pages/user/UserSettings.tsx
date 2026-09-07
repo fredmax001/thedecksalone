@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -275,16 +275,38 @@ export default function UserSettings() {
     }
   };
 
-  const updateNotification = (key: keyof UserSettings['notifications'], value: boolean) => {
-    const next = { ...settings, notifications: { ...settings.notifications, [key]: value } };
+  // Optimistic per-toggle save: flip immediately, persist in background,
+  // restore previous value on failure. Extra clicks are ignored while pending.
+  const toggleSavePending = useRef(false);
+
+  const persistToggle = async (next: UserSettings) => {
+    if (toggleSavePending.current) return;
+    const previous = settings;
     setSettings(next);
-    setSettingsDirty(true);
+    toggleSavePending.current = true;
+    try {
+      const res = await api.put('/users/settings', {
+        notifications: next.notifications,
+        privacy: next.privacy,
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.error || 'Failed to save settings');
+      }
+      setSettingsDirty(false);
+    } catch (err: any) {
+      setSettings(previous);
+      toast.error('Could not save setting: ' + getApiErrorMessage(err, 'Failed to save setting'));
+    } finally {
+      toggleSavePending.current = false;
+    }
+  };
+
+  const updateNotification = (key: keyof UserSettings['notifications'], value: boolean) => {
+    void persistToggle({ ...settings, notifications: { ...settings.notifications, [key]: value } });
   };
 
   const updatePrivacy = (key: keyof UserSettings['privacy'], value: boolean) => {
-    const next = { ...settings, privacy: { ...settings.privacy, [key]: value } };
-    setSettings(next);
-    setSettingsDirty(true);
+    void persistToggle({ ...settings, privacy: { ...settings.privacy, [key]: value } });
   };
 
   const handleSaveSettings = async () => {
