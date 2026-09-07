@@ -148,11 +148,7 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
                 }}
                 disabled={markAllRead.isPending}
               >
-                {markAllRead.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <CheckCheck className="w-3 h-3 mr-1" />
-                )}
+                <CheckCheck className="w-3 h-3 mr-1" />
                 Mark read
               </Button>
             )}
@@ -167,11 +163,7 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
                 }}
                 disabled={clearAll.isPending}
               >
-                {clearAll.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <span className="text-xs">Clear all</span>
-                )}
+                <span className="text-xs">Clear all</span>
               </Button>
             )}
           </div>

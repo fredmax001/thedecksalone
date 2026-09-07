@@ -23,8 +23,6 @@ import {
   type NotificationItem,
 } from '@/hooks/useUserDashboard';
 import { useDeleteNotification } from '@/hooks/useNotifications';
-import { toast } from 'sonner';
-import { getApiErrorMessage } from '@/lib/apiErrors';
 
 const notificationConfig: Record<string, { icon: typeof Bell; color: string }> = {
   BOOKING_UPDATE: { icon: Calendar, color: 'text-blue' },
@@ -39,7 +37,6 @@ function NotificationRow({ item, index }: { item: NotificationItem; index: numbe
   const navigate = useNavigate();
   const markRead = useMarkNotificationRead();
   const deleteNotification = useDeleteNotification();
-  const [isRemoved, setIsRemoved] = useState(false);
 
   const config = notificationConfig[item.type] || notificationConfig.SYSTEM;
   const Icon = config.icon;
@@ -52,8 +49,6 @@ function NotificationRow({ item, index }: { item: NotificationItem; index: numbe
       navigate(item.actionUrl);
     }
   };
-
-  if (isRemoved) return null;
 
   return (
     <motion.div
@@ -106,13 +101,7 @@ function NotificationRow({ item, index }: { item: NotificationItem; index: numbe
           className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-red"
           onClick={(e) => {
             e.stopPropagation();
-            setIsRemoved(true);
-            deleteNotification.mutate(item.id, {
-              onError: (err) => {
-                setIsRemoved(false);
-                toast.error(getApiErrorMessage(err, 'Failed to dismiss notification'));
-              },
-            });
+            deleteNotification.mutate(item.id);
           }}
         >
           <X className="w-3.5 h-3.5" />

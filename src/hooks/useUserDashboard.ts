@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { buildQueryString } from '@/lib/url';
+import { getApiErrorMessage } from '@/lib/apiErrors';
 
 /* ─── Bookings ─── */
 export interface UserBooking {
@@ -122,6 +124,11 @@ export function useUserNotifications() {
   });
 }
 
+interface DashboardNotificationsPage {
+  items: NotificationItem[];
+  meta: { unreadCount: number };
+}
+
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -129,7 +136,46 @@ export function useMarkNotificationRead() {
       const res = await api.patch(`/notifications/${id}/read`);
       return res.data;
     },
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['user-notifications'] });
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      await queryClient.cancelQueries({ queryKey: ['notifications-unread-count'] });
+      const previousLists = queryClient.getQueriesData<NotificationItem[]>({ queryKey: ['user-notifications'] });
+      const previousPages = queryClient.getQueriesData<DashboardNotificationsPage>({ queryKey: ['notifications'] });
+      const previousCount = queryClient.getQueryData<number>(['notifications-unread-count']);
+      queryClient.setQueriesData<NotificationItem[]>({ queryKey: ['user-notifications'] }, (old) =>
+        old?.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+      queryClient.setQueriesData<DashboardNotificationsPage>({ queryKey: ['notifications'] }, (old) => {
+        if (!old) return old;
+        const wasUnread = old.items.some((n) => n.id === id && !n.read);
+        return {
+          ...old,
+          items: old.items.map((n) => (n.id === id ? { ...n, read: true } : n)),
+          meta: wasUnread
+            ? { ...old.meta, unreadCount: Math.max(0, old.meta.unreadCount - 1) }
+            : old.meta,
+        };
+      });
+      if (typeof previousCount === 'number' &&
+          previousLists.some(([, list]) => list?.some((n) => n.id === id && !n.read))) {
+        queryClient.setQueryData<number>(['notifications-unread-count'], Math.max(0, previousCount - 1));
+      }
+      return { previousLists, previousPages, previousCount };
+    },
+    onError: (error, _id, context) => {
+      context?.previousLists?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      context?.previousPages?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      if (context?.previousCount !== undefined) {
+        queryClient.setQueryData(['notifications-unread-count'], context.previousCount);
+      }
+      toast.error('Could not mark notification read: ' + getApiErrorMessage(error, 'Unknown error'));
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
@@ -144,7 +190,41 @@ export function useMarkAllNotificationsRead() {
       const res = await api.patch('/notifications/read-all');
       return res.data;
     },
-    onSuccess: () => {
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['user-notifications'] });
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      await queryClient.cancelQueries({ queryKey: ['notifications-unread-count'] });
+      const previousLists = queryClient.getQueriesData<NotificationItem[]>({ queryKey: ['user-notifications'] });
+      const previousPages = queryClient.getQueriesData<DashboardNotificationsPage>({ queryKey: ['notifications'] });
+      const previousCount = queryClient.getQueryData<number>(['notifications-unread-count']);
+      queryClient.setQueriesData<NotificationItem[]>({ queryKey: ['user-notifications'] }, (old) =>
+        old?.map((n) => ({ ...n, read: true }))
+      );
+      queryClient.setQueriesData<DashboardNotificationsPage>({ queryKey: ['notifications'] }, (old) =>
+        old
+          ? {
+              ...old,
+              items: old.items.map((n) => ({ ...n, read: true })),
+              meta: { ...old.meta, unreadCount: 0 },
+            }
+          : old
+      );
+      queryClient.setQueryData<number>(['notifications-unread-count'], 0);
+      return { previousLists, previousPages, previousCount };
+    },
+    onError: (error, _vars, context) => {
+      context?.previousLists?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      context?.previousPages?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      if (context?.previousCount !== undefined) {
+        queryClient.setQueryData(['notifications-unread-count'], context.previousCount);
+      }
+      toast.error('Could not mark notification read: ' + getApiErrorMessage(error, 'Unknown error'));
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
