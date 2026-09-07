@@ -653,6 +653,67 @@ html, body {
   -webkit-touch-callout: none;
 }
 
+/*
+ * Shared press feedback for raw buttons / tappable divs that are not the
+ * shadcn <Button>. Subagents apply these classes — they do not invent
+ * per-screen variants. 150ms press, respects reduced motion.
+ */
+.btn-press {
+  transition: all 150ms ease;
+}
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+.btn-press-subtle {
+  transition: all 150ms ease;
+}
+.btn-press-subtle:active {
+  filter: brightness(1.25);
+}
+
+/* Shared ghost pill used across modals / MixHub / DjProfile CTAs */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.06);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  transition: all 150ms ease;
+}
+.btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.btn-ghost:active {
+  transform: scale(0.98);
+  filter: brightness(1.1);
+}
+.btn-ghost:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-press,
+  .btn-press-subtle,
+  .btn-ghost {
+    transition: none;
+  }
+  .btn-press:active,
+  .btn-ghost:active {
+    transform: none;
+  }
+  .btn-press-subtle:active {
+    filter: none;
+  }
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
