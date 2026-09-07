@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { FileText, Settings, Loader2, ShieldCheck, Clock } from 'lucide-react';
+import { FileText, Settings, ShieldCheck, Clock } from 'lucide-react';
 import api from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime } from '@/lib/dateTime';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 export function ModeratorAuditLogs() {
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayedLoading(loading);
   const [logs, setLogs] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -48,9 +51,7 @@ export function ModeratorAuditLogs() {
 
       {/* Log Entries List */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? <ListSkeleton /> : null
       ) : logs.length === 0 ? (
         <Card className="bg-black-elevated border-dark-gray p-12 text-center">
           <ShieldCheck className="w-12 h-12 text-text-muted mx-auto mb-3" />
