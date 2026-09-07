@@ -42,6 +42,8 @@ import { getMixUrl } from '@/lib/slug';
 import MixFeedRow from '@/components/feed/MixFeedRow';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 /* ──────────────────────── Helpers ──────────────────────── */
 function formatDuration(seconds: number): string {
@@ -510,6 +512,8 @@ export default function MixHub() {
 
   const featuredMix = trending[0] || allMixes[0];
 
+  const showSkeleton = useDelayedLoading(latestLoading && page === 1);
+
   return (
     <div className="min-h-screen bg-[#080808] text-text-primary pb-32">
       {/* ─── 🎧 SPOTIFY / APPLE MUSIC SPOTLIGHT HERO (Desktop only) ─── */}
@@ -779,11 +783,9 @@ export default function MixHub() {
           )}
         </div>
 
-        {/* Loading Spinner */}
+        {/* Loading Skeleton */}
         {latestLoading && page === 1 ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#f4e059] animate-spin" />
-          </div>
+          showSkeleton ? <FeedSectionSkeleton /> : null
         ) : viewMode === 'waveform' ? (
           /* 1. Full Waveform Cards (Unified with Feed layout) */
           <div className="space-y-3.5">
