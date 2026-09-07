@@ -310,43 +310,43 @@ export default function Layout() {
                         <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
                       </div>
                       <DropdownMenuItem asChild>
-                        <Link to={profilePath} className="cursor-pointer text-xs">Profile</Link>
+                        <Link to={profilePath} className="btn-press-subtle cursor-pointer text-xs">Profile</Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Link to={dashboardPath} className="cursor-pointer text-xs">Dashboard</Link>
+                        <Link to={dashboardPath} className="btn-press-subtle cursor-pointer text-xs">Dashboard</Link>
                       </DropdownMenuItem>
                       {isDj && (
                         <DropdownMenuItem asChild>
-                          <Link to="/dashboard" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
+                          <Link to="/dashboard" className="btn-press-subtle cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
                             <Radio className="w-3.5 h-3.5" /> DJ Studio
                           </Link>
                         </DropdownMenuItem>
                       )}
                       {isModerator && (
                         <DropdownMenuItem asChild>
-                          <Link to="/moderator" className="cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
+                          <Link to="/moderator" className="btn-press-subtle cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
                             <Shield className="w-3.5 h-3.5" /> Moderator Console
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem asChild>
-                        <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="cursor-pointer text-xs">Settings</Link>
+                        <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="btn-press-subtle cursor-pointer text-xs">Settings</Link>
                       </DropdownMenuItem>
                       {!isNativeApp && (
                         <DropdownMenuItem asChild>
-                          <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
+                          <Link to="/install" className="btn-press-subtle cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
                             Install App
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator className="bg-dark-gray" />
                       <DropdownMenuItem asChild>
-                        <Link to="/about" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
+                        <Link to="/about" className="btn-press-subtle cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
                           <Info className="w-3.5 h-3.5" /> About Deck Salone
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Link to="/help" className="cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
+                        <Link to="/help" className="btn-press-subtle cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
                           <HelpCircle className="w-3.5 h-3.5" /> Help & DJ Guide
                         </Link>
                       </DropdownMenuItem>
@@ -368,7 +368,7 @@ export default function Layout() {
                         </>
                       )}
                       <DropdownMenuSeparator className="bg-dark-gray" />
-                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
+                      <DropdownMenuItem onClick={handleLogout} className="btn-press-subtle cursor-pointer text-red text-xs">
                         <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
                       </DropdownMenuItem>
                     </DropdownMenuContent>

@@ -33,7 +33,7 @@ export default function MobileTabBar({ items }: MobileTabBarProps) {
               key={item.path}
               to={item.path}
               className={cn(
-                'flex flex-col items-center justify-center min-w-[72px] h-full space-y-1 px-2 transition-colors',
+                'btn-press-subtle flex flex-col items-center justify-center min-w-[72px] h-full space-y-1 px-2 transition-colors',
                 active ? 'text-gold' : 'text-text-muted hover:text-text-primary'
               )}
             >
