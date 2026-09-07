@@ -665,7 +665,7 @@ export default function MixPlayer() {
                     e.stopPropagation();
                     toggleLike();
                   }}
-                  className="p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 ml-1 hidden md:block"
+                  className="btn-press p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 ml-1 hidden md:block"
                 >
                   <Heart
                     size={14}
@@ -692,7 +692,7 @@ export default function MixPlayer() {
                     <div className="flex items-center gap-5">
                       <button
                         onClick={() => setIsShuffled(!isShuffled)}
-                        className={`p-1 transition-colors ${isShuffled ? 'text-gold' : 'text-white/25 hover:text-white/50'}`}
+                        className={`btn-press p-1 transition-colors ${isShuffled ? 'text-gold' : 'text-white/25 hover:text-white/50'}`}
                         title="Shuffle"
                       >
                         <Shuffle size={14} />
@@ -700,7 +700,7 @@ export default function MixPlayer() {
                       <button
                         onClick={prev}
                         disabled={queue.length <= 1}
-                        className="p-1 text-white/40 hover:text-white/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                        className="btn-press p-1 text-white/40 hover:text-white/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         title="Previous"
                       >
                         <SkipBack size={16} />
@@ -718,14 +718,14 @@ export default function MixPlayer() {
                       <button
                         onClick={next}
                         disabled={queue.length <= 1}
-                        className="p-1 text-white/40 hover:text-white/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                        className="btn-press p-1 text-white/40 hover:text-white/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         title="Next"
                       >
                         <SkipForward size={16} />
                       </button>
                       <button
                         onClick={() => setIsRepeating(!isRepeating)}
-                        className={`p-1 transition-colors ${isRepeating ? 'text-gold' : 'text-white/25 hover:text-white/50'}`}
+                        className={`btn-press p-1 transition-colors ${isRepeating ? 'text-gold' : 'text-white/25 hover:text-white/50'}`}
                         title="Repeat"
                       >
                         <Repeat size={14} />
@@ -765,7 +765,7 @@ export default function MixPlayer() {
                 <div className="hidden sm:flex items-center gap-2 group mr-2">
                   <button
                     onClick={toggleMute}
-                    className="p-1.5 text-white/30 hover:text-white/60 transition-colors"
+                    className="btn-press p-1.5 text-white/30 hover:text-white/60 transition-colors"
                   >
                     {isMuted || volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
                   </button>
@@ -808,14 +808,14 @@ export default function MixPlayer() {
                 )}
                 <button
                   onClick={() => setIsExpanded(true)}
-                  className="p-1.5 text-white/30 hover:text-white/60 transition-colors hidden md:block"
+                  className="btn-press p-1.5 text-white/30 hover:text-white/60 transition-colors hidden md:block"
                   title="Expand"
                 >
                   <Maximize2 size={15} />
                 </button>
                 <button
                   onClick={close}
-                  className="p-1.5 text-white/30 hover:text-red transition-colors"
+                  className="btn-press p-1.5 text-white/30 hover:text-red transition-colors"
                   title="Close"
                 >
                   <X size={16} />
@@ -914,7 +914,7 @@ export default function MixPlayer() {
                     <div className="flex items-center justify-between px-4 mt-2">
                       <button
                         onClick={() => setIsShuffled(!isShuffled)}
-                        className={`p-2 transition-colors ${isShuffled ? 'text-gold' : 'text-white/20'}`}
+                        className={`btn-press p-2 transition-colors ${isShuffled ? 'text-gold' : 'text-white/20'}`}
                       >
                         <Shuffle size={18} />
                       </button>
@@ -948,7 +948,7 @@ export default function MixPlayer() {
 
                       <button
                         onClick={() => setIsRepeating(!isRepeating)}
-                        className={`p-2 transition-colors ${isRepeating ? 'text-gold' : 'text-white/20'}`}
+                        className={`btn-press p-2 transition-colors ${isRepeating ? 'text-gold' : 'text-white/20'}`}
                       >
                         <Repeat size={18} />
                       </button>
@@ -961,7 +961,7 @@ export default function MixPlayer() {
                   <div className="flex items-center gap-3 mt-6 px-4">
                     <button
                       onClick={toggleMute}
-                      className="p-2 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+                      className="btn-press p-2 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
                     >
                       {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
                     </button>
@@ -994,7 +994,7 @@ export default function MixPlayer() {
                   <button
                     onClick={toggleLike}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold uppercase tracking-wider transition-colors',
+                      'btn-press flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold uppercase tracking-wider transition-colors',
                       liked
                         ? 'border-red/30 text-red bg-red/5'
                         : 'border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
@@ -1023,7 +1023,7 @@ export default function MixPlayer() {
                       }}
                     />
                   )}
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider">
+                  <button className="btn-press flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider">
                     <ListMusic size={14} />
                     <span>Queue</span>
                   </button>
