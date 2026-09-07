@@ -12,6 +12,8 @@ import { useOnsiteDashboard, useOnsiteGuests, useOnsiteCheckin, useOnsiteWalkin,
 import { formatCurrency } from '@/lib/formatting';
 import { formatEventDate } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 type View = 'home' | 'scanner' | 'guests' | 'walkin' | 'stats';
 type ScanState = 'idle' | 'scanning' | 'valid' | 'already_used' | 'invalid' | 'wrong_event' | 'not_approved' | 'unauthorized';
@@ -521,6 +523,7 @@ function GuestsTab({ eventId }: { eventId: string }) {
   }, [search]);
 
   const { data, isLoading } = useOnsiteGuests(eventId, { search: debouncedSearch, status, page: 1, limit: 50 });
+  const showSkeleton = useDelayedLoading(isLoading);
   const checkin = useOnsiteCheckin(eventId);
 
   const guests = data?.data || [];
@@ -576,7 +579,7 @@ function GuestsTab({ eventId }: { eventId: string }) {
         </div>
       </div>
 
-      {isLoading && <div className="text-center py-8 text-text-muted"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>}
+      {isLoading && (showSkeleton ? <DashboardSkeleton cards={2} /> : null)}
 
       <div className="space-y-3">
         {guests.map((guest: any) => (
@@ -799,13 +802,10 @@ function WalkinTab({ eventId }: { eventId: string }) {
 function StatsTab({ eventId }: { eventId: string }) {
   const { data, isLoading } = useOnsiteDashboard(eventId);
   const summary = data?.summary;
+  const showSkeleton = useDelayedLoading(isLoading);
 
   if (isLoading || !summary) {
-    return (
-      <div className="flex items-center justify-center h-64 text-text-muted">
-        <Loader2 className="w-6 h-6 animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   const stats = [
