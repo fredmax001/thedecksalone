@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Loader2,
   Heart,
   Music,
   Calendar,
@@ -24,6 +23,8 @@ import { useFollowing, type FollowingDJ } from '@/hooks/useUserDashboard';
 import { useFollowDj } from '@/hooks/useDJs';
 import { getMediaUrl } from '@/lib/api';
 import { formatDate } from '@/lib/dateTime';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 type LayoutMode = 'grid' | 'list';
 
@@ -303,12 +304,10 @@ export default function Following() {
     dj.genre?.some((g) => g.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const showSkeleton = useDelayedLoading(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
