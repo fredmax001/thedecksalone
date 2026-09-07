@@ -15,6 +15,8 @@ import api, { getMediaUrl } from '@/lib/api';
 import { formatDate } from '@/lib/dateTime';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ListSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +45,7 @@ const SYSTEM_GENRES = [
 
 export function ModeratorMixes() {
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayedLoading(loading);
   const [mixes, setMixes] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('ALL');
@@ -260,9 +263,7 @@ export function ModeratorMixes() {
 
       {/* Mix List Table / Cards */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        </div>
+        showSkeleton ? <ListSkeleton /> : null
       ) : mixes.length === 0 ? (
         <Card className="bg-black-elevated border-dark-gray p-12 text-center">
           <Music className="w-12 h-12 text-text-muted mx-auto mb-3" />
