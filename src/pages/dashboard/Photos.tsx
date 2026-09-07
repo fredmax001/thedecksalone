@@ -4,6 +4,8 @@ import { Trash2, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 interface DjPhoto {
   id: string;
@@ -75,12 +77,9 @@ export default function PhotosPage() {
     }
   };
 
+  const showSkeleton = useDelayedLoading(isLoading);
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={32} className="animate-spin text-gold" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton /> : null;
   }
 
   return (
