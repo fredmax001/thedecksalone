@@ -100,6 +100,8 @@ import { formatCompactNumber, formatCurrency } from '@/lib/formatting';
 import { formatDate, formatDateTime } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 /* ─────────────────────── Types ─────────────────────── */
 
@@ -239,11 +241,8 @@ function TimeRangeSelector({ selected, onChange }: { selected: TimeRange; onChan
 }
 
 function LoadingCenter() {
-  return (
-    <div className="flex items-center justify-center py-20">
-      <Loader2 className="w-10 h-10 text-[#f4e059] animate-spin" />
-    </div>
-  );
+  const showSkeleton = useDelayedLoading(true);
+  return showSkeleton ? <DashboardSkeleton /> : null;
 }
 
 function EmptyState({ message }: { message: string }) {
