@@ -101,20 +101,54 @@ export default function MixComments({
       toast.info('Sign in to leave a comment');
       return;
     }
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || submitting) return;
+
+    // Optimistic append with a temporary id
+    const tempId = `temp-${Date.now()}`;
+    const optimisticComment: MixCommentItem = {
+      id: tempId,
+      mixId,
+      userId: user?.id || '',
+      content: newComment.trim(),
+      createdAt: new Date().toISOString(),
+      user: {
+        id: user?.id || '',
+        name: user?.name,
+        username: user?.username || 'me',
+        avatar: user?.avatar,
+        role: user?.role || '',
+        djProfile: user?.djProfile ?? undefined,
+      },
+      likeCount: 0,
+      isLiked: false,
+      replies: [],
+    };
+    setComments((prev) => [...prev, optimisticComment]);
+    setTotalCount((prev) => prev + 1);
+    setNewComment('');
 
     setSubmitting(true);
     try {
       const res = await api.post(`/mixes/${mixId}/comments`, {
-        content: newComment.trim(),
+        content: optimisticComment.content,
       });
       if (res.data.success) {
+        const real = res.data.data;
+        if (real?.id) {
+          setComments((prev) =>
+            prev.map((c) => (c.id === tempId ? { ...real, replies: real.replies || [] } : c))
+          );
+        } else {
+          fetchComments();
+        }
         toast.success('Comment posted!');
-        setNewComment('');
-        fetchComments();
+      } else {
+        throw new Error(res.data.error || 'Failed to post comment');
       }
     } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to post comment'));
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      toast.error('Could not post comment: ' + getApiErrorMessage(err, 'Failed to post comment'));
     } finally {
       setSubmitting(false);
     }
@@ -125,22 +159,75 @@ export default function MixComments({
       toast.info('Sign in to reply');
       return;
     }
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || submitting) return;
+
+    // Optimistic append to the parent's replies with a temporary id
+    const tempId = `temp-${Date.now()}`;
+    const optimisticReply: MixCommentItem = {
+      id: tempId,
+      mixId,
+      userId: user?.id || '',
+      content: replyText.trim(),
+      parentId,
+      createdAt: new Date().toISOString(),
+      user: {
+        id: user?.id || '',
+        name: user?.name,
+        username: user?.username || 'me',
+        avatar: user?.avatar,
+        role: user?.role || '',
+        djProfile: user?.djProfile ?? undefined,
+      },
+      likeCount: 0,
+      isLiked: false,
+    };
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === parentId ? { ...c, replies: [...(c.replies || []), optimisticReply] } : c
+      )
+    );
+    setTotalCount((prev) => prev + 1);
+    setReplyText('');
+    setReplyingToId(null);
 
     setSubmitting(true);
     try {
       const res = await api.post(`/mixes/${mixId}/comments`, {
-        content: replyText.trim(),
+        content: optimisticReply.content,
         parentId,
       });
       if (res.data.success) {
+        const real = res.data.data;
+        if (real?.id) {
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === parentId
+                ? {
+                    ...c,
+                    replies: (c.replies || []).map((r) =>
+                      r.id === tempId ? { ...real, replies: real.replies || [] } : r
+                    ),
+                  }
+                : c
+            )
+          );
+        } else {
+          fetchComments();
+        }
         toast.success('Reply posted!');
-        setReplyText('');
-        setReplyingToId(null);
-        fetchComments();
+      } else {
+        throw new Error(res.data.error || 'Failed to post reply');
       }
     } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to post reply'));
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === parentId
+            ? { ...c, replies: (c.replies || []).filter((r) => r.id !== tempId) }
+            : c
+        )
+      );
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      toast.error('Could not post comment: ' + getApiErrorMessage(err, 'Failed to post reply'));
     } finally {
       setSubmitting(false);
     }
@@ -148,14 +235,34 @@ export default function MixComments({
 
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
+
+    // Optimistic removal (top-level or nested reply)
+    const previousComments = comments;
+    const previousTotal = totalCount;
+    setComments((prev) =>
+      prev
+        .map((c) =>
+          c.id === commentId
+            ? null
+            : c.replies
+              ? { ...c, replies: c.replies.filter((r) => r.id !== commentId) }
+              : c
+        )
+        .filter((c): c is MixCommentItem => c !== null)
+    );
+    setTotalCount((prev) => Math.max(0, prev - 1));
+
     try {
       const res = await api.delete(`/mixes/${mixId}/comments/${commentId}`);
       if (res.data.success) {
         toast.success('Comment deleted');
-        fetchComments();
+      } else {
+        throw new Error(res.data.error || 'Failed to delete comment');
       }
-    } catch {
-      toast.error('Failed to delete comment');
+    } catch (err: any) {
+      setComments(previousComments);
+      setTotalCount(previousTotal);
+      toast.error('Could not delete comment: ' + getApiErrorMessage(err, 'Failed to delete comment'));
     }
   };
 
@@ -165,33 +272,62 @@ export default function MixComments({
         toast.info('Sign in to like comments');
         return;
       }
+      if (likingId === commentId) return;
       setLikingId(commentId);
+
+      // Optimistic toggle of like state/count
+      const previousComments = comments;
+      setComments((prev) =>
+        prev.map((c) => {
+          const mapItem = (item: MixCommentItem): MixCommentItem => {
+            if (item.id === commentId) {
+              const liked = !item.isLiked;
+              return {
+                ...item,
+                isLiked: liked,
+                likeCount: Math.max(0, (item.likeCount || 0) + (liked ? 1 : -1)),
+              };
+            }
+            if (item.replies) {
+              return { ...item, replies: item.replies.map(mapItem) };
+            }
+            return item;
+          };
+          return mapItem(c);
+        })
+      );
+
       try {
         const res = await api.post(`/mixes/${mixId}/comments/${commentId}/like`);
         if (res.data.success) {
           const liked = res.data.data?.liked;
-          toast.success(liked ? 'Liked comment' : 'Unliked comment');
-          setComments((prev) =>
-            prev.map((c) => {
-              const mapItem = (item: MixCommentItem): MixCommentItem => {
-                if (item.id === commentId) {
-                  return {
-                    ...item,
-                    isLiked: liked,
-                    likeCount: Math.max(0, (item.likeCount || 0) + (liked ? 1 : -1)),
-                  };
-                }
-                if (item.replies) {
-                  return { ...item, replies: item.replies.map(mapItem) };
-                }
-                return item;
-              };
-              return mapItem(c);
-            })
-          );
+          if (typeof liked === 'boolean') {
+            setComments((prev) =>
+              prev.map((c) => {
+                const mapItem = (item: MixCommentItem): MixCommentItem => {
+                  if (item.id === commentId) {
+                    return {
+                      ...item,
+                      isLiked: liked,
+                      likeCount: Math.max(0, (item.likeCount || 0) + (liked === item.isLiked ? 0 : liked ? 1 : -1)),
+                    };
+                  }
+                  if (item.replies) {
+                    return { ...item, replies: item.replies.map(mapItem) };
+                  }
+                  return item;
+                };
+                return mapItem(c);
+              })
+            );
+          }
+          toast.success(res.data.data?.liked ? 'Liked comment' : 'Unliked comment');
+        } else {
+          throw new Error(res.data.error || 'Failed to like comment');
         }
       } catch (err: any) {
-        toast.error(getApiErrorMessage(err, 'Failed to like comment'));
+        setComments(previousComments);
+        toast.error('Could not like comment: ' + getApiErrorMessage(err, 'Failed to like comment'));
       } finally {
         setLikingId(null);
       }
