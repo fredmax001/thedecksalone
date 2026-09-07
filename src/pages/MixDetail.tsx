@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, Heart, Clock, Music, Loader2, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2 } from 'lucide-react';
+import { Play, Heart, Clock, Music, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2 } from 'lucide-react';
 import { useMix, useLikeMix, useMixLike } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
@@ -20,6 +20,8 @@ import { formatCompactNumber } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
 import { getMixShareUrl } from '@/lib/slug';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -136,13 +138,9 @@ export default function MixDetail() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (error || !mix) {
     return (
