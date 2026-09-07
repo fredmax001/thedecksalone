@@ -179,7 +179,8 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               {query && (
                 <button
                   onClick={() => setQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-white"
+                  aria-label="Clear search"
+                  className="btn-press absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -189,7 +190,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
             <button
               onClick={() => setShowFilters((prev) => !prev)}
               className={cn(
-                'h-11 px-3 rounded-xl border transition-all flex items-center gap-2 shrink-0',
+                'btn-press-subtle h-11 px-3 rounded-xl border transition-all flex items-center gap-2 shrink-0',
                 showFilters
                   ? 'bg-gold text-black border-gold'
                   : 'bg-white/[0.04] text-text-secondary border-white/10 hover:border-gold/40'
@@ -205,7 +206,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
             <button
               onClick={() => setTab('mixes')}
               className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all',
+                'btn-press-subtle flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all',
                 tab === 'mixes'
                   ? 'bg-gold text-black'
                   : 'bg-white/[0.05] text-text-secondary hover:text-white border border-white/10'
@@ -216,7 +217,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
             <button
               onClick={() => setTab('djs')}
               className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all',
+                'btn-press-subtle flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-all',
                 tab === 'djs'
                   ? 'bg-gold text-black'
                   : 'bg-white/[0.05] text-text-secondary hover:text-white border border-white/10'
@@ -229,7 +230,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               <button
                 onClick={() => setViewMode('list')}
                 className={cn(
-                  'p-1.5 rounded-md transition-all',
+                  'btn-press p-1.5 rounded-md transition-all',
                   viewMode === 'list' ? 'bg-gold text-black' : 'text-text-muted hover:text-white'
                 )}
               >
@@ -238,7 +239,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               <button
                 onClick={() => setViewMode('grid')}
                 className={cn(
-                  'p-1.5 rounded-md transition-all',
+                  'btn-press p-1.5 rounded-md transition-all',
                   viewMode === 'grid' ? 'bg-gold text-black' : 'text-text-muted hover:text-white'
                 )}
               >
