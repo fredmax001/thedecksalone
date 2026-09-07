@@ -13,6 +13,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useEvents, useEventTypes } from '@/hooks/useEvents';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { PageSkeleton } from '@/components/ui/page-skeletons';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/apiErrors';
@@ -142,13 +144,9 @@ export default function Events() {
   const featured = events.slice(0, 2);
   const openSlots = (openSlotsData?.data || []).map(toEventItem);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-black flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
-  }
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading && showSkeleton) return <PageSkeleton />;
+  if (isLoading) return null;
 
   if (error) {
     return (
