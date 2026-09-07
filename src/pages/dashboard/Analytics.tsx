@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   BarChart3,
-  Loader2,
   TrendingUp,
   Headphones,
   Calendar,
@@ -24,6 +23,8 @@ import { Button } from '@/components/ui/button';
 import { FeatureLock } from '@/components/FeatureLock';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useRequireDj } from '@/hooks/useRequireDj';
+import { DashboardSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
   BarChart as ReBarChart,
   Bar,
@@ -225,12 +226,10 @@ export default function Analytics() {
   const totalMixes = overview?.totalMixes || 0;
   const avgStreamsPerMix = totalMixes > 0 ? Math.round(totalStreams / totalMixes) : 0;
 
+  const showSkeleton = useDelayedLoading(loading);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-gold animate-spin" />
-      </div>
-    );
+    return showSkeleton ? <DashboardSkeleton cards={8} /> : null;
   }
 
   if (!isDj) {
