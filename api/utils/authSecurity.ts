@@ -168,6 +168,10 @@ async function sendLockoutNotification(email: string): Promise<void> {
           </div>
         `,
       });
+    } else if (process.env.NODE_ENV === 'production') {
+      // Never log live reset tokens in production — without SMTP the link
+      // simply cannot be delivered, so log a warning without the token.
+      console.warn(`[Security Alert] SMTP not configured — password reset link for locked user ${email} was NOT delivered (token withheld from logs)`);
     } else {
       console.log(`[Dev Security Alert] Password reset link for locked user ${email}: ${resetUrl}`);
     }
