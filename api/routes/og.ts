@@ -16,6 +16,8 @@ function renderMetaHtml(params: {
   const { title, description, url, image, type = 'website' } = params;
   const safeTitle = sanitize(title);
   const safeDescription = sanitize(description);
+  const safeUrl = sanitize(url);
+  const safeImage = sanitize(image);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,20 +28,20 @@ function renderMetaHtml(params: {
   <meta property="og:type" content="${type}">
   <meta property="og:title" content="${safeTitle}">
   <meta property="og:description" content="${safeDescription}">
-  <meta property="og:url" content="${url}">
-  <meta property="og:image" content="${image}">
+  <meta property="og:url" content="${safeUrl}">
+  <meta property="og:image" content="${safeImage}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="The Deck Salone">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${safeTitle}">
   <meta name="twitter:description" content="${safeDescription}">
-  <meta name="twitter:image" content="${image}">
-  <link rel="canonical" href="${url}">
-  <script>window.location.replace(${JSON.stringify(url)});</script>
+  <meta name="twitter:image" content="${safeImage}">
+  <link rel="canonical" href="${safeUrl}">
+  <script>window.location.replace(${JSON.stringify(safeUrl)});</script>
 </head>
 <body>
-  <p>Redirecting to <a href="${url}">${safeTitle}</a>...</p>
+  <p>Redirecting to <a href="${safeUrl}">${safeTitle}</a>...</p>
 </body>
 </html>`;
 }
