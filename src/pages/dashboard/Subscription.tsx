@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import PayPalSubscribeButton from '@/components/PayPalSubscribeButton';
 
 interface Plan {
   id: string;
@@ -326,6 +327,22 @@ export default function Subscription() {
 
   const selectedPlan = PLANS.find((plan) => plan.id === selectedPlanId);
 
+  const handlePayPalSuccess = async (paidPlan: string) => {
+    setRequestSent(false);
+    setStatus((prev: any) => ({
+      ...(prev || {}),
+      isPro: true,
+      activePlan: String(paidPlan).replace('_annual', '') || 'pro',
+    }));
+    try {
+      const res = await api.get('/payments/pro-subscription/current');
+      setStatus(res.data.data);
+    } catch {
+      // Status refresh is best-effort — local state already reflects success
+    }
+    await fetchMe();
+  };
+
   const hasPendingRequest = latestRequest?.status === 'pending';
   const isSelectedCurrentPaidPlan = !!selectedPlanId && selectedPlanId !== 'free' && selectedPlanId === currentPlan;
   const shouldShowPaymentPanel = (!!selectedPlanId && selectedPlanId !== 'free') || !!latestRequest || (status?.isPro && currentPlan !== 'free');
@@ -573,6 +590,21 @@ export default function Subscription() {
                         You already have a pending request. You can resubmit with a new proof to replace it.
                       </p>
                     )}
+
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-white/10" />
+                      <span className="text-[11px] uppercase tracking-wider text-text-muted font-semibold">or pay instantly</span>
+                      <div className="flex-1 h-px bg-white/10" />
+                    </div>
+                    {selectedPlanId === 'pro' || selectedPlanId === 'legend' ? (
+                      <PayPalSubscribeButton
+                        plan={selectedPlanId}
+                        billingPeriod={billingPeriod}
+                        onSuccess={handlePayPalSuccess}
+                      />
+                    ) : (
+                      <p className="text-[11px] text-text-muted text-center">PayPal checkout is available for Pro and Pro+ plans.</p>
+                    )}
                   </>
                 )}
               </div>
@@ -694,7 +726,7 @@ export default function Subscription() {
               },
               {
                 q: 'What currency is used?',
-                a: 'All prices are in Sierra Leonean Leone (SLE). Paid subscriptions are currently handled through Orange Money.',
+                a: 'Prices are listed in Sierra Leonean Leone (SLE). Pay instantly with PayPal (charged in USD), or via Orange Money with manual admin confirmation.',
               },
               {
                 q: 'Do you offer yearly discounts?',

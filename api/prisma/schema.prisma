@@ -67,6 +67,7 @@ model User {
   targetedReports         ViolationReport[] @relation("TargetedReports")
   djSupports              DjSupport[]
   proSubscriptionRequests ProSubscriptionRequest[]
+  paypalPayments          PayPalPayment[]
   supportTickets          SupportTicket[]
   mixReactions            MixReaction[]
 
@@ -737,6 +738,25 @@ model ProSubscriptionRequest {
   @@index([status])
   @@index([createdAt])
   @@map("pro_subscription_requests")
+}
+
+model PayPalPayment {
+  id         String    @id @default(cuid())
+  userId     String
+  orderId    String    @unique // PayPal order ID — also our idempotency key
+  plan       String // pro | legend
+  amountSle  Float
+  amountUsd  Float
+  rate       Float // USD per 1 SLE at capture time
+  status     String    @default("CREATED") // CREATED | CAPTURED | FAILED
+  payerId    String?
+  capturedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("paypal_payments")
 }
 
 model Event {
