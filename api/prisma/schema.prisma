@@ -744,12 +744,15 @@ model PayPalPayment {
   id         String    @id @default(cuid())
   userId     String
   orderId    String    @unique // PayPal order ID — also our idempotency key
-  plan       String // pro | legend
+  purpose    String    @default("SUBSCRIPTION") // SUBSCRIPTION | TICKET | BOOKING | SUPPORT
+  refId      String? // purpose-specific reference (ticket ids, bookingId, djId)
+  plan       String // pro | legend | pro_annual | legend_annual (purpose-specific tag otherwise)
   amountSle  Float
   amountUsd  Float
   rate       Float // USD per 1 SLE at capture time
   status     String    @default("CREATED") // CREATED | CAPTURED | FAILED
   payerId    String?
+  meta       Json? // purpose-specific payload (buyer info, ticket ids, messages)
   capturedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt

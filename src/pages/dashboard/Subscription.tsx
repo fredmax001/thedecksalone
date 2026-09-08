@@ -23,7 +23,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
-import PayPalSubscribeButton from '@/components/PayPalSubscribeButton';
+import PayPalButton from '@/components/PayPalButton';
 
 interface Plan {
   id: string;
@@ -597,10 +597,20 @@ export default function Subscription() {
                       <div className="flex-1 h-px bg-white/10" />
                     </div>
                     {selectedPlanId === 'pro' || selectedPlanId === 'legend' ? (
-                      <PayPalSubscribeButton
-                        plan={selectedPlanId}
-                        billingPeriod={billingPeriod}
-                        onSuccess={handlePayPalSuccess}
+                      <PayPalButton
+                        label={`Pay with PayPal — instant activation`}
+                        successMessage="🎉 Payment confirmed! Your subscription is now active."
+                        createOrder={async () => {
+                          const res = await api.post('/payments/paypal/create-order', {
+                            plan: selectedPlanId,
+                            billingPeriod,
+                          });
+                          return res.data.data.orderId;
+                        }}
+                        onCapture={async (orderId) => {
+                          const res = await api.post('/payments/paypal/capture-order', { orderId });
+                          await handlePayPalSuccess(res.data.data?.plan || selectedPlanId);
+                        }}
                       />
                     ) : (
                       <p className="text-[11px] text-text-muted text-center">PayPal checkout is available for Pro and Pro+ plans.</p>

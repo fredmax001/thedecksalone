@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { useEventAvailability, usePurchaseTicket } from '@/hooks/useEventTicketing';
+import PayPalButton from '@/components/PayPalButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -218,7 +219,35 @@ function BuyTicketModal({
 
         {/* Upload (paid only) */}
         {!isFree && (
-          <label className="block cursor-pointer mb-4">
+          <>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">or pay instantly</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+            <PayPalButton
+              label={`Pay ${formatCurrency(total, selectedType.currency)} with PayPal`}
+              successMessage="🎟️ Payment confirmed! Your tickets are approved."
+              className="mb-4"
+              createOrder={async () => {
+                const res = await api.post('/payments/paypal/ticket-order', {
+                  eventId: event.id,
+                  ticketTypeId: selectedType.id,
+                  quantity,
+                  buyerName: buyerName ? buyerName.trim() : undefined,
+                  buyerEmail: buyerEmail ? buyerEmail.trim() : undefined,
+                  buyerPhone: buyerPhone ? buyerPhone.trim() : undefined,
+                  notes: notes ? notes.trim() : undefined,
+                });
+                return res.data.data.orderId;
+              }}
+              onCapture={async (orderId) => {
+                await api.post('/payments/paypal/capture-ticket', { orderId });
+                onSuccess();
+                onClose();
+              }}
+            />
+            <label className="block cursor-pointer mb-4">
             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])} />
             <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${file ? 'border-gold/40 bg-gold/5' : 'border-white/10 hover:border-gold/20'}`}>
               {file ? <p className="text-sm text-gold font-semibold">✓ {file.name}</p> : <><Upload className="w-6 h-6 text-text-muted mx-auto mb-2" /><p className="text-sm text-text-muted">Upload payment screenshot</p></>}

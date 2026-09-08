@@ -48,6 +48,7 @@ import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { DashboardSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import PayPalButton from '@/components/PayPalButton';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -105,8 +106,7 @@ export default function MyBookings() {
     setExpandedId(null);
   };
 
-  const submitReview = async () => {
-    if (!selectedBooking || reviewRating === 0) return;
+  const submitReview = async () => {    if (!selectedBooking || reviewRating === 0) return;
     setReviewSubmitting(true);
     try {
       await api.post(`/bookings/${selectedBooking.id}/review`, {
@@ -332,6 +332,64 @@ export default function MyBookings() {
                             Leave Review
                           </Button>
                         )}
+
+                        {/* PayPal Payments — deposit / full balance */}
+                        {(() => {
+                          const payments = (booking as any).payments || [];
+                          const completed = payments.filter((p: any) => p.status === 'COMPLETED' && p.type !== 'REFUND');
+                          const paidSum = completed.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+                          const finalPrice = booking.finalPrice || 0;
+                          const deposit = booking.deposit || 0;
+                          const depositPaid = completed.some((p: any) => p.type === 'DEPOSIT');
+                          const canPayDeposit = booking.status === 'CONFIRMED' && deposit > 0 && !depositPaid;
+                          const remaining = Math.max(0, finalPrice - paidSum);
+                          const canPayFull = ['CONFIRMED', 'DEPOSIT_PAID'].includes(booking.status) && finalPrice > 0 && remaining > 0;
+                          if (!canPayDeposit && !canPayFull) return null;
+                          return (
+                            <div className="rounded-xl bg-black-surface border border-gold/20 p-4 space-y-3">
+                              <p className="text-xs font-semibold text-text-primary uppercase tracking-wider">
+                                Pay Online with PayPal
+                              </p>
+                              {canPayDeposit && (
+                                <PayPalButton
+                                  label={`Pay Deposit (SLE ${deposit})`}
+                                  successMessage="Deposit received! Your booking is marked Deposit Paid."
+                                  createOrder={async () => {
+                                    const res = await api.post('/payments/paypal/booking-order', {
+                                      bookingId: booking.id,
+                                      type: 'DEPOSIT',
+                                    });
+                                    return res.data.data.orderId;
+                                  }}
+                                  onCapture={async (orderId) => {
+                                    await api.post('/payments/paypal/capture-booking', { orderId });
+                                    refetch();
+                                  }}
+                                />
+                              )}
+                              {canPayFull && (
+                                <PayPalButton
+                                  label={`Pay SLE ${remaining} (Full Balance)`}
+                                  successMessage="Payment received! Your booking is fully paid."
+                                  createOrder={async () => {
+                                    const res = await api.post('/payments/paypal/booking-order', {
+                                      bookingId: booking.id,
+                                      type: 'FULL_PAYMENT',
+                                    });
+                                    return res.data.data.orderId;
+                                  }}
+                                  onCapture={async (orderId) => {
+                                    await api.post('/payments/paypal/capture-booking', { orderId });
+                                    refetch();
+                                  }}
+                                />
+                              )}
+                              <p className="text-[10px] text-text-muted text-center uppercase tracking-wider">
+                                Instant confirmation · charged in USD · or arrange manual payment with the DJ
+                              </p>
+                            </div>
+                          );
+                        })()}
 
                         {/* Message DJ */}
                         <Button

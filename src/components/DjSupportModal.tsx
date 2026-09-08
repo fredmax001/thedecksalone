@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
+import PayPalButton from '@/components/PayPalButton';
 
 interface DjSupportModalProps {
   isOpen: boolean;
@@ -36,6 +37,19 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePayPalTip = async (orderId: string) => {
+    await api.post('/payments/paypal/capture-support', { orderId });
+    toast.success(`🙏 Thank you for supporting ${dj.stageName}!`, {
+      description: 'Your tip was sent instantly via PayPal.',
+    });
+    if (onSuccess) onSuccess();
+    onClose();
+    setAmount('');
+    setPaymentReference('');
+    setMessage('');
+    setSelectedFile(null);
+  };
 
   if (!isOpen) return null;
 
@@ -161,6 +175,30 @@ export function DjSupportModal({ isOpen, onClose, dj, onSuccess }: DjSupportModa
               <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
               <span>Leave an optional message of encouragement</span>
             </div>
+          </div>
+
+          {/* PayPal instant tip */}
+          <div className="mb-5">
+            <PayPalButton
+              label={`Send SLE ${amount || '…'} with PayPal`}
+              successMessage="Tip sent!"
+              createOrder={async () => {
+                const parsedAmount = parseFloat(amount);
+                if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+                  throw new Error('Please enter a valid amount first');
+                }
+                const res = await api.post('/payments/paypal/support-order', {
+                  djId: dj.id,
+                  amount: parsedAmount,
+                  message: message ? message.trim() : undefined,
+                });
+                return res.data.data.orderId;
+              }}
+              onCapture={handlePayPalTip}
+            />
+            <p className="text-[10px] text-text-muted mt-2 text-center uppercase tracking-wider">
+              Instant · no screenshot needed · or use Orange Money below
+            </p>
           </div>
 
           {/* Payment Steps */}
