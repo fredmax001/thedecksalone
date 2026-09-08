@@ -20,6 +20,7 @@ export interface ResolvedAudio {
   tags?: string[];
   duration?: number;
   coverImage?: string;
+  releaseDate?: Date;
 }
 
 const DIRECT_AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|m4a|aac|flac|weba)(\?.*)?$/i;
@@ -202,6 +203,10 @@ function resolveHearthisTrackData(data: any): ResolvedAudio | null {
           ? data.thumb.trim()
           : undefined;
 
+  const releaseDate = parseHearthisDate(
+    data.release_date || data.created_at || (data.release_timestamp ? data.release_timestamp * 1000 : undefined)
+  );
+
   return {
     audioUrl: streamUrl,
     audioSource: 'hearthis',
@@ -211,7 +216,23 @@ function resolveHearthisTrackData(data: any): ResolvedAudio | null {
     tags,
     duration,
     coverImage,
+    releaseDate,
   };
+}
+
+function parseHearthisDate(raw: any): Date | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === 'number') {
+    const d = new Date(raw > 1e12 ? raw : raw * 1000);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    // API returns "YYYY-MM-DD HH:mm:ss" (no timezone) — treat as UTC
+    const normalized = raw.trim().replace(' ', 'T') + 'Z';
+    const d = new Date(normalized);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+  return undefined;
 }
 
 export async function resolveHearthisSet(

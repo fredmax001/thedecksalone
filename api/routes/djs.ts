@@ -486,7 +486,12 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
 
   const commonInclude = {
     user: { select: { id: true, username: true } },
-    mixes: { where: { isPublic: true }, orderBy: { createdAt: 'desc' } },
+    mixes: {
+      where: { isPublic: true },
+      // Newest by original release date when known (Hearthis imports carry
+      // their upload date); fall back to import date for older mixes.
+      orderBy: [{ releaseDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+    },
     streamingPlatforms: true,
     reviews: {
       include: { user: { select: { id: true, username: true, avatar: true } } },
