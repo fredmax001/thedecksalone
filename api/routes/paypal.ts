@@ -96,7 +96,7 @@ router.post('/create-order', authMiddleware, asyncHandlerCompat(async (req: any,
   if (!parsed.success) return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
 
   const { plan, billingPeriod } = parsed.data;
-  const config = getSubscriptionConfig();
+  const config = await getSubscriptionConfig();
   const amountSle = billingPeriod === 'annual'
     ? (ANNUAL_PRICES_SLE[plan] ?? (plan === 'legend' ? config.legendPrice : config.proPrice) * 12)
     : (plan === 'legend' ? config.legendPrice : config.proPrice);
