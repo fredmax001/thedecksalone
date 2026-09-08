@@ -253,6 +253,7 @@ function BuyTicketModal({
               {file ? <p className="text-sm text-gold font-semibold">✓ {file.name}</p> : <><Upload className="w-6 h-6 text-text-muted mx-auto mb-2" /><p className="text-sm text-text-muted">Upload payment screenshot</p></>}
             </div>
           </label>
+          </>
         )}
 
         <button
