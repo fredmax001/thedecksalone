@@ -2811,7 +2811,7 @@ router.post('/send-email', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any,
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/dispatch-bug-report - Dispatch bug summary email
 // ───────────────────────────────────────────────────────────────────
-router.post('/dispatch-bug-report', async (req: any, res: any) => {
+router.post('/dispatch-bug-report', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const { sendDailyBugSummary } = require('../utils/bugReport');
     const result = await sendDailyBugSummary();
@@ -2825,7 +2825,7 @@ router.post('/dispatch-bug-report', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/nudge-incomplete-profiles - Send 5-step profile nudges
 // ───────────────────────────────────────────────────────────────────
-router.post('/nudge-incomplete-profiles', async (req: any, res: any) => {
+router.post('/nudge-incomplete-profiles', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const { nudgeIncompleteProfiles } = require('../utils/profileCompletion');
     const { userId } = req.body;
@@ -3441,7 +3441,7 @@ router.get('/incomplete-profiles', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/profiles/nudge - Send nudge email to incomplete profiles
 // ───────────────────────────────────────────────────────────────────
-router.post('/profiles/nudge', async (req: any, res: any) => {
+router.post('/profiles/nudge', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const { userId, allIncomplete } = req.body || {};
 
