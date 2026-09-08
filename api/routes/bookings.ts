@@ -482,9 +482,24 @@ router.put('/:id/status', authMiddleware, asyncHandler(async (req, res) => {
     return fail(res, 400, `Cannot transition from ${booking.status} to ${status}`);
   }
 
-  // Only DJ can set finalPrice; only client can confirm when DJ proposes
+  // Only DJ can set finalPrice/deposit (money terms are set by the DJ side)
   if (finalPrice !== undefined && !isDj && !isAdmin) {
     return fail(res, 403, 'Only the DJ can set the final price');
+  }
+  if (deposit !== undefined && !isDj && !isAdmin) {
+    return fail(res, 403, 'Only the DJ can set the deposit');
+  }
+
+  // Money-lifecycle transitions (DEPOSIT_PAID, COMPLETED, REFUNDED) are
+  // DJ/admin-only. A client may only CONFIRM (accepting terms the DJ has
+  // proposed via finalPrice) or CANCEL their own booking.
+  if (isClient && !isDj && !isAdmin) {
+    if (status !== 'CONFIRMED' && status !== 'CANCELLED') {
+      return fail(res, 403, 'Only the DJ can update the booking to this status');
+    }
+    if (status === 'CONFIRMED' && booking.finalPrice == null) {
+      return fail(res, 400, 'Wait for the DJ to propose terms before confirming');
+    }
   }
 
   const updateData: any = { status };
