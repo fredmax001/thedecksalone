@@ -654,6 +654,7 @@ router.get('/me', authMiddleware, asyncHandler(async (req, res) => {
       createdAt: true,
       subscriptionTier: true,
       subscriptionActivatedAt: true,
+      subscriptionExpiresAt: true,
       notificationPreferences: true,
       privacyPreferences: true,
       djProfile: {
@@ -673,6 +674,7 @@ router.get('/me', authMiddleware, asyncHandler(async (req, res) => {
           isPro: true,
           subscriptionTier: true,
           subscriptionActivatedAt: true,
+          subscriptionExpiresAt: true,
           totalFollowers: true,
           totalStreams: true,
           totalMixes: true,

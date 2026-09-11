@@ -1,16 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {
-  ListMusic,
-  Play,
-  Music,
-  Flame,
-  Radio,
-  Compass,
-  PartyPopper,
-  Disc3,
-} from 'lucide-react';
+import { ListMusic, Play, Music, Compass, X, Sparkles, ChevronDown } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { useForYouPlaylists } from '@/hooks/useRecommendations';
@@ -18,41 +9,62 @@ import { motion } from 'framer-motion';
 import SEOHead from '@/components/SEOHead';
 import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { GENRES } from '@/constants/genres';
+import { MOODS, ENERGIES, MOOD_LABELS, ENERGY_LABELS } from '@/constants/moods';
 
-interface PlaylistRowSectionProps {
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  playlists: any[];
-  badge?: string;
-  isForYou?: boolean;
+/* ─────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────── */
+
+function toTrack(m: any): MixTrack {
+  return {
+    id: m.id,
+    title: m.title,
+    dj: m.dj?.stageName || m.dj || 'DJ',
+    duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
+    cover: getMediaUrl(m.coverImage || m.cover) || '',
+    genre: m.genre || '',
+    plays: m.plays || 0,
+    audioUrl: getMediaUrl(m.audioUrl) || '',
+  };
 }
 
-function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: number }) {
+/** Facets used for filtering. Smart playlists expose their rule values;
+    official (manual) playlists have no facets and only show unfiltered. */
+function facetsOf(p: any) {
+  return {
+    moods: p.moods || [],
+    energies: p.energies || [],
+    genres: p.genres || [],
+  };
+}
+
+/* ─────────────────────────────────────────────
+   Card
+───────────────────────────────────────────── */
+
+function PlaylistCard({ playlist, index = 0 }: { playlist: any; index?: number }) {
   const { play, setQueue } = usePlayerStore();
 
   const trackCount = playlist._count?.items || playlist.items?.length || playlist.trackCount || 0;
   const cover = getMediaUrl(playlist.coverImage) || '/images/genres/salone-mix.jpg';
+  const isSmart = Boolean(playlist.isSmart);
+
+  const ruleChips = useMemo(() => {
+    if (!isSmart) return [];
+    const chips: string[] = [];
+    (playlist.moods || []).forEach((m: string) => chips.push(MOOD_LABELS[m] || m));
+    (playlist.energies || []).forEach((e: string) => chips.push(`${ENERGY_LABELS[e] || e} Energy`));
+    return chips.slice(0, 2);
+  }, [isSmart, playlist.moods, playlist.energies]);
 
   const handleQuickPlay = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // If playlist already has items embedded (like for-you smart playlists)
-    if (playlist.items && playlist.items.length > 0 && playlist.items[0].id) {
-      const tracks: MixTrack[] = playlist.items.map((item: any) => {
-        const m = item.mix || item;
-        return {
-          id: m.id,
-          title: m.title,
-          dj: m.dj?.stageName || m.dj || 'DJ',
-          duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
-          cover: getMediaUrl(m.coverImage || m.cover) || '',
-          genre: m.genre || '',
-          plays: m.plays || 0,
-          audioUrl: getMediaUrl(m.audioUrl) || '',
-        };
-      });
+    // Smart playlists embed only a preview — fetch the full generated tracklist.
+    if (!isSmart && playlist.items?.length > 0 && playlist.items[0].id) {
+      const tracks: MixTrack[] = playlist.items.map((item: any) => toTrack(item.mix || item));
       if (tracks.length > 0) {
         setQueue(tracks);
         play(tracks[0]);
@@ -60,24 +72,13 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
       return;
     }
 
+    const base = isSmart ? '/smart-playlists' : '/official-playlists';
     try {
-      const res = await api.get(`/official-playlists/${playlist.slug || playlist.id}`);
+      const res = await api.get(`${base}/${playlist.slug || playlist.id}`);
       if (res.data.success && res.data.data?.items?.length > 0) {
         const tracks: MixTrack[] = res.data.data.items
           .filter((item: any) => item.mix)
-          .map((item: any) => {
-            const m = item.mix;
-            return {
-              id: m.id,
-              title: m.title,
-              dj: m.dj?.stageName || 'DJ',
-              duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
-              cover: getMediaUrl(m.coverImage) || '',
-              genre: m.genre || '',
-              plays: m.plays || 0,
-              audioUrl: getMediaUrl(m.audioUrl) || '',
-            };
-          });
+          .map((item: any) => toTrack(item.mix));
         if (tracks.length > 0) {
           setQueue(tracks);
           play(tracks[0]);
@@ -92,15 +93,12 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.04 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 10) * 0.04 }}
       className="group"
     >
-      <Link
-        to={playlist.slug?.startsWith('for-you') ? `/mixes?search=${encodeURIComponent(playlist.title)}` : `/playlist/${playlist.slug || playlist.id}`}
-        className="block"
-      >
+      <Link to={`/playlist/${playlist.slug || playlist.id}`} className="block">
         <div className="rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-3 transition-all shadow-lg hover:shadow-gold/10 flex flex-col h-full">
-          {/* Compact Square Artwork */}
+          {/* Square Artwork */}
           <div className="relative aspect-square rounded-xl overflow-hidden bg-black shrink-0 shadow-md">
             <img
               src={cover}
@@ -113,17 +111,24 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
-            {/* Badge */}
-            {playlist.badge && (
-              <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
-                {playlist.badge}
-              </span>
-            )}
-            {playlist.isFeatured && !playlist.badge && (
-              <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
-                ★ Featured
-              </span>
-            )}
+            {/* Badges */}
+            <div className="absolute top-2 left-2 flex flex-col items-start gap-1 z-10">
+              {playlist.badge && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
+                  {playlist.badge}
+                </span>
+              )}
+              {isSmart && !playlist.badge && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
+                  Smart
+                </span>
+              )}
+              {playlist.isFeatured && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/70 text-gold border border-gold/40 shadow-md">
+                  ★ Featured
+                </span>
+              )}
+            </div>
 
             {/* Play Button Overlay */}
             <button
@@ -142,6 +147,18 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
               <h3 className="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
                 {playlist.title}
               </h3>
+              {ruleChips.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {ruleChips.map((c) => (
+                    <span
+                      key={c}
+                      className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-text-secondary"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
               {playlist.description && (
                 <p className="text-[11px] text-text-secondary line-clamp-2 mt-1 leading-relaxed">
                   {playlist.description}
@@ -154,7 +171,9 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
                 <Music className="w-3 h-3" />
                 {trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}
               </span>
-              <span className="truncate text-text-muted/80">Deck Salone Official</span>
+              <span className="truncate text-text-muted/80">
+                {isSmart ? 'Auto-curated' : 'Deck Salone Official'}
+              </span>
             </div>
           </div>
         </div>
@@ -163,212 +182,248 @@ function CompactPlaylistCard({ playlist, index = 0 }: { playlist: any; index?: n
   );
 }
 
-function PlaylistRowSection({
-  title,
-  subtitle,
-  icon,
-  playlists,
-}: PlaylistRowSectionProps) {
-  if (!playlists || playlists.length === 0) return null;
+/* ─────────────────────────────────────────────
+   Filter Dropdown
+───────────────────────────────────────────── */
+
+function FilterDropdown({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  const active = Boolean(value);
+  const activeLabel = options.find((o) => o.value === value)?.label;
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <div className="text-gold">{icon}</div>
-            <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
-              {title}
-            </h2>
-          </div>
-          <p className="text-xs text-text-secondary">{subtitle}</p>
-        </div>
-      </div>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide px-3.5 py-2 rounded-full border transition-all whitespace-nowrap ${
+          active
+            ? 'bg-gold text-black border-gold shadow-md'
+            : 'bg-white/[0.04] text-text-secondary border-white/10 hover:border-gold/40 hover:text-white'
+        }`}
+      >
+        <span className="text-text-muted/70 normal-case tracking-normal font-semibold">{label}</span>
+        <span className={active ? 'truncate max-w-28' : ''}>{active ? activeLabel : 'All'}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
 
-      {/* Responsive Grid with reduced card sizes (2 cols on mobile, 3 on tablet, 4 on desktop, 5 on wide) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
-        {playlists.map((pl, i) => (
-          <CompactPlaylistCard key={pl.id || i} playlist={pl} index={i} />
-        ))}
-      </div>
-    </section>
+      {open && (
+        <div className="absolute left-0 top-full mt-2 z-30 min-w-44 max-h-72 overflow-y-auto rounded-xl bg-[#161514] border border-white/10 shadow-2xl p-1.5 space-y-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              setOpen(false);
+            }}
+            className={`w-full text-left text-[11px] font-bold uppercase tracking-wide px-3 py-2 rounded-lg transition ${
+              !active ? 'bg-gold/15 text-gold' : 'text-text-secondary hover:bg-white/[0.06] hover:text-white'
+            }`}
+          >
+            All
+          </button>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+              className={`w-full text-left text-[11px] font-bold uppercase tracking-wide px-3 py-2 rounded-lg transition ${
+                value === o.value
+                  ? 'bg-gold/15 text-gold'
+                  : 'text-text-secondary hover:bg-white/[0.06] hover:text-white'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
+/* ─────────────────────────────────────────────
+   Page
+───────────────────────────────────────────── */
+
 export function OfficialPlaylists() {
-  const { data: playlists = [], isPending } = useQuery({
+  const { data: official = [], isPending: officialPending } = useQuery({
     queryKey: ['officialPlaylists'],
     queryFn: async () => {
       const res = await api.get('/official-playlists');
       return (res.data?.data || []) as any[];
     },
   });
-  const showSkeleton = useDelayedLoading(isPending);
+
+  const { data: smart = [], isPending: smartPending } = useQuery({
+    queryKey: ['smartPlaylists'],
+    queryFn: async () => {
+      const res = await api.get('/smart-playlists');
+      return (res.data?.data || []) as any[];
+    },
+  });
+
+  const showSkeleton = useDelayedLoading(officialPending || smartPending);
   const { data: forYouPlaylists } = useForYouPlaylists();
 
-  // Group Official Playlists into Curated Shelves
-  const trendingPlaylists = useMemo(() => {
-    return playlists.filter((p) => p.isFeatured || (p.title || '').toLowerCase().includes('top') || (p.title || '').toLowerCase().includes('trending'));
-  }, [playlists]);
+  const [selectedMood, setSelectedMood] = useState('');
+  const [selectedEnergy, setSelectedEnergy] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('');
 
-  const saloneHeritagePlaylists = useMemo(() => {
-    return playlists.filter((p) =>
-      (p.title || '').toLowerCase().includes('salone') ||
-      (p.description || '').toLowerCase().includes('salone') ||
-      (p.title || '').toLowerCase().includes('koloqua') ||
-      (p.title || '').toLowerCase().includes('freetown') ||
-      (p.title || '').toLowerCase().includes('bubu')
-    );
-  }, [playlists]);
+  const hasFilters = Boolean(selectedMood || selectedEnergy || selectedGenre);
 
-  const genrePlaylists = useMemo(() => {
-    return playlists.filter((p) =>
-      (p.title || '').toLowerCase().includes('afro') ||
-      (p.title || '').toLowerCase().includes('amapiano') ||
-      (p.title || '').toLowerCase().includes('reggae') ||
-      (p.title || '').toLowerCase().includes('dancehall') ||
-      (p.title || '').toLowerCase().includes('hip hop')
-    );
-  }, [playlists]);
+  const allPlaylists = useMemo(() => {
+    // Featured first, then smart (fresh auto-curations), then the rest by recency
+    const merged = [...official, ...smart];
+    return merged.sort((a, b) => {
+      if (Boolean(a.isFeatured) !== Boolean(b.isFeatured)) return a.isFeatured ? -1 : 1;
+      if (Boolean(a.isSmart) !== Boolean(b.isSmart)) return a.isSmart ? -1 : 1;
+      return 0;
+    });
+  }, [official, smart]);
 
-  const partyPlaylists = useMemo(() => {
-    return playlists.filter((p) =>
-      (p.title || '').toLowerCase().includes('party') ||
-      (p.title || '').toLowerCase().includes('club') ||
-      (p.title || '').toLowerCase().includes('beach') ||
-      (p.title || '').toLowerCase().includes('weekend')
-    );
-  }, [playlists]);
+  const filtered = useMemo(() => {
+    if (!hasFilters) return allPlaylists;
+    return allPlaylists.filter((p) => {
+      const f = facetsOf(p);
+      if (selectedMood && !f.moods.includes(selectedMood)) return false;
+      if (selectedEnergy && !f.energies.includes(selectedEnergy)) return false;
+      if (selectedGenre && !f.genres.includes(selectedGenre)) return false;
+      return true;
+    });
+  }, [allPlaylists, hasFilters, selectedMood, selectedEnergy, selectedGenre]);
 
-  const featuredPlaylist = playlists.find((p) => p.isFeatured) || playlists[0];
+  const clearFilters = () => {
+    setSelectedMood('');
+    setSelectedEnergy('');
+    setSelectedGenre('');
+  };
+
+  const genreOptions = GENRES.map((g) => ({ value: g, label: g }));
 
   return (
-    <div className="min-h-screen bg-[#080808] text-text-primary py-8 sm:py-12 px-4 sm:px-6 max-w-7xl mx-auto space-y-12 pb-32">
+    <div className="min-h-screen bg-[#080808] text-text-primary py-8 sm:py-12 px-4 sm:px-6 max-w-7xl mx-auto space-y-8 pb-32">
       <SEOHead
-        title="Official Playlists — Deck Salone"
-        description="Stream curated DJ mixtapes, chart-topping sounds, cultural heritage, and personalized listening sets across Sierra Leone."
+        title="Playlists — Deck Salone"
+        description="Stream curated DJ mixtapes and smart mood, genre & energy playlists from Sierra Leone."
       />
 
-      {/* ─── 🌟 EDITORIAL SPOTLIGHT HERO ─── */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#1c1c1c] via-[#121212] to-[#0A0A0A] border border-white/[0.08] p-6 sm:p-10 shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gold/10 rounded-full blur-3xl pointer-events-none" />
+      {/* ─── HEADER (minimal editorial) ─── */}
+      <header className="space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gold flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          Playlists
+        </p>
+        <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
+          Find your <span className="text-gradient-gold">vibe</span>
+        </h1>
+        <p className="text-sm text-text-secondary max-w-xl leading-relaxed">
+          Hand-curated collections and smart playlists built from mood, genre and energy — filter below or press play.
+        </p>
+      </header>
 
-        <div className="relative z-10 grid lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-8 space-y-4">
-            <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white leading-none">
-              Curated <span className="text-gradient-gold">Playlists</span>
-            </h1>
-          </div>
+      {/* ─── FILTER BAR ─── */}
+      <div className="sticky top-16 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#080808]/90 backdrop-blur-md border-b border-white/[0.06]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-text-muted flex items-center gap-2 mr-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+            Filter
+          </span>
+          <FilterDropdown label="Mood" options={[...MOODS]} value={selectedMood} onChange={setSelectedMood} />
+          <FilterDropdown label="Energy" options={[...ENERGIES]} value={selectedEnergy} onChange={setSelectedEnergy} />
+          <FilterDropdown label="Genre" options={genreOptions} value={selectedGenre} onChange={setSelectedGenre} />
 
-          {featuredPlaylist && (
-            <div className="lg:col-span-4">
-              <Link to={`/playlist/${featuredPlaylist.slug || featuredPlaylist.id}`} className="block group">
-                <div className="relative rounded-2xl overflow-hidden aspect-video bg-black border border-white/[0.1] group-hover:border-gold/50 shadow-xl transition-all">
-                  {featuredPlaylist.coverImage ? (
-                    <img
-                      src={getMediaUrl(featuredPlaylist.coverImage)}
-                      alt={featuredPlaylist.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gold/20 via-[#111] to-black">
-                      <ListMusic className="w-10 h-10 text-gold mb-1" />
-                      <span className="text-[10px] text-gold font-bold uppercase tracking-widest">Featured</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-4 flex flex-col justify-between">
-                    <span className="self-start text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-gold text-black">
-                      ⭐ Highlight
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-bold text-white uppercase truncate group-hover:text-gold transition-colors">
-                        {featuredPlaylist.title}
-                      </h3>
-                      <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1 font-mono">
-                        <Music className="w-3 h-3 text-gold" />
-                        {featuredPlaylist._count?.items || featuredPlaylist.items?.length || 0} Tracks
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </div>
+          <span className="text-[11px] font-mono text-text-muted/70 ml-auto">
+            {filtered.length} {filtered.length === 1 ? 'playlist' : 'playlists'}
+          </span>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gold hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Clear
+            </button>
           )}
         </div>
       </div>
 
-      {/* ─── 🎧 1. MADE FOR YOU (PERSONALIZED AI PLAYLISTS) ─── */}
-      {forYouPlaylists && forYouPlaylists.length > 0 && (
-        <PlaylistRowSection
-          title="Made For You"
-          subtitle="Dynamic daily blends tailored to what you listen to and favorite"
-          icon={<Compass className="w-5 h-5 text-gold" />}
-          playlists={forYouPlaylists}
-          isForYou
-        />
-      )}
-
-      {/* Loading state */}
-      {isPending ? (
-        showSkeleton ? (
-          <FeedSectionSkeleton />
-        ) : null
-      ) : playlists.length === 0 ? (
+      {/* ─── UNIFIED GRID ─── */}
+      {officialPending || smartPending ? (
+        showSkeleton ? <FeedSectionSkeleton /> : null
+      ) : filtered.length === 0 ? (
         <div className="rounded-3xl border border-white/[0.06] bg-[#101010] p-12 text-center max-w-md mx-auto">
           <ListMusic className="w-12 h-12 text-text-muted mx-auto mb-3" />
-          <h3 className="text-base font-bold text-white uppercase">No Playlists Available</h3>
-          <p className="text-xs text-text-muted mt-1">Check back soon for new curated drops.</p>
+          <h3 className="text-base font-bold text-white uppercase">
+            {hasFilters ? 'No playlists match' : 'No Playlists Available'}
+          </h3>
+          <p className="text-xs text-text-muted mt-1">
+            {hasFilters
+              ? 'Try removing a filter or two — new smart playlists are added regularly.'
+              : 'Check back soon for new curated drops.'}
+          </p>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 text-[11px] font-bold uppercase tracking-wide text-gold hover:text-white transition-colors"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
-        <div className="space-y-12">
-          {/* ─── 🔥 2. TRENDING & FEATURED COLLECTIONS ─── */}
-          {trendingPlaylists.length > 0 && (
-            <PlaylistRowSection
-              title="Trending & Top Charts"
-              subtitle="The most streamed weekly mixtape curations in Sierra Leone"
-              icon={<Flame className="w-5 h-5 text-amber-400" />}
-              playlists={trendingPlaylists}
-            />
-          )}
-
-          {/* ─── 🌴 3. SIERRA LEONE HERITAGE & SOUNDS ─── */}
-          {saloneHeritagePlaylists.length > 0 && (
-            <PlaylistRowSection
-              title="Salone Heritage & Culture"
-              subtitle="Authentic Salone mixes, Koloqua anthems, and Palm Wine rhythms"
-              icon={<Disc3 className="w-5 h-5 text-emerald-400" />}
-              playlists={saloneHeritagePlaylists}
-            />
-          )}
-
-          {/* ─── ⚡ 4. GENRE SPOTLIGHTS ─── */}
-          {genrePlaylists.length > 0 && (
-            <PlaylistRowSection
-              title="Genre Spotlights"
-              subtitle="Afrobeats, Amapiano 3-Step, Dancehall, and Reggae selections"
-              icon={<Radio className="w-5 h-5 text-purple-400" />}
-              playlists={genrePlaylists}
-            />
-          )}
-
-          {/* ─── 🎉 5. CLUB & FESTIVAL STARTERS ─── */}
-          {partyPlaylists.length > 0 && (
-            <PlaylistRowSection
-              title="Party & Club Starters"
-              subtitle="High-octane mixes built for Lumley Beach nights and weekend sets"
-              icon={<PartyPopper className="w-5 h-5 text-rose-400" />}
-              playlists={partyPlaylists}
-            />
-          )}
-
-          {/* ─── 📁 6. ALL CURATED PLAYLISTS ─── */}
-          <PlaylistRowSection
-            title="All Official Curations"
-            subtitle={`Browse the complete library of ${playlists.length} curated playlist collections`}
-            icon={<ListMusic className="w-5 h-5 text-gold" />}
-            playlists={playlists}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+          {filtered.map((pl, i) => (
+            <PlaylistCard key={pl.id || i} playlist={pl} index={i} />
+          ))}
         </div>
+      )}
+
+      {/* ─── MADE FOR YOU ─── */}
+      {forYouPlaylists && forYouPlaylists.length > 0 && !hasFilters && (
+        <section className="space-y-4 pt-6 border-t border-white/[0.06]">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <Compass className="w-5 h-5 text-gold" />
+              <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
+                Made For You
+              </h2>
+            </div>
+            <p className="text-xs text-text-secondary">
+              Dynamic daily blends tailored to what you listen to and favorite
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+            {forYouPlaylists.map((pl: any, i: number) => (
+              <PlaylistCard key={pl.id || i} playlist={pl} index={i} />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

@@ -12,8 +12,12 @@ import {
   CheckCircle2,
   ArrowUp,
   ArrowDown,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
+import { GENRES } from '@/constants/genres';
+import { MOODS, ENERGIES, MOOD_LABELS, ENERGY_LABELS } from '@/constants/moods';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,9 +47,496 @@ const PRESET_PLAYLIST_NAMES = [
   'New & Rising DJs',
 ];
 
+const SORT_OPTIONS = [
+  { value: 'trending', label: 'Trending (most played)' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'most_liked', label: 'Most liked' },
+];
+
+function RuleChips({ playlist }: { playlist: any }) {
+  const chips: string[] = [];
+  (playlist.moods || []).forEach((m: string) => chips.push(MOOD_LABELS[m] || m));
+  (playlist.energies || []).forEach((e: string) => chips.push(`${ENERGY_LABELS[e] || e} Energy`));
+  return (
+    <div className="flex flex-wrap gap-1">
+      {chips.length === 0 && playlist.genres?.length === 0 && (
+        <Badge className="bg-white/5 text-text-secondary border-white/10 text-[9px]">All mixes</Badge>
+      )}
+      {chips.map((c) => (
+        <Badge key={c} className="bg-gold/10 text-gold border-gold/30 text-[9px]">{c}</Badge>
+      ))}
+      {(playlist.genres || []).slice(0, 3).map((g: string) => (
+        <Badge key={g} className="bg-white/5 text-text-secondary border-white/10 text-[9px]">{g}</Badge>
+      ))}
+      {(playlist.genres || []).length > 3 && (
+        <Badge className="bg-white/5 text-text-secondary border-white/10 text-[9px]">
+          +{playlist.genres.length - 3} more
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+export function SmartPlaylistsPanel() {
+  const [loading, setLoading] = useState(true);
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const showSkeleton = useDelayedLoading(loading);
+
+  // Dialog / form state
+  const [editing, setEditing] = useState<any | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [coverImage, setCoverImage] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [genres, setGenres] = useState<string[]>([]);
+  const [moods, setMoods] = useState<string[]>([]);
+  const [energies, setEnergies] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState('trending');
+  const [trackLimit, setTrackLimit] = useState(20);
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Live preview
+  const [previewTotal, setPreviewTotal] = useState<number | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const fetchPlaylists = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/moderator/smart-playlists');
+      if (res.data.success) setPlaylists(res.data.data);
+    } catch (err) {
+      console.error('Failed to fetch smart playlists', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlaylists();
+  }, []);
+
+  // Debounced live preview of how many mixes match the current rules
+  useEffect(() => {
+    if (!editing) return;
+    setPreviewLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/moderator/smart-playlists/preview', {
+          params: {
+            genres: JSON.stringify(genres),
+            moods: JSON.stringify(moods),
+            energies: JSON.stringify(energies),
+            sortBy,
+            trackLimit,
+          },
+        });
+        if (res.data.success) setPreviewTotal(res.data.data.total);
+      } catch {
+        setPreviewTotal(null);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [editing, genres, moods, energies, sortBy, trackLimit]);
+
+  const handleOpenCreate = () => {
+    setIsNew(true);
+    setEditing({});
+    setTitle('');
+    setDescription('');
+    setCoverImage('');
+    setCoverFile(null);
+    setCoverPreview(null);
+    setGenres([]);
+    setMoods([]);
+    setEnergies([]);
+    setSortBy('trending');
+    setTrackLimit(20);
+    setIsFeatured(false);
+    setIsPublished(true);
+    setPreviewTotal(null);
+  };
+
+  const handleOpenEdit = (pl: any) => {
+    setIsNew(false);
+    setEditing(pl);
+    setTitle(pl.title || '');
+    setDescription(pl.description || '');
+    setCoverImage(pl.coverImage || '');
+    setCoverFile(null);
+    setCoverPreview(pl.coverImage ? getMediaUrl(pl.coverImage) : null);
+    setGenres(pl.genres || []);
+    setMoods(pl.moods || []);
+    setEnergies(pl.energies || []);
+    setSortBy(pl.sortBy || 'trending');
+    setTrackLimit(pl.trackLimit || 20);
+    setIsFeatured(Boolean(pl.isFeatured));
+    setIsPublished(pl.isPublished !== false);
+    setPreviewTotal(null);
+  };
+
+  const toggleValue = (list: string[], setList: (v: string[]) => void, value: string) => {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+    try {
+      setSaving(true);
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', description || '');
+      formData.append('genres', JSON.stringify(genres));
+      formData.append('moods', JSON.stringify(moods));
+      formData.append('energies', JSON.stringify(energies));
+      formData.append('sortBy', sortBy);
+      formData.append('trackLimit', String(trackLimit));
+      formData.append('isFeatured', String(isFeatured));
+      formData.append('isPublished', String(isPublished));
+      if (coverFile) {
+        formData.append('coverImageFile', coverFile);
+      } else if (coverImage) {
+        formData.append('coverImage', coverImage);
+      }
+
+      if (isNew) {
+        await api.post('/moderator/smart-playlists', formData);
+      } else {
+        await api.put(`/moderator/smart-playlists/${editing.id}`, formData);
+      }
+      setEditing(null);
+      fetchPlaylists();
+    } catch (err) {
+      console.error('Failed to save smart playlist', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this smart playlist?')) return;
+    try {
+      await api.delete(`/moderator/smart-playlists/${id}`);
+      fetchPlaylists();
+    } catch (err) {
+      console.error('Failed to delete smart playlist', err);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-black-elevated p-4 sm:p-5 rounded-xl border border-dark-gray">
+        <div>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-gold" />
+            <h2 className="text-base font-bold text-white">Smart Playlists</h2>
+            <Badge className="bg-gold/20 text-gold border-gold/40 text-[10px]">Mood • Genre • Energy</Badge>
+          </div>
+          <p className="text-xs text-text-secondary mt-1">
+            Rule-based playlists that build themselves from mix mood, genre and energy tags. Leave a rule empty to match everything.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={handleOpenCreate}
+          className="bg-gold text-black hover:bg-gold-light font-semibold text-xs gap-1.5 shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Create Smart Playlist
+        </Button>
+      </div>
+
+      {loading ? (
+        showSkeleton ? <DashboardSkeleton /> : null
+      ) : playlists.length === 0 ? (
+        <Card className="bg-black-elevated border-dark-gray p-12 text-center">
+          <Sparkles className="w-12 h-12 text-text-muted mx-auto mb-3" />
+          <p className="text-sm font-semibold text-white">No smart playlists yet</p>
+          <p className="text-xs text-text-muted mt-1">
+            Create one to auto-fill a playlist from mixes matching mood, genre and energy rules.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {playlists.map((pl) => (
+            <Card
+              key={pl.id}
+              className={`bg-black-elevated border-dark-gray p-4 space-y-3 ${
+                !pl.isPublished ? 'opacity-60 border-red/30' : ''
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-lg bg-gold/10 border border-gold/30 flex items-center justify-center shrink-0 overflow-hidden">
+                    {pl.coverImage ? (
+                      <img src={getMediaUrl(pl.coverImage)} alt={pl.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <Sparkles className="w-6 h-6 text-gold" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-white truncate">{pl.title}</h3>
+                      {pl.isFeatured && (
+                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[9px] px-1.5 py-0">
+                          ⭐ Featured
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-text-muted">
+                      Smart Playlist • up to {pl.trackLimit} mixes • {SORT_OPTIONS.find((s) => s.value === pl.sortBy)?.label}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => handleOpenEdit(pl)} className="h-7 w-7 p-0 text-gold hover:text-white">
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleDelete(pl.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-300">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <RuleChips playlist={pl} />
+
+              <div className="pt-2 border-t border-dark-gray/60 flex items-center justify-between text-[10px] text-text-muted">
+                <span className="truncate">Slug: /playlist/{pl.slug}</span>
+                <span className={pl.isPublished ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                  {pl.isPublished ? '● Published' : '○ Unpublished'}
+                </span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Create / Edit Smart Playlist Dialog */}
+      <Dialog open={Boolean(editing)} onOpenChange={() => setEditing(null)}>
+        <DialogContent className="bg-black-elevated border-dark-gray text-white max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gold text-base font-bold">
+              <Sparkles className="w-5 h-5" />
+              {isNew ? 'Create Smart Playlist' : 'Edit Smart Playlist'}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-text-secondary">
+              Mixes are matched automatically from the rules below. Leaving a group empty means "match all".
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-semibold text-text-secondary block mb-1">Playlist Title</label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. High-Energy Amapiano Party"
+                className="bg-black-surface border-dark-gray text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-text-secondary block mb-1">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What vibe is this playlist?"
+                rows={2}
+                className="w-full bg-black-surface border border-dark-gray rounded-md p-2.5 text-xs text-white focus:outline-none focus:border-gold"
+              />
+            </div>
+
+            {/* Rules */}
+            <div className="space-y-3 bg-black-surface rounded-lg border border-dark-gray p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Match Rules</p>
+
+              <div>
+                <p className="text-[11px] font-semibold text-text-secondary mb-1.5">Moods</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {MOODS.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => toggleValue(moods, setMoods, m.value)}
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border transition ${
+                        moods.includes(m.value)
+                          ? 'bg-gold text-black border-gold'
+                          : 'bg-black-elevated text-text-secondary border-dark-gray hover:border-gold/40'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold text-text-secondary mb-1.5">Energy</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ENERGIES.map((en) => (
+                    <button
+                      key={en.value}
+                      type="button"
+                      onClick={() => toggleValue(energies, setEnergies, en.value)}
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border transition ${
+                        energies.includes(en.value)
+                          ? 'bg-gold text-black border-gold'
+                          : 'bg-black-elevated text-text-secondary border-dark-gray hover:border-gold/40'
+                      }`}
+                    >
+                      {en.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold text-text-secondary mb-1.5">Genres</p>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                  {GENRES.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => toggleValue(genres, setGenres, g)}
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border transition ${
+                        genres.includes(g)
+                          ? 'bg-gold text-black border-gold'
+                          : 'bg-black-elevated text-text-secondary border-dark-gray hover:border-gold/40'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-text-secondary block mb-1">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full bg-black-elevated border border-dark-gray rounded-md px-2.5 py-2 text-xs text-white focus:border-gold focus:outline-none"
+                  >
+                    {SORT_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-text-secondary block mb-1">Max Mixes</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={trackLimit}
+                    onChange={(e) => setTrackLimit(parseInt(e.target.value, 10) || 20)}
+                    className="bg-black-elevated border-dark-gray text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-text-secondary bg-black-elevated rounded-md px-3 py-2 border border-dark-gray">
+                <RefreshCw className={`w-3.5 h-3.5 text-gold ${previewLoading ? 'animate-spin' : ''}`} />
+                {previewLoading ? (
+                  <span>Checking matches…</span>
+                ) : previewTotal !== null ? (
+                  <span>
+                    <span className="text-gold font-bold">{previewTotal}</span> {previewTotal === 1 ? 'mix matches' : 'mixes match'} these rules right now
+                  </span>
+                ) : (
+                  <span>Preview will appear as you set rules</span>
+                )}
+              </div>
+            </div>
+
+            {/* Cover */}
+            <div>
+              <label className="text-xs font-semibold text-text-secondary block mb-1">Cover Artwork (optional)</label>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 cursor-pointer bg-black-surface border border-dashed border-gold/40 hover:border-gold rounded-xl p-3 text-center transition-colors flex items-center justify-center gap-2 text-xs text-gold">
+                  <Upload className="w-4 h-4" />
+                  <span>{coverFile ? coverFile.name : 'Upload Image File'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        setCoverFile(f);
+                        setCoverPreview(URL.createObjectURL(f));
+                      }
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                {coverPreview && (
+                  <div className="w-12 h-12 rounded-lg overflow-hidden border border-gold shrink-0">
+                    <img src={coverPreview} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+              <Input
+                value={coverImage}
+                onChange={(e) => {
+                  setCoverImage(e.target.value);
+                  if (e.target.value) setCoverPreview(e.target.value);
+                }}
+                placeholder="…or direct image URL"
+                className="bg-black-surface border-dark-gray text-xs text-white mt-2"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-black-surface rounded-lg border border-dark-gray">
+              <label className="flex items-center gap-2 cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={isPublished}
+                  onChange={(e) => setIsPublished(e.target.checked)}
+                  className="rounded accent-gold w-4 h-4"
+                />
+                <span>Publish Immediately</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-amber-300 font-medium">
+                <input
+                  type="checkbox"
+                  checked={isFeatured}
+                  onChange={(e) => setIsFeatured(e.target.checked)}
+                  className="rounded accent-amber-500 w-4 h-4"
+                />
+                <span>⭐ Feature</span>
+              </label>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(null)} className="text-xs">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saving || !title.trim()}
+              className="bg-gold text-black hover:bg-gold-light text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Smart Playlist'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export function ModeratorPlaylists() {
   const [loading, setLoading] = useState(true);
   const showSkeleton = useDelayedLoading(loading);
+  const [activeTab, setActiveTab] = useState<'curated' | 'smart'>('curated');
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [editingPlaylist, setEditingPlaylist] = useState<any | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -300,6 +791,38 @@ export function ModeratorPlaylists() {
 
   return (
     <div className="space-y-6">
+      {/* Curated vs Smart tab switcher */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('curated')}
+          className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-4 py-2 rounded-lg border transition ${
+            activeTab === 'curated'
+              ? 'bg-gold text-black border-gold'
+              : 'bg-black-elevated text-text-secondary border-dark-gray hover:border-gold/40'
+          }`}
+        >
+          <ListMusic className="w-4 h-4" />
+          Curated Playlists
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('smart')}
+          className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-4 py-2 rounded-lg border transition ${
+            activeTab === 'smart'
+              ? 'bg-gold text-black border-gold'
+              : 'bg-black-elevated text-text-secondary border-dark-gray hover:border-gold/40'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          Smart Playlists
+        </button>
+      </div>
+
+      {activeTab === 'smart' ? (
+        <SmartPlaylistsPanel />
+      ) : (
+        <>
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-black-elevated p-4 sm:p-5 rounded-xl border border-dark-gray">
         <div>
@@ -726,6 +1249,8 @@ export function ModeratorPlaylists() {
           </div>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

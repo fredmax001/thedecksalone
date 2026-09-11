@@ -90,14 +90,14 @@ const suspendEventSchema = z.object({
 });
 
 const activatePromoSchema = z.object({
-  months: z.number().int().min(1).max(12).default(1),
+  months: z.number().int().min(0).max(12).default(1), // 0 = lifetime
   reason: z.string().optional(),
 });
 
 const grantPlanSchema = z.object({
   djId: z.string().min(1),
   plan: z.enum(['pro', 'legend']),
-  months: z.number().int().min(1).max(24).default(1),
+  months: z.number().int().min(0).max(24).default(1), // 0 = lifetime
   reason: z.string().optional(),
 });
 
@@ -3083,7 +3083,7 @@ router.post('/promo/:djId/activate', requireRole('ADMIN', 'FINANCE_ADMIN'), asyn
       return fail(res, 404, 'DJ not found');
     }
 
-    await activateSubscriptionFeatures(dj.userId, 'pro');
+    await activateSubscriptionFeatures(dj.userId, 'pro', { months: parsed.data.months });
 
     const updatedUser = await prisma.user.update({
       where: { id: dj.userId },
@@ -3128,7 +3128,7 @@ router.post('/grant-plan', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req: an
       return fail(res, 404, 'DJ not found');
     }
 
-    await activateSubscriptionFeatures(dj.userId, plan);
+    await activateSubscriptionFeatures(dj.userId, plan, { months });
 
     const updatedUser = await prisma.user.update({
       where: { id: dj.userId },

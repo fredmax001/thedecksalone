@@ -16,7 +16,21 @@ export const useFeatureAccess = () => {
     const { open: openUpgradeModal, close: closeUpgradeModal, ...upgradeModal } = useUpgradeModalStore();
 
     // Get current tier (default to 'free' if no profile)
-    const tier = (user?.djProfile?.subscriptionTier || 'free') as 'free' | 'pro' | 'legend';
+    const rawTier = (user?.djProfile?.subscriptionTier || 'free') as 'free' | 'pro' | 'legend';
+
+    // A paid tier whose subscription has lapsed (past the grace period)
+    // behaves as free — mirrors SUBSCRIPTION_GRACE_DAYS on the backend.
+    const GRACE_DAYS = 3;
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    let tier = rawTier;
+    if (rawTier === 'pro' || rawTier === 'legend') {
+      const expiresAt = user?.djProfile?.subscriptionExpiresAt
+        ? new Date(user.djProfile.subscriptionExpiresAt).getTime()
+        : null; // null = lifetime
+      if (expiresAt !== null && Date.now() > expiresAt + GRACE_DAYS * MS_PER_DAY) {
+        tier = 'free';
+      }
+    }
 
     // Tier levels for comparison: free < pro < legend
     const tierLevels = { free: 0, pro: 1, legend: 2 };

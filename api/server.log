@@ -1,4 +1,108 @@
-◇ injected env (7) from ../.env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (6) from .env // tip: ⌘ override existing { override: true }
-Deck Salone API running on port 5002
-Health check: http://localhost:5002/healtShutting down...
+◇ injected env (16) from ../.env // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+{"level":"warn","message":"REDIS_URL not provided. Running without Redis caching.","timestamp":"2026-09-11 00:50:52"}
+{"level":"info","message":"Deck Salone API running on port 5002","timestamp":"2026-09-11 00:50:52"}
+{"level":"info","message":"Health check: http://localhost:5002/health","timestamp":"2026-09-11 00:50:52"}
+{"level":"info","message":"[BackgroundJobs] Starting scheduled background tasks","timestamp":"2026-09-11 00:50:52"}
+[Scheduler] Starting background cron jobs...
+[Scheduler] Cron jobs registered.
+{"duration":4,"level":"info","message":"HTTP Request","method":"GET","requestId":"394fbcde-fcfe-4a3e-a846-7418204a7fc3","status":200,"timestamp":"2026-09-11 00:50:54","url":"/health"}
+{"duration":0,"level":"info","message":"HTTP Request","method":"GET","requestId":"43ce106a-26c3-4094-98d3-aa06032ae9f7","status":200,"timestamp":"2026-09-11 00:51:02","url":"/health"}
+[Scheduler] Running initial ranking recalculation...
+[Scheduler] Initial rankings complete; starting discovery score backfill...
+[DiscoveryScores] Recalculated 0 mixes in 4ms
+{"duration":392,"level":"info","message":"HTTP Request","method":"POST","requestId":"dce9bfa8-f105-4da1-9998-5db7a8a6a425","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/analytics/visit"}
+{"duration":121,"level":"info","message":"HTTP Request","method":"GET","requestId":"128b4541-19bb-4a97-bf57-aa4708545790","status":404,"timestamp":"2026-09-11 00:58:18","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":137,"level":"info","message":"HTTP Request","method":"GET","requestId":"0a91f713-b844-44c9-ac44-6d026ad3ba81","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/djs/genres"}
+{"duration":139,"level":"info","message":"HTTP Request","method":"GET","requestId":"dd14d2c8-522c-49b6-96e0-9769c8f9fa03","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/mixes/genres"}
+{"duration":144,"level":"info","message":"HTTP Request","method":"GET","requestId":"0a610a25-77e5-48c8-8ab8-ef5353ca45ca","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":12,"level":"info","message":"HTTP Request","method":"GET","requestId":"54ba4da2-1c4d-4ea1-8632-d9979612bca5","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":160,"level":"info","message":"HTTP Request","method":"GET","requestId":"9315d646-cb07-4a86-b5ae-7279c9e28dac","status":200,"timestamp":"2026-09-11 00:58:18","url":"/api/discover/djs?page=1&limit=12"}
+[2026-09-10T17:15:52.082Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 01:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+{"duration":220,"level":"info","message":"HTTP Request","method":"POST","requestId":"376a9dcf-3612-416e-9ec5-e1447c734163","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/analytics/visit"}
+{"duration":220,"level":"info","message":"HTTP Request","method":"GET","requestId":"bb9e4e0a-3b98-4996-b4c0-075a6d54cd9b","status":404,"timestamp":"2026-09-11 01:52:47","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":160,"level":"info","message":"HTTP Request","method":"GET","requestId":"fa2ba0ee-520d-46f3-af21-0f9f0c9afb3c","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/mixes/genres"}
+{"duration":174,"level":"info","message":"HTTP Request","method":"GET","requestId":"85c5e519-9b5e-433c-a365-b42139fdf1a1","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":207,"level":"info","message":"HTTP Request","method":"GET","requestId":"b774feb4-59a6-4bc1-94ed-4db10ff1578a","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/djs/genres"}
+{"duration":30,"level":"info","message":"HTTP Request","method":"GET","requestId":"3e45e4e7-cf9d-42a6-abed-0daabcd5b53b","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":183,"level":"info","message":"HTTP Request","method":"GET","requestId":"2747bc91-f022-4660-adf3-9dc7939a9998","status":200,"timestamp":"2026-09-11 01:52:47","url":"/api/discover/djs?page=1&limit=12"}
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 25ms
+[Scheduler] Hourly discovery scores completed in 26ms
+[Scheduler] Starting hourly discovery score refresh...
+[Scheduler] Starting daily account purge...
+[DiscoveryScores] Recalculated 0 stale mixes in 41ms
+[Scheduler] Hourly discovery scores completed in 43ms
+[Scheduler] Daily account purge completed in 16ms. Purged 0 accounts.
+{"duration":427,"level":"info","message":"HTTP Request","method":"POST","requestId":"250ec7fc-f093-463b-b6d3-bb72f3a8b8c9","status":200,"timestamp":"2026-09-11 03:03:28","url":"/api/analytics/visit"}
+{"duration":409,"level":"info","message":"HTTP Request","method":"GET","requestId":"3612f4c1-80fd-49a0-b72e-fd6cafaee453","status":404,"timestamp":"2026-09-11 03:03:29","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":433,"level":"info","message":"HTTP Request","method":"GET","requestId":"478e5c9c-18b8-4b8d-b3ef-8d06abe71945","status":200,"timestamp":"2026-09-11 03:03:29","url":"/api/mixes/genres"}
+{"duration":20,"level":"info","message":"HTTP Request","method":"GET","requestId":"f269ea9d-a460-4a40-84e9-acb4f1968f8a","status":200,"timestamp":"2026-09-11 03:03:29","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":437,"level":"info","message":"HTTP Request","method":"GET","requestId":"79d86942-162c-4e27-a8c3-7fbba64e26b6","status":200,"timestamp":"2026-09-11 03:03:29","url":"/api/djs/genres"}
+{"duration":438,"level":"info","message":"HTTP Request","method":"GET","requestId":"04eb5aa4-d914-40b2-832b-be2d51b3ab8c","status":200,"timestamp":"2026-09-11 03:03:29","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":462,"level":"info","message":"HTTP Request","method":"GET","requestId":"092f0833-6797-48dd-aa18-aea7516a35e0","status":200,"timestamp":"2026-09-11 03:03:29","url":"/api/discover/djs?page=1&limit=12"}
+[2026-09-10T20:07:17.118Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 04:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[2026-09-10T21:04:28.156Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 05:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[2026-09-10T22:01:01.178Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 06:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 48ms
+[Scheduler] Hourly discovery scores completed in 104ms
+[2026-09-11T00:07:28.185Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 08:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[2026-09-11T01:00:58.192Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 09:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 110ms
+[Scheduler] Hourly discovery scores completed in 164ms
+[2026-09-11T03:00:45.206Z] [PID: 25719] [32m[NODE-CRON][32m [33m[WARN][0m missed execution at Fri Sep 11 2026 11:00:00 GMT+0800 (Malaysia Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 51ms
+[Scheduler] Hourly discovery scores completed in 56ms
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 58ms
+[Scheduler] Hourly discovery scores completed in 61ms
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 25ms
+[Scheduler] Hourly discovery scores completed in 27ms
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 27ms
+[Scheduler] Hourly discovery scores completed in 28ms
+{"duration":258,"level":"info","message":"HTTP Request","method":"GET","requestId":"4f24ce97-86b9-48d4-a63f-ebd26e6465d1","status":404,"timestamp":"2026-09-11 15:21:52","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":273,"level":"info","message":"HTTP Request","method":"GET","requestId":"e3c7cacc-8efc-4e9a-827a-21f40c3eeba6","status":200,"timestamp":"2026-09-11 15:21:52","url":"/api/djs/genres"}
+{"duration":283,"level":"info","message":"HTTP Request","method":"GET","requestId":"79b9fdc7-2a45-4f64-b195-0356838460ca","status":200,"timestamp":"2026-09-11 15:21:52","url":"/api/mixes/genres"}
+{"duration":280,"level":"info","message":"HTTP Request","method":"GET","requestId":"feb0e204-bc65-4e82-87cc-324065cbd271","status":200,"timestamp":"2026-09-11 15:21:52","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":10,"level":"info","message":"HTTP Request","method":"GET","requestId":"d2970292-3ac2-40f7-8d06-2a84019685e6","status":200,"timestamp":"2026-09-11 15:21:52","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":288,"level":"info","message":"HTTP Request","method":"GET","requestId":"4149e955-3fb6-4989-ad9e-c01297c292bd","status":200,"timestamp":"2026-09-11 15:21:52","url":"/api/discover/djs?page=1&limit=12"}
+{"duration":98,"level":"info","message":"HTTP Request","method":"GET","requestId":"e20fd47b-2683-4b88-ba6f-7ed6c0c33fc9","status":200,"timestamp":"2026-09-11 15:33:08","url":"/api/mixes/genres"}
+{"duration":100,"level":"info","message":"HTTP Request","method":"GET","requestId":"32a2a467-6555-4c58-ad0f-ab21df084744","status":404,"timestamp":"2026-09-11 15:33:08","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":116,"level":"info","message":"HTTP Request","method":"GET","requestId":"5498101f-cbee-4c81-8663-97c21f3771f6","status":200,"timestamp":"2026-09-11 15:33:08","url":"/api/djs/genres"}
+{"duration":108,"level":"info","message":"HTTP Request","method":"GET","requestId":"07336060-51f0-4f3d-a622-53641f0ac88a","status":200,"timestamp":"2026-09-11 15:33:08","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":10,"level":"info","message":"HTTP Request","method":"GET","requestId":"b6af5041-1402-4f05-b386-7c9c5d35ea84","status":200,"timestamp":"2026-09-11 15:33:08","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":149,"level":"info","message":"HTTP Request","method":"GET","requestId":"df4c0dd7-0220-4976-8305-3c9c21c8a130","status":200,"timestamp":"2026-09-11 15:33:08","url":"/api/discover/djs?page=1&limit=12"}
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 30ms
+[Scheduler] Hourly discovery scores completed in 33ms
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 55ms
+[Scheduler] Hourly discovery scores completed in 59ms
+{"duration":62,"level":"info","message":"HTTP Request","method":"POST","requestId":"1a7fdf47-92a0-477d-8f0d-cc2691fa41bb","status":200,"timestamp":"2026-09-11 17:46:32","url":"/api/analytics/visit"}
+{"duration":24,"level":"info","message":"HTTP Request","method":"GET","requestId":"97a6a8ec-0bb8-466c-8cd2-7118e39335c5","status":404,"timestamp":"2026-09-11 17:46:33","url":"/api/official-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":27,"level":"info","message":"HTTP Request","method":"GET","requestId":"ada4f29a-7264-4104-9f80-01afa62e0a63","status":200,"timestamp":"2026-09-11 17:46:33","url":"/api/mixes/genres"}
+{"duration":28,"level":"info","message":"HTTP Request","method":"GET","requestId":"25287392-c641-433c-8343-aa680db2dd79","status":200,"timestamp":"2026-09-11 17:46:33","url":"/api/djs/genres"}
+{"duration":30,"level":"info","message":"HTTP Request","method":"GET","requestId":"566882dc-6edf-40b1-917e-c4c5e760e3d1","status":200,"timestamp":"2026-09-11 17:46:33","url":"/api/mixes?page=1&limit=12&sortBy=newest"}
+{"duration":7,"level":"info","message":"HTTP Request","method":"GET","requestId":"79b911d9-0d33-42e9-ac1b-3a3bdb3ca9c3","status":200,"timestamp":"2026-09-11 17:46:33","url":"/api/smart-playlists/salone-heritage-culture-mtvocv0m"}
+{"duration":41,"level":"info","message":"HTTP Request","method":"GET","requestId":"3d7b8bcf-390e-477b-a928-aebe643aaf9c","status":200,"timestamp":"2026-09-11 17:46:33","url":"/api/discover/djs?page=1&limit=12"}
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 286ms
+[Scheduler] Hourly discovery scores completed in 292ms
+{"level":"info","message":"SIGHUP ignored","timestamp":"2026-09-11 18:59:58"}
+[Scheduler] Starting hourly discovery score refresh...
+[DiscoveryScores] Recalculated 0 stale mixes in 1244ms
+[Scheduler] Hourly discovery scores completed in 1244ms
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to unexpected postmaster exit", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("be-secure.c"), line: Some(241), routine: Some("secure_read") }) }
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-09-11 19:00:35"}

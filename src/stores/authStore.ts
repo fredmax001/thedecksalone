@@ -19,6 +19,7 @@ export interface User {
   referredBy?: string | null;
   subscriptionTier?: string;
   subscriptionActivatedAt?: string | Date | null;
+  subscriptionExpiresAt?: string | Date | null;
 
   djProfile?: {
     id: string;
@@ -28,6 +29,7 @@ export interface User {
     isPro?: boolean;
     isPublic?: boolean;
     subscriptionTier?: string;
+    subscriptionExpiresAt?: string | Date | null;
     verificationStatus?: string | null;
     verificationBadgeType?: string | null;
     verificationReason?: string | null;
@@ -46,6 +48,7 @@ export interface User {
     hasFeatureAccess: boolean;
     daysLeft: number;
     trialEnd?: string;
+    subscriptionEnd?: string | null;
     status: string;
   };
 }

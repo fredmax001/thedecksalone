@@ -4,6 +4,7 @@ const { prisma } = require('../utils/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadCover } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
+const { generateSmartPlaylistItems } = require('../services/smartPlaylist.service');
 const logger = require('../utils/logger');
 const { ok, fail } = require('../utils/response');
 
@@ -435,6 +436,187 @@ router.delete('/playlists/:id', async (req: any, res: any) => {
     });
 
     return res.json({ success: true, message: 'Playlist deleted' });
+  } catch (error: any) {
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   SMART PLAYLISTS (rule-based, generated from mix metadata)
+   GET    /api/moderator/smart-playlists
+   POST   /api/moderator/smart-playlists
+   PUT    /api/moderator/smart-playlists/:id
+   DELETE /api/moderator/smart-playlists/:id
+   GET    /api/moderator/smart-playlists/preview  (query: genres,moods,energies,sortBy,trackLimit)
+   ───────────────────────────────────────────────────────────── */
+
+function parseStringArrayField(value: any): string[] {
+  if (value === undefined || value === null || value === '') return [];
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map((v: any) => String(v).trim()).filter(Boolean);
+    } catch {
+      // fall through to comma-separated parsing
+    }
+    return value.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+const VALID_SORTS = ['trending', 'newest', 'most_liked'];
+
+function smartPlaylistInput(body: any) {
+  const sortBy = VALID_SORTS.includes(body.sortBy) ? body.sortBy : 'trending';
+  const trackLimit = Math.min(Math.max(parseInt(body.trackLimit, 10) || 20, 1), 100);
+  return {
+    title: typeof body.title === 'string' ? body.title.trim() : '',
+    description: body.description || null,
+    genres: parseStringArrayField(body.genres),
+    moods: parseStringArrayField(body.moods),
+    energies: parseStringArrayField(body.energies),
+    sortBy,
+    trackLimit,
+    isFeatured: body.isFeatured === true || body.isFeatured === 'true',
+    isPublished: body.isPublished !== undefined ? (body.isPublished === true || body.isPublished === 'true') : true,
+  };
+}
+
+function generateSmartSlug(title: string) {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') +
+    '-' +
+    Date.now().toString(36)
+  );
+}
+
+router.get('/smart-playlists/preview', async (req: any, res: any) => {
+  try {
+    const input = smartPlaylistInput({ ...req.query, isPublished: true });
+    const { items, total } = await generateSmartPlaylistItems(input, { preview: true });
+    return ok(res, { total, sample: items });
+  } catch (error: any) {
+    logger.error('Error previewing smart playlist:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+router.get('/smart-playlists', async (req: any, res: any) => {
+  try {
+    const playlists = await prisma.smartPlaylist.findMany({ orderBy: { createdAt: 'desc' } });
+    return ok(res, playlists);
+  } catch (error: any) {
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+router.post('/smart-playlists', uploadCover.single('coverImageFile'), async (req: any, res: any) => {
+  try {
+    const input = smartPlaylistInput(req.body);
+    if (!input.title) return fail(res, 400, 'Playlist title is required');
+
+    let coverImage = req.body.coverImage || null;
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
+    }
+
+    const playlist = await prisma.smartPlaylist.create({
+      data: {
+        ...input,
+        coverImage,
+        slug: generateSmartSlug(input.title),
+        createdById: req.user.id,
+      },
+    });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'CREATE_SMART_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: playlist.id,
+      targetName: playlist.title,
+      newData: { rules: { genres: input.genres, moods: input.moods, energies: input.energies, sortBy: input.sortBy } },
+      reason: 'Created Smart Playlist',
+    });
+
+    return ok(res, playlist);
+  } catch (error: any) {
+    logger.error('Error creating smart playlist:', error);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+router.put('/smart-playlists/:id', uploadCover.single('coverImageFile'), async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.smartPlaylist.findUnique({ where: { id } });
+    if (!existing) return fail(res, 404, 'Smart playlist not found');
+
+    const input = smartPlaylistInput(req.body);
+    const updateData: any = {
+      title: input.title || existing.title,
+      description: input.description,
+      genres: input.genres,
+      moods: input.moods,
+      energies: input.energies,
+      sortBy: input.sortBy,
+      trackLimit: input.trackLimit,
+      isFeatured: req.body.isFeatured !== undefined ? input.isFeatured : existing.isFeatured,
+      isPublished: req.body.isPublished !== undefined ? input.isPublished : existing.isPublished,
+    };
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      updateData.coverImage = await uploadBuffer(req.file.buffer, 'covers', { contentType: req.file.mimetype, ext });
+    }
+
+    const updated = await prisma.smartPlaylist.update({ where: { id }, data: updateData });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'UPDATE_SMART_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: updated.title,
+      previousData: { rules: { genres: existing.genres, moods: existing.moods, energies: existing.energies } },
+      newData: { rules: { genres: updated.genres, moods: updated.moods, energies: updated.energies } },
+    });
+
+    return ok(res, updated);
+  } catch (error: any) {
+    logger.error('Error updating smart playlist:', error);
+    console.error('[moderator.ts] Unhandled error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+router.delete('/smart-playlists/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.smartPlaylist.findUnique({ where: { id } });
+    if (!existing) return fail(res, 404, 'Smart playlist not found');
+
+    await prisma.smartPlaylist.delete({ where: { id } });
+
+    await createModeratorLog({
+      moderatorId: req.user.id,
+      moderatorName: req.user.name || req.user.email,
+      action: 'DELETE_SMART_PLAYLIST',
+      targetType: 'PLAYLIST',
+      targetId: id,
+      targetName: existing.title,
+    });
+
+    return res.json({ success: true, message: 'Smart playlist deleted' });
   } catch (error: any) {
     console.error('[moderator.ts] Unhandled error:', error);
     return fail(res, 500, 'Internal server error');

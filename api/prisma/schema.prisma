@@ -40,6 +40,7 @@ model User {
   username                String       @unique @db.VarChar(30)
   subscriptionTier        String       @default("free")
   subscriptionActivatedAt DateTime?
+  subscriptionExpiresAt   DateTime? // null on paid tier = lifetime; enforced via grace period
   deletedAt               DateTime?
   deletionEmailSentAt     DateTime?
 
@@ -197,6 +198,7 @@ model DjProfile {
   startYear               Int?
   streamingLinks          Json?
   subscriptionActivatedAt DateTime?
+  subscriptionExpiresAt   DateTime? // null on paid tier = lifetime; enforced via grace period
   subscriptionTier        String                   @default("free")
   totalMixUploads         Int                      @default(0)
   verificationNotes       String?
@@ -328,6 +330,8 @@ model Mix {
   version          String?
   bpm              String?
   musicalKey       String?
+  mood             String?
+  energy           String?
   showAutoBpmKey   Boolean       @default(true)
   isAiProduced     Boolean       @default(false)
   releaseDate      DateTime?
@@ -1356,6 +1360,29 @@ model OfficialPlaylist {
   @@index([slug])
   @@index([createdAt])
   @@map("official_playlists")
+}
+
+model SmartPlaylist {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  coverImage  String?
+  slug        String   @unique
+  genres      String[] @default([]) // empty = all genres
+  moods       String[] @default([]) // empty = all moods
+  energies    String[] @default([]) // empty = all energies
+  sortBy      String   @default("trending") // trending | newest | most_liked
+  trackLimit  Int      @default(20)
+  isPublished Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished])
+  @@index([isPublished, isFeatured])
+  @@index([slug])
+  @@map("smart_playlists")
 }
 
 model OfficialPlaylistItem {

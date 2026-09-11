@@ -62,8 +62,10 @@ const reportRoutes = require('./routes/reports');
 const supportRoutes = require('./routes/support');
 const moderatorRoutes = require('./routes/moderator');
 const officialPlaylistRoutes = require('./routes/officialPlaylists');
+const smartPlaylistRoutes = require('./routes/smartPlaylists');
 const developerRoutes = require('./routes/developers');
 const hallOfFameRoutes = require('./routes/hallOfFame');
+const appVersionRoutes = require('./routes/appVersion');
 
 const app = express();
 // Trust reverse proxies (Nginx / Cloudflare / Host edge) to resolve client IP correctly
@@ -222,6 +224,7 @@ app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/moderator', moderatorRoutes);
 app.use('/api/official-playlists', officialPlaylistRoutes);
+app.use('/api/smart-playlists', smartPlaylistRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payments/paypal', paypalRoutes);
@@ -240,6 +243,7 @@ app.use('/api/sets', setRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/developers', developerRoutes);
 app.use('/api/hall-of-fame', hallOfFameRoutes);
+app.use('/api/app', appVersionRoutes);
 
 // Safe image proxy endpoint to allow Canvas export without CORS/tainting issues
 app.get('/api/proxy-image', async (req, res) => {

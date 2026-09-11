@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
 import { GENRES } from '@/constants/genres';
+import { MOODS, ENERGIES } from '@/constants/moods';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
@@ -70,6 +71,8 @@ export default function EditMix() {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
+  const [mood, setMood] = useState('');
+  const [energy, setEnergy] = useState('');
 
   // Privacy & Access Toggles
   const [isPrivate, setIsPrivate] = useState(false);
@@ -127,6 +130,8 @@ export default function EditMix() {
           setSubGenres(Array.isArray(mix.secondaryGenres) ? mix.secondaryGenres.join(', ') : '');
           setDescription(mix.description || '');
           setTags(mix.tags || []);
+          setMood(mix.mood || '');
+          setEnergy(mix.energy || '');
           setIsPrivate(!mix.isPublic);
           setNotListed(Boolean(mix.notListed));
           setDoNotShowStats(Boolean(mix.hideStats));
@@ -239,6 +244,8 @@ export default function EditMix() {
       formData.append('genre', genre);
       formData.append('category', category);
       formData.append('description', description);
+      formData.append('mood', mood);
+      formData.append('energy', energy);
       formData.append('tags', JSON.stringify(tags));
       formData.append(
         'secondaryGenres',
@@ -800,6 +807,48 @@ export default function EditMix() {
                     placeholder="e.g. Afropop, Street Pop"
                     className="bg-black/60 border-white/10 text-white text-xs h-10 rounded-xl"
                   />
+                </div>
+
+                {/* Mood */}
+                <div>
+                  <label className="text-[11px] font-bold uppercase text-text-muted block mb-1">
+                    Mood
+                  </label>
+                  <select
+                    value={mood}
+                    onChange={(e) => setMood(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-semibold outline-none focus:border-[#f4e059]"
+                  >
+                    <option value="" className="bg-[#181818] text-white">
+                      None
+                    </option>
+                    {MOODS.map((m) => (
+                      <option key={m.value} value={m.value} className="bg-[#181818] text-white">
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Energy */}
+                <div>
+                  <label className="text-[11px] font-bold uppercase text-text-muted block mb-1">
+                    Energy
+                  </label>
+                  <select
+                    value={energy}
+                    onChange={(e) => setEnergy(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-semibold outline-none focus:border-[#f4e059]"
+                  >
+                    <option value="" className="bg-[#181818] text-white">
+                      None
+                    </option>
+                    {ENERGIES.map((en) => (
+                      <option key={en.value} value={en.value} className="bg-[#181818] text-white">
+                        {en.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Select Type */}

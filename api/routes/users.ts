@@ -993,6 +993,7 @@ router.get('/subscription/status', authMiddleware, async (req, res) => {
           id: true,
           subscriptionTier: true,
           subscriptionActivatedAt: true,
+          subscriptionExpiresAt: true,
         },
       }),
       prisma.proSubscriptionRequest.findFirst({
@@ -1018,6 +1019,7 @@ router.get('/subscription/status', authMiddleware, async (req, res) => {
     return ok(res, {
         tier: user.subscriptionTier || 'free',
         activatedAt: user.subscriptionActivatedAt,
+        expiresAt: user.subscriptionExpiresAt,
         latestRequest,
       });
   } catch (error) {

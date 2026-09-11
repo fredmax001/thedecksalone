@@ -2,6 +2,37 @@ const { prisma } = require('../utils/prisma');
 const { sendSentDmSms } = require('./sms');
 
 /**
+ * Detect whether a string looks like HTML markup.
+ */
+function looksLikeHtml(content: string): boolean {
+  if (typeof content !== 'string') return false;
+  return /<\s*(div|p|h[1-6]|table|ul|ol|li|br|strong|span|a|body|html|img|hr|blockquote)[\s>]/i.test(content);
+}
+
+/**
+ * Crude HTML → plain-text fallback for the `text` part of a multipart email.
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|tr|table|ul|ol)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Create a notification for a user.
  * Optionally sends an email if the user has email notifications enabled.
  */
@@ -128,10 +159,13 @@ async function createNotification({
     if (sendEmail && emailEnabled) {
       try {
         const { sendEmail: sendEmailFn } = require('./email');
+        const content = emailBody || body || '';
+        const isHtml = looksLikeHtml(content);
         await sendEmailFn({
           to: user.email,
           subject: emailSubject || title,
-          text: emailBody || body,
+          text: isHtml ? htmlToText(content) : content,
+          html: isHtml ? content : undefined,
         });
       } catch (emailErr) {
         console.warn('[Notification] Failed to send email:', emailErr.message);
@@ -254,4 +288,6 @@ module.exports = {
   getUnreadCount,
   markAllAsRead,
   cleanupOldNotifications,
+  looksLikeHtml,
+  htmlToText,
 };

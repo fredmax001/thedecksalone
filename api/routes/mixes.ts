@@ -49,6 +49,8 @@ const createMixSchema = z.object({
   genre: z.string().min(1).max(100),
   category: z.string().min(1).max(100),
   tags: z.array(z.string()).optional(),
+  mood: z.string().max(50).optional(),
+  energy: z.enum(['low', 'medium', 'high']).optional(),
   duration: z.number().int().min(1).optional(),
   isPublic: parseBooleanOptional,
   isExclusive: parseBooleanOptional,
@@ -65,6 +67,8 @@ const updateMixSchema = z.object({
   category: z.string().min(1).max(100).optional(),
   tags: z.array(z.string()).optional(),
   secondaryGenres: z.array(z.string()).optional(),
+  mood: z.string().max(50).optional().nullable(),
+  energy: z.enum(['low', 'medium', 'high']).optional().nullable(),
   duration: z.number().int().min(1).optional(),
   isPublic: parseBooleanOptional,
   isExclusive: parseBooleanOptional,
@@ -977,6 +981,12 @@ router.put('/:id', authMiddleware, uploadMix, asyncHandler(async (req, res) => {
   }
   if (req.body.releaseDate === '' || req.body.releaseDate === 'null' || req.body.releaseDate === 'undefined') {
     req.body.releaseDate = null;
+  }
+  if (req.body.mood === '' || req.body.mood === 'null' || req.body.mood === 'undefined') {
+    req.body.mood = null;
+  }
+  if (req.body.energy === '' || req.body.energy === 'null' || req.body.energy === 'undefined') {
+    req.body.energy = null;
   }
 
   const parsed = updateMixSchema.safeParse(req.body);

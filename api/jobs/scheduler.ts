@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { prisma } = require('../utils/prisma');
 const { recalculateAllRankingsV2 } = require('../utils/rankingAlgorithm');
 const { recalculateAllDiscoveryScores, recalculateStaleDiscoveryScores } = require('./recalculateDiscoveryScores');
+const { processSubscriptionExpirations } = require('../utils/subscriptionExpiry');
 
 const CRON_JOBS = {
   // Weekly full DJ ranking recalculation (Sundays at 02:00 UTC)
@@ -10,6 +11,8 @@ const CRON_JOBS = {
   hourlyDiscovery: '0 * * * *',
   // Daily purge of accounts scheduled for permanent deletion
   dailyAccountPurge: '0 3 * * *',
+  // Daily subscription expiry sweep (downgrades + renewal warnings)
+  dailySubscriptionExpiry: '30 3 * * *',
 };
 
 let jobsStarted = false;
@@ -95,6 +98,18 @@ export function startScheduledJobs() {
       console.log(`[Scheduler] Daily account purge completed in ${Date.now() - startedAt}ms. Purged ${usersToPurge.length} accounts.`);
     } catch (error) {
       console.error('[Scheduler] Daily account purge failed:', error);
+    }
+  });
+
+  // Daily subscription expiry: downgrade past-grace subscribers, warn expiring ones
+  cron.schedule(CRON_JOBS.dailySubscriptionExpiry, async () => {
+    const startedAt = Date.now();
+    console.log('[Scheduler] Starting subscription expiry sweep...');
+    try {
+      const result = await processSubscriptionExpirations();
+      console.log(`[Scheduler] Subscription expiry sweep completed in ${Date.now() - startedAt}ms. Downgraded: ${result.downgraded}, warned: ${result.warned}`);
+    } catch (error) {
+      console.error('[Scheduler] Subscription expiry sweep failed:', error);
     }
   });
 

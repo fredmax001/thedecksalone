@@ -42,7 +42,9 @@ interface Plan {
 interface ProSubscriptionStatus {
   isPro: boolean;
   activePlan: string;
+  subscriptionState?: 'active' | 'grace' | 'expired' | 'none';
   subscriptionActivatedAt?: string | null;
+  subscriptionExpiresAt?: string | null;
   latestRequest: {
     id: string;
     plan: 'pro' | 'legend' | 'pro_annual' | 'legend_annual';
@@ -348,6 +350,19 @@ export default function Subscription() {
   const shouldShowPaymentPanel = (!!selectedPlanId && selectedPlanId !== 'free') || !!latestRequest || (status?.isPro && currentPlan !== 'free');
   const whatsappUrl = `https://wa.me/${paymentConfig.whatsappNumber.replace(/\D/g, '')}`;
 
+  // Expiry / grace derived from the backend status payload
+  const GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+  const expiresAt = status?.subscriptionExpiresAt ? new Date(status.subscriptionExpiresAt) : null;
+  const expiresAtMs = expiresAt ? expiresAt.getTime() : null;
+  const inGrace =
+    currentPlan !== 'free' &&
+    expiresAtMs !== null &&
+    expiresAtMs <= Date.now() &&
+    Date.now() <= expiresAtMs + GRACE_MS;
+  const graceDaysLeft = inGrace && expiresAtMs !== null
+    ? Math.max(1, Math.ceil((expiresAtMs + GRACE_MS - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0;
+
   if (statusLoading) {
     return (
       <div className="min-h-[320px] flex items-center justify-center">
@@ -428,8 +443,28 @@ export default function Subscription() {
             <Star className="w-3.5 h-3.5 mr-1.5" />
             Current: {PLANS.find((p) => p.id === currentPlan)?.name || 'Free'}
           </Badge>
+          {currentPlan !== 'free' && expiresAt && !inGrace && (
+            <span className="text-xs text-text-muted">
+              Expires on {expiresAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Expired-but-in-grace warning */}
+      {inGrace && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl bg-amber-500/10 border border-amber-500/40 p-3 flex items-center gap-3"
+        >
+          <FileText className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <p className="text-sm text-amber-300">
+            <span className="font-bold">Your subscription expired on {expiresAt?.toLocaleDateString()}.</span>{' '}
+            You have {graceDaysLeft} {graceDaysLeft === 1 ? 'day' : 'days'} of grace remaining — renew below to keep your Pro features.
+          </p>
+        </motion.div>
+      )}
 
       {/* Annual savings banner */}
       {billingPeriod === 'annual' && (

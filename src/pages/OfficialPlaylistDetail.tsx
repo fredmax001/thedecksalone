@@ -51,12 +51,20 @@ function PlayingWaveIndicator() {
 export function OfficialPlaylistDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { data: playlist, isPending } = useQuery({
-    queryKey: ['officialPlaylist', slug],
+    queryKey: ['playlistDetail', slug],
     queryFn: async () => {
-      const res = await api.get(`/official-playlists/${slug}`);
+      // Official (manual) playlists first, then rule-based smart playlists
+      try {
+        const res = await api.get(`/official-playlists/${slug}`);
+        if (res.data?.data) return res.data.data;
+      } catch {
+        // fall through to smart playlists
+      }
+      const res = await api.get(`/smart-playlists/${slug}`);
       return res.data?.data ?? null;
     },
     enabled: !!slug,
+    retry: false,
   });
   const { play, pause, setQueue, currentTrack, isPlaying } = usePlayerStore();
 
@@ -146,7 +154,7 @@ export function OfficialPlaylistDetail() {
         to="/playlists"
         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted hover:text-[#f4e059] transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to Official Playlists
+        <ArrowLeft className="w-4 h-4" /> Back to Playlists
       </Link>
 
       {/* ─── 🎧 APPLE MUSIC / SPOTIFY ALBUM HERO ─── */}
@@ -182,6 +190,12 @@ export function OfficialPlaylistDetail() {
               </div>
             )}
 
+            {playlist.isSmart && (
+              <span className="px-2.5 py-1 rounded-full bg-[#f4e059]/15 text-[#f4e059] border border-[#f4e059]/30 text-xs font-bold uppercase tracking-wide">
+                Smart Playlist
+              </span>
+            )}
+
             <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
               {playlist.title}
             </h1>
@@ -197,7 +211,9 @@ export function OfficialPlaylistDetail() {
               <span>•</span>
               <span>{formatDuration(totalDuration)} Total Runtime</span>
               <span>•</span>
-              <span className="text-[#f4e059]">Deck Salone Official Editorial</span>
+              <span className="text-[#f4e059]">
+                {playlist.isSmart ? 'Auto-curated • Updates as new mixes drop' : 'Deck Salone Official Editorial'}
+              </span>
             </div>
 
             {/* Play All & Shuffle Buttons */}

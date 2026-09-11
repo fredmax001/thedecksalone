@@ -7,6 +7,8 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { initSystemNotifications, syncUnreadSystemNotifications } from '@/lib/systemNotifications';
+import { checkForUpdate, openUpdatePage, markUpdateToastShown, wasUpdateToastShown, useUpdateStore } from '@/lib/appUpdates';
+import { toast } from 'sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
@@ -245,6 +247,44 @@ function DeepLinkHandler() {
   return null;
 }
 
+/* ─── App update checker: notifies users when a newer version is on Google Play ─── */
+function UpdateChecker() {
+  useEffect(() => {
+    const notifyIfUpdateAvailable = async () => {
+      const available = await checkForUpdate();
+      if (!available || wasUpdateToastShown()) return;
+
+      const { info } = useUpdateStore.getState();
+      markUpdateToastShown();
+      toast.info('A new version of Deck Salone is available!', {
+        description: info?.releaseNotes || `Version ${info?.latestVersion} is ready on Google Play.`,
+        duration: 10000,
+        action: {
+          label: 'Update',
+          onClick: () => openUpdatePage(),
+        },
+      });
+    };
+
+    // Check on app launch
+    notifyIfUpdateAvailable();
+
+    // Re-check whenever the app is resumed (native only)
+    let resumeListener: { remove: () => Promise<void> } | null = null;
+    CapacitorApp.addListener('appStateChange', (state) => {
+      if (state.isActive) notifyIfUpdateAvailable();
+    }).then((l) => {
+      resumeListener = l;
+    }).catch(() => {});
+
+    return () => {
+      resumeListener?.remove().catch(() => {});
+    };
+  }, []);
+
+  return null;
+}
+
 /* ─── Android System Notification sync and tap manager ─── */
 function SystemNotificationManager() {
   const navigate = useNavigate();
@@ -282,6 +322,7 @@ export default function App() {
     <BrowserRouter>
       <DeepLinkHandler />
       <SystemNotificationManager />
+      <UpdateChecker />
       <AuthInitializer />
       <VisitTracker />
       <Suspense fallback={<div className="flex h-screen w-full items-center justify-center text-deck-accent"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent"></div></div>}>

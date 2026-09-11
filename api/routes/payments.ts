@@ -5,6 +5,7 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { uploadDocument } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { getSubscriptionConfig } = require('../utils/subscriptionConfig');
+const { getSubscriptionState } = require('../utils/subscription');
 const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
@@ -60,6 +61,7 @@ router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
         isPro: true,
         subscriptionTier: true,
         subscriptionActivatedAt: true,
+        subscriptionExpiresAt: true,
         proSubscriptionRequests: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -71,10 +73,16 @@ router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
       return fail(res, 404, 'DJ profile not found');
     }
 
+    // Report lapsed subscriptions as free so the UI prompts a renewal
+    const subState = getSubscriptionState(dj);
+    const paidActive = subState === 'active' || subState === 'grace';
+
     return ok(res, {
-        isPro: dj.isPro,
-        activePlan: dj.subscriptionTier || (dj.isPro ? 'pro' : 'free'),
+        isPro: paidActive ? (dj.isPro || dj.subscriptionTier === 'pro' || dj.subscriptionTier === 'legend') : false,
+        activePlan: paidActive ? (dj.subscriptionTier || (dj.isPro ? 'pro' : 'free')) : 'free',
+        subscriptionState: subState,
         subscriptionActivatedAt: dj.subscriptionActivatedAt,
+        subscriptionExpiresAt: dj.subscriptionExpiresAt,
         latestRequest: dj.proSubscriptionRequests[0] || null,
       });
   } catch (error) {

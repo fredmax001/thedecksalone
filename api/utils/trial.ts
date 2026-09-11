@@ -1,12 +1,14 @@
 const { prisma } = require('./prisma');
 const { createNotification } = require('./notifications');
 const { logger } = require('./logger');
+const { getSubscriptionState, daysUntilExpiry, daysUntilGraceEnd } = require('./subscription');
 
 /**
  * Calculates 14-day trial status for a user/DJ profile.
  * - DJ trial starts when the DJ profile was created (or user.createdAt if no DJ profile).
  * - Admin/Staff users automatically bypass trial restrictions.
- * - Subscribed DJs (Pro/Legend) have permanent active access.
+ * - Subscribed DJs (Pro/Legend) keep access while their subscription is active,
+ *   including a short grace period after it expires.
  */
 function calculateTrialStatus(user: any, djProfile?: any) {
   const isAdminOrStaff = Boolean(
@@ -25,22 +27,32 @@ function calculateTrialStatus(user: any, djProfile?: any) {
   }
 
   const profile = djProfile || user?.djProfile;
-  const isProSubscriber = Boolean(
-    profile && (
-      profile.subscriptionTier === 'pro' ||
-      profile.subscriptionTier === 'legend' ||
-      profile.isPro === true
-    )
-  );
+  const subState = getSubscriptionState(profile);
 
-  if (isProSubscriber) {
+  if (subState === 'active' || subState === 'grace') {
+    const expiresAt = profile?.subscriptionExpiresAt ? new Date(profile.subscriptionExpiresAt) : null;
+    const inGrace = subState === 'grace';
     return {
       isSubscribed: true,
       isTrialActive: false,
       hasFeatureAccess: true,
+      daysLeft: expiresAt
+        ? (inGrace ? daysUntilGraceEnd(expiresAt) : daysUntilExpiry(expiresAt))
+        : 0,
+      trialEnd: expiresAt,
+      subscriptionEnd: expiresAt,
+      status: inGrace ? 'subscription_grace' : 'active_subscription',
+    };
+  }
+
+  if (subState === 'expired') {
+    return {
+      isSubscribed: false,
+      isTrialActive: false,
+      hasFeatureAccess: false,
       daysLeft: 0,
       trialEnd: null,
-      status: 'active_subscription',
+      status: 'subscription_expired',
     };
   }
 
@@ -102,10 +114,14 @@ async function requireTrialOrSubscription(req: any, res: any, next: any) {
     const trial = calculateTrialStatus(user, user.djProfile);
 
     if (!trial.hasFeatureAccess) {
+      const expiredSubscription = trial.status === 'subscription_expired';
       return res.status(403).json({
         success: false,
-        error: 'Your 14-day free trial has expired. Upgrade to Pro or Legend to access this feature.',
+        error: expiredSubscription
+          ? 'Your subscription has expired. Renew your plan to access this feature.'
+          : 'Your 14-day free trial has expired. Upgrade to Pro or Legend to access this feature.',
         requiresSubscription: true,
+        subscriptionExpired: expiredSubscription,
         trialStatus: trial,
       });
     }

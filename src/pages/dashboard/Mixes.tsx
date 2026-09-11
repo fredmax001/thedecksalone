@@ -85,6 +85,7 @@ interface Mix {
 }
 
 import { GENRES } from '@/constants/genres';
+import { MOODS, ENERGIES } from '@/constants/moods';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { useRequireDj } from '@/hooks/useRequireDj';
 import { DashboardSkeleton } from '@/components/ui/page-skeletons';
@@ -147,6 +148,8 @@ export default function Mixes() {
     title: '',
     genre: '',
     description: '',
+    mood: '',
+    energy: '',
     isPublic: true,
     allowPublicDownloads: false,
     repostToDownload: false,
@@ -174,6 +177,8 @@ export default function Mixes() {
     title: '',
     genre: '',
     description: '',
+    mood: '',
+    energy: '',
     isPublic: true,
     allowPublicDownloads: false,
     repostToDownload: false,
@@ -254,6 +259,8 @@ export default function Mixes() {
     formData.append('genre', uploadForm.genre);
     formData.append('category', uploadForm.genre);
     formData.append('description', uploadForm.description);
+    if (uploadForm.mood) formData.append('mood', uploadForm.mood);
+    if (uploadForm.energy) formData.append('energy', uploadForm.energy);
     formData.append('isPublic', String(uploadForm.isPublic));
     formData.append('allowPublicDownloads', String(uploadForm.allowPublicDownloads));
     formData.append('repostToDownload', String(uploadForm.repostToDownload));
@@ -297,6 +304,8 @@ export default function Mixes() {
           title: '',
           genre: '',
           description: '',
+          mood: '',
+          energy: '',
           isPublic: true,
           allowPublicDownloads: false,
           repostToDownload: false,
@@ -338,6 +347,8 @@ export default function Mixes() {
       formData.append('genre', editForm.genre);
       formData.append('category', editForm.genre);
       formData.append('description', editForm.description);
+      formData.append('mood', editForm.mood);
+      formData.append('energy', editForm.energy);
       formData.append('isPublic', String(editForm.isPublic));
       formData.append('allowPublicDownloads', String(editForm.allowPublicDownloads));
       formData.append('repostToDownload', String(editForm.repostToDownload));
@@ -1131,6 +1142,35 @@ export default function Mixes() {
                   </select>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Mood</Label>
+                    <select
+                      value={uploadForm.mood}
+                      onChange={(e) => setUploadForm({ ...uploadForm, mood: e.target.value })}
+                      className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    >
+                      <option value="">Select mood (optional)</option>
+                      {MOODS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Energy</Label>
+                    <select
+                      value={uploadForm.energy}
+                      onChange={(e) => setUploadForm({ ...uploadForm, energy: e.target.value })}
+                      className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    >
+                      <option value="">Select energy (optional)</option>
+                      {ENERGIES.map((en) => (
+                        <option key={en.value} value={en.value}>{en.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <Label className="text-text-secondary mb-2 block">Description</Label>
                   <Textarea
@@ -1540,6 +1580,35 @@ export default function Mixes() {
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Mood</Label>
+                    <select
+                      value={editForm.mood}
+                      onChange={(e) => setEditForm({ ...editForm, mood: e.target.value })}
+                      className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    >
+                      <option value="">Select mood (optional)</option>
+                      {MOODS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-text-secondary mb-2 block">Energy</Label>
+                    <select
+                      value={editForm.energy}
+                      onChange={(e) => setEditForm({ ...editForm, energy: e.target.value })}
+                      className="w-full bg-black-elevated border border-dark-gray rounded-lg px-3 py-2 text-sm text-text-primary focus:border-gold focus:outline-none"
+                    >
+                      <option value="">Select energy (optional)</option>
+                      {ENERGIES.map((en) => (
+                        <option key={en.value} value={en.value}>{en.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>

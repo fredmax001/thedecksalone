@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 const { prisma } = require('../utils/prisma');
+const { getSubscriptionState, addMonths } = require('../utils/subscription');
 
 /**
  * Subscription tier levels
@@ -30,6 +31,7 @@ export const getUserSubscription = async (userId: string) => {
             id: true,
             subscriptionTier: true,
             subscriptionActivatedAt: true,
+            subscriptionExpiresAt: true,
             totalMixUploads: true,
             hearThisConnected: true,
             canReceivePayments: true,
@@ -214,6 +216,19 @@ export const requireSubscriptionTier =
                 return res.status(404).json({ success: false, error: 'DJ profile not found' });
             }
 
+            // Lazily enforce expiry: a paid tier whose subscription has lapsed
+            // (past the grace period) is downgraded on the spot and denied.
+            if (getSubscriptionState(profile) === 'expired') {
+                await resetSubscriptionFeatures(userId);
+                return res.status(403).json({
+                    success: false,
+                    error: `This feature requires ${minTier} subscription`,
+                    currentTier: SubscriptionTier.FREE,
+                    requiredTier: minTier,
+                    subscriptionExpired: true,
+                });
+            }
+
             if (!hasSubscriptionTier(profile.subscriptionTier, minTier)) {
                 return res.status(403).json({
                     success: false,
@@ -257,6 +272,18 @@ export const requireProOrAdmin = async (req: Request, res: Response, next: NextF
         return res.status(403).json({ success: false, error: 'DJ profile not found' });
     }
 
+    // Lazily enforce expiry (see requireSubscriptionTier)
+    if (getSubscriptionState(profile) === 'expired') {
+        await resetSubscriptionFeatures(authUser.id);
+        return res.status(403).json({
+            success: false,
+            error: 'This feature requires Pro subscription or admin access',
+            currentTier: SubscriptionTier.FREE,
+            requiredTier: SubscriptionTier.PRO,
+            subscriptionExpired: true,
+        });
+    }
+
     if (!hasSubscriptionTier(profile.subscriptionTier, SubscriptionTier.PRO)) {
         return res.status(403).json({
             success: false,
@@ -270,20 +297,47 @@ export const requireProOrAdmin = async (req: Request, res: Response, next: NextF
 };
 
 /**
- * Update feature access when subscription is activated
+ * Update feature access when subscription is activated.
+ *
+ * Duration: explicit `opts.months` wins; otherwise derived from the plan
+ * string (`*_annual` -> 12 months, anything else -> 1 month). `months: 0`
+ * grants lifetime (expiresAt = null).
+ *
+ * Renewal: if the user still has a valid subscription, the new period is
+ * stacked on top of the remaining time.
  */
 export const activateSubscriptionFeatures = async (
     userId: string,
-    tier: SubscriptionTier | string
+    tier: SubscriptionTier | string,
+    opts?: { months?: number }
 ) => {
     const normalizedTier = String(tier).includes('legend') ? SubscriptionTier.LEGEND : SubscriptionTier.PRO;
+
+    const months = opts?.months !== undefined
+        ? opts.months
+        : (String(tier).includes('annual') ? 12 : 1);
+    const lifetime = months <= 0;
+
+    // Stack renewal on top of any remaining paid time
+    const [existingUser, existingDj] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { subscriptionExpiresAt: true } }),
+        prisma.djProfile.findUnique({ where: { userId }, select: { subscriptionExpiresAt: true } }),
+    ]);
+    const currentExpiryMs = Math.max(
+        existingUser?.subscriptionExpiresAt ? new Date(existingUser.subscriptionExpiresAt).getTime() : 0,
+        existingDj?.subscriptionExpiresAt ? new Date(existingDj.subscriptionExpiresAt).getTime() : 0,
+    );
+    const base = new Date(Math.max(Date.now(), currentExpiryMs));
+    const expiresAt = lifetime ? null : addMonths(base, months);
+    const activatedAt = new Date();
 
     // Update User table
     await prisma.user.update({
         where: { id: userId },
         data: {
             subscriptionTier: normalizedTier,
-            subscriptionActivatedAt: new Date(),
+            subscriptionActivatedAt: activatedAt,
+            subscriptionExpiresAt: expiresAt,
         },
     }).catch((e: any) => console.error('Error updating user subscription:', e));
 
@@ -292,7 +346,8 @@ export const activateSubscriptionFeatures = async (
     if (dj) {
         const updateData: any = {
             subscriptionTier: normalizedTier,
-            subscriptionActivatedAt: new Date(),
+            subscriptionActivatedAt: activatedAt,
+            subscriptionExpiresAt: expiresAt,
         };
 
         if (normalizedTier === SubscriptionTier.PRO || normalizedTier === SubscriptionTier.LEGEND) {
@@ -323,6 +378,7 @@ export const resetSubscriptionFeatures = async (userId: string) => {
         data: {
             subscriptionTier: SubscriptionTier.FREE,
             subscriptionActivatedAt: null,
+            subscriptionExpiresAt: null,
         },
     }).catch(() => {});
 
@@ -333,6 +389,8 @@ export const resetSubscriptionFeatures = async (userId: string) => {
             data: {
                 subscriptionTier: SubscriptionTier.FREE,
                 subscriptionActivatedAt: null,
+                subscriptionExpiresAt: null,
+                isPro: false,
                 canReceivePayments: false,
                 canViewAnalytics: false,
                 isVerifiedEligible: false,
