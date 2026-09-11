@@ -20,11 +20,26 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+interface AppVersionInfo {
+  latestVersion: string;
+  latestVersionCode: number;
+  releaseNotes: string;
+  apkUrl: string;
+}
+
 export default function InstallApp() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [appInfo, setAppInfo] = useState<AppVersionInfo | null>(null);
+
+  useEffect(() => {
+    fetch('/api/app/version')
+      .then((res) => res.json())
+      .then((res) => setAppInfo(res?.data || null))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Detect platform
@@ -167,6 +182,43 @@ export default function InstallApp() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Native Android APK Download */}
+      <div className="bg-black-surface border border-gold/30 rounded-2xl p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
+        <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-gold/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-black-elevated border border-gold/30 flex items-center justify-center shrink-0">
+              <Smartphone className="w-8 h-8 text-gold" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-text-primary uppercase tracking-wide">Deck Salone Android App</h3>
+                <span className="px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30 text-[10px] font-bold uppercase">
+                  v{appInfo?.latestVersion || '1.1.0'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-green/15 text-green border border-green/30 text-[10px] font-bold uppercase">
+                  APK
+                </span>
+              </div>
+              <p className="text-xs text-text-muted mt-0.5">
+                Full native app — faster uploads, background play & ticket scanner
+              </p>
+            </div>
+          </div>
+
+          <a
+            href={appInfo?.apkUrl || '/api/app/download'}
+            download
+            className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-gold-gradient text-black font-extrabold text-sm uppercase tracking-wide rounded-full shadow-[0_0_20px_rgba(244,224,89,0.3)] hover:scale-105 active:scale-95 transition-all"
+          >
+            <Download className="w-4 h-4" /> Download APK
+          </a>
+        </div>
+        <p className="text-[11px] text-text-muted mt-4 relative z-10">
+          After downloading, open the file and allow “Install from unknown sources” when prompted. The download is counted automatically — no sign-in required.
+        </p>
       </div>
 
       {/* Installation Guide by Platform */}

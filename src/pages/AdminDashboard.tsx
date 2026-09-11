@@ -325,6 +325,7 @@ function DashboardSection() {
     { label: 'Events', value: formatCompactNumber(stats?.totalEvents || 0), icon: Calendar, color: '#06B6D4' },
     { label: 'Monthly Visits', value: formatCompactNumber(stats?.totalVisitsMonth || 0), icon: Globe, color: '#EC4899' },
     { label: 'Battles', value: formatCompactNumber(stats?.activeBattles || 0), icon: Trophy, color: '#f4e059' },
+    { label: 'APK Downloads', value: formatCompactNumber(stats?.totalAppDownloads || 0), icon: Smartphone, color: '#22D3EE' },
   ];
 
   const timelineList = useMemo(() => {

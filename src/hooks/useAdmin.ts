@@ -21,6 +21,7 @@ export interface AdminStats {
   uniqueVisitorsToday: number;
   totalPlaylists?: number;
   totalFeedPosts?: number;
+  totalAppDownloads?: number;
 }
 
 export interface AdminAnalytics {

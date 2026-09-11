@@ -23,7 +23,9 @@ const paymentProcessSchema = z.object({
 });
 
 const proSubscriptionSchema = z.object({
-  plan: z.enum(['pro', 'legend']).default('pro'),
+  // Annual variants are submitted when the user picks yearly billing; the
+  // admin approval flow normalizes them (annual => 12 months on activation).
+  plan: z.enum(['pro', 'legend', 'pro_annual', 'legend_annual']).default('pro'),
   note: z.string().max(500).optional(),
 });
 
@@ -113,12 +115,14 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
     }
 
     const requestedPlan = parsed.data.plan;
+    const isAnnual = requestedPlan.endsWith('_annual');
+    const basePlanId = isAnnual ? requestedPlan.replace('_annual', '') : requestedPlan;
     const activePlan = dj.subscriptionTier || (dj.isPro ? 'pro' : 'free');
     const config = await getSubscriptionConfig();
-    const plan = config.plans.find((p: any) => p.id === requestedPlan);
+    const plan = config.plans.find((p: any) => p.id === basePlanId);
 
     if (activePlan === requestedPlan) {
-      return fail(res, 400, `Your ${plan?.name || requestedPlan} subscription is already active`);
+      return fail(res, 400, `Your ${plan?.name || basePlanId} subscription is already active`);
     }
 
     const proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
@@ -133,7 +137,7 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     const data = {
       plan: requestedPlan,
-      amount: plan?.price || (requestedPlan === 'legend' ? 750 : 250),
+      amount: plan ? (isAnnual ? plan.price * 12 : plan.price) : (basePlanId === 'legend' ? (isAnnual ? 4200 : 350) : (isAnnual ? 2400 : 200)),
       currency: config.currency,
       paymentMethod: config.paymentMethod,
       paymentNumber: config.paymentNumber,

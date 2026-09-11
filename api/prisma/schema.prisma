@@ -1161,6 +1161,16 @@ model OppApplications {
   @@map("opp_applications")
 }
 
+model AppDownload {
+  id         String   @id @default(cuid())
+  platform   String   @default("android")
+  appVersion String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("app_downloads")
+}
+
 model PromoGrant {
   id          String    @id @default(cuid())
   djId        String

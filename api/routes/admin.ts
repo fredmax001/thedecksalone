@@ -182,6 +182,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       pendingVerifications,
       totalPlaylists,
       totalFeedPosts,
+      totalAppDownloads,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.djProfile.count(),
@@ -195,6 +196,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       prisma.djProfile.count({ where: { verificationStatus: 'pending' } }),
       prisma.officialPlaylist.count(),
       prisma.mix.count({ where: { isPublic: true } }),
+      prisma.appDownload.count(),
     ]);
 
     const bookingRevenue = await prisma.booking.aggregate({
@@ -236,6 +238,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       pendingVerifications,
       totalPlaylists,
       totalFeedPosts,
+      totalAppDownloads,
       estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
       totalPayments: totalPayments._sum.amount || 0,
       activeBattles,
