@@ -52,7 +52,7 @@ export default function DjFeedRow({ dj, index = 0 }: DjFeedRowProps) {
               <div className="flex items-center gap-2 text-xs text-text-secondary mt-0.5">
                 <span className="flex items-center gap-1 truncate text-[11px] sm:text-xs">
                   <MapPin className="w-3 h-3 text-gold shrink-0" />
-                  {dj.city ? `${dj.city}, Sierra Leone` : 'Sierra Leone 🇸🇱'}
+                  {dj.city || dj.country ? [dj.city, dj.country].filter(Boolean).join(', ') : ''}
                 </span>
                 {dj.genres && dj.genres.length > 0 && (
                   <span className="hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">

@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { AFRICAN_COUNTRIES } from '@/lib/africanCountries';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
 import { useRequireDj } from '@/hooks/useRequireDj';
@@ -61,20 +62,8 @@ const GENRES = [
 
 const CITIES = [...SIERRA_LEONE_CITIES];
 
-const COUNTRIES = [
-  'Sierra Leone',
-  'Nigeria',
-  'Ghana',
-  'Liberia',
-  'Guinea',
-  'United Kingdom',
-  'United States',
-  'Canada',
-  'Germany',
-  'Netherlands',
-  'France',
-  'Other',
-];
+// Platform is open to African countries only
+const COUNTRIES = AFRICAN_COUNTRIES;
 
 const LANGUAGES = ['English', 'Krio', 'Mende', 'Temne', 'Limba', 'Other'];
 
@@ -671,19 +660,28 @@ export default function Profile() {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-text-secondary">City</Label>
-                    <Select
-                      value={form.city}
-                      onValueChange={(val) => updateForm((prev) => ({ ...prev, city: val, community: '' }))}
-                    >
-                      <SelectTrigger className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary">
-                        <SelectValue placeholder="Select City" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#141414] border-[#2a2a2a] text-text-primary">
-                        {CITIES.map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {form.country === 'Sierra Leone' ? (
+                      <Select
+                        value={form.city}
+                        onValueChange={(val) => updateForm((prev) => ({ ...prev, city: val, community: '' }))}
+                      >
+                        <SelectTrigger className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary">
+                          <SelectValue placeholder="Select City" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#141414] border-[#2a2a2a] text-text-primary">
+                          {CITIES.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={form.city}
+                        onChange={(e) => updateForm((prev) => ({ ...prev, city: e.target.value, community: '' }))}
+                        placeholder="Your city"
+                        className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary focus:border-gold"
+                      />
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -1469,7 +1467,7 @@ export default function Profile() {
                 {/* Location */}
                 <div className="flex items-center gap-1 text-xs text-text-muted">
                   <MapPin className="w-3.5 h-3.5 text-text-secondary" />
-                  <span>{form.city ? `${form.city}, ${form.country}` : 'Freetown, Sierra Leone'}</span>
+                  <span>{form.city ? `${form.city}${form.country ? `, ${form.country}` : ''}` : form.country || ''}</span>
                 </div>
 
                 {/* Genres */}

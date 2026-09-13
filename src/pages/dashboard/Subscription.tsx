@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { isSierraLeoneUser } from '@/lib/userCountry';
 import { formatCurrency } from '@/lib/formatting';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import PayPalButton from '@/components/PayPalButton';
@@ -157,7 +158,8 @@ export default function Subscription() {
   const [note, setNote] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('monthly');
-  const { fetchMe } = useAuthStore();
+  const { fetchMe, user } = useAuthStore();
+  const sierraLeonePayer = isSierraLeoneUser(user);
   const currentPlan = status?.activePlan || (status?.isPro ? 'pro' : 'free');
   const latestRequest = status?.latestRequest;
 
@@ -494,7 +496,9 @@ export default function Subscription() {
                     <h3 className="font-semibold text-text-primary">
                       {isSelectedCurrentPaidPlan ? `${selectedPlan?.name || 'Subscription'} Active` : `${selectedPlan?.name || 'Subscription'} Payment`}
                     </h3>
-                    <p className="text-xs text-text-muted">Manual confirmation for Sierra Leone payments</p>
+                    <p className="text-xs text-text-muted">
+                      {sierraLeonePayer ? 'Manual confirmation for Sierra Leone payments' : 'Instant activation via PayPal'}
+                    </p>
                   </div>
                 </div>
                 <div className="space-y-3 text-sm text-text-secondary">
@@ -503,9 +507,9 @@ export default function Subscription() {
                       <p className="text-sm font-semibold text-green">✓ Active Now</p>
                       <p className="text-xs text-green/80 mt-1">Your {selectedPlan?.name || 'subscription'} has been confirmed by admin.</p>
                     </div>
-                  ) : (
+                  ) : sierraLeonePayer ? (
                     <>
-                      <p className="font-semibold text-text-primary">Pay to this Orange Money Number:</p>
+                      <p className="text-sm font-semibold text-text-primary">Pay to this Orange Money Number:</p>
                       <div className="rounded-xl bg-black-elevated border border-white/10 p-4">
                         <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
                           {paymentConfig.paymentMethod} Number
@@ -518,6 +522,11 @@ export default function Subscription() {
                       <p className="text-sm font-medium text-text-primary">Next Step:</p>
                       <p className="text-xs text-text-muted">Take a screenshot of your payment receipt and upload it below. Our admin will verify and activate your {selectedPlan?.name} subscription.</p>
                     </>
+                  ) : (
+                    <div className="rounded-xl bg-black-elevated border border-white/10 p-4">
+                      <p className="text-sm font-semibold text-text-primary">PayPal is the payment method available in your country.</p>
+                      <p className="text-xs text-text-muted mt-2">Pay securely with PayPal on the right — your subscription activates automatically after payment.</p>
+                    </div>
                   )}
                   <a
                     href={whatsappUrl}
@@ -535,10 +544,10 @@ export default function Subscription() {
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
                     <p className="text-sm font-semibold text-text-primary">
-                      {isSelectedCurrentPaidPlan ? 'Subscription Status' : 'Upload Payment Proof'}
+                      {isSelectedCurrentPaidPlan ? 'Subscription Status' : sierraLeonePayer ? 'Upload Payment Proof' : 'Payment'}
                     </p>
                     <p className="text-xs text-text-muted">
-                      {isSelectedCurrentPaidPlan ? 'Admin confirmation complete' : 'Accepted: screenshot or PDF receipt'}
+                      {isSelectedCurrentPaidPlan ? 'Admin confirmation complete' : sierraLeonePayer ? 'Accepted: screenshot or PDF receipt' : 'Secure checkout via PayPal'}
                     </p>
                   </div>
                   {isSelectedCurrentPaidPlan ? (
@@ -580,6 +589,8 @@ export default function Subscription() {
 
                 {!isSelectedCurrentPaidPlan && (
                   <>
+                    {sierraLeonePayer && (
+                    <>
                     <label className="block">
                       <input
                         type="file"
@@ -631,6 +642,8 @@ export default function Subscription() {
                       <span className="text-[11px] uppercase tracking-wider text-text-muted font-semibold">or pay instantly</span>
                       <div className="flex-1 h-px bg-white/10" />
                     </div>
+                    </>
+                    )}
                     {selectedPlanId === 'pro' || selectedPlanId === 'legend' ? (
                       <PayPalButton
                         label={`Pay with PayPal — instant activation`}

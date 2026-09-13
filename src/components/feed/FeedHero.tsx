@@ -156,7 +156,7 @@ export default function FeedHero({ mix, event, dj }: FeedHeroProps) {
               {dj.stageName}
             </h2>
             <p className="text-sm sm:text-base text-text-secondary mb-4">
-              {dj.city ? `${dj.city}, Sierra Leone` : 'Sierra Leone 🇸🇱'}
+              {dj.city || dj.country ? [dj.city, dj.country].filter(Boolean).join(', ') : ''}
               {dj.genres && dj.genres.length > 0 ? ` • ${dj.genres[0]}` : ''}
             </p>
             <Link

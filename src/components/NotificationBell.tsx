@@ -96,6 +96,7 @@ interface NotificationBellProps {
 }
 
 export default function NotificationBell({ className, variant = 'ghost' }: NotificationBellProps) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const { data: notificationsData, isLoading } = useNotifications({ limit: 8 });
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
@@ -204,7 +205,7 @@ export default function NotificationBell({ className, variant = 'ghost' }: Notif
               className="text-xs text-gold hover:bg-gold/10 w-full"
               onClick={() => {
                 setOpen(false);
-                window.location.href = '/user/notifications';
+                navigate('/user/notifications');
               }}
             >
               View all notifications

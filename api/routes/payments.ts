@@ -107,11 +107,16 @@ router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'),
 
     const dj = await prisma.djProfile.findUnique({
       where: { userId: req.user.id },
-      select: { id: true, isPro: true, subscriptionTier: true },
+      select: { id: true, isPro: true, subscriptionTier: true, country: true },
     });
 
     if (!dj) {
       return fail(res, 404, 'DJ profile not found');
+    }
+
+    // Manual mobile-money payments are for Sierra Leone only — other countries use PayPal
+    if ((dj.country || 'Sierra Leone') !== 'Sierra Leone') {
+      return fail(res, 403, 'Manual payments are only available in Sierra Leone. Please use PayPal checkout.');
     }
 
     const requestedPlan = parsed.data.plan;

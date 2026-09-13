@@ -13,6 +13,44 @@ const listSchema = z.object({
   unreadOnly: z.string().optional(),
 });
 
+const pushTokenSchema = z.object({
+  token: z.string().min(10).max(255),
+  platform: z.string().max(20).optional(),
+});
+
+// POST /api/notifications/push-token - Register an FCM device token for the current user
+router.post('/push-token', authMiddleware, async (req, res) => {
+  try {
+    const parsed = pushTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return fail(res, 400, 'Invalid push token');
+    }
+
+    const { token, platform } = parsed.data;
+    await prisma.pushToken.upsert({
+      where: { token },
+      update: { userId: req.user.id, platform: platform || null, lastSeenAt: new Date() },
+      create: { userId: req.user.id, token, platform: platform || null },
+    });
+
+    return ok(res, { registered: true });
+  } catch (error) {
+    console.error('[Notifications] Push token register error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
+// DELETE /api/notifications/push-token - Remove all push tokens for the current user (logout)
+router.delete('/push-token', authMiddleware, async (req, res) => {
+  try {
+    await prisma.pushToken.deleteMany({ where: { userId: req.user.id } });
+    return ok(res, { removed: true });
+  } catch (error) {
+    console.error('[Notifications] Push token delete error:', error);
+    return fail(res, 500, 'Internal server error');
+  }
+});
+
 // GET /api/notifications - List current user's notifications
 router.get('/', authMiddleware, async (req, res) => {
   try {

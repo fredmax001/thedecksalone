@@ -249,7 +249,6 @@ export default function MixFeedRow({
             <p className="text-[11px] text-text-secondary truncate mt-0.5 flex items-center gap-1">
               <span>{djName}</span>
               <span className="text-gold text-[10px]">✓</span>
-              <span>🇸🇱</span>
             </p>
           </div>
         </div>
@@ -413,7 +412,6 @@ export default function MixFeedRow({
                   <span className="inline-flex items-center text-gold" title="Verified DJ">
                     ✓
                   </span>
-                  <span className="text-xs">🇸🇱</span>
                   {isProDj && (
                     <span className="text-[8px] uppercase font-black px-1.5 py-0.2 rounded bg-gold/20 text-gold border border-gold/30 shadow-sm">
                       PRO

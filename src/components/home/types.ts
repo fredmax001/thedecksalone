@@ -4,6 +4,7 @@ export interface HomeDJ {
   stageName: string;
   avatar?: string;
   city?: string;
+  country?: string;
   genres?: string[];
   verified?: boolean;
   subscriptionTier?: string;

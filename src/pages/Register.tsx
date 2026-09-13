@@ -25,11 +25,10 @@ import {
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import PasswordStrength from '@/components/PasswordStrength';
-import PhoneOtpForm from '@/components/PhoneOtpForm';
-import { toast } from 'sonner';
 import { passwordSchema } from '@/lib/schemas';
 import { redirectAfterAuth } from '@/lib/navigation';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { AFRICAN_COUNTRIES } from '@/lib/africanCountries';
 
 /* ─── Constants ─── */
 const CITIES = [
@@ -65,6 +64,7 @@ const djStep1Schema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   phone: z.string().optional(),
   gender: z.string().optional(),
+  country: z.string().min(1, 'Please select your country'),
   terms: z.literal(true),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords don't match",
@@ -91,6 +91,7 @@ const userSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
   phone: z.string().optional(),
   gender: z.string().optional(),
+  country: z.string().min(1, 'Please select your country'),
   password: passwordSchema,
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   terms: z.literal(true),
@@ -123,7 +124,7 @@ const iconCls = 'absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-text-mu
 /* ─── Register Page ─── */
 export default function Register() {
   // Which account type the user chose: null = not chosen yet, 'DJ' or 'USER'
-  const [accountType, setAccountType] = useState<'DJ' | 'USER' | 'PHONE' | null>(null);
+  const [accountType, setAccountType] = useState<'DJ' | 'USER' | null>(null);
   const [step, setStep] = useState(1); // only relevant for DJ flow
   const [direction, setDirection] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -189,7 +190,7 @@ export default function Register() {
       setError(null);
       const step1 = watchDj1();
 
-      const result = await register(step1.email, step1.password, 'DJ', step1.phone, step1.gender);
+      const result = await register(step1.email, step1.password, 'DJ', step1.phone, step1.gender, step1.country);
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -201,6 +202,7 @@ export default function Register() {
         formData.append('stageName', step1.stageName);
         formData.append('fullName', step1.fullName);
         formData.append('city', data.city);
+        formData.append('country', step1.country);
         data.genres.forEach((g) => formData.append('genres', g));
         formData.append('startYear', data.startYear);
         if (data.bio) formData.append('bio', data.bio);
@@ -226,7 +228,7 @@ export default function Register() {
       setIsSubmitting(true);
       setError(null);
 
-      const result = await register(data.email, data.password, 'USER', data.phone, data.gender);
+      const result = await register(data.email, data.password, 'USER', data.phone, data.gender, data.country);
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -246,20 +248,6 @@ export default function Register() {
       setTimeout(() => navigate('/discover'), 1500);
     },
     [register, navigate]
-  );
-
-  /* ─── Phone OTP Registration ─── */
-  // The backend finds OR creates the account on first successful verification.
-  const onPhoneVerified = useCallback(
-    async (phoneUser: { id: string; email: string; phone?: string; role: string }, token: string) => {
-      const { setAuth, fetchMe } = useAuthStore.getState();
-      setAuth(phoneUser as never, token);
-      fetchMe();
-      toast.success('Welcome to Deck Salone!');
-      setCompleted(true);
-      setTimeout(() => navigate('/discover'), 1500);
-    },
-    [navigate]
   );
 
   const toggleGenre = useCallback(
@@ -422,61 +410,9 @@ export default function Register() {
               </svg>
               <span>Continue with Google</span>
             </button>
-
-            {/* Phone signup */}
-            <button
-              type="button"
-              onClick={() => setAccountType('PHONE')}
-              className="mt-3 w-full h-[48px] rounded-xl bg-black-elevated hover:bg-gold/5 text-text-primary text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-md active:scale-95 border border-dark-gray hover:border-gold"
-            >
-              <Phone className="w-5 h-5 text-gold" />
-              <span>Sign up with Phone</span>
-            </button>
           </div>
 
           <p className="mt-6 text-center text-sm text-text-secondary">
-            Already have an account?{' '}
-            <Link to="/login" className="text-gold hover:text-gold-light font-medium transition-colors">
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </AuthLayout>
-    );
-  }
-
-  /* ─── PHONE Sign Up (OTP — account created automatically on first verification) ─── */
-  if (accountType === 'PHONE') {
-    return (
-      <AuthLayout quote="Your stage is waiting. Create your profile and let the world hear your sound.">
-        <div className="bg-black-surface border border-dark-gray rounded-2xl p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
-          <div className="text-center mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gold/15 flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-6 h-6 text-gold" />
-            </div>
-            <h1 className="text-[26px] sm:text-[32px] font-semibold uppercase tracking-tight text-text-primary font-display">
-              Sign Up with Phone
-            </h1>
-            <p className="mt-2 text-sm text-text-muted">
-              We&apos;ll text you a verification code — no password needed
-            </p>
-          </div>
-
-          <div className="mb-6 p-3 rounded-lg bg-gold/10 border border-gold/30 text-text-secondary text-sm text-center">
-            An account is created automatically the first time you verify your phone number.
-          </div>
-
-          <PhoneOtpForm onVerified={onPhoneVerified} verifyLabel="Verify & Create Account" />
-
-          <button
-            type="button"
-            onClick={() => setAccountType(null)}
-            className="w-full h-[44px] mt-6 text-sm text-text-muted hover:text-text-primary transition-colors"
-          >
-            ← Back
-          </button>
-
-          <p className="text-center text-sm text-text-secondary mt-2">
             Already have an account?{' '}
             <Link to="/login" className="text-gold hover:text-gold-light font-medium transition-colors">
               Sign in
@@ -548,6 +484,28 @@ export default function Register() {
               {errUser.email && (
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1.5 text-sm text-red">
                   {errUser.email.message}
+                </motion.p>
+              )}
+            </motion.div>
+
+            {/* Country */}
+            <motion.div variants={fadeUpItem} initial="hidden" animate="show">
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Country</label>
+              <div className="relative">
+                <MapPin className={iconCls} />
+                <select
+                  {...regUser('country')}
+                  className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)] appearance-none cursor-pointer ${errUser.country ? 'border-red' : 'border-medium-gray'}`}
+                >
+                  <option value="" className="bg-black-surface">Select your country</option>
+                  {AFRICAN_COUNTRIES.map((country) => (
+                    <option key={country} value={country} className="bg-black-surface">{country}</option>
+                  ))}
+                </select>
+              </div>
+              {errUser.country && (
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1.5 text-sm text-red">
+                  {errUser.country.message}
                 </motion.p>
               )}
             </motion.div>
@@ -808,6 +766,28 @@ export default function Register() {
                 )}
               </motion.div>
 
+              {/* Country */}
+              <motion.div variants={fadeUpItem} initial="hidden" animate="show">
+                <label className="block text-sm font-medium text-text-primary mb-1.5">Country</label>
+                <div className="relative">
+                  <MapPin className={iconCls} />
+                  <select
+                    {...regDj1('country')}
+                    className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)] appearance-none cursor-pointer ${errDj1.country ? 'border-red' : 'border-medium-gray'}`}
+                  >
+                    <option value="" className="bg-black-surface">Select your country</option>
+                    {AFRICAN_COUNTRIES.map((country) => (
+                      <option key={country} value={country} className="bg-black-surface">{country}</option>
+                    ))}
+                  </select>
+                </div>
+                {errDj1.country && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1.5 text-sm text-red">
+                    {errDj1.country.message}
+                  </motion.p>
+                )}
+              </motion.div>
+
               {/* Phone */}
               <motion.div variants={fadeUpItem} initial="hidden" animate="show">
                 <label className="block text-sm font-medium text-text-primary mb-1.5">
@@ -954,20 +934,29 @@ export default function Register() {
               onSubmit={handleDj2(onDjStep2)}
               className="flex flex-col gap-5"
             >
-              {/* City */}
+              {/* City — Sierra Leone city list for SL DJs, free text for other countries */}
               <motion.div variants={fadeUpItem} initial="hidden" animate="show">
                 <label className="block text-sm font-medium text-text-primary mb-1.5">City</label>
                 <div className="relative">
                   <MapPin className={iconCls} />
-                  <select
-                    {...regDj2('city')}
-                    className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)] appearance-none cursor-pointer ${errDj2.city ? 'border-red' : 'border-medium-gray'}`}
-                  >
-                    <option value="" className="bg-black-surface">Select your city</option>
-                    {CITIES.map((city) => (
-                      <option key={city} value={city} className="bg-black-surface">{city}</option>
-                    ))}
-                  </select>
+                  {watchDj1('country') === 'Sierra Leone' ? (
+                    <select
+                      {...regDj2('city')}
+                      className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)] appearance-none cursor-pointer ${errDj2.city ? 'border-red' : 'border-medium-gray'}`}
+                    >
+                      <option value="" className="bg-black-surface">Select your city</option>
+                      {CITIES.map((city) => (
+                        <option key={city} value={city} className="bg-black-surface">{city}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Your city"
+                      {...regDj2('city')}
+                      className={`w-full h-[48px] bg-black-surface border rounded-lg pl-11 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)] ${errDj2.city ? 'border-red' : 'border-medium-gray'}`}
+                    />
+                  )}
                 </div>
                 {errDj2.city && (
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1.5 text-sm text-red">

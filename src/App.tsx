@@ -7,6 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { initSystemNotifications, syncUnreadSystemNotifications } from '@/lib/systemNotifications';
+import { initPushNotifications } from '@/lib/pushNotifications';
 import { checkForUpdate, openUpdatePage, markUpdateToastShown, wasUpdateToastShown, useUpdateStore } from '@/lib/appUpdates';
 import { toast } from 'sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -17,6 +18,7 @@ import MixPlayer from './components/MixPlayer';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import LocationPrompt from './components/LocationPrompt';
 import ResumeListeningModal from './components/ResumeListeningModal';
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -311,6 +313,19 @@ function SystemNotificationManager() {
   return null;
 }
 
+/* ─── FCM push notifications: register device token and handle taps (native only) ─── */
+function PushNotificationManager() {
+  const navigate = useNavigate();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    initPushNotifications(navigate);
+  }, [isAuthenticated, navigate]);
+
+  return null;
+}
+
 /* ──────────────────────── Router ──────────────────────── */
 export default function App() {
   useEffect(() => {
@@ -322,6 +337,7 @@ export default function App() {
     <BrowserRouter>
       <DeepLinkHandler />
       <SystemNotificationManager />
+      <PushNotificationManager />
       <UpdateChecker />
       <AuthInitializer />
       <VisitTracker />
@@ -472,6 +488,7 @@ export default function App() {
         <TermsAcceptanceModal />
         <LocationPrompt />
         <ResumeListeningModal />
+        <NotificationPermissionPrompt />
       </Suspense>
     </BrowserRouter>
   );

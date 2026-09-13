@@ -10,6 +10,7 @@ const { computeDjScore, recalculateAllRankings } = require('../utils/ranking');
 const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { createNotification } = require('../utils/notifications');
 const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
+const { isAfricanCountry } = require('../utils/africanCountries');
 const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
@@ -626,6 +627,11 @@ router.post('/', authMiddleware, uploadDjProfileImages, asyncHandler(async (req,
   }
 
   const data = parsed.data;
+
+  // Platform is open to African countries only
+  if (data.country && !isAfricanCountry(data.country)) {
+    return fail(res, 400, 'Deck Salone is currently available in Africa only.');
+  }
 
   if (data.community) {
     if (!data.city) {

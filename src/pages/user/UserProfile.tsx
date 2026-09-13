@@ -44,6 +44,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { AFRICAN_COUNTRIES } from '@/lib/africanCountries';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
 
@@ -396,31 +397,50 @@ export default function UserProfile() {
 
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-text-secondary">City</Label>
-                    <Select
-                      value={form.city}
-                      onValueChange={(val) => updateForm((prev) => ({ ...prev, city: val }))}
-                    >
-                      <SelectTrigger className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary h-9 text-xs">
-                        <SelectValue placeholder="Select City" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#141414] border-[#2a2a2a] text-text-primary max-h-64">
-                        {CITIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {form.country === 'Sierra Leone' ? (
+                      <Select
+                        value={form.city}
+                        onValueChange={(val) => updateForm((prev) => ({ ...prev, city: val }))}
+                      >
+                        <SelectTrigger className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary h-9 text-xs">
+                          <SelectValue placeholder="Select City" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#141414] border-[#2a2a2a] text-text-primary max-h-64">
+                          {CITIES.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={form.city}
+                        onChange={(e) => updateForm((prev) => ({ ...prev, city: e.target.value }))}
+                        placeholder="Your city"
+                        className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary focus:border-gold h-9 text-sm"
+                      />
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-1 pt-1">
                   <Label className="text-xs font-semibold text-text-secondary">Country</Label>
-                  <Input
+                  <Select
                     value={form.country}
-                    onChange={(e) => updateForm((prev) => ({ ...prev, country: e.target.value }))}
-                    className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary focus:border-gold h-9 text-sm"
-                  />
+                    onValueChange={(val) => updateForm((prev) => ({ ...prev, country: val }))}
+                  >
+                    <SelectTrigger className="bg-[#0a0a0a] border-[#2a2a2a] text-text-primary h-9 text-xs">
+                      <SelectValue placeholder="Select Country" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#141414] border-[#2a2a2a] text-text-primary max-h-64">
+                      {AFRICAN_COUNTRIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>

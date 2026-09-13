@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import UpdatesSection from '@/components/UpdatesSection';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -759,6 +760,9 @@ export default function UserSettings() {
           Save Notification & Privacy Settings
         </Button>
       )}
+
+      {/* App Updates */}
+      <UpdatesSection />
 
       {/* Danger Zone */}
       <Card className="bg-red/5 border-red/20">

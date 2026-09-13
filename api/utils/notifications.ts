@@ -155,6 +155,16 @@ async function createNotification({
       });
     }
 
+    // Server push (FCM) — best-effort, respects the same push* prefs as in-app
+    if (pushEnabled) {
+      try {
+        const { sendPushToUser } = require('./push');
+        sendPushToUser(userId, title, body || '', actionUrl ? { actionUrl } : {}).catch(() => {});
+      } catch {
+        // Push is optional — never break notification creation
+      }
+    }
+
     // Send email if requested and enabled
     if (sendEmail && emailEnabled) {
       try {

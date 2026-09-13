@@ -19,6 +19,8 @@ import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import SEOHead from '@/components/SEOHead';
+import PayPalButton from '@/components/PayPalButton';
+import { isSierraLeoneUser } from '@/lib/userCountry';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 
@@ -123,6 +125,8 @@ export default function Pricing() {
 
   const { isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
+  // Sierra Leone keeps the manual Orange Money / Afrimoney flow; other countries pay via PayPal only
+  const sierraLeonePayer = isSierraLeoneUser(user);
 
   // Modal checkout state
   const [paymentReference, setPaymentReference] = useState('');
@@ -472,7 +476,9 @@ export default function Pricing() {
                 </div>
               </div>
 
-              {/* Mobile Money Payment Instructions */}
+              {/* Mobile Money Payment Instructions — Sierra Leone only */}
+              {sierraLeonePayer && (
+              <>
               <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-[#f4e059] flex items-center gap-1.5">
                   <PhoneCall className="w-3.5 h-3.5" /> Mobile Money Payment Details:
@@ -560,6 +566,41 @@ export default function Pricing() {
                   )}
                 </button>
               </div>
+              </>
+              )}
+
+              {/* PayPal checkout — all countries except Sierra Leone */}
+              {!sierraLeonePayer && selectedPlan.id !== 'free' && (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#f4e059]">
+                      Pay securely with PayPal
+                    </p>
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      You&apos;ll be charged in USD (converted from SLE {billingCycle === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.annualPrice}). Your subscription activates automatically after payment.
+                    </p>
+                  </div>
+                  <PayPalButton
+                    label={`Pay with PayPal — instant activation`}
+                    successMessage="🎉 Payment confirmed! Your subscription is now active."
+                    createOrder={async () => {
+                      const res = await api.post('/payments/paypal/create-order', {
+                        plan: selectedPlan.id,
+                        billingPeriod: billingCycle,
+                      });
+                      return res.data.data.orderId;
+                    }}
+                    onCapture={async (orderId) => {
+                      await api.post('/payments/paypal/capture-order', { orderId });
+                      toast.success(`🎉 ${selectedPlan.name} activated!`, {
+                        description: 'Your perks are live. Enjoy!',
+                      });
+                      setSelectedPlan(null);
+                      navigate(user?.role === 'DJ' ? '/dashboard/subscription' : '/user/dashboard');
+                    }}
+                  />
+                </div>
+              )}
             </motion.div>
           </div>
         </AnimatePresence>

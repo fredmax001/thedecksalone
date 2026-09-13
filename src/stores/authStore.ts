@@ -60,7 +60,7 @@ interface AuthState {
   isLoading: boolean;
   setAuth: (user: User, token: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, role: UserRole, phone?: string, gender?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, role: UserRole, phone?: string, gender?: string, country?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   fetchMe: () => Promise<void>;
   init: () => void;
@@ -70,6 +70,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { queryClient } from '@/lib/queryClient';
 import { clearPersistedQueryCache } from '@/lib/queryPersistence';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import { unregisterPushTokens } from '@/lib/pushNotifications';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -107,9 +108,9 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email, password, role, phone, gender) => {
+      register: async (email, password, role, phone, gender, country) => {
         try {
-          const res = await api.post('/auth/register', { email, password, role, phone, gender });
+          const res = await api.post('/auth/register', { email, password, role, phone, gender, country });
           if (res.data.success) {
             const { user, token } = res.data.data;
             queryClient.clear();
@@ -125,6 +126,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // 0. Remove FCM push tokens for this account (best-effort)
+        unregisterPushTokens().catch(() => {});
+
         // 1. Reset player state and detach user
         usePlayerStore.getState().setCurrentUserId(null);
 

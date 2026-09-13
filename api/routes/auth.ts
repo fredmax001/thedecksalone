@@ -13,6 +13,7 @@ const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswo
 const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
 const { RESERVED_USERNAMES, isValidUsername, generateUsername } = require('../utils/username');
+const { isAfricanCountry } = require('../utils/africanCountries');
 const { calculateTrialStatus } = require('../utils/trial');
 const { asyncHandler } = require('../middleware/asyncHandler');
 const { ok, fail } = require('../utils/response');
@@ -28,6 +29,7 @@ const registerSchema = z.object({
   }),
   username: z.string().optional(),
   phone: z.string().optional(),
+  country: z.string().max(100).optional(),
   role: z.enum(['USER', 'DJ']).optional(),
   gender: z.enum(GENDER_VALUES).optional(),
 });
@@ -73,10 +75,15 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
   }
 
-  let { email, password, phone, role, gender } = parsed.data;
+  let { email, password, phone, role, gender, country } = parsed.data;
   let { username } = parsed.data;
 
   email = email.toLowerCase();
+
+  // Platform is open to African countries only
+  if (country && !isAfricanCountry(country)) {
+    return fail(res, 400, 'Deck Salone is currently available in Africa only.');
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -106,7 +113,7 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   const hashedPassword = await hashPassword(password);
   const userRole = role === 'DJ' ? 'DJ' : 'USER';
   const user = await prisma.user.create({
-    data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined },
+    data: { email, username, password: hashedPassword, phone: phone || null, role: userRole, gender: gender || undefined, location: country || null },
     select: { id: true, email: true, username: true, role: true, gender: true, createdAt: true },
   });
 

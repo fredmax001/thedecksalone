@@ -697,6 +697,12 @@ router.delete('/account', authMiddleware, async (req, res) => {
       return fail(res, 404, 'User not found');
     }
 
+    // Manual mobile-money payments are for Sierra Leone only — other countries use PayPal
+    const payerCountry = user.djProfile?.country || (user.location?.split(',')?.pop()?.trim() ?? null) || 'Sierra Leone';
+    if (payerCountry !== 'Sierra Leone') {
+      return fail(res, 403, 'Manual payments are only available in Sierra Leone. Please use PayPal checkout.');
+    }
+
     if (user.deletedAt) {
       return ok(res, { scheduled: true, deletionDate: user.deletedAt });
     }
