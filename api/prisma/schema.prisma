@@ -1507,3 +1507,18 @@ model HallOfFameLegend {
 
 
 
+model Popup {
+  id        String    @id @default(cuid())
+  title     String
+  message   String    @db.Text
+  type      String    @default("MODAL") // MODAL | BANNER | SHEET
+  isActive  Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isActive])
+  @@map("popups")
+}

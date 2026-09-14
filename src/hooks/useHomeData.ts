@@ -63,8 +63,24 @@ export function useHomeData() {
   const officialPlaylists = useQuery({
     queryKey: ['officialPlaylists', 'home'],
     queryFn: async () => {
-      const res = await api.get('/official-playlists?limit=8');
-      return res.data.data || [];
+      try {
+        const [officialRes, smartRes] = await Promise.all([
+          api.get('/official-playlists').catch(() => ({ data: { data: [] } })),
+          api.get('/smart-playlists').catch(() => ({ data: { data: [] } })),
+        ]);
+        const official = officialRes.data?.data || [];
+        const smart = smartRes.data?.data || [];
+        const merged = [...official, ...smart];
+        return merged
+          .sort((a: any, b: any) => {
+            if (Boolean(a.isFeatured) !== Boolean(b.isFeatured)) return a.isFeatured ? -1 : 1;
+            if (Boolean(a.isSmart) !== Boolean(b.isSmart)) return a.isSmart ? -1 : 1;
+            return 0;
+          })
+          .slice(0, 8);
+      } catch {
+        return [];
+      }
     },
     staleTime: 1000 * 60 * 5,
   });

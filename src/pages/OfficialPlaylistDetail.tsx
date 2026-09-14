@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import {
-  ListMusic,
   Play,
   Pause,
   ArrowLeft,
@@ -16,6 +15,7 @@ import { motion } from 'framer-motion';
 import { formatCompactNumber } from '@/lib/formatting';
 import { ListSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import PlaylistCoverArt from '@/components/playlists/PlaylistCoverArt';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -163,21 +163,13 @@ export function OfficialPlaylistDetail() {
 
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-8">
           {/* Big Artwork */}
-          <div className="w-44 h-44 sm:w-56 sm:h-56 rounded-2xl bg-black border border-white/[0.1] overflow-hidden shrink-0 shadow-2xl">
-            {playlist.coverImage ? (
-              <img
-                src={getMediaUrl(playlist.coverImage)}
-                alt={playlist.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#f4e059]/20 via-[#111] to-black">
-                <ListMusic className="w-16 h-16 text-[#f4e059] mb-2" />
-                <span className="text-xs text-[#f4e059] font-bold uppercase tracking-widest">
-                  Official Playlist
-                </span>
-              </div>
-            )}
+          <div className="w-44 h-44 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shrink-0 shadow-2xl">
+            <PlaylistCoverArt
+              playlist={playlist}
+              aspect="square"
+              showPlayButton={false}
+              className="w-full h-full"
+            />
           </div>
 
           {/* Details & Action Controls */}
@@ -190,12 +182,6 @@ export function OfficialPlaylistDetail() {
               </div>
             )}
 
-            {playlist.isSmart && (
-              <span className="px-2.5 py-1 rounded-full bg-[#f4e059]/15 text-[#f4e059] border border-[#f4e059]/30 text-xs font-bold uppercase tracking-wide">
-                Smart Playlist
-              </span>
-            )}
-
             <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
               {playlist.title}
             </h1>
@@ -206,14 +192,10 @@ export function OfficialPlaylistDetail() {
               </p>
             )}
 
-            <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-text-muted pt-1">
-              <span className="text-white font-bold">{tracks.length} Mixes</span>
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-text-muted pt-1">
+              <span className="text-white font-bold">{tracks.length} {tracks.length === 1 ? 'Mix' : 'Mixes'}</span>
               <span>•</span>
-              <span>{formatDuration(totalDuration)} Total Runtime</span>
-              <span>•</span>
-              <span className="text-[#f4e059]">
-                {playlist.isSmart ? 'Auto-curated • Updates as new mixes drop' : 'Deck Salone Official Editorial'}
-              </span>
+              <span>{formatDuration(totalDuration)} Runtime</span>
             </div>
 
             {/* Play All & Shuffle Buttons */}
@@ -299,7 +281,7 @@ export function OfficialPlaylistDetail() {
                         <PlayingWaveIndicator />
                       ) : (
                         <>
-                          <span className="font-mono text-xs text-text-muted group-hover:hidden">
+                          <span className="font-bold text-xs text-text-muted group-hover:hidden">
                             {String(index + 1).padStart(2, '0')}
                           </span>
                           <button className="hidden group-hover:flex w-6 h-6 rounded-full bg-[#f4e059] text-black items-center justify-center">
@@ -345,12 +327,12 @@ export function OfficialPlaylistDetail() {
                     </div>
 
                     {/* Stream Plays */}
-                    <div className="hidden sm:block col-span-2 text-right font-mono text-xs text-text-muted">
+                    <div className="hidden sm:block col-span-2 text-right font-semibold text-xs text-text-muted">
                       {formatCompactNumber(track.plays || 0)}
                     </div>
 
                     {/* Duration */}
-                    <div className="col-span-2 sm:col-span-1 text-right font-mono text-xs text-text-muted">
+                    <div className="col-span-2 sm:col-span-1 text-right font-semibold text-xs text-text-muted">
                       {formatDuration(track.duration)}
                     </div>
                   </div>

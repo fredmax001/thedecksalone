@@ -18,7 +18,7 @@ import { useDJs } from '@/hooks/useDJs';
 import { useMixes, useTrendingMixes } from '@/hooks/useMixes';
 import { useEvents } from '@/hooks/useEvents';
 import { useRecommendedDjs, useForYouPlaylists, useFeedStats } from '@/hooks/useRecommendations';
-import api, { getMediaUrl } from '@/lib/api';
+import api from '@/lib/api';
 import SEOHead from '@/components/SEOHead';
 import { cn } from '@/lib/utils';
 import SectionHeader from '@/components/home/SectionHeader';
@@ -95,10 +95,18 @@ export default function Feed() {
     const fetchPlaylists = async () => {
       try {
         setPlaylistsLoading(true);
-        const res = await api.get('/official-playlists');
-        if (res.data.success) {
-          setPlaylists(res.data.data || []);
-        }
+        const [officialRes, smartRes] = await Promise.all([
+          api.get('/official-playlists').catch(() => ({ data: { data: [] } })),
+          api.get('/smart-playlists').catch(() => ({ data: { data: [] } })),
+        ]);
+        const official = officialRes.data?.data || [];
+        const smart = smartRes.data?.data || [];
+        const merged = [...official, ...smart].sort((a: any, b: any) => {
+          if (Boolean(a.isFeatured) !== Boolean(b.isFeatured)) return a.isFeatured ? -1 : 1;
+          if (Boolean(a.isSmart) !== Boolean(b.isSmart)) return a.isSmart ? -1 : 1;
+          return 0;
+        });
+        setPlaylists(merged);
       } catch (err) {
         console.error('Failed to load playlists in Feed', err);
       } finally {
@@ -212,7 +220,7 @@ export default function Feed() {
       <section className="border-b border-dark-gray bg-gradient-to-b from-[#161614] via-[#10100f] to-black pt-6 pb-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="font-display text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
+            <h1 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-white">
               FEED
             </h1>
           </div>
@@ -371,12 +379,6 @@ export default function Feed() {
                           {dj.genres?.slice(0, 2).join(' • ') || 'Afrobeats • Salone Mix'}
                         </p>
 
-                        {dj.recommendationReason && (
-                          <div className="mt-2 text-[9px] font-mono px-2 py-0.5 rounded-full bg-gold/10 text-gold border border-gold/20 line-clamp-1">
-                            {dj.recommendationReason}
-                          </div>
-                        )}
-
                         <button
                           onClick={(e) => handleFollowDj(dj.id, e)}
                           className={cn(
@@ -405,38 +407,17 @@ export default function Feed() {
               </div>
             )}
 
-            {/* 🎵 MADE FOR YOU PLAYLISTS */}
-            {forYouPlaylists && forYouPlaylists.length > 0 && (
+            {/* 🎵 FEATURED & CURATED PLAYLISTS */}
+            {(playlists.length > 0 || (forYouPlaylists && forYouPlaylists.length > 0)) && (
               <div className="space-y-4">
                 <SectionHeader
-                  title="Made For You Playlists"
+                  title="Official & Curated Playlists"
                   action={{ label: 'View all playlists', to: '/playlists' }}
                   icon={<Compass className="w-4 h-4 text-gold" />}
                 />
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  {forYouPlaylists.map((pl) => (
-                    <Link
-                      key={pl.id}
-                      to={`/mixes?search=${encodeURIComponent(pl.title)}`}
-                      className="group rounded-2xl bg-[#121110] border border-white/[0.08] hover:border-gold/40 p-3.5 transition-all flex flex-col"
-                    >
-                      <div className="relative aspect-square rounded-xl overflow-hidden bg-black mb-2.5">
-                        <img
-                          src={getMediaUrl(pl.coverImage)}
-                          alt={pl.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                        />
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-gold text-black text-[9px] font-black uppercase">
-                          {pl.badge}
-                        </span>
-                      </div>
-                      <h4 className="font-display text-xs sm:text-sm font-bold text-white uppercase truncate group-hover:text-gold transition-colors">
-                        {pl.title}
-                      </h4>
-                      <p className="text-[11px] text-text-secondary line-clamp-2 mt-1 leading-relaxed flex-1">
-                        {pl.description}
-                      </p>
-                    </Link>
+                  {(playlists.length > 0 ? playlists.slice(0, 4) : forYouPlaylists || []).map((pl, i) => (
+                    <PlaylistFeedRow key={pl.id} playlist={pl} index={i} />
                   ))}
                 </div>
               </div>
@@ -550,7 +531,7 @@ export default function Feed() {
           </div>
         ) : activeTab === 'playlists' ? (
           /* ─── TAB: PLAYLISTS ─── */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
             {playlists.length > 0 ? (
               playlists.map((pl, i) => <PlaylistFeedRow key={pl.id} playlist={pl} index={i} />)
             ) : (

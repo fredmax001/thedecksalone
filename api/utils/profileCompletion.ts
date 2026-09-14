@@ -188,3 +188,73 @@ export async function sendProfileNudgeEmail(user: any, djProfile?: any, mixCount
 
   return result;
 }
+
+/**
+ * Automated batch or single user nudge function
+ */
+export async function nudgeIncompleteProfiles(userId?: string) {
+  if (userId) {
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        djProfile: {
+          include: {
+            _count: { select: { mixes: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      const dj = await prisma.djProfile.findUnique({
+        where: { id: userId },
+        include: {
+          user: true,
+          _count: { select: { mixes: true } },
+        },
+      });
+      if (dj && dj.user) {
+        user = { ...dj.user, djProfile: dj } as any;
+      }
+    }
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const mixCount = user.djProfile?._count?.mixes || 0;
+    const result = await sendProfileNudgeEmail(user, user.djProfile, mixCount);
+    return {
+      success: result.success,
+      totalMatched: 1,
+      emailsSent: result.success ? 1 : 0,
+      message: result.success ? `Nudge email sent to ${user.email}!` : (result.error || 'Failed to send email'),
+    };
+  }
+
+  const djs = await prisma.djProfile.findMany({
+    include: {
+      user: true,
+      _count: { select: { mixes: true } },
+    },
+  });
+
+  let sent = 0;
+  for (const dj of djs) {
+    if (!dj.user) continue;
+    const completion = calculateProfileCompletion(dj.user, dj, dj._count.mixes);
+    if (!completion.isComplete) {
+      const res = await sendProfileNudgeEmail(dj.user, dj, dj._count.mixes).catch(() => ({ success: false }));
+      if (res && res.success) {
+        sent++;
+      }
+    }
+  }
+
+  return {
+    success: true,
+    totalMatched: djs.length,
+    emailsSent: sent,
+    message: `${sent} profile nudge emails dispatched!`,
+  };
+}

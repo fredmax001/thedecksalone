@@ -24,6 +24,7 @@ import {
   ExternalLink,
   CreditCard,
   BellRing,
+  AppWindow,
   Send,
   Clock,
   Trophy,
@@ -102,6 +103,7 @@ import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import { useAdminPopups, useCreatePopup, useUpdatePopup, useDeletePopup, type Popup, type PopupType } from '@/hooks/usePopups';
 
 /* ─────────────────────── Types ─────────────────────── */
 
@@ -110,7 +112,7 @@ type AdminSection =
   | 'users' | 'events' | 'revenue' | 'analytics' | 'platforms'
   | 'verification' | 'notifications' | 'subscriptions' | 'security'
   | 'ads' | 'roles' | 'settings' | 'battles' | 'opportunities'
-  | 'halloffame' | 'violations' | 'promo';
+  | 'halloffame' | 'violations' | 'promo' | 'popups';
 
 interface SidebarItem {
   id: AdminSection;
@@ -141,6 +143,7 @@ const sidebarItems: SidebarItem[] = [
   { id: 'opportunities', label: 'Opportunities', icon: Plus, group: 'Growth' },
   { id: 'promo', label: 'Promo & Referrals', icon: Gift, group: 'Growth' },
   { id: 'ads', label: 'Ads Manager', icon: Megaphone, group: 'Growth' },
+  { id: 'popups', label: 'Popups & Alerts', icon: AppWindow, group: 'Growth' },
   { id: 'notifications', label: 'Notifications', icon: BellRing, group: 'Growth' },
   { id: 'platforms', label: 'API & Integrations', icon: Server, group: 'System' },
   { id: 'security', label: 'Security Logs', icon: Shield, group: 'System' },
@@ -2036,6 +2039,243 @@ function BattlesSection() {
               </div>
               <button onClick={handleCreate} disabled={createBattleMutation.isPending} className="w-full py-2 bg-[#f4e059] text-black font-bold rounded-lg hover:bg-[#f4e059]/90 disabled:opacity-50">
                 {createBattleMutation.isPending ? 'Creating...' : 'Create Battle'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Popups, Alerts & Sheets ─────────────────────── */
+
+function toLocalInputValue(iso?: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const POPUP_TYPE_LABELS: Record<string, string> = { MODAL: 'Popup Modal', BANNER: 'Alert Banner', SHEET: 'Bottom Sheet' };
+
+function popupErrMessage(error: unknown): string {
+  const e = error as { response?: { data?: { error?: string } }; message?: string };
+  return e?.response?.data?.error || e?.message || 'Unknown error';
+}
+
+function PopupsSection() {
+  const { data: popups, isLoading, error } = useAdminPopups();
+  const createMutation = useCreatePopup();
+  const updateMutation = useUpdatePopup();
+  const deleteMutation = useDeletePopup();
+
+  const [showModal, setShowModal] = useState(false);
+  const [editingPopup, setEditingPopup] = useState<Popup | null>(null);
+  const [form, setForm] = useState({ title: '', message: '', type: 'MODAL' as PopupType, isActive: true, startsAt: '', endsAt: '' });
+
+  const list = popups || [];
+  const [now] = useState(() => Date.now());
+  const activeCount = list.filter((p) => p.isActive).length;
+  const liveCount = list.filter((p) =>
+    p.isActive &&
+    (!p.startsAt || new Date(p.startsAt).getTime() <= now) &&
+    (!p.endsAt || new Date(p.endsAt).getTime() >= now)
+  ).length;
+  const bannerCount = list.filter((p) => p.type === 'BANNER').length;
+
+  const openCreate = () => {
+    setEditingPopup(null);
+    setForm({ title: '', message: '', type: 'MODAL', isActive: true, startsAt: '', endsAt: '' });
+    setShowModal(true);
+  };
+
+  const openEdit = (p: Popup) => {
+    setEditingPopup(p);
+    setForm({
+      title: p.title,
+      message: p.message,
+      type: p.type,
+      isActive: p.isActive ?? true,
+      startsAt: toLocalInputValue(p.startsAt),
+      endsAt: toLocalInputValue(p.endsAt),
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = () => {
+    if (!form.title || !form.message) return;
+    const payload = {
+      title: form.title,
+      message: form.message,
+      type: form.type,
+      isActive: form.isActive,
+      startsAt: form.startsAt || null,
+      endsAt: form.endsAt || null,
+    };
+    if (editingPopup) {
+      updateMutation.mutate({ id: editingPopup.id, ...payload }, { onSuccess: () => setShowModal(false) });
+    } else {
+      createMutation.mutate(payload, { onSuccess: () => setShowModal(false) });
+    }
+  };
+
+  const handleToggle = (p: Popup) => {
+    updateMutation.mutate({ id: p.id, isActive: !(p.isActive ?? true) });
+  };
+
+  const handleDelete = (p: Popup) => {
+    if (confirm(`Delete popup "${p.title}"?`)) deleteMutation.mutate(p.id);
+  };
+
+  const inputClass = 'w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-text-primary focus:outline-none focus:border-[#f4e059]/30';
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Popups, Alerts & Sheets" subtitle="Create and manage in-app popups shown to all users" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Total Popups</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{list.length.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Active</p>
+          <p className="font-mono text-2xl font-bold text-[#f4e059] mt-2">{activeCount.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Live Now</p>
+          <p className="font-mono text-2xl font-bold text-green-400 mt-2">{liveCount.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl p-5 border border-white/5" style={{ background: 'var(--bg-card)' }}>
+          <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Banners</p>
+          <p className="font-mono text-2xl font-bold text-text-primary mt-2">{bannerCount.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-text-muted">Popups go live immediately when active and inside their schedule. No schedule = always on.</p>
+        <button
+          onClick={openCreate}
+          className="px-3 py-1.5 text-xs rounded-lg font-bold uppercase bg-[#f4e059] text-black hover:bg-[#f4e059]/90 ml-auto"
+        >
+          + New Popup
+        </button>
+      </div>
+
+      {isLoading && <LoadingCenter />}
+
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 p-6 text-center" style={{ background: 'var(--bg-error)' }}>
+          <p className="text-red-400 font-medium">Failed to load popups</p>
+          <p className="text-red-400/60 text-sm mt-1">{popupErrMessage(error)}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
+          <table className="w-full text-left">
+            <thead className="border-b border-white/5 text-[10px] uppercase text-text-muted">
+              <tr>
+                <th className="p-4">Title</th>
+                <th className="p-4">Type</th>
+                <th className="p-4">Schedule</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Created</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((p) => (
+                <tr key={p.id} className="border-b border-white/5 text-sm">
+                  <td className="p-4">
+                    <p className="font-bold text-text-primary">{p.title}</p>
+                    <p className="text-xs text-text-muted line-clamp-1 mt-0.5 max-w-[280px]">{p.message}</p>
+                  </td>
+                  <td className="p-4 text-text-secondary">{POPUP_TYPE_LABELS[p.type] || p.type}</td>
+                  <td className="p-4 font-mono text-text-secondary text-xs">
+                    {p.startsAt || p.endsAt ? (
+                      <>
+                        {p.startsAt ? formatDateTime(p.startsAt) : 'Now'} → {p.endsAt ? formatDateTime(p.endsAt) : 'Always'}
+                      </>
+                    ) : (
+                      'Always on'
+                    )}
+                  </td>
+                  <td className="p-4"><StatusBadge status={p.isActive ? 'active' : 'inactive'} /></td>
+                  <td className="p-4 font-mono text-text-secondary">{formatDate(p.createdAt)}</td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => openEdit(p)} className="px-3 py-1.5 text-xs rounded-lg bg-white/5 text-text-muted hover:bg-white/10">Edit</button>
+                      <button
+                        onClick={() => handleToggle(p)}
+                        disabled={updateMutation.isPending}
+                        className={`px-3 py-1.5 text-xs rounded-lg flex items-center gap-1 disabled:opacity-50 ${p.isActive ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}
+                      >
+                        {p.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        disabled={deleteMutation.isPending}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {list.length === 0 && <EmptyState message="No popups created yet." />}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 p-6 space-y-4 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-modal)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-text-primary">{editingPopup ? 'Edit Popup' : 'Create New Popup'}</h3>
+              <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-white/5 text-text-muted"><XIcon className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Title</label>
+                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputClass} placeholder="Popup title" />
+              </div>
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Message</label>
+                <textarea rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className={inputClass} placeholder="Message shown to users" />
+              </div>
+              <div>
+                <label className="text-xs text-text-muted block mb-1">Format</label>
+                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as PopupType })} className={inputClass}>
+                  <option value="MODAL">Popup Modal — centered dialog</option>
+                  <option value="BANNER">Alert Banner — top strip</option>
+                  <option value="SHEET">Bottom Sheet — slides up</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-text-muted block mb-1">Starts At</label>
+                  <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} className={inputClass} />
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted block mb-1">Ends At</label>
+                  <input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} className={inputClass} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer">
+                <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="accent-[#f4e059]" />
+                Active (visible to users)
+              </label>
+              <button
+                onClick={handleSubmit}
+                disabled={createMutation.isPending || updateMutation.isPending || !form.title || !form.message}
+                className="w-full py-2 bg-[#f4e059] text-black font-bold rounded-lg hover:bg-[#f4e059]/90 disabled:opacity-50"
+              >
+                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingPopup ? 'Save Changes' : 'Create Popup'}
               </button>
             </div>
           </div>
@@ -5858,7 +6098,7 @@ function IncompleteProfilesWidget() {
               nudgeMutation.mutate(
                 { allIncomplete: true },
                 {
-                  onSuccess: (res: any) => toast.success(res?.data?.message || '5-step profile nudge emails sent!'),
+                  onSuccess: (res: any) => toast.success(res?.message || res?.data?.message || '5-step profile nudge emails sent!'),
                   onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send nudge emails')),
                 }
               )
@@ -5944,9 +6184,9 @@ function IncompleteProfilesWidget() {
                       <button
                         onClick={() =>
                           nudgeMutation.mutate(
-                            { userId: u.id },
+                            { userId: u.userId || u.id },
                             {
-                              onSuccess: (res: any) => toast.success(res?.data?.message || `Nudge email sent to ${u.email}!`),
+                              onSuccess: (res: any) => toast.success(res?.message || res?.data?.message || `Nudge email sent to ${u.email}!`),
                               onError: (err: any) => toast.error(getApiErrorMessage(err, 'Failed to send nudge email')),
                             }
                           )
@@ -6601,6 +6841,7 @@ export default function AdminDashboard() {
     roles: <RolesSection />,
     halloffame: <HallOfFameSection />,
     settings: <SettingsSection />,
+    popups: <PopupsSection />,
     opportunities: <OpportunitiesSection />,
     violations: <ViolationsSection />,
     promo: <PromoSection />,

@@ -376,28 +376,39 @@ router.get('/djs/recommended', softAuthMiddleware, async (req: any, res: any) =>
       select: {
         id: true,
         stageName: true,
-        slug: true,
         avatar: true,
         city: true,
+        community: true,
         verified: true,
+        verificationBadgeType: true,
         genres: true,
         subscriptionTier: true,
         totalMixes: true,
         totalFollowers: true,
-        totalPlays: true,
-        rating: true,
+        averageRating: true,
+        mixes: { select: { plays: true } },
+        _count: { select: { followers: true, mixes: true } },
         user: {
           select: { username: true },
         },
       },
     });
 
-    return ok(res, djs.map((d: any) => ({
-        ...d,
+    return ok(res, djs.map((d: any) => {
+      const { mixes, _count, ...rest } = d;
+      const realFollowers = _count?.followers ?? d.totalFollowers ?? 0;
+      const realMixes = _count?.mixes ?? (mixes?.length || d.totalMixes || 0);
+      return {
+        ...rest,
+        totalFollowers: realFollowers,
+        totalMixes: realMixes,
+        totalPlays: (mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0),
+        rating: d.averageRating || 0,
         recommendationReason: preferredGenres.some((g) => d.genres?.includes(g))
           ? `Plays your favorite genres (${preferredGenres.filter((g) => d.genres?.includes(g)).join(', ')})`
           : 'Top trending verified DJ in Sierra Leone',
-      })));
+      };
+    }));
   } catch (error: any) {
     console.error('Error fetching recommended DJs:', error);
     return fail(res, 500, 'Failed to fetch DJ recommendations');

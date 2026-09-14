@@ -1,1364 +1,479 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search,
-  MapPin,
-  Star,
-  CheckCircle2,
-  X,
-  SlidersHorizontal,
+  Play,
   Users,
   Music2,
-  ChevronDown,
-  ChevronLeft,
+  Star,
+  MapPin,
   ChevronRight,
-  TrendingUp,
-  LayoutGrid,
-  List,
 } from 'lucide-react';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import FadeIn from '@/components/FadeIn';
 import SEOHead from '@/components/SEOHead';
-import { useDJs, useDJGenres } from '@/hooks/useDJs';
-import { useUsers } from '@/hooks/useUsers';
-import { imageFallback } from '@/lib/utils';
-import ShareButton from '@/components/ShareButton';
-import { CITY_TO_COMMUNITIES, SIERRA_LEONE_CITIES } from '@/lib/sierraLeoneLocations';
+import { useDJs } from '@/hooks/useDJs';
+import { useMixes, useTrendingMixes } from '@/hooks/useMixes';
+import { useRecommendedDjs } from '@/hooks/useRecommendations';
+import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import { imageFallback, getAvatarImageUrl } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/api';
 import { formatCurrency } from '@/lib/formatting';
-import { getAvatarImageUrl } from '@/lib/utils';
-
-/* ─────────────────── Types ─────────────────── */
-
-interface DJ {
-  id: string;
-  username?: string;
-  stageName: string;
-  avatar: string;
-  city: string;
-  community?: string;
-  country: string;
-  genres: string[];
-  verified: boolean;
-  totalFollowers: number;
-  totalMixes: number;
-  averageRating: number;
-  rankingPosition: number;
-  bookingFeeMin: number;
-  bookingFeeMax: number;
-  currency: string;
-  startYear: number;
-  equipment: string[];
-}
-
-type DJsResponse = {
-  data: DJ[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-};
-
-interface DiscoveredUser {
-  id: string;
-  name: string | null;
-  username: string;
-  avatar: string | null;
-  location: string | null;
-  bio: string | null;
-  favoriteGenres: string[];
-  createdAt: string;
-  displayName: string;
-}
-
-type UsersResponse = {
-  data: DiscoveredUser[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-};
-/* ─────────────────── Constants ─────────────────── */
-
-const EQUIPMENT = ['Pioneer DJ', 'Serato', 'Traktor', 'Rekordbox'];
-
-const CITIES = [...SIERRA_LEONE_CITIES];
-
-const SORT_OPTIONS = [
-  { label: 'Rank (Default)', value: 'ranking' },
-  { label: 'Most Followers', value: 'followers' },
-  { label: 'Most Mixes', value: 'mixes' },
-  { label: 'Highest Rated', value: 'rating' },
-] as const;
-
-type SortValue = (typeof SORT_OPTIONS)[number]['value'];
-
-/* ─────────────────── Easing ─────────────────── */
-
-const easeSmooth = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 /* ─────────────────── Helpers ─────────────────── */
 
-function formatFollowers(n: number | null | undefined) {
+function formatNumber(n: number | null | undefined): string {
   const num = n ?? 0;
-  if (num >= 1000) {
-    return `${(num / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+  if (num >= 1_000_000) {
+    return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (num >= 1_000) {
+    return `${(num / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   }
   return num.toLocaleString();
 }
 
-function formatPrice(dj: DJ) {
+function formatPrice(dj: any): string {
   const min = dj.bookingFeeMin ?? 0;
   const max = dj.bookingFeeMax;
   if (max && max > min) {
     return `${formatCurrency(min)} - ${formatCurrency(max)}`;
   }
-  return `${formatCurrency(min)}+`;
+  if (min > 0) {
+    return `${formatCurrency(min)}+`;
+  }
+  return 'Contact for Rates';
 }
 
-/* ─────────────────── DJ Card ─────────────────── */
+function toMixTrack(m: any): MixTrack {
+  return {
+    id: m.id,
+    title: m.title,
+    dj: m.dj?.stageName || m.dj || 'DJ',
+    duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
+    cover: getMediaUrl(m.coverImage || m.cover) || '',
+    genre: m.genre || '',
+    plays: m.plays || 0,
+    audioUrl: getMediaUrl(m.audioUrl) || '',
+    djAvatar: m.dj?.avatar,
+    djUsername: m.dj?.username,
+  };
+}
 
-function DJCard({ dj, index }: { dj: DJ; index: number }) {
-  const [hovered, setHovered] = useState(false);
+/* ─────────────────── Section Header ─────────────────── */
 
+function DiscoverSectionHeader({
+  title,
+  viewAllLink,
+}: {
+  title: string;
+  viewAllLink?: string;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      transition={{ duration: 0.5, delay: index * 0.06, ease: easeSmooth }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="group relative bg-black-elevated rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card hover:border-gold/30"
-    >
-      {/* Image */}
-      <div className="relative aspect-square overflow-hidden">
-        <img
-          src={getAvatarImageUrl(dj.avatar)}
-          alt={dj.stageName}
-          onError={imageFallback}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
-
-        {/* Rank Badge */}
-        <div className="absolute top-3 left-3 w-10 h-10 rounded-full bg-gold-gradient flex items-center justify-center border-2 border-gold shadow-lg">
-          <span className="font-mono text-sm font-bold text-black">{dj.rankingPosition}</span>
-        </div>
-
-        {/* Verified Badge */}
-        {dj.verified && (
-          <div className="absolute top-3 right-3">
-            <VerifiedBadge dj={dj} size={20} />
-          </div>
-        )}
-
-        {/* Book Button on hover */}
-        <AnimatePresence>
-          {hovered && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="absolute bottom-3 right-3"
-            >
-              <Link
-                to={`/dj/${dj.username || dj.id}`}
-                className="inline-flex items-center px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold bg-black/60 backdrop-blur-sm hover:bg-gold hover:text-black transition-colors duration-200"
-              >
-                Book
-              </Link>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        {/* Genre Pills */}
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {dj.genres.slice(0, 2).map((g) => (
-            <span
-              key={g}
-              className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-secondary"
-            >
-              {g}
-            </span>
-          ))}
-        </div>
-
-        {/* Name */}
-        <Link to={`/dj/${dj.username || dj.id}`}>
-          <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5 hover:text-gold transition-colors">
-            {dj.stageName}
-          </h3>
+    <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <h2 className="font-display text-lg sm:text-xl md:text-2xl font-black uppercase tracking-tight text-white">
+        {title}
+      </h2>
+      {viewAllLink && (
+        <Link
+          to={viewAllLink}
+          className="text-xs sm:text-sm font-bold text-white/80 hover:text-gold transition-colors inline-flex items-center gap-1"
+        >
+          View All
+          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </Link>
-
-        {/* City */}
-        <div className="flex items-center gap-1 mt-1 mb-3">
-          <MapPin className="w-3.5 h-3.5 text-text-muted" />
-          <span className="text-xs text-text-muted">
-            {[dj.community, dj.city].filter(Boolean).join(', ')}
-          </span>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-3">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-text-muted mb-0.5">
-              <Users className="w-3 h-3" />
-            </div>
-            <span className="font-mono text-xs font-semibold text-text-primary">
-              {formatFollowers(dj.totalFollowers)}
-            </span>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-text-muted mb-0.5">
-              <Music2 className="w-3 h-3" />
-            </div>
-            <span className="font-mono text-xs font-semibold text-text-primary">{dj.totalMixes}</span>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-text-muted mb-0.5">
-              <Star className="w-3 h-3" />
-            </div>
-            <span className="font-mono text-xs font-semibold text-text-primary">
-              {dj.averageRating.toFixed(1)}
-            </span>
-          </div>
-        </div>
-
-        {/* Price */}
-        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
-          <span className="text-[10px] uppercase tracking-wider text-text-muted">From</span>
-          <span className="font-mono text-xs font-semibold text-gold">{formatPrice(dj)}</span>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
-          <Link
-            to={`/dj/${dj.username || dj.id}`}
-            className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
-          >
-            View Profile
-          </Link>
-          <ShareButton
-            url={`${window.location.origin}/dj/${dj.username || dj.id}`}
-            title={`Check out ${dj.stageName} on The Deck Salone`}
-            size="sm"
-          />
-        </div>
-      </div>
-    </motion.div>
+      )}
+    </div>
   );
 }
 
-/* ─────────────────── DJ List Row ─────────────────── */
+/* ─────────────────── Recommended DJ Feature Card ─────────────────── */
 
-function DJListRow({ dj, index }: { dj: DJ; index: number }) {
+function RecommendedDjCard({
+  dj,
+  onPlay,
+}: {
+  dj: any;
+  onPlay: (dj: any, e: React.MouseEvent) => void;
+}) {
+  const avatarUrl = getAvatarImageUrl(dj.avatar);
+  const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Sierra Leone';
+  const followersCount = dj.totalFollowers || dj._count?.followers || 0;
+  const playsCount = dj.totalPlays || 0;
+  const mixesCount = dj.totalMixes || dj._count?.mixes || 0;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ duration: 0.4, delay: index * 0.04, ease: easeSmooth }}
-      className="group flex items-center gap-4 p-4 bg-black-elevated rounded-xl border border-white/5 hover:border-gold/30 transition-all duration-300"
-    >
-      {/* Rank */}
-      <div className="w-8 h-8 rounded-full bg-gold-gradient flex items-center justify-center border border-gold shrink-0">
-        <span className="font-mono text-xs font-bold text-black">{dj.rankingPosition}</span>
-      </div>
-
-      {/* Avatar */}
-      <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
+    <div className="w-full rounded-2xl sm:rounded-3xl bg-black border border-white/10 hover:border-gold/40 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all duration-300 hover:shadow-card group">
+      {/* Left Avatar */}
+      <Link
+        to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+        className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl sm:rounded-2xl overflow-hidden shrink-0 bg-neutral-900 border border-white/5 block"
+      >
         <img
-          src={getAvatarImageUrl(dj.avatar)}
+          src={avatarUrl}
           alt={dj.stageName}
           onError={imageFallback}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          loading="lazy"
         />
-      </div>
+      </Link>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Link to={`/dj/${dj.username || dj.id}`}>
-            <h3 className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary hover:text-gold transition-colors truncate">
+      {/* Right Details */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Link
+            to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+            className="block min-w-0"
+          >
+            <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
               {dj.stageName}
             </h3>
           </Link>
-          {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
+          {dj.verified && <VerifiedBadge dj={dj} size={15} className="shrink-0" />}
         </div>
-        <div className="flex items-center gap-1 mt-0.5">
-          <MapPin className="w-3 h-3 text-text-muted" />
-          <span className="text-xs text-text-muted truncate">
-            {[dj.community, dj.city].filter(Boolean).join(', ')}
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {dj.genres.slice(0, 3).map((g) => (
-            <span
-              key={g}
-              className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-secondary"
-            >
-              {g}
-            </span>
-          ))}
-        </div>
-      </div>
 
-      {/* Stats */}
-      <div className="hidden sm:flex items-center gap-4 text-xs text-text-secondary shrink-0">
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 text-text-muted">
-            <Users className="w-3 h-3" />
-          </div>
-          <span className="font-mono font-semibold text-text-primary">{formatFollowers(dj.totalFollowers)}</span>
+        {/* Plays / Mixes (real data only) */}
+        <div className="font-bold text-xs sm:text-sm text-white/90 mt-0.5 truncate">
+          {playsCount > 0 ? `${formatNumber(playsCount)} Plays` : `${formatNumber(mixesCount)} Mixes`}
         </div>
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 text-text-muted">
-            <Music2 className="w-3 h-3" />
-          </div>
-          <span className="font-mono font-semibold text-text-primary">{dj.totalMixes}</span>
-        </div>
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 text-text-muted">
-            <Star className="w-3 h-3" />
-          </div>
-          <span className="font-mono font-semibold text-text-primary">{dj.averageRating.toFixed(1)}</span>
-        </div>
-      </div>
 
-      {/* Price & CTA */}
-      <div className="hidden md:flex flex-col items-end gap-2 shrink-0">
-        <span className="font-mono text-xs font-semibold text-gold">{formatPrice(dj)}</span>
-        <Link
-          to={`/dj/${dj.username || dj.id}`}
-          className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors"
-        >
-          Book
-        </Link>
+        {/* Location & followers */}
+        <div className="text-[11px] sm:text-xs text-text-muted truncate mt-0.5">
+          {location} · {followersCount} followers
+        </div>
+
+        {/* Action Row */}
+        <div className="flex items-center gap-2 mt-2 sm:mt-2.5">
+          <Link
+            to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+            className="px-3 sm:px-4 py-1.5 rounded-full bg-gold hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider transition-transform hover:scale-105 shrink-0"
+          >
+            VIEW PROFILE
+          </Link>
+          <button
+            onClick={(e) => onPlay(dj, e)}
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gold hover:brightness-110 flex items-center justify-center text-black shrink-0 transition-transform hover:scale-105 shadow"
+            title="Play Top Mix"
+          >
+            <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+          </button>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-/* ─────────────────── User Card ─────────────────── */
+/* ─────────────────── Rounded Mix Card ─────────────────── */
 
-function UserCard({ user, index }: { user: DiscoveredUser; index: number }) {
+function RoundedMixCard({
+  mix,
+  onClick,
+}: {
+  mix: any;
+  onClick: (mix: any) => void;
+}) {
+  const coverUrl = getMediaUrl(mix.coverImage || mix.cover) || '/images/genres/salone-mix.jpg';
+  const title = mix.genre || mix.title || 'Mix';
+  const subtitle = mix.title || `${mix.genre || 'Afrobeats'} Mix`;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      transition={{ duration: 0.5, delay: index * 0.06, ease: easeSmooth }}
-      className="group relative bg-black-elevated rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card hover:border-gold/30"
+    <div
+      onClick={() => onClick(mix)}
+      className="shrink-0 w-32 xs:w-36 sm:w-44 md:w-48 group cursor-pointer select-none"
     >
-      <div className="relative aspect-square overflow-hidden">
+      {/* Artwork with smooth rounded-2xl / rounded-3xl corners */}
+      <div className="relative aspect-[4/5] sm:aspect-square w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-neutral-900 border border-white/10 group-hover:border-gold/40 transition-all shadow-md">
         <img
-          src={getAvatarImageUrl(user.avatar)}
-          alt={user.displayName}
+          src={coverUrl}
+          alt={title}
           onError={imageFallback}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          loading="lazy"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
+        {/* Subtle Play Overlay */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gold text-black flex items-center justify-center shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
+            <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-black ml-0.5" />
+          </div>
+        </div>
       </div>
 
-      <div className="p-4">
-        {user.favoriteGenres?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {user.favoriteGenres.slice(0, 2).map((g) => (
+      {/* Info Underneath */}
+      <div className="mt-1.5 sm:mt-2 px-0.5">
+        <h4 className="font-display font-bold text-xs sm:text-sm md:text-base text-white truncate group-hover:text-gold transition-colors">
+          {title}
+        </h4>
+        <p className="text-[11px] sm:text-xs text-text-secondary truncate mt-0.5">
+          {subtitle}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Ranked DJ Leaderboard Row ─────────────────── */
+
+function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
+  const avatarUrl = getAvatarImageUrl(dj.avatar);
+  const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Sierra Leone';
+  const followersCount = dj.totalFollowers || dj._count?.followers || 0;
+  const mixesCount = dj.totalMixes || dj._count?.mixes || 0;
+  const rating = dj.averageRating || 0.0;
+  const genres = Array.isArray(dj.genres) ? dj.genres : [];
+
+  return (
+    <div className="rounded-2xl bg-black hover:bg-[#141414] border border-white/10 hover:border-gold/40 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all duration-300 shadow-md group">
+      {/* Rank Badge */}
+      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gold text-black font-black text-xs sm:text-sm flex items-center justify-center shrink-0 shadow">
+        {rank}
+      </div>
+
+      {/* DJ Avatar */}
+      <Link
+        to={`/dj/${dj.username || dj.id}`}
+        className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden shrink-0 border border-white/10 block"
+      >
+        <img
+          src={avatarUrl}
+          alt={dj.stageName}
+          onError={imageFallback}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+        />
+      </Link>
+
+      {/* DJ Main Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Link
+            to={`/dj/${dj.username || dj.id}`}
+            className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors"
+          >
+            {dj.stageName}
+          </Link>
+          {dj.verified && <VerifiedBadge dj={dj} size={15} className="shrink-0" />}
+        </div>
+
+        {/* Location & followers */}
+        <div className="flex items-center gap-1 text-[11px] sm:text-xs text-text-muted mt-0.5 truncate">
+          <MapPin className="w-3 h-3 text-text-muted shrink-0" />
+          <span className="truncate">{location}</span>
+          <span className="text-text-muted/50">·</span>
+          <span className="shrink-0">{followersCount} followers</span>
+        </div>
+
+        {/* Genre Tags */}
+        {genres.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {genres.slice(0, 3).map((g: string) => (
               <span
                 key={g}
-                className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-secondary"
+                className="px-2 py-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider rounded-md bg-white/[0.06] text-text-secondary border border-white/5"
               >
                 {g}
               </span>
             ))}
           </div>
         )}
+      </div>
 
-        <Link to={`/user/${user.username}`}>
-          <h3 className="font-display text-base font-semibold uppercase tracking-tight text-text-primary flex items-center gap-1.5 hover:text-gold transition-colors">
-            {user.displayName}
-          </h3>
-        </Link>
-
-        {user.location && (
-          <div className="flex items-center gap-1 mt-1 mb-3">
-            <MapPin className="w-3.5 h-3.5 text-text-muted" />
-            <span className="text-xs text-text-muted">{user.location}</span>
-          </div>
-        )}
-
-        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
-          <Link
-            to={`/user/${user.username}`}
-            className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
-          >
-            View Profile
-          </Link>
-          <ShareButton
-            url={`${window.location.origin}/user/${user.username}`}
-            title={`Check out ${user.displayName} on The Deck Salone`}
-            size="sm"
-          />
+      {/* Stats (Followers, Mixes, Rating) */}
+      <div className="hidden sm:flex items-center gap-3 sm:gap-4 text-xs text-text-secondary shrink-0 font-medium">
+        <div className="flex items-center gap-1" title="Followers">
+          <Users className="w-3.5 h-3.5 text-text-muted" />
+          <span>{followersCount}</span>
+        </div>
+        <div className="flex items-center gap-1" title="Total Mixes">
+          <Music2 className="w-3.5 h-3.5 text-text-muted" />
+          <span>{mixesCount}</span>
+        </div>
+        <div className="flex items-center gap-1" title="Rating">
+          <Star className="w-3.5 h-3.5 text-gold fill-gold/20" />
+          <span>{rating.toFixed(1)}</span>
         </div>
       </div>
-    </motion.div>
-  );
-}
 
-/* ─────────────────── User List Row ─────────────────── */
-
-function UserListRow({ user, index }: { user: DiscoveredUser; index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ duration: 0.4, delay: index * 0.04, ease: easeSmooth }}
-      className="group flex items-center gap-4 p-4 bg-black-elevated rounded-xl border border-white/5 hover:border-gold/30 transition-all duration-300"
-    >
-      <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
-        <img
-          src={getAvatarImageUrl(user.avatar)}
-          alt={user.displayName}
-          onError={imageFallback}
-          className="w-full h-full object-cover"
-        />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Link to={`/user/${user.username}`}>
-            <h3 className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary hover:text-gold transition-colors truncate">
-              {user.displayName}
-            </h3>
-          </Link>
-        </div>
-        {user.location && (
-          <div className="flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3 h-3 text-text-muted" />
-            <span className="text-xs text-text-muted truncate">{user.location}</span>
-          </div>
-        )}
-        {user.bio && (
-          <p className="text-xs text-text-secondary mt-1 truncate">{user.bio}</p>
-        )}
-      </div>
-
-      <div className="hidden md:flex flex-col items-end gap-2 shrink-0">
+      {/* Price & Book Button */}
+      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-3 shrink-0">
+        <span className="font-semibold text-xs sm:text-sm text-white/90 hidden md:block">
+          {formatPrice(dj)}
+        </span>
         <Link
-          to={`/user/${user.username}`}
-          className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors"
+          to={`/dj/${dj.username || dj.id}`}
+          className="px-4 sm:px-5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors shrink-0"
         >
-          View
+          BOOK
         </Link>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-/* ─────────────────── Filter Chip ─────────────────── */
-
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      transition={{ duration: 0.2 }}
-      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-gold/40 text-gold bg-gold/5"
-    >
-      {label}
-      <button onClick={onRemove} className="btn-press-subtle hover:text-text-primary transition-colors">
-        <X className="w-3 h-3" />
-      </button>
-    </motion.span>
-  );
-}
-
-/* ─────────────────── Empty State ─────────────────── */
-
-function EmptyState({ onClear }: { onClear: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20"
-    >
-      <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
-        <Search className="w-8 h-8 text-text-muted" />
-      </div>
-      <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
-        NO DJS FOUND
-      </h3>
-      <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
-        Try adjusting your filters or search for something different.
-      </p>
-      <button
-        onClick={onClear}
-        className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
-      >
-        Clear All Filters
-      </button>
-    </motion.div>
-  );
-}
-
-/* ─────────────────── Main Component ─────────────────── */
-
-type TabType = 'djs' | 'people';
+/* ─────────────────── Main Discover Component ─────────────────── */
 
 export default function Discover() {
-  const [activeTab, setActiveTab] = useState<TabType>('djs');
-  const [activeGenre, setActiveGenre] = useState('All');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [selectedCity, setSelectedCity] = useState('');
-  const [selectedCommunity, setSelectedCommunity] = useState('');
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
-  const [ratingMin, setRatingMin] = useState(0);
-  const [sortBy, setSortBy] = useState<SortValue>('ranking');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortOpen, setSortOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const ITEMS_PER_PAGE = 12;
+  const { play, setQueue } = usePlayerStore();
 
-  /* ── Data ── */
-  const djsQuery = useDJs({
-    city: selectedCity || undefined,
-    community: selectedCommunity || undefined,
-    genre: activeGenre !== 'All' ? activeGenre : undefined,
-    sortBy,
-    page: currentPage,
-    limit: ITEMS_PER_PAGE,
-  });
+  /* ── 1. Recommended DJs ── */
+  const { data: recommendedDjs = [] } = useRecommendedDjs(6);
 
-  const usersQuery = useUsers({
-    page: currentPage,
-    limit: ITEMS_PER_PAGE,
-  });
+  /* ── 2. All/Top DJs for circular avatars & leaderboard ── */
+  const djsQuery = useDJs({ limit: 16, sortBy: 'ranking' });
+  const djs: any[] = (djsQuery.data as any)?.data || [];
 
-  const genresQuery = useDJGenres();
+  /* ── 3. Todays Hits (Trending Mixes) ── */
+  const trendingQuery = useTrendingMixes(10);
+  const trendingMixes: any[] = (trendingQuery.data as any) || [];
 
-  /* ── Error logging ── */
-  useEffect(() => {
-    if (djsQuery.error) {
-      console.error('[Discover] DJs query failed:', djsQuery.error);
+  /* ── 4. Recently Added (Newest Mixes) ── */
+  const newestMixesQuery = useMixes({ sortBy: 'newest', limit: 10 });
+  const newestMixes: any[] = (newestMixesQuery.data as any)?.data || [];
+
+  /* ── 5. Recently Played (from store or popular mixes fallback) ── */
+  const playerHistory = usePlayerStore((s) => s.history);
+  const recentlyPlayedList = useMemo(() => {
+    const list = Object.values(playerHistory || {})
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      .map((item) => item.track)
+      .filter(Boolean);
+
+    if (list.length > 0) return list.slice(0, 10);
+    // Fallback to top mixes if history is empty
+    return trendingMixes.slice(0, 10);
+  }, [playerHistory, trendingMixes]);
+
+  /* ── Playback Handlers ── */
+  const handlePlayMix = (mix: any) => {
+    const track = toMixTrack(mix);
+    const queue = [
+      track,
+      ...trendingMixes.map(toMixTrack).filter((t) => t.id !== track.id),
+    ];
+    setQueue(queue);
+    play(track);
+  };
+
+  const handlePlayDj = (dj: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dj.mixes && dj.mixes.length > 0) {
+      const topMix = dj.mixes[0];
+      handlePlayMix(topMix);
+      return;
     }
-  }, [djsQuery.error]);
-
-  const djsData = djsQuery.data as DJsResponse | undefined;
-  const usersData = usersQuery.data as UsersResponse | undefined;
-  const genreOptions = useMemo(
-    () => ['All', ...((genresQuery.data as string[] | undefined) ?? [])],
-    [genresQuery.data]
-  );
-
-  /* ── Client-side filters (equipment & rating aren't supported server-side) ── */
-  const displayedDjs = useMemo(() => {
-    const djs = djsData?.data ?? [];
-    return djs.filter((dj) => {
-      if (dj.averageRating < ratingMin) return false;
-      if (
-        selectedEquipment.length > 0 &&
-        !selectedEquipment.some((eq) => dj.equipment.includes(eq))
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [djsData, ratingMin, selectedEquipment]);
-
-  const totalPages = djsData?.meta?.totalPages ?? 0;
-  const communityOptions = selectedCity ? CITY_TO_COMMUNITIES[selectedCity] ?? [] : [];
-
-  /* ── Active Filters ── */
-  const activeFilters = useMemo(() => {
-    const filters: { label: string; remove: () => void }[] = [];
-    if (activeGenre !== 'All')
-      filters.push({
-        label: activeGenre,
-        remove: () => setActiveGenre('All'),
-      });
-    if (selectedCity)
-      filters.push({
-        label: selectedCity,
-        remove: () => {
-          setSelectedCity('');
-          setSelectedCommunity('');
-        },
-      });
-    if (selectedCommunity)
-      filters.push({
-        label: selectedCommunity,
-        remove: () => setSelectedCommunity(''),
-      });
-    selectedEquipment.forEach((eq) =>
-      filters.push({
-        label: eq,
-        remove: () =>
-          setSelectedEquipment((prev) => prev.filter((e) => e !== eq)),
-      })
-    );
-    if (ratingMin > 1)
-      filters.push({
-        label: `${ratingMin}+ Stars`,
-        remove: () => setRatingMin(1),
-      });
-    return filters;
-  }, [activeGenre, selectedCity, selectedCommunity, selectedEquipment, ratingMin]);
-
-  const clearAllFilters = () => {
-    setActiveGenre('All');
-    setSelectedCity('');
-    setSelectedCommunity('');
-    setSelectedEquipment([]);
-    setRatingMin(1);
-    setCurrentPage(1);
-  };
-
-  const toggleCity = (city: string) => {
-    setSelectedCity((prev) => {
-      const nextCity = prev === city ? '' : city;
-      setSelectedCommunity('');
-      return nextCity;
-    });
-    setCurrentPage(1);
-  };
-
-  const toggleCommunity = (community: string) => {
-    setSelectedCommunity((prev) => (prev === community ? '' : community));
-    setCurrentPage(1);
-  };
-
-  const toggleEquipment = (eq: string) => {
-    setSelectedEquipment((prev) =>
-      prev.includes(eq) ? prev.filter((e) => e !== eq) : [...prev, eq]
-    );
-    setCurrentPage(1);
-  };
-
-  const handleGenreClick = (genre: string) => {
-    setActiveGenre(genre);
-    setCurrentPage(1);
-  };
-
-  const handleSortSelect = (value: SortValue) => {
-    setSortBy(value);
-    setSortOpen(false);
-    setCurrentPage(1);
-  };
-
-  const sortLabel = SORT_OPTIONS.find((opt) => opt.value === sortBy)?.label ?? sortBy;
-
-  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
-  const genreDropdownRef = useRef<HTMLDivElement>(null);
-
-  /* Close genre dropdown on outside click */
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (genreDropdownRef.current && !genreDropdownRef.current.contains(event.target as Node)) {
-        setGenreDropdownOpen(false);
-      }
+    // Fallback: play first available trending mix or first mix
+    if (trendingMixes.length > 0) {
+      handlePlayMix(trendingMixes[0]);
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  };
 
   return (
-    <div className="min-h-[100dvh] bg-bg-page">
+    <div className="min-h-[100dvh] bg-black pb-32 text-white">
       <SEOHead
-        title="Discover DJs — Deck Salone"
-        description="Browse and discover top Sierra Leonean DJs by genre, city, and performance rating."
+        title="Discover DJs & Hits — Deck Salone"
+        description="Discover top trending Sierra Leonean DJs, today's hits, recently added mixes, and book verified DJs."
       />
-      {/* ════════ Section 1: Hero ════════ */}
-      <section className="hero-banner pt-8 pb-6 sm:pt-10 sm:pb-8 border-b border-dark-gray">
-        <div className="container-main">
-          <FadeIn delay={0.1}>
-            <p className="section-label text-center mb-1.5">DISCOVER</p>
-          </FadeIn>
-          <FadeIn delay={0.2}>
-            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold uppercase tracking-tight text-text-primary text-center">
-              FIND YOUR PERFECT DJ
-            </h1>
-          </FadeIn>
-          {/* Tab Switcher */}
-          <FadeIn delay={0.3}>
-            <div className="flex justify-center mt-3.5">
-              <div className="inline-flex items-center bg-black-surface border border-dark-gray rounded-full p-1">
-                <button
-                  onClick={() => { setActiveTab('djs'); setCurrentPage(1); }}
-                  className={`btn-press-subtle px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
-                    activeTab === 'djs'
-                      ? 'bg-gold-gradient text-black'
-                      : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  DJs
-                </button>
-                <button
-                  onClick={() => { setActiveTab('people'); setCurrentPage(1); }}
-                  className={`btn-press-subtle px-5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
-                    activeTab === 'people'
-                      ? 'bg-gold-gradient text-black'
-                      : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  People
-                </button>
-              </div>
-            </div>
-          </FadeIn>
-          {/* Genre Filter Pills — Desktop */}
-          {activeTab === 'djs' && (
-          <FadeIn delay={0.5}>
-            <div className="hidden md:flex flex-wrap justify-center gap-1.5 mt-3">
-              {genreOptions.map((genre, i) => (
-                <motion.button
-                  key={genre}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + i * 0.04, ease: easeSmooth }}
-                  onClick={() => handleGenreClick(genre)}
-                  className={`btn-press-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
-                    activeGenre === genre
-                      ? 'bg-gold-gradient text-black'
-                      : 'bg-transparent border border-white/20 text-text-secondary hover:text-text-primary hover:border-white/40'
-                  }`}
-                >
-                  {genre}
-                </motion.button>
-              ))}
-            </div>
-          </FadeIn>
-          )}
 
-          {/* Genre Filter Dropdown — Mobile */}
-          {activeTab === 'djs' && (
-          <FadeIn delay={0.5}>
-            <div className="md:hidden mt-5" ref={genreDropdownRef}>
-              <button
-                onClick={() => setGenreDropdownOpen(!genreDropdownOpen)}
-                className={`btn-press-subtle w-full flex items-center justify-between px-4 py-3 text-sm font-semibold uppercase tracking-wide rounded-full border transition-all duration-200 ${
-                  activeGenre !== 'All'
-                    ? 'bg-gold-gradient text-black border-gold'
-                    : 'bg-transparent border-white/20 text-text-secondary'
-                }`}
-              >
-                <span>Genre: {activeGenre}</span>
-                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${genreDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {genreDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                    exit={{ opacity: 0, y: -5, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-2 bg-black-surface border border-dark-gray rounded-xl py-2 max-h-64 overflow-y-auto">
-                      {genreOptions.map((genre) => (
-                        <button
-                          key={genre}
-                          onClick={() => {
-                            handleGenreClick(genre);
-                            setGenreDropdownOpen(false);
-                          }}
-                          className={`block w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                            activeGenre === genre
-                              ? 'text-gold bg-gold/10'
-                              : 'text-text-secondary hover:text-text-primary hover:bg-black-elevated'
-                          }`}
-                        >
-                          {genre}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </FadeIn>
-          )}
+      {/* Main Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-10 sm:space-y-12">
+        {/* ════════ Page Header: Discover ════════ */}
+        <div>
+          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight text-white">
+            Discover
+          </h1>
+        </div>
 
-          {/* Advanced Filters Toggle */}
-          {activeTab === 'djs' && (
-          <FadeIn delay={0.7}>
-            <div className="flex justify-center mt-4">
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="btn-press-subtle inline-flex items-center gap-2 text-gold text-sm font-medium hover:text-gold-light transition-colors"
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                Advanced Filters
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`}
-                />
-              </button>
-            </div>
-          </FadeIn>
-          )}
-
-          {/* Advanced Filters Panel */}
-          {activeTab === 'djs' && (
-          <AnimatePresence>
-            {showAdvanced && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: easeSmooth }}
-                className="overflow-hidden"
-              >
-                <div className="max-w-4xl mx-auto mt-6 bg-black-surface rounded-xl border border-dark-gray p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* City */}
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
-                        City
-                      </h4>
-                      <div className="space-y-2">
-                        {CITIES.map((city) => (
-                          <label
-                            key={city}
-                            className="flex items-center gap-2.5 cursor-pointer group"
-                            onClick={() => toggleCity(city)}
-                          >
-                            <div
-                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                                selectedCity === city
-                                  ? 'bg-gold border-gold'
-                                  : 'border-dark-gray group-hover:border-text-muted'
-                              }`}
-                            >
-                              {selectedCity === city && (
-                                <CheckCircle2 className="w-3 h-3 text-black" />
-                              )}
-                            </div>
-                            <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                              {city}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
-                        Community
-                      </h4>
-                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                        {selectedCity ? communityOptions.map((community) => (
-                          <label
-                            key={community}
-                            className="flex items-center gap-2.5 cursor-pointer group"
-                            onClick={() => toggleCommunity(community)}
-                          >
-                            <div
-                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                                selectedCommunity === community
-                                  ? 'bg-gold border-gold'
-                                  : 'border-dark-gray group-hover:border-text-muted'
-                              }`}
-                            >
-                              {selectedCommunity === community && (
-                                <CheckCircle2 className="w-3 h-3 text-black" />
-                              )}
-                            </div>
-                            <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                              {community}
-                            </span>
-                          </label>
-                        )) : (
-                          <p className="text-sm text-text-muted">Select a city first.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Rating */}
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
-                        Min Rating
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {[1, 2, 3, 4, 5].map((r) => (
-                          <button
-                            key={r}
-                            onClick={() => {
-                              setRatingMin(r);
-                              setCurrentPage(1);
-                            }}
-                            className={`btn-press-subtle flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                              ratingMin === r
-                                ? 'bg-gold/15 text-gold border border-gold'
-                                : 'bg-transparent text-text-muted border border-dark-gray hover:border-white/20'
-                            }`}
-                          >
-                            <Star className="w-3 h-3" />
-                            {r}+
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Equipment */}
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">
-                        Equipment
-                      </h4>
-                      <div className="space-y-2">
-                        {EQUIPMENT.map((eq) => (
-                          <label
-                            key={eq}
-                            className="flex items-center gap-2.5 cursor-pointer group"
-                            onClick={() => toggleEquipment(eq)}
-                          >
-                            <div
-                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                                selectedEquipment.includes(eq)
-                                  ? 'bg-gold border-gold'
-                                  : 'border-dark-gray group-hover:border-text-muted'
-                              }`}
-                            >
-                              {selectedEquipment.includes(eq) && (
-                                <CheckCircle2 className="w-3 h-3 text-black" />
-                              )}
-                            </div>
-                            <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                              {eq}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-dark-gray">
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-sm text-text-muted hover:text-text-primary transition-colors"
-                    >
-                      Clear All
-                    </button>
-                    <button
-                      onClick={() => setShowAdvanced(false)}
-                      className="px-6 py-2 bg-gold-gradient text-black text-sm font-semibold uppercase rounded-full hover:scale-[1.02] transition-transform"
-                    >
-                      Apply Filters
-                    </button>
-                  </div>
+        {/* ════════ Section 1: Recommended for You ════════ */}
+        {recommendedDjs.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
+              Recommended for You
+            </h2>
+            <div className="flex items-center gap-3 sm:gap-4 md:gap-5 overflow-x-auto scrollbar-hide py-1">
+              {recommendedDjs.map((dj: any) => (
+                <div key={dj.id} className="w-[280px] xs:w-[320px] sm:w-[360px] md:w-[380px] shrink-0">
+                  <RecommendedDjCard dj={dj} onPlay={handlePlayDj} />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          )}
-        </div>
-      </section>
-
-      {/* ════════ Section 2: Active Filters Bar ════════ */}
-      <section className="bg-black border-b border-white/5 py-3 sticky top-16 lg:top-28 z-40">
-        <div className="container-main flex flex-wrap items-center gap-3">
-          {/* Active filter chips */}
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            <AnimatePresence>
-              {activeFilters.map((filter) => (
-                <FilterChip
-                  key={filter.label}
-                  label={filter.label}
-                  onRemove={filter.remove}
-                />
               ))}
-            </AnimatePresence>
-            {activeFilters.length > 0 && (
-              <button
-                onClick={clearAllFilters}
-                className="text-xs text-text-muted hover:text-gold transition-colors ml-2"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-
-          {/* Sort Dropdown -- result count removed per v1.0.4 request */}
-          <div className="relative">
-            <button
-              onClick={() => setSortOpen(!sortOpen)}
-              className="btn-press-subtle inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-text-secondary bg-black-surface border border-dark-gray rounded-full hover:border-white/20 transition-colors"
-            >
-              Sort: {sortLabel}
-              <ChevronDown className={`w-3 h-3 transition-transform ${sortOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <AnimatePresence>
-              {sortOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="absolute right-0 top-full mt-2 bg-black-elevated border border-dark-gray rounded-xl shadow-card py-2 min-w-48 z-50"
-                >
-                  {SORT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleSortSelect(opt.value)}
-                      className={`block w-full text-left px-4 py-2 text-xs transition-colors ${
-                        sortBy === opt.value
-                          ? 'text-gold bg-gold/10'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-black-surface'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-black-surface border border-dark-gray rounded-full p-0.5 shrink-0">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`btn-press-subtle p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
-              title="List view"
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`btn-press-subtle p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted hover:text-text-primary'}`}
-              title="Grid view"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ Section 3: Results ════════ */}
-      <section className="py-8">
-        <div className="container-main">
-          {activeTab === 'djs' ? (
-            <AnimatePresence mode="wait">
-              {djsQuery.isLoading ? (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
-                      <div className="w-full h-48 bg-white/5" />
-                      <div className="p-5">
-                        <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
-                        <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
-                        <div className="flex gap-2 mb-4">
-                          <div className="h-6 w-16 bg-white/5 rounded-full" />
-                          <div className="h-6 w-16 bg-white/5 rounded-full" />
-                        </div>
-                        <div className="h-10 bg-white/5 rounded-lg w-full" />
-                      </div>
-                    </div>
-                  ))}
-                </motion.div>
-              ) : djsQuery.error ? (
-                <motion.div
-                  key="error"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  className="flex flex-col items-center justify-center py-20"
-                >
-                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
-                    <Search className="w-8 h-8 text-text-muted" />
-                  </div>
-                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
-                    FAILED TO LOAD DJS
-                  </h3>
-                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
-                    {(djsQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
-                  </p>
-                  <button
-                    onClick={() => djsQuery.refetch()}
-                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </motion.div>
-              ) : displayedDjs.length === 0 ? (
-                <EmptyState key="empty" onClear={clearAllFilters} />
-              ) : viewMode === 'list' ? (
-                <motion.div
-                  key="list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-3"
-                >
-                  <AnimatePresence>
-                    {displayedDjs.map((dj, i) => (
-                      <DJListRow key={dj.id} dj={dj} index={i} />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="grid"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  <AnimatePresence>
-                    {displayedDjs.map((dj, i) => (
-                      <DJCard key={dj.id} dj={dj} index={i} />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          ) : (
-            <AnimatePresence mode="wait">
-              {usersQuery.isLoading ? (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="bg-black-surface rounded-2xl overflow-hidden border border-white/5 animate-pulse">
-                      <div className="w-full h-48 bg-white/5" />
-                      <div className="p-5">
-                        <div className="h-6 bg-white/5 rounded w-3/4 mb-3" />
-                        <div className="h-4 bg-white/5 rounded w-1/2 mb-4" />
-                        <div className="flex gap-2 mb-4">
-                          <div className="h-6 w-16 bg-white/5 rounded-full" />
-                          <div className="h-6 w-16 bg-white/5 rounded-full" />
-                        </div>
-                        <div className="h-10 bg-white/5 rounded-lg w-full" />
-                      </div>
-                    </div>
-                  ))}
-                </motion.div>
-              ) : usersQuery.isError ? (
-                <motion.div
-                  key="error"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  className="flex flex-col items-center justify-center py-20"
-                >
-                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
-                    <Search className="w-8 h-8 text-text-muted" />
-                  </div>
-                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
-                    FAILED TO LOAD PEOPLE
-                  </h3>
-                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
-                    {(usersQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
-                  </p>
-                  <button
-                    onClick={() => usersQuery.refetch()}
-                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </motion.div>
-              ) : (usersData?.data?.length ?? 0) === 0 ? (
-                <motion.div
-                  key="empty"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center justify-center py-20"
-                >
-                  <div className="w-16 h-16 rounded-full bg-black-surface flex items-center justify-center mb-4">
-                    <Users className="w-8 h-8 text-text-muted" />
-                  </div>
-                  <h3 className="font-display text-xl font-semibold uppercase tracking-tight text-text-primary mb-2">
-                    NO PEOPLE FOUND
-                  </h3>
-                  <p className="text-text-secondary text-sm text-center max-w-sm mb-6">
-                    Try adjusting your search or check back later.
-                  </p>
-                  <button
-                    onClick={() => { clearAllFilters(); }}
-                    className="px-6 py-2.5 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
-                  >
-                    Clear Filters
-                  </button>
-                </motion.div>
-              ) : viewMode === 'list' ? (
-                <motion.div
-                  key="list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-3"
-                >
-                  <AnimatePresence>
-                    {usersData!.data.map((user, i) => (
-                      <UserListRow key={user.id} user={user} index={i} />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="grid"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  <AnimatePresence>
-                    {usersData!.data.map((user, i) => (
-                      <UserCard key={user.id} user={user} index={i} />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          )}
-        </div>
-      </section>
-
-      {/* ════════ Section 4: Pagination ════════ */}
-      {((activeTab === 'djs' && totalPages > 1 && displayedDjs.length > 0) ||
-        (activeTab === 'people' && (usersData?.meta?.totalPages ?? 0) > 1 && (usersData?.data?.length ?? 0) > 0)) && (
-        <section className="pb-8">
-          <div className="container-main flex flex-col items-center gap-4">
-            {/* Page Numbers */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="p-2 rounded-full text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              {Array.from({ length: activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0) }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-9 h-9 rounded-full text-sm font-medium transition-all ${
-                    currentPage === page
-                      ? 'bg-gold-gradient text-black'
-                      : 'text-text-muted hover:text-text-primary hover:bg-black-surface'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0), p + 1))}
-                disabled={currentPage === (activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0))}
-                className="p-2 rounded-full text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
             </div>
+          </section>
+        )}
 
-            {/* Load More */}
-            {currentPage < (activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0)) && (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setCurrentPage((p) => Math.min(activeTab === 'djs' ? totalPages : (usersData?.meta?.totalPages ?? 0), p + 1))}
-                className="px-8 py-3 rounded-full border border-white/20 text-text-primary text-sm font-medium hover:border-gold hover:text-gold transition-colors"
-              >
-                {activeTab === 'djs' ? 'Load More DJs' : 'Load More People'}
-              </motion.button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ════════ Section 5: CTA Banner ════════ */}
-      <section className="bg-black-elevated py-16 mt-8">
-        <div className="container-main">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
-            {/* Left Column */}
-            <div className="lg:col-span-3">
-              <FadeIn>
-                <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold uppercase tracking-tight text-text-primary">
-                  ARE YOU A DJ?
-                </h2>
-              </FadeIn>
-              <FadeIn delay={0.1}>
-                <p className="mt-4 text-text-secondary text-sm sm:text-base max-w-lg">
-                  Join the platform and get discovered by promoters, fans, and event organizers across Sierra Leone.
-                </p>
-              </FadeIn>
-
-              <FadeIn delay={0.2}>
-                <ul className="mt-6 space-y-3">
-                  {[
-                    'Create your verified professional profile',
-                    'Upload and showcase your mixes',
-                    'Track performance with real analytics',
-                    'Get booked directly through the platform',
-                    'Compete in weekly DJ battles',
-                  ].map((item, i) => (
-                    <motion.li
-                      key={i}
-                      initial={{ opacity: 0, x: -20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.2 + i * 0.08, ease: easeSmooth }}
-                      className="flex items-center gap-3 text-sm text-text-secondary"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-gold shrink-0" />
-                      {item}
-                    </motion.li>
-                  ))}
-                </ul>
-              </FadeIn>
-
-              <FadeIn delay={0.6}>
+        {/* ════════ Section 2: DJs (Circular Avatars) ════════ */}
+        {djs.length > 0 && (
+          <section>
+            <DiscoverSectionHeader title="DJs" viewAllLink="/rankings" />
+            <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto scrollbar-hide py-2">
+              {djs.map((dj: any) => (
                 <Link
-                  to="/login"
-                  className="inline-flex items-center mt-8 px-8 py-3 bg-gold-gradient text-black text-sm font-semibold uppercase tracking-wide rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200"
+                  key={dj.id}
+                  to={`/dj/${dj.username || dj.id}`}
+                  className="flex flex-col items-center gap-2 shrink-0 group"
                 >
-                  Create Free Profile
-                  <TrendingUp className="w-4 h-4 ml-2" />
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-gold transition-all duration-300 group-hover:scale-105 shadow-md bg-neutral-900">
+                    <img
+                      src={getAvatarImageUrl(dj.avatar)}
+                      alt={dj.stageName}
+                      onError={imageFallback}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-text-secondary group-hover:text-gold transition-colors truncate max-w-[90px] sm:max-w-[110px] text-center">
+                    {dj.stageName}
+                  </span>
                 </Link>
-              </FadeIn>
+              ))}
             </div>
+          </section>
+        )}
 
-            {/* Right Column - Decorative Images */}
-            <div className="lg:col-span-2 relative hidden lg:block">
-              <FadeIn direction="right" delay={0.3}>
-                <div className="relative">
-                  <img
-                    src="/images/dj-promo/promo-1.jpg"
-                    alt="DJ performing"
-                    className="w-48 h-60 object-cover rounded-xl border-[3px] border-gold shadow-card"
-                    style={{ transform: 'rotate(-3deg)' }}
-                  />
-                  <img
-                    src="/images/dj-promo/promo-2.jpg"
-                    alt="DJ at club"
-                    className="w-44 h-56 object-cover rounded-xl border-[3px] border-gold shadow-card absolute top-8 left-28"
-                    style={{ transform: 'rotate(3deg)' }}
-                  />
-                </div>
-              </FadeIn>
+        {/* ════════ Section 3: Todays hits ════════ */}
+        {trendingMixes.length > 0 && (
+          <section>
+            <DiscoverSectionHeader title="Todays hits" viewAllLink="/mixes?sortBy=trending" />
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
+              {trendingMixes.map((mix: any) => (
+                <RoundedMixCard key={mix.id} mix={mix} onClick={handlePlayMix} />
+              ))}
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
+        )}
+
+        {/* ════════ Section 4: Recently Played ════════ */}
+        {recentlyPlayedList.length > 0 && (
+          <section>
+            <DiscoverSectionHeader title="Recently Played" viewAllLink="/library" />
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
+              {recentlyPlayedList.map((mix: any) => (
+                <RoundedMixCard key={mix.id} mix={mix} onClick={handlePlayMix} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ════════ Section 5: Recently Added ════════ */}
+        {newestMixes.length > 0 && (
+          <section>
+            <DiscoverSectionHeader title="Recently Added" viewAllLink="/mixes?sortBy=newest" />
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
+              {newestMixes.map((mix: any) => (
+                <RoundedMixCard key={mix.id} mix={mix} onClick={handlePlayMix} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ════════ Section 6: Ranked DJs Leaderboard ════════ */}
+        {djs.length > 0 && (
+          <section className="space-y-3 pt-4">
+            <DiscoverSectionHeader title="Top Rated DJs" viewAllLink="/rankings" />
+            <div className="space-y-3">
+              {djs.slice(0, 10).map((dj: any, index: number) => (
+                <RankedDjRow key={dj.id} dj={dj} rank={index + 1} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

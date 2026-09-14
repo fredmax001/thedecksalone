@@ -65,30 +65,80 @@ function DJCard({ dj, index }: { dj: FollowingDJ; index: number }) {
     >
       <Card className="bg-black-elevated border-dark-gray hover:border-gold/20 transition-all group">
         <CardContent className="p-4">
-          {/* DJ Header */}
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <Avatar className="w-12 h-12 border-2 border-gold/30">
-                <AvatarImage src={getMediaUrl(dj.avatar) || undefined} />
-                <AvatarFallback className="bg-gold/10 text-gold">
-                  <Music className="w-5 h-5" />
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-medium text-text-primary">{dj.stageName}</p>
-                <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {dj.city || 'Unknown location'}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {dj.followerCount.toLocaleString()}
-                  </span>
-                </div>
+          <div className="flex items-center gap-4">
+            {/* Artist image — 80px, rounded-24px (reference Library row) */}
+            <Avatar
+              className="w-20 h-20 rounded-3xl cursor-pointer shrink-0"
+              onClick={() => navigate(`/dj/${dj.id}`)}
+            >
+              <AvatarImage src={getMediaUrl(dj.avatar) || undefined} className="object-cover" />
+              <AvatarFallback className="bg-gold/10 text-gold rounded-3xl">
+                <Music className="w-6 h-6" />
+              </AvatarFallback>
+            </Avatar>
+
+            {/* Name & meta */}
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-xl font-medium text-text-primary truncate cursor-pointer hover:text-gold transition-colors"
+                onClick={() => navigate(`/dj/${dj.id}`)}
+              >
+                {dj.stageName}
+              </p>
+              <div className="flex items-center gap-3 text-xs text-text-muted mt-1">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {dj.city || 'Unknown location'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  {dj.followerCount.toLocaleString()}
+                </span>
               </div>
+
+              {/* Genres */}
+              {dj.genre && dj.genre.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {dj.genre.slice(0, 3).map((g) => (
+                    <Badge key={g} className="bg-black-surface text-text-secondary border-dark-gray text-[10px]">
+                      {g}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Latest Content */}
+              {(dj.latestMix || dj.latestEvent) && (
+                <div className="mt-2 space-y-1">
+                  {dj.latestMix && (
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer hover:text-gold transition-colors"
+                      onClick={() => navigate(`/mixes?id=${dj.latestMix!.id}`)}
+                    >
+                      <Headphones className="w-3 h-3 text-gold shrink-0" />
+                      <span className="truncate">{dj.latestMix.title}</span>
+                    </div>
+                  )}
+                  {dj.latestEvent && (
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer hover:text-gold transition-colors"
+                      onClick={() => navigate(`/events/${dj.latestEvent?.id}`)}
+                    >
+                      <Calendar className="w-3 h-3 text-purple shrink-0" />
+                      <span className="truncate">
+                        {dj.latestEvent.title} · {formatDate(dj.latestEvent.eventDate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!dj.latestMix && !dj.latestEvent && (
+                <p className="text-xs text-text-muted mt-2">No recent activity</p>
+              )}
             </div>
-            <div className="flex gap-1">
+
+            {/* Actions */}
+            <div className="flex flex-col gap-1 shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -109,54 +159,6 @@ function DJCard({ dj, index }: { dj: FollowingDJ; index: number }) {
                 <Heart className="w-4 h-4 fill-current" />
               </Button>
             </div>
-          </div>
-
-          {/* Genres */}
-          {dj.genre && dj.genre.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-3">
-              {dj.genre.slice(0, 4).map((g) => (
-                <Badge key={g} className="bg-black-surface text-text-secondary border-dark-gray text-[10px]">
-                  {g}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* Latest Content */}
-          <div className="mt-4 space-y-2">
-            {dj.latestMix && (
-              <div
-                className="flex items-center gap-3 p-2 rounded-lg bg-black-surface/50 hover:bg-black-surface cursor-pointer transition-colors"
-                onClick={() => navigate(`/mixes?id=${dj.latestMix!.id}`)}
-              >
-                <div className="w-10 h-10 rounded bg-gold/10 flex items-center justify-center flex-shrink-0">
-                  <Headphones className="w-4 h-4 text-gold" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{dj.latestMix.title}</p>
-                  <p className="text-[10px] text-text-muted">New mix</p>
-                </div>
-              </div>
-            )}
-            {dj.latestEvent && (
-              <div
-                className="flex items-center gap-3 p-2 rounded-lg bg-black-surface/50 hover:bg-black-surface cursor-pointer transition-colors"
-                onClick={() => navigate(`/events/${dj.latestEvent?.id}`)}
-              >
-                <div className="w-10 h-10 rounded bg-purple/10 flex items-center justify-center flex-shrink-0">
-                  <Calendar className="w-4 h-4 text-purple" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{dj.latestEvent.title}</p>
-                  <p className="text-[10px] text-text-muted">
-                    {formatDate(dj.latestEvent.eventDate)} · {dj.latestEvent.city}
-                  </p>
-                </div>
-              </div>
-            )}
-            {!dj.latestMix && !dj.latestEvent && (
-              <p className="text-xs text-text-muted text-center py-2">No recent activity</p>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -182,21 +184,21 @@ function DJListRow({ dj, index }: { dj: FollowingDJ; index: number }) {
       <Card className="bg-black-elevated border-dark-gray hover:border-gold/20 transition-all group">
         <CardContent className="p-3">
           <div className="flex items-center gap-4">
-            {/* Avatar */}
+            {/* Artist image — rounded-24px square (reference Library row) */}
             <Avatar
-              className="w-10 h-10 border-2 border-gold/30 cursor-pointer shrink-0"
+              className="w-16 h-16 rounded-3xl cursor-pointer shrink-0"
               onClick={() => navigate(`/dj/${dj.id}`)}
             >
-              <AvatarImage src={getMediaUrl(dj.avatar) || undefined} />
-              <AvatarFallback className="bg-gold/10 text-gold">
-                <Music className="w-4 h-4" />
+              <AvatarImage src={getMediaUrl(dj.avatar) || undefined} className="object-cover" />
+              <AvatarFallback className="bg-gold/10 text-gold rounded-3xl">
+                <Music className="w-5 h-5" />
               </AvatarFallback>
             </Avatar>
 
             {/* Name & Meta */}
             <div className="flex-1 min-w-0">
               <p
-                className="font-medium text-text-primary text-sm cursor-pointer hover:text-gold transition-colors truncate"
+                className="text-lg font-medium text-text-primary cursor-pointer hover:text-gold transition-colors truncate"
                 onClick={() => navigate(`/dj/${dj.id}`)}
               >
                 {dj.stageName}
@@ -211,18 +213,17 @@ function DJListRow({ dj, index }: { dj: FollowingDJ; index: number }) {
                   {dj.followerCount.toLocaleString()}
                 </span>
               </div>
+              {/* Genres (hidden on mobile) */}
+              {dj.genre && dj.genre.length > 0 && (
+                <div className="hidden sm:flex flex-wrap gap-1 mt-1.5 max-w-[220px]">
+                  {dj.genre.slice(0, 2).map((g) => (
+                    <Badge key={g} className="bg-black-surface text-text-secondary border-dark-gray text-[10px]">
+                      {g}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {/* Genres (hidden on mobile) */}
-            {dj.genre && dj.genre.length > 0 && (
-              <div className="hidden sm:flex flex-wrap gap-1 max-w-[180px]">
-                {dj.genre.slice(0, 2).map((g) => (
-                  <Badge key={g} className="bg-black-surface text-text-secondary border-dark-gray text-[10px]">
-                    {g}
-                  </Badge>
-                ))}
-              </div>
-            )}
 
             {/* Latest Content (hidden on smaller screens) */}
             <div className="hidden md:flex items-center gap-2 min-w-0 flex-1 max-w-xs">

@@ -33,6 +33,44 @@ const feedFilterSchema = z.object({
   since: z.string().datetime().optional(),
 });
 
+// GET /api/users/liked-mixes - Mixes liked by the current user
+router.get('/liked-mixes', authMiddleware, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const likes = await prisma.mixLike.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: {
+      mix: {
+        include: {
+          dj: {
+            select: {
+              id: true,
+              stageName: true,
+              avatar: true,
+              city: true,
+              country: true,
+              verified: true,
+              subscriptionTier: true,
+              isPro: true,
+            },
+          },
+          _count: {
+            select: {
+              mixLikes: true,
+              reups: true,
+              mixComments: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const mixes = likes.map((l) => l.mix).filter(Boolean);
+  return ok(res, mixes);
+}));
+
 // GET /api/users/activity - Current user's activity history
 // Returns: mix likes, ratings given, battle votes, and saved events (when model exists)
 router.get('/activity', authMiddleware, asyncHandler(async (req, res) => {

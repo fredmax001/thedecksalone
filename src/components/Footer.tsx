@@ -5,9 +5,9 @@ const platformLinks = [
   { label: 'Discover DJs', path: '/discover' },
   { label: 'Rankings', path: '/rankings' },
   { label: 'Mix Hub', path: '/mixes' },
-  { label: 'Events', path: '/events' },
+  { label: 'Playlists', path: '/playlists' },
+  { label: 'My Library', path: '/library' },
   { label: 'Book a DJ', path: '/booking' },
-  { label: 'Battle Arena', path: '/battles' },
 ];
 
 const resourceLinks: Array<

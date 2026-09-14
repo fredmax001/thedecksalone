@@ -19,6 +19,7 @@ import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import LocationPrompt from './components/LocationPrompt';
 import ResumeListeningModal from './components/ResumeListeningModal';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
+import PopupManager from './components/PopupManager';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -34,7 +35,7 @@ const UserPublicProfile = lazy(() => import('./pages/UserPublicProfile'));
 const Events = lazy(() => import('./pages/Events'));
 const EventDetail = lazy(() => import('./pages/EventDetail'));
 const HallOfFame = lazy(() => import('./pages/HallOfFame'));
-const Battles = lazy(() => import('./pages/Battles'));
+const Library = lazy(() => import('./pages/Library'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -339,6 +340,7 @@ export default function App() {
       <SystemNotificationManager />
       <PushNotificationManager />
       <UpdateChecker />
+      <PopupManager />
       <AuthInitializer />
       <VisitTracker />
       <Suspense fallback={<div className="flex h-screen w-full items-center justify-center text-deck-accent"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deck-accent"></div></div>}>
@@ -468,7 +470,7 @@ export default function App() {
             <Route path="events/:id/onsite" element={<OnsiteLogin />} />
             <Route path="events/:id/onsite/tools" element={<OnsiteTools />} />
             <Route path="hall-of-fame" element={<HallOfFame />} />
-            <Route path="battles" element={<Battles />} />
+            <Route path="library" element={<Library />} />
             <Route path="feed" element={<Feed />} />
             <Route path="account" element={<AccountPage />} />
             <Route path="terms" element={<Terms />} />

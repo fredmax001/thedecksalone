@@ -1,56 +1,86 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ListMusic, Music, ArrowRight } from 'lucide-react';
-import { getMediaUrl } from '@/lib/api';
+import { Music } from 'lucide-react';
+import PlaylistCoverArt from '@/components/playlists/PlaylistCoverArt';
+import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import api, { getMediaUrl } from '@/lib/api';
 import type { FeedPlaylist } from './types';
 
+function toTrack(m: any): MixTrack {
+  return {
+    id: m.id,
+    title: m.title,
+    dj: m.dj?.stageName || m.dj || 'DJ',
+    duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
+    cover: getMediaUrl(m.coverImage || m.cover) || '',
+    genre: m.genre || '',
+    plays: m.plays || 0,
+    audioUrl: getMediaUrl(m.audioUrl) || '',
+  };
+}
+
 interface PlaylistFeedRowProps {
-  playlist: FeedPlaylist;
+  playlist: FeedPlaylist | any;
   index?: number;
 }
 
 export default function PlaylistFeedRow({ playlist, index = 0 }: PlaylistFeedRowProps) {
-  const cover = playlist.coverImage ? getMediaUrl(playlist.coverImage) : null;
-  const trackCount = playlist._count?.items || playlist.items?.length || 0;
+  const { play, setQueue } = usePlayerStore();
+  const trackCount = playlist._count?.items || playlist.items?.length || playlist.trackCount || 0;
+  const isSmart = Boolean(playlist.isSmart);
+
+  const handleQuickPlay = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isSmart && playlist.items?.length > 0 && playlist.items[0].id) {
+      const tracks: MixTrack[] = playlist.items.map((item: any) => toTrack(item.mix || item));
+      if (tracks.length > 0) {
+        setQueue(tracks);
+        play(tracks[0]);
+      }
+      return;
+    }
+
+    const base = isSmart ? '/smart-playlists' : '/official-playlists';
+    try {
+      const res = await api.get(`${base}/${playlist.slug || playlist.id}`);
+      if (res.data.success && res.data.data?.items?.length > 0) {
+        const tracks: MixTrack[] = res.data.data.items
+          .filter((item: any) => item.mix)
+          .map((item: any) => toTrack(item.mix));
+        if (tracks.length > 0) {
+          setQueue(tracks);
+          play(tracks[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to quick play playlist', err);
+    }
+  };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 10) * 0.04 }}
+      className="group"
     >
-      <Link to={`/playlist/${playlist.slug || playlist.id}`} className="block group">
-        <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-black-surface hover:bg-[#181818] border border-dark-gray hover:border-gold/40 transition-all">
-          <div className="relative w-20 h-14 sm:w-28 sm:h-18 rounded-xl overflow-hidden shrink-0 bg-black border border-white/10">
-            {cover ? (
-              <img src={cover} alt={playlist.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gold/15 to-black">
-                <ListMusic className="w-6 h-6 text-gold" />
-              </div>
-            )}
-            {playlist.isFeatured && (
-              <span className="absolute top-1.5 left-1.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-gold text-black">
-                ★ Featured
-              </span>
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <h3 className="font-display text-sm sm:text-base font-bold text-white group-hover:text-gold transition-colors truncate">
+      <Link to={`/playlist/${playlist.slug || playlist.id}`} className="block">
+        <div className="rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-2.5 sm:p-3 transition-all shadow-lg hover:shadow-gold/10 flex flex-col">
+          <PlaylistCoverArt
+            playlist={playlist}
+            aspect="square"
+            onPlay={handleQuickPlay}
+            showPlayButton={true}
+          />
+          <div className="mt-2.5 px-0.5 flex items-center justify-between gap-2">
+            <h3 className="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
               {playlist.title}
             </h3>
-            <p className="text-xs text-text-secondary line-clamp-2 mt-0.5">
-              {playlist.description || 'Official Deck Salone curated set list.'}
-            </p>
-          </div>
-
-          <div className="shrink-0 flex flex-col items-end gap-2">
-            <span className="text-xs font-mono text-text-muted flex items-center gap-1">
-              <Music className="w-3 h-3 text-gold" /> {trackCount} Mixes
-            </span>
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gold uppercase group-hover:translate-x-0.5 transition-transform">
-              Open <ArrowRight className="w-3 h-3" />
+            <span className="text-[11px] font-mono text-text-muted shrink-0 flex items-center gap-1">
+              <Music className="w-3 h-3 text-gold/80" />
+              <span>{trackCount}</span>
             </span>
           </div>
         </div>

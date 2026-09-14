@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ListMusic, Play, Music, Compass, X, Sparkles, ChevronDown } from 'lucide-react';
+import { ListMusic, Music, Compass, X, ChevronDown } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { useForYouPlaylists } from '@/hooks/useRecommendations';
@@ -10,7 +10,8 @@ import SEOHead from '@/components/SEOHead';
 import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { GENRES } from '@/constants/genres';
-import { MOODS, ENERGIES, MOOD_LABELS, ENERGY_LABELS } from '@/constants/moods';
+import { MOODS, ENERGIES } from '@/constants/moods';
+import PlaylistCoverArt from '@/components/playlists/PlaylistCoverArt';
 
 /* ─────────────────────────────────────────────
    Helpers
@@ -47,16 +48,7 @@ function PlaylistCard({ playlist, index = 0 }: { playlist: any; index?: number }
   const { play, setQueue } = usePlayerStore();
 
   const trackCount = playlist._count?.items || playlist.items?.length || playlist.trackCount || 0;
-  const cover = getMediaUrl(playlist.coverImage) || '/images/genres/salone-mix.jpg';
   const isSmart = Boolean(playlist.isSmart);
-
-  const ruleChips = useMemo(() => {
-    if (!isSmart) return [];
-    const chips: string[] = [];
-    (playlist.moods || []).forEach((m: string) => chips.push(MOOD_LABELS[m] || m));
-    (playlist.energies || []).forEach((e: string) => chips.push(`${ENERGY_LABELS[e] || e} Energy`));
-    return chips.slice(0, 2);
-  }, [isSmart, playlist.moods, playlist.energies]);
 
   const handleQuickPlay = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -97,84 +89,24 @@ function PlaylistCard({ playlist, index = 0 }: { playlist: any; index?: number }
       className="group"
     >
       <Link to={`/playlist/${playlist.slug || playlist.id}`} className="block">
-        <div className="rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-3 transition-all shadow-lg hover:shadow-gold/10 flex flex-col h-full">
-          {/* Square Artwork */}
-          <div className="relative aspect-square rounded-xl overflow-hidden bg-black shrink-0 shadow-md">
-            <img
-              src={cover}
-              alt={playlist.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/mix-placeholder.jpg';
-              }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
+        <div className="rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-2.5 sm:p-3 transition-all shadow-lg hover:shadow-gold/10 flex flex-col">
+          {/* Dynamic DJ Cover Artwork */}
+          <PlaylistCoverArt
+            playlist={playlist}
+            aspect="square"
+            onPlay={handleQuickPlay}
+            showPlayButton={true}
+          />
 
-            {/* Badges */}
-            <div className="absolute top-2 left-2 flex flex-col items-start gap-1 z-10">
-              {playlist.badge && (
-                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
-                  {playlist.badge}
-                </span>
-              )}
-              {isSmart && !playlist.badge && (
-                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-black shadow-md">
-                  Smart
-                </span>
-              )}
-              {playlist.isFeatured && (
-                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/70 text-gold border border-gold/40 shadow-md">
-                  ★ Featured
-                </span>
-              )}
-            </div>
-
-            {/* Play Button Overlay */}
-            <button
-              type="button"
-              onClick={handleQuickPlay}
-              className="absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gold text-black flex items-center justify-center shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all hover:scale-110 active:scale-95 z-10"
-              aria-label={`Play ${playlist.title}`}
-            >
-              <Play className="w-4 h-4 fill-black ml-0.5" />
-            </button>
-          </div>
-
-          {/* Title & Info */}
-          <div className="mt-2.5 min-w-0 flex-1 flex flex-col justify-between">
-            <div>
-              <h3 className="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
-                {playlist.title}
-              </h3>
-              {ruleChips.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {ruleChips.map((c) => (
-                    <span
-                      key={c}
-                      className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-text-secondary"
-                    >
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {playlist.description && (
-                <p className="text-[11px] text-text-secondary line-clamp-2 mt-1 leading-relaxed">
-                  {playlist.description}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-text-muted">
-              <span className="flex items-center gap-1 text-gold">
-                <Music className="w-3 h-3" />
-                {trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}
-              </span>
-              <span className="truncate text-text-muted/80">
-                {isSmart ? 'Auto-curated' : 'Deck Salone Official'}
-              </span>
-            </div>
+          {/* Simple Clean Title & Mix Count */}
+          <div className="mt-2.5 px-0.5 flex items-center justify-between gap-2">
+            <h3 className="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
+              {playlist.title}
+            </h3>
+            <span className="text-[11px] font-bold text-text-muted shrink-0 flex items-center gap-1">
+              <Music className="w-3 h-3 text-gold/80" />
+              <span>{trackCount}</span>
+            </span>
           </div>
         </div>
       </Link>
@@ -325,52 +257,47 @@ export function OfficialPlaylists() {
   const genreOptions = GENRES.map((g) => ({ value: g, label: g }));
 
   return (
-    <div className="min-h-screen bg-[#080808] text-text-primary py-8 sm:py-12 px-4 sm:px-6 max-w-7xl mx-auto space-y-8 pb-32">
+    <div className="min-h-[100dvh] bg-bg-page pb-32">
       <SEOHead
         title="Playlists — Deck Salone"
         description="Stream curated DJ mixtapes and smart mood, genre & energy playlists from Sierra Leone."
       />
 
-      {/* ─── HEADER (minimal editorial) ─── */}
-      <header className="space-y-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gold flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5" />
-          Playlists
-        </p>
-        <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
-          Find your <span className="text-gradient-gold">vibe</span>
-        </h1>
-        <p className="text-sm text-text-secondary max-w-xl leading-relaxed">
-          Hand-curated collections and smart playlists built from mood, genre and energy — filter below or press play.
-        </p>
-      </header>
-
-      {/* ─── FILTER BAR ─── */}
-      <div className="sticky top-16 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#080808]/90 backdrop-blur-md border-b border-white/[0.06]">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-text-muted flex items-center gap-2 mr-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-gold" />
-            Filter
-          </span>
-          <FilterDropdown label="Mood" options={[...MOODS]} value={selectedMood} onChange={setSelectedMood} />
-          <FilterDropdown label="Energy" options={[...ENERGIES]} value={selectedEnergy} onChange={setSelectedEnergy} />
-          <FilterDropdown label="Genre" options={genreOptions} value={selectedGenre} onChange={setSelectedGenre} />
-
-          <span className="text-[11px] font-mono text-text-muted/70 ml-auto">
-            {filtered.length} {filtered.length === 1 ? 'playlist' : 'playlists'}
-          </span>
-          {hasFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gold hover:text-white transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Clear
-            </button>
-          )}
+      {/* ════════ Page Header Banner ════════ */}
+      <section className="border-b border-dark-gray bg-gradient-to-b from-[#161614] via-[#10100f] to-black pt-6 pb-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <h1 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-white">
+            PLAYLISTS
+          </h1>
         </div>
-      </div>
+      </section>
+
+      {/* ════════ Sticky Filter Bar ════════ */}
+      <section className="sticky top-14 sm:top-16 lg:top-20 z-30 bg-black/95 backdrop-blur-xl border-b border-dark-gray py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterDropdown label="Mood" options={[...MOODS]} value={selectedMood} onChange={setSelectedMood} />
+            <FilterDropdown label="Energy" options={[...ENERGIES]} value={selectedEnergy} onChange={setSelectedEnergy} />
+            <FilterDropdown label="Genre" options={genreOptions} value={selectedGenre} onChange={setSelectedGenre} />
+
+            <span className="text-[11px] font-semibold text-text-muted/70 ml-auto">
+              {filtered.length} {filtered.length === 1 ? 'playlist' : 'playlists'}
+            </span>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gold hover:text-white transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
 
       {/* ─── UNIFIED GRID ─── */}
       {officialPending || smartPending ? (
@@ -425,6 +352,7 @@ export function OfficialPlaylists() {
           </div>
         </section>
       )}
+      </main>
     </div>
   );
 }

@@ -15,7 +15,6 @@ import {
   Radio,
   Search,
   Sparkles,
-  Trophy,
   Upload,
   Users,
   Shield,
@@ -45,10 +44,10 @@ const browseItems = [
   { label: 'Discover', path: '/discover', icon: Flame },
   { label: 'Ranking', path: '/rankings', icon: BarChart3 },
   { label: 'Mix Hub', path: '/mixes', icon: ListMusic },
-  { label: 'Playlists', path: '/playlists', icon: Library },
+  { label: 'Playlists', path: '/playlists', icon: Radio },
   { label: 'Feed', path: '/feed', icon: Rss },
   { label: 'Events', path: '/events', icon: Calendar },
-  { label: 'Battles', path: '/battles', icon: Trophy },
+  { label: 'My Library', path: '/library', icon: Library },
   { label: 'Request DJ', path: '/request-dj', icon: Users },
 ];
 

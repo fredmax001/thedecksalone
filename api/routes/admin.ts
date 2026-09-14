@@ -11,7 +11,7 @@ const { getSubscriptionConfig, setSubscriptionConfig } = require('../utils/subsc
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { uploadAdminMedia } = require('../utils/upload');
 const { processEventImage } = require('../utils/imageProcessor');
-const { calculateProfileCompletion, sendProfileNudgeEmail } = require('../utils/profileCompletion');
+const { calculateProfileCompletion, sendProfileNudgeEmail, nudgeIncompleteProfiles } = require('../utils/profileCompletion');
 const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
@@ -2830,13 +2830,12 @@ router.post('/dispatch-bug-report', requireRole('ADMIN', 'SUPER_ADMIN'), async (
 // ───────────────────────────────────────────────────────────────────
 router.post('/nudge-incomplete-profiles', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
-    const { nudgeIncompleteProfiles } = require('../utils/profileCompletion');
-    const { userId } = req.body;
+    const { userId } = req.body || {};
     const result = await nudgeIncompleteProfiles(userId);
-    return ok(res, result);
+    return ok(res, result, result.message);
   } catch (error: any) {
-    console.error('[admin.ts] Unhandled error:', error);
-    return fail(res, 500, 'Internal server error');
+    console.error('[Admin Nudge Incomplete Profiles] Error:', error);
+    return fail(res, 500, error.message || 'Internal server error');
   }
 });
 
@@ -3449,40 +3448,22 @@ router.post('/profiles/nudge', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: 
     const { userId, allIncomplete } = req.body || {};
 
     if (userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { djProfile: true, _count: { select: { mixes: true } } },
-      });
-      if (!user) {
-        return fail(res, 404, 'User not found');
+      const result = await nudgeIncompleteProfiles(userId);
+      if (!result.success) {
+        return fail(res, 500, result.message || 'Failed to send nudge email');
       }
-      const result = await sendProfileNudgeEmail(user, user.djProfile, user._count.mixes);
-      return res.json({ success: result.success, data: { userId, email: user.email } });
+      return ok(res, result, result.message);
     }
 
     if (allIncomplete) {
-      const djs = await prisma.djProfile.findMany({
-        include: {
-          user: true,
-          _count: { select: { mixes: true } },
-        },
-      });
-
-      let sent = 0;
-      for (const dj of djs) {
-        const completion = calculateProfileCompletion(dj.user, dj, dj._count.mixes);
-        if (!completion.isComplete) {
-          await sendProfileNudgeEmail(dj.user, dj, dj._count.mixes).catch(() => {});
-          sent++;
-        }
-      }
-      return ok(res, { emailsSent: sent });
+      const result = await nudgeIncompleteProfiles();
+      return ok(res, result, result.message);
     }
 
     return fail(res, 400, 'Provide userId or set allIncomplete to true');
   } catch (error: any) {
     console.error('[Admin Profile Nudge] Error:', error.message);
-    return fail(res, 500, 'Failed to send profile nudge');
+    return fail(res, 500, error.message || 'Failed to send profile nudge');
   }
 });
 
@@ -3589,6 +3570,128 @@ router.get('/events/:id/scan-logs', asyncHandler(async (req, res) => {
   });
 
   return ok(res, logs);
+}));
+
+/* ─────────────────────── Popups, Alerts & Sheets ─────────────────────── */
+
+const POPUP_TYPES = ['MODAL', 'BANNER', 'SHEET'];
+
+function parsePopupSchedule(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? undefined : date;
+}
+
+// GET /api/admin/popups - List all popups
+router.get('/popups', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
+  const popups = await prisma.popup.findMany({ orderBy: { createdAt: 'desc' } });
+  return ok(res, popups);
+}));
+
+// POST /api/admin/popups - Create popup
+router.post('/popups', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
+  const { title, message, type, isActive, startsAt, endsAt } = req.body;
+  if (!title || !message) {
+    return fail(res, 400, 'title and message are required');
+  }
+  if (type && !POPUP_TYPES.includes(type)) {
+    return fail(res, 400, `type must be one of ${POPUP_TYPES.join(', ')}`);
+  }
+
+  const startDate = parsePopupSchedule(startsAt);
+  const endDate = parsePopupSchedule(endsAt);
+  if (startDate === undefined || endDate === undefined) {
+    return fail(res, 400, 'startsAt and endsAt must be valid dates');
+  }
+
+  const popup = await prisma.popup.create({
+    data: {
+      title,
+      message,
+      type: type || 'MODAL',
+      isActive: isActive !== false,
+      startsAt: startDate,
+      endsAt: endDate,
+      createdBy: req.user.id,
+    },
+  });
+
+  await createAuditLog({
+    actorId: req.user.id,
+    targetId: null,
+    action: 'POPUP_CREATE',
+    entity: 'POPUP',
+    entityId: popup.id,
+    metadata: { title, type: popup.type },
+    req,
+  });
+
+  return res.status(201).json({ success: true, data: popup });
+}));
+
+// PUT /api/admin/popups/:id - Update popup (edit content, schedule, or toggle active)
+router.put('/popups/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
+  const { title, message, type, isActive, startsAt, endsAt } = req.body;
+
+  const existing = await prisma.popup.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    return fail(res, 404, 'Popup not found');
+  }
+  if (type !== undefined && !POPUP_TYPES.includes(type)) {
+    return fail(res, 400, `type must be one of ${POPUP_TYPES.join(', ')}`);
+  }
+
+  const startDate = parsePopupSchedule(startsAt);
+  const endDate = parsePopupSchedule(endsAt);
+  if (startDate === undefined || endDate === undefined) {
+    return fail(res, 400, 'startsAt and endsAt must be valid dates');
+  }
+
+  const popup = await prisma.popup.update({
+    where: { id: req.params.id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(message !== undefined && { message }),
+      ...(type !== undefined && { type }),
+      ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+      ...(startsAt !== undefined && { startsAt: startDate }),
+      ...(endsAt !== undefined && { endsAt: endDate }),
+    },
+  });
+
+  await createAuditLog({
+    actorId: req.user.id,
+    targetId: null,
+    action: 'POPUP_UPDATE',
+    entity: 'POPUP',
+    entityId: popup.id,
+    metadata: { title: popup.title, type: popup.type, isActive: popup.isActive },
+    req,
+  });
+
+  return ok(res, popup);
+}));
+
+// DELETE /api/admin/popups/:id - Delete popup
+router.delete('/popups/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
+  const existing = await prisma.popup.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    return fail(res, 404, 'Popup not found');
+  }
+
+  await prisma.popup.delete({ where: { id: req.params.id } });
+
+  await createAuditLog({
+    actorId: req.user.id,
+    targetId: null,
+    action: 'POPUP_DELETE',
+    entity: 'POPUP',
+    entityId: existing.id,
+    metadata: { title: existing.title, type: existing.type },
+    req,
+  });
+
+  return ok(res, { id: existing.id });
 }));
 
 module.exports = router;

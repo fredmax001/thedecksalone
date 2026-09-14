@@ -1,522 +1,344 @@
-import { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
-  Trophy,
-  MapPin,
-  Star,
-  TrendingDown,
+  Play,
   TrendingUp,
-  Flame,
-  Award,
-  RefreshCw,
-  ChevronUp,
-  Music2,
-  Globe,
+  TrendingDown,
+  Minus,
+  MapPin,
 } from 'lucide-react';
-import FadeIn from '@/components/FadeIn';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import SEOHead from '@/components/SEOHead';
 import { useRankings } from '@/hooks/useRankings';
-import { useDelayedLoading } from '@/hooks/use-delayed-loading';
-import { PageSkeleton } from '@/components/ui/page-skeletons';
-/* ─────────────────── Easing ─────────────────── */
-
-const easeSmooth = [0.16, 1, 0.3, 1] as [number, number, number, number];
-
-/* ─────────────────── Types ─────────────────── */
-
-interface RankedDJ {
-  id: string;
-  username?: string;
-  rankingPosition: number;
-  stageName: string;
-  genres: string[];
-  city: string;
-  country: string;
-  rankingScore: number;
-  digitalScore: number;
-  industryScore: number;
-  communityScore: number;
-  trend?: number;
-  verified: boolean;
-  avatar: string;
-  totalFollowers: number;
-  totalBookings: number;
-  totalStreams: number;
-}
-
-const CATEGORIES = ['Global', 'By City', 'By Genre', 'Fastest Rising', 'Most Booked', 'Most Streamed'];
-const CITIES = ['Freetown', 'Bo', 'Kenema', 'Makeni', 'Koidu Town', 'Port Loko', 'Lunsar', 'Waterloo', 'Kabala', 'Magburaka', 'Kailahun', 'Moyamba', 'Pujehun', 'Bonthe', 'Kambia'];
-const GENRES = ['Afrobeats', 'Amapiano', 'Dancehall', 'Hip Hop', 'Gospel', 'Salone Mix', 'Club Mix', 'Throwback', 'R&B', 'Reggae'];
+import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import { getAvatarImageUrl, imageFallback } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/api';
 
 /* ─────────────────── Helpers ─────────────────── */
 
-function getRankColor(rank: number): string {
-  if (rank === 1) return 'text-gold';
-  if (rank === 2) return 'text-[#C0C0C0]';
-  if (rank === 3) return 'text-[#CD7F32]';
-  if (rank <= 10) return 'text-gold/70';
-  return 'text-text-muted';
+function toTrack(m: any): MixTrack {
+  return {
+    id: m.id,
+    title: m.title,
+    dj: m.dj?.stageName || m.dj || 'DJ',
+    duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
+    cover: getMediaUrl(m.coverImage || m.cover) || '',
+    genre: m.genre || '',
+    plays: m.plays || 0,
+    audioUrl: getMediaUrl(m.audioUrl) || '',
+    djAvatar: m.dj?.avatar,
+    djUsername: m.dj?.username,
+  };
 }
 
-function getRankBorder(rank: number): string {
-  if (rank <= 3) return 'border-gold';
-  return 'border-white/10';
+/* ─────────────────── Trend Arrow Component ─────────────────── */
+
+function TrendArrow({ trend }: { trend?: number }) {
+  const val = trend ?? 0;
+  if (val > 0) {
+    return (
+      <span className="inline-flex items-center text-emerald-400" title={`Climbed up +${val}`}>
+        <TrendingUp className="w-3.5 h-3.5" />
+      </span>
+    );
+  }
+  if (val < 0) {
+    return (
+      <span className="inline-flex items-center text-rose-500" title={`Dropped ${val}`}>
+        <TrendingDown className="w-3.5 h-3.5" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center text-neutral-500" title="Unchanged position">
+      <Minus className="w-3.5 h-3.5" />
+    </span>
+  );
 }
 
-import { formatCompactNumber } from '@/lib/formatting';
-import { formatDate } from '@/lib/dateTime';
-import { getAvatarImageUrl } from '@/lib/utils';
+/* ─────────────────── Top 3 Podium Card ─────────────────── */
 
-/* ─────────────────── Components ─────────────────── */
-
-function RankingRow({ dj, index }: { dj: RankedDJ; index: number }) {
-  const isTop3 = dj.rankingPosition <= 3;
-  const rankColors = ['text-gold', 'text-[#C0C0C0]', 'text-[#CD7F32]'];
-  const trend = dj.trend || 0;
+function TopPodiumCard({
+  dj,
+  rank,
+  onPlay,
+}: {
+  dj: any;
+  rank: number;
+  onPlay: (dj: any, e: React.MouseEvent) => void;
+}) {
+  const avatarUrl = getAvatarImageUrl(dj.avatar);
+  const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Sierra Leone';
+  const followersCount = dj.totalFollowers || dj._count?.followers || 0;
+  const score = dj.rankingScore || 0;
+  const progressPercent = Math.min(100, Math.max(10, (score / 10) * 100));
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 40 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.5, delay: index * 0.05, ease: easeSmooth }}
-      className={`group flex items-center gap-4 py-3 px-4 rounded-xl transition-colors duration-200 cursor-pointer hover:bg-medium-gray ${
-        index % 2 === 0 ? 'bg-black-elevated' : 'bg-black'
-      } ${isTop3 ? 'bg-rank-gradient-top' : ''}`}
-    >
-      <div className="w-12 text-center shrink-0">
-        {isTop3 ? (
-          <div className="flex flex-col items-center">
-            <Trophy className={`w-5 h-5 ${rankColors[dj.rankingPosition - 1]}`} />
-            <span className={`font-mono text-sm font-bold ${rankColors[dj.rankingPosition - 1]}`}>{dj.rankingPosition}</span>
-          </div>
-        ) : (
-          <span className={`font-mono text-base font-semibold ${dj.rankingPosition <= 10 ? 'text-gold/70' : 'text-text-muted'}`}>
-            {dj.rankingPosition}
-          </span>
-        )}
-      </div>
-
-      <div className="shrink-0">
-        <img
-          src={getAvatarImageUrl(dj.avatar)}
-          alt={dj.stageName}
-          className={`w-12 h-12 rounded-full object-cover border-2 ${getRankBorder(dj.rankingPosition)}`}
-        />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-display text-sm font-semibold uppercase tracking-tight text-text-primary truncate">
-            {dj.stageName}
-          </span>
-          {dj.verified && <VerifiedBadge dj={dj} className="shrink-0" />}
-          {dj.rankingPosition === 1 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-gold/20 text-gold border border-gold/40 shadow-[0_0_12px_rgba(244, 224, 89,0.3)] shrink-0">
-              <Trophy className="w-3 h-3 text-gold" />
-              #1 DJ OF THE WEEK
-            </span>
-          )}
-          {dj.rankingPosition === 2 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-slate-300/20 text-slate-300 border border-slate-300/40 shrink-0">
-              <Trophy className="w-3 h-3 text-slate-300" />
-              #2 DJ OF THE WEEK
-            </span>
-          )}
-          {dj.rankingPosition === 3 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-amber-700/20 text-amber-500 border border-amber-700/40 shrink-0">
-              <Trophy className="w-3 h-3 text-amber-500" />
-              #3 DJ OF THE WEEK
-            </span>
-          )}
-          {trend > 3 && <Flame className="w-4 h-4 text-orange shrink-0" />}
+    <div className="rounded-3xl bg-black border border-white/10 hover:border-gold/40 p-3.5 sm:p-4 flex items-center gap-3.5 sm:gap-4 transition-all duration-300 shadow-md group">
+      {/* Left DJ Avatar with #1 / #2 / #3 badge */}
+      <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl overflow-hidden shrink-0 bg-neutral-900 border border-white/5">
+        <Link to={`/dj/${dj.username || dj.user?.username || dj.id}`} className="block w-full h-full">
+          <img
+            src={avatarUrl}
+            alt={dj.stageName}
+            onError={imageFallback}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+          />
+        </Link>
+        {/* Yellow Rank Badge at bottom-left corner of avatar */}
+        <div className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-gold text-black font-mono font-black text-[10px] sm:text-xs uppercase shadow-md">
+          #{rank}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-          {dj.genres.slice(0, 3).map((g) => (
-            <span key={g} className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded-full border border-white/10 text-text-muted">
+      </div>
+
+      {/* Right Details */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Link
+            to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+            className="font-display text-base sm:text-lg font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors"
+          >
+            {dj.stageName}
+          </Link>
+          {dj.verified && <VerifiedBadge dj={dj} size={15} className="shrink-0" />}
+        </div>
+
+        {/* Location & followers */}
+        <div className="text-[11px] sm:text-xs text-text-muted truncate mt-0.5">
+          {location} · {followersCount} followers
+        </div>
+
+        {/* Score bar & Trend Line */}
+        <div className="flex items-center gap-2 sm:gap-3 mt-2">
+          {/* Progress bar line with indicator dot */}
+          <div className="flex-1 h-1.5 bg-neutral-800 rounded-full relative overflow-hidden">
+            <div
+              className="h-full bg-gold rounded-full relative"
+              style={{ width: `${progressPercent}%` }}
+            >
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-gold shadow-sm ring-2 ring-black" />
+            </div>
+          </div>
+
+          {/* Score number */}
+          <span className="font-bold text-xs sm:text-sm text-white/90 shrink-0">
+            {score.toFixed(1)}
+          </span>
+
+          {/* Trend arrow */}
+          <div className="shrink-0 flex items-center">
+            <TrendArrow trend={dj.trend} />
+          </div>
+
+          {/* View Link */}
+          <Link
+            to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+            className="text-[10px] font-bold text-text-muted hover:text-gold uppercase tracking-wider shrink-0"
+          >
+            VIEW
+          </Link>
+        </div>
+
+        {/* Action Row */}
+        <div className="flex items-center gap-2 mt-2 sm:mt-3">
+          <Link
+            to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+            className="px-3 sm:px-4 py-1.5 rounded-full bg-gold hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider transition-transform hover:scale-102 shrink-0"
+          >
+            View Profile
+          </Link>
+          <button
+            onClick={(e) => onPlay(dj, e)}
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gold hover:brightness-110 flex items-center justify-center text-black shrink-0 transition-transform hover:scale-105 shadow"
+            title="Play Top Mix"
+          >
+            <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Ranked Table Row ─────────────────── */
+
+function RankedRow({
+  dj,
+  rank,
+}: {
+  dj: any;
+  rank: number;
+}) {
+  const avatarUrl = getAvatarImageUrl(dj.avatar);
+  const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Freetown';
+  const genres = Array.isArray(dj.genres) ? dj.genres : [];
+  const score = dj.rankingScore || 0;
+  const progressPercent = Math.min(100, Math.max(8, (score / 10) * 100));
+
+  return (
+    <div className="rounded-2xl bg-black hover:bg-[#151515] border border-white/10 hover:border-gold/40 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all duration-300 shadow-md group">
+      {/* Rank number */}
+      <span className="font-bold text-xs sm:text-sm text-neutral-400 w-6 text-center shrink-0">
+        {rank}
+      </span>
+
+      {/* Small circular DJ avatar */}
+      <Link
+        to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+        className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border border-white/10 block bg-neutral-900"
+      >
+        <img
+          src={avatarUrl}
+          alt={dj.stageName}
+          onError={imageFallback}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+        />
+      </Link>
+
+      {/* DJ Name, genres & location */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Link
+            to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+            className="font-display text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors"
+          >
+            {dj.stageName}
+          </Link>
+          {dj.verified && <VerifiedBadge dj={dj} size={14} className="shrink-0" />}
+        </div>
+
+        {/* Genre Tags & Location */}
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          {genres.slice(0, 3).map((g: string) => (
+            <span
+              key={g}
+              className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md bg-white/[0.06] text-text-secondary border border-white/5"
+            >
               {g}
             </span>
           ))}
-          <span className="flex items-center gap-1 text-[10px] text-text-muted">
-            <MapPin className="w-3 h-3" />
-            {dj.city}
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-text-muted truncate">
+            <MapPin className="w-2.5 h-2.5 text-text-muted shrink-0" />
+            {location}
           </span>
         </div>
       </div>
 
-      <div className="hidden sm:flex items-center gap-3 w-48 shrink-0">
-        <div className="flex-1 h-2 bg-dark-gray rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            whileInView={{ width: `${Math.min(dj.rankingScore, 100)}%` }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, delay: 0.2 + index * 0.05, ease: easeSmooth }}
-            className="h-full bg-gold-gradient rounded-full"
-          />
+      {/* Right Score & Trend Section */}
+      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        {/* Progress bar line */}
+        <div className="w-20 sm:w-32 md:w-44 h-1.5 bg-neutral-800 rounded-full relative overflow-hidden hidden xs:block">
+          <div
+            className="h-full bg-gold rounded-full relative"
+            style={{ width: `${progressPercent}%` }}
+          >
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-gold shadow-sm ring-2 ring-black" />
+          </div>
         </div>
-        <span className="font-mono text-sm font-semibold text-gold w-12 text-right">{dj.rankingScore.toFixed(1)}</span>
-      </div>
 
-      <div className="flex items-center gap-1 shrink-0 w-16 justify-end">
-        {trend > 0 ? (
-          <>
-            <ChevronUp className="w-4 h-4 text-green" />
-            <span className="font-mono text-xs font-medium text-green">+{trend}%</span>
-          </>
+        {/* Score value */}
+        <span className="font-bold text-xs sm:text-sm text-white/90 min-w-[32px] text-right">
+          {score.toFixed(1)}
+        </span>
+
+        {/* Trend Arrow */}
+        <div className="flex items-center">
+          <TrendArrow trend={dj.trend} />
+        </div>
+
+        {/* View Link */}
+        <Link
+          to={`/dj/${dj.username || dj.user?.username || dj.id}`}
+          className="text-[10px] font-bold text-text-muted hover:text-gold uppercase tracking-wider transition-colors shrink-0"
+        >
+          VIEW
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Main Rankings Page ─────────────────── */
+
+export default function Rankings() {
+  const { play, setQueue } = usePlayerStore();
+  const { data: djs = [], isLoading } = useRankings({ limit: 50 });
+
+  const top3 = useMemo(() => djs.slice(0, 3), [djs]);
+  const remainingDjs = useMemo(() => djs.slice(3), [djs]);
+
+  const handlePlayDj = (dj: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dj.mixes && dj.mixes.length > 0) {
+      const topMix = dj.mixes[0];
+      const track = toTrack(topMix);
+      setQueue([track]);
+      play(track);
+    }
+  };
+
+  return (
+    <div className="min-h-[100dvh] bg-bg-page pb-32 text-white">
+      <SEOHead
+        title="Official DJ Rankings — Deck Salone"
+        description="Live verified Sierra Leonean DJ rankings and weekly leaderboard based on performance, stream volume, and live sets."
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-8 sm:space-y-10">
+        {/* ════════ Page Header: Ranking ════════ */}
+        <div>
+          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight text-white">
+            Ranking
+          </h1>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-4 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 bg-neutral-900 rounded-3xl border border-white/5" />
+              ))}
+            </div>
+            <div className="space-y-3">
+              {[4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="h-16 bg-neutral-900 rounded-2xl border border-white/5" />
+              ))}
+            </div>
+          </div>
         ) : (
           <>
-            <TrendingDown className="w-4 h-4 text-red" />
-            <span className="font-mono text-xs font-medium text-red">{trend}%</span>
+            {/* ════════ Top 3 Podium Cards ════════ */}
+            {top3.length > 0 && (
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                {top3.map((dj: any, index: number) => (
+                  <TopPodiumCard
+                    key={dj.id}
+                    dj={dj}
+                    rank={index + 1}
+                    onPlay={handlePlayDj}
+                  />
+                ))}
+              </section>
+            )}
+
+            {/* ════════ Remaining Ranked DJs (4 to N) ════════ */}
+            {remainingDjs.length > 0 && (
+              <section className="space-y-3">
+                {remainingDjs.map((dj: any, index: number) => (
+                  <RankedRow
+                    key={dj.id}
+                    dj={dj}
+                    rank={index + 4}
+                  />
+                ))}
+              </section>
+            )}
           </>
         )}
       </div>
-
-      <div className="hidden md:block shrink-0">
-        <Link
-          to={`/dj/${dj.username || dj.id}`}
-          className="text-xs font-semibold uppercase tracking-wider text-gold hover:text-gold-light transition-colors"
-        >
-          View
-        </Link>
-      </div>
-    </motion.div>
-  );
-}
-
-function RankingList({ djs, title, subtitle }: { djs: RankedDJ[]; title: string; subtitle?: React.ReactNode }) {
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div className="flex items-center justify-between mb-6">
-        <p className="section-label">{title}</p>
-        {subtitle}
-      </div>
-      <div className="space-y-1">
-        {djs.map((dj, i) => (
-          <RankingRow key={dj.id} dj={dj} index={i} />
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function ByCitySection({ djs }: { djs: RankedDJ[] }) {
-  const byCity = useMemo(() => {
-    const map: Record<string, RankedDJ[]> = {};
-    djs.forEach((dj) => {
-      if (!map[dj.city]) map[dj.city] = [];
-      map[dj.city].push(dj);
-    });
-    return CITIES.map((city) => ({ city, djs: (map[city] || []).slice(0, 5) })).filter((c) => c.djs.length > 0);
-  }, [djs]);
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <p className="section-label mb-6">TOP DJS BY CITY</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {byCity.map((cityData, i) => (
-          <FadeIn key={cityData.city} delay={i * 0.1}>
-            <div className="bg-black-elevated rounded-2xl border border-white/5 p-5 hover:border-gold/20 transition-colors">
-              <div className="flex items-center gap-2 mb-1">
-                <MapPin className="w-4 h-4 text-gold" />
-                <h3 className="font-display text-lg font-semibold uppercase text-text-primary">{cityData.city}</h3>
-              </div>
-              <p className="font-mono text-xs text-text-muted mb-4">{cityData.djs.length} DJs</p>
-              <div className="space-y-3">
-                {cityData.djs.map((dj, j) => (
-                  <div key={dj.id} className="flex items-center gap-3">
-                    <span className={`font-mono text-sm font-bold w-6 ${getRankColor(j + 1)}`}>{j + 1}</span>
-                    <img src={getAvatarImageUrl(dj.avatar)} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-text-primary truncate">{dj.stageName}</p>
-                      <p className="font-mono text-[10px] text-gold">{dj.rankingScore.toFixed(1)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </FadeIn>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function ByGenreSection({ djs }: { djs: RankedDJ[] }) {
-  const byGenre = useMemo(() => {
-    return GENRES.map((genre) => ({
-      genre,
-      djs: djs.filter((dj) => dj.genres.includes(genre)).slice(0, 3),
-    })).filter((g) => g.djs.length > 0);
-  }, [djs]);
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <p className="section-label mb-6">TOP DJS BY GENRE</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {byGenre.map((genreData, i) => (
-          <FadeIn key={genreData.genre} delay={i * 0.08}>
-            <div className="bg-black-elevated rounded-2xl border border-white/5 p-5 hover:border-gold/20 transition-colors">
-              <h3 className="font-display text-lg font-semibold uppercase text-text-primary mb-4">{genreData.genre}</h3>
-              <div className="space-y-3">
-                {genreData.djs.map((dj, j) => (
-                  <div key={dj.id} className="flex items-center gap-3">
-                    <span className={`font-mono text-sm font-bold w-6 ${getRankColor(j + 1)}`}>{j + 1}</span>
-                    <img src={getAvatarImageUrl(dj.avatar)} alt={dj.stageName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-text-primary truncate">{dj.stageName}</p>
-                      <p className="font-mono text-[10px] text-gold">{dj.rankingScore.toFixed(1)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </FadeIn>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function FastestRisingSection({ djs }: { djs: RankedDJ[] }) {
-  const rising = useMemo(() => {
-    return [...djs]
-      .filter((dj) => (dj.trend || 0) > 0)
-      .sort((a, b) => (b.trend || 0) - (a.trend || 0))
-      .slice(0, 5);
-  }, [djs]);
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div className="flex items-center gap-2 mb-6">
-        <TrendingUp className="w-4 h-4 text-green" />
-        <p className="section-label">FASTEST RISING</p>
-      </div>
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
-        <div className="bg-black-elevated min-w-[640px] overflow-hidden">
-          <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-white/5 text-xs font-semibold uppercase tracking-wider text-text-muted">
-            <div className="col-span-1">Rank</div>
-            <div className="col-span-4">DJ</div>
-            <div className="col-span-3 text-center">Change</div>
-            <div className="col-span-2 text-center">Score</div>
-            <div className="col-span-2 text-center">Position</div>
-          </div>
-          {rising.map((dj, i) => (
-            <motion.div
-              key={dj.id}
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, ease: easeSmooth }}
-              className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 last:border-0 hover:bg-medium-gray/50 transition-colors items-center"
-            >
-              <div className="col-span-1">
-                <span className="font-mono text-base font-bold text-green">{i + 1}</span>
-              </div>
-              <div className="col-span-4 flex items-center gap-3">
-                <img src={getAvatarImageUrl(dj.avatar)} alt={dj.stageName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">{dj.stageName}</p>
-                  {(dj.trend || 0) > 3 && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-green/15 text-green">
-                      <Star className="w-3 h-3" />
-                      Rising Star
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="col-span-3 text-center">
-                <span className="font-mono text-lg font-bold text-green">+{dj.trend}%</span>
-              </div>
-              <div className="col-span-2 text-center">
-                <span className="font-mono text-sm font-semibold text-text-primary">{dj.rankingScore.toFixed(1)}</span>
-              </div>
-              <div className="col-span-2 text-center">
-                <span className="font-mono text-sm text-text-muted">#{dj.rankingPosition}</span>
-              </div>
-            </motion.div>
-          ))}
-          {rising.length === 0 && (
-            <div className="px-6 py-8 text-center text-text-muted text-sm">No rising DJs this week</div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function MostBookedSection({ djs }: { djs: RankedDJ[] }) {
-  const booked = useMemo(() => [...djs].sort((a, b) => b.totalBookings - a.totalBookings).slice(0, 10), [djs]);
-  const maxBookings = Math.max(1, ...booked.map((d) => d.totalBookings));
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div className="flex items-center gap-2 mb-6">
-        <Award className="w-4 h-4 text-purple" />
-        <p className="section-label">MOST BOOKED</p>
-      </div>
-      <div className="space-y-4">
-        {booked.map((dj, i) => (
-          <FadeIn key={dj.id} delay={i * 0.08}>
-            <div className="flex items-center gap-4">
-              <span className="font-mono text-sm font-bold text-text-muted w-6">{i + 1}</span>
-              <img src={getAvatarImageUrl(dj.avatar)} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
-              <span className="text-sm font-medium text-text-primary w-32 truncate">{dj.stageName}</span>
-              <div className="flex-1 h-6 bg-dark-gray rounded-md overflow-hidden max-w-md">
-                <motion.div
-                  initial={{ width: 0 }}
-                  whileInView={{ width: `${(dj.totalBookings / maxBookings) * 100}%` }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.8, delay: i * 0.1, ease: easeSmooth }}
-                  className="h-full rounded-md"
-                  style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 50%, #8B5CF6 100%)' }}
-                />
-              </div>
-              <span className="font-mono text-sm font-semibold text-purple w-12 text-right">{dj.totalBookings}</span>
-            </div>
-          </FadeIn>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function MostStreamedSection({ djs }: { djs: RankedDJ[] }) {
-  const streamed = useMemo(() => [...djs].sort((a, b) => b.totalStreams - a.totalStreams).slice(0, 10), [djs]);
-  const maxStreams = Math.max(1, ...streamed.map((d) => d.totalStreams));
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div className="flex items-center gap-2 mb-6">
-        <Music2 className="w-4 h-4 text-gold" />
-        <p className="section-label">MOST STREAMED</p>
-      </div>
-      <div className="space-y-4">
-        {streamed.map((dj, i) => (
-          <FadeIn key={dj.id} delay={i * 0.08}>
-            <div className="flex items-center gap-4">
-              <span className="font-mono text-sm font-bold text-text-muted w-6">{i + 1}</span>
-              <img src={getAvatarImageUrl(dj.avatar)} alt={dj.stageName} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
-              <span className="text-sm font-medium text-text-primary w-32 truncate">{dj.stageName}</span>
-              <div className="flex-1 h-6 bg-dark-gray rounded-md overflow-hidden max-w-md">
-                <motion.div
-                  initial={{ width: 0 }}
-                  whileInView={{ width: `${(dj.totalStreams / maxStreams) * 100}%` }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.8, delay: i * 0.1, ease: easeSmooth }}
-                  className={`h-full rounded-md ${i === 0 ? 'gold-shimmer' : 'bg-gold-gradient'}`}
-                />
-              </div>
-              <span className="font-mono text-sm font-semibold text-gold w-16 text-right">{formatCompactNumber(dj.totalStreams)}</span>
-            </div>
-          </FadeIn>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-/* ─────────────────── Main Component ─────────────────── */
-
-export default function Rankings() {
-  const [activeCategory, setActiveCategory] = useState('Global');
-  const { data: globalDjs = [], isLoading, error } = useRankings({ limit: 50 });
-
-  const showSkeleton = useDelayedLoading(isLoading);
-  if (isLoading && showSkeleton) return <PageSkeleton />;
-  if (isLoading) return null;
-
-  if (error) {
-    return (
-      <div className="min-h-[100dvh] bg-black flex items-center justify-center p-6 text-center">
-        <div className="max-w-md">
-          <p className="text-red-400 font-medium">Failed to load rankings</p>
-          <p className="text-text-muted text-sm mt-2">{error instanceof Error ? error.message : 'Please try again later.'}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[100dvh] bg-bg-page">
-      {/* Hero */}
-      <section className="hero-banner pt-8 pb-6 sm:pt-10 sm:pb-8 border-b border-dark-gray">
-        <div className="container-main">
-          <FadeIn delay={0.1}>
-            <p className="section-label text-center mb-1.5">LIVE RANKINGS</p>
-          </FadeIn>
-          <FadeIn delay={0.2}>
-            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold uppercase tracking-tight text-text-primary text-center">
-              SIERRA LEONE DJ RANKINGS
-            </h1>
-          </FadeIn>
-          <FadeIn delay={0.4}>
-            <div className="flex items-center justify-center gap-2 mt-2.5 text-text-muted">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="font-mono text-xs">Last updated: {formatDate(new Date())}</span>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* Tabs */}
-      <section className="py-4 sm:py-6">
-        <div className="container-main">
-          <FadeIn>
-            <div className="flex flex-wrap justify-center gap-2 mb-6">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-5 py-2 text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-200 ${
-                    activeCategory === cat
-                      ? 'bg-gold-gradient text-black'
-                      : 'bg-transparent border border-white/20 text-text-secondary hover:text-text-primary hover:border-white/40'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </FadeIn>
-
-          {activeCategory === 'Global' && (
-            <RankingList
-              djs={globalDjs}
-              title="GLOBAL TOP 50"
-              subtitle={
-                <div className="flex items-center gap-1.5">
-                  <Globe className="w-4 h-4 text-text-muted" />
-                  <span className="font-mono text-xs text-text-muted">All Cities</span>
-                </div>
-              }
-            />
-          )}
-
-          {activeCategory === 'By City' && <ByCitySection djs={globalDjs} />}
-          {activeCategory === 'By Genre' && <ByGenreSection djs={globalDjs} />}
-          {activeCategory === 'Fastest Rising' && <FastestRisingSection djs={globalDjs} />}
-          {activeCategory === 'Most Booked' && <MostBookedSection djs={globalDjs} />}
-          {activeCategory === 'Most Streamed' && <MostStreamedSection djs={globalDjs} />}
-        </div>
-      </section>
-
-      {/* Most Streamed / Most Booked */}
-      {activeCategory === 'Global' && (
-        <>
-          <section className="py-12 bg-black-elevated">
-            <div className="container-main">
-              <MostStreamedSection djs={globalDjs} />
-            </div>
-          </section>
-          <section className="py-12">
-            <div className="container-main">
-              <MostBookedSection djs={globalDjs} />
-            </div>
-          </section>
-        </>
-      )}
-
     </div>
   );
 }

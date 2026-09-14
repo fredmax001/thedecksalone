@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useCreateGig } from '@/hooks/useGigs';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import SEOHead from '@/components/SEOHead';
 
 const EVENT_TYPES = [
   'Wedding',
@@ -142,19 +143,22 @@ export default function RequestDj() {
   }
 
   return (
-    <div className="min-h-[80dvh] bg-black px-6 py-16">
-      <div className="max-w-3xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-10"
-        >
-          <span className="text-gold text-xs font-semibold uppercase tracking-widest">DJ Marketplace</span>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold text-text-primary uppercase tracking-tight mt-2">
-            Request a DJ
-          </h1>
-        </motion.div>
+    <div className="min-h-[100dvh] bg-bg-page pb-32">
+      <SEOHead
+        title="Request DJ — Deck Salone"
+        description="Submit a DJ booking request and get connected with verified Sierra Leonean DJs for your event."
+      />
 
+      {/* ════════ Page Header Banner ════════ */}
+      <section className="border-b border-dark-gray bg-gradient-to-b from-[#161614] via-[#10100f] to-black pt-6 pb-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <h1 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-white">
+            REQUEST DJ
+          </h1>
+        </div>
+      </section>
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -384,7 +388,7 @@ export default function RequestDj() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -15,13 +15,14 @@ export interface VerifiedBadgeProps {
 export function VerifiedBadge({ dj, className = '', size = 16 }: VerifiedBadgeProps) {
   if (!dj?.verified) return null;
 
-  let color = '#9CA3AF'; // Default Grey
+  const isGold =
+    dj.verificationBadgeType === 'gold' ||
+    dj.verificationBadgeType === 'yellow' ||
+    dj.subscriptionTier === 'legend' ||
+    dj.subscriptionTier === 'pro' ||
+    dj.isPro === true;
 
-  if (dj.verificationBadgeType === 'gold') {
-    color = '#FACC15';
-  } else if (dj.verificationBadgeType === 'grey') {
-    color = '#9CA3AF';
-  }
+  const color = isGold ? '#FACC15' : '#9CA3AF';
 
   return (
     <svg

@@ -50,6 +50,17 @@ export function useRespondToCounterOffer() {
   });
 }
 
+/* ─── Liked Mixes ─── */
+export function useLikedMixes() {
+  return useQuery({
+    queryKey: ['user-liked-mixes'],
+    queryFn: async () => {
+      const res = await api.get('/users/liked-mixes');
+      return (res.data.data || []) as any[];
+    },
+  });
+}
+
 /* ─── Following ─── */
 export interface FollowingDJ {
   id: string;
