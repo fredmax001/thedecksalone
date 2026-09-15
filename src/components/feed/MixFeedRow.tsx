@@ -161,11 +161,6 @@ export default function MixFeedRow({
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isAuthenticated) {
-      setDownloadModalMode('auth');
-      return;
-    }
-
     try {
       toast.info(`Preparing download for "${mix.title}"...`);
       const res = await api.post(`/mixes/${mix.id}/download`);

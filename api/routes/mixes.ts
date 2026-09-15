@@ -103,57 +103,68 @@ const importHearthisSchema = z.object({
  * Returns an object describing the gate and whether access is granted.
  */
 async function checkDownloadAccess(mix, user) {
-  const isOwner = mix.dj?.userId === user.id;
-  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'MODERATOR';
-
-  if (isOwner || isAdmin) {
-    return { allowed: true, gate: 'owner' };
-  }
-
-  // Per-mix download gates (mutually exclusive in UI, checked in priority order)
+  // 1. Explicit public download permission allows all users and guests
   if (mix.allowPublicDownloads) {
     return { allowed: true, gate: 'public' };
   }
 
-  if (mix.repostToDownload) {
-    const repost = await prisma.mixRepost.findUnique({
-      where: { mixId_userId: { mixId: mix.id, userId: user.id } },
-    });
-    if (repost) {
-      return { allowed: true, gate: 'repost' };
+  // 2. Authenticated user access rules
+  if (user) {
+    const isOwner = mix.dj?.userId === user.id;
+    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'MODERATOR';
+
+    if (isOwner || isAdmin) {
+      return { allowed: true, gate: 'owner' };
     }
-    return { allowed: false, gate: 'repost' };
-  }
 
-  if (mix.followToDownload) {
-    const follow = await prisma.follow.findUnique({
-      where: { userId_djId: { userId: user.id, djId: mix.djId } },
-    });
-    if (follow) {
-      return { allowed: true, gate: 'follow' };
+    if (mix.repostToDownload) {
+      const repost = await prisma.mixRepost.findUnique({
+        where: { mixId_userId: { mixId: mix.id, userId: user.id } },
+      });
+      if (repost) {
+        return { allowed: true, gate: 'repost' };
+      }
+      return { allowed: false, gate: 'repost' };
     }
-    return { allowed: false, gate: 'follow' };
+
+    if (mix.followToDownload) {
+      const follow = await prisma.follow.findUnique({
+        where: { userId_djId: { userId: user.id, djId: mix.djId } },
+      });
+      if (follow) {
+        return { allowed: true, gate: 'follow' };
+      }
+      return { allowed: false, gate: 'follow' };
+    }
+
+    // Fans / listeners can download mixes for free. DJs still need a Pro subscription
+    // to unlock downloads as a platform monetization feature.
+    const userWithDj = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { djProfile: true },
+    });
+
+    if (userWithDj?.role === 'USER') {
+      return { allowed: true, gate: 'free' };
+    }
+
+    const userTier = (userWithDj?.djProfile?.subscriptionTier || userWithDj?.subscriptionTier || 'free').toLowerCase();
+    const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
+
+    if (hasProPlan) {
+      return { allowed: true, gate: 'subscription' };
+    }
+
+    return { allowed: false, gate: 'subscription' };
   }
 
-  // Fans / listeners can download mixes for free. DJs still need a Pro subscription
-  // to unlock downloads as a platform monetization feature.
-  const userWithDj = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { djProfile: true },
-  });
-
-  if (userWithDj?.role === 'USER') {
-    return { allowed: true, gate: 'free' };
+  // 3. Guest / Unauthenticated instant download path
+  // If the mix has no special DJ gates (repost / follow / exclusive), allow direct public download
+  if (!mix.repostToDownload && !mix.followToDownload && !mix.isExclusive) {
+    return { allowed: true, gate: 'public' };
   }
 
-  const userTier = (userWithDj?.djProfile?.subscriptionTier || userWithDj?.subscriptionTier || 'free').toLowerCase();
-  const hasProPlan = ['pro', 'pro_plus', 'legend'].includes(userTier);
-
-  if (hasProPlan) {
-    return { allowed: true, gate: 'subscription' };
-  }
-
-  return { allowed: false, gate: 'subscription' };
+  return { allowed: false, gate: 'auth' };
 }
 
 // GET /api/mixes - List mixes with filtering
@@ -1514,14 +1525,13 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
       return res.status(404).send('Audio file not found.');
     }
 
-    // Require authentication and check download permissions
-    if (!req.user) {
-      return res.status(401).send('Please log in to download mixes.');
-    }
-
+    // Check download access (supports authenticated users and guest instant download for public mixes)
     const access = await checkDownloadAccess(mix, req.user);
 
     if (!access.allowed) {
+      if (!req.user || access.gate === 'auth') {
+        return res.status(401).send('Please log in to download mixes.');
+      }
       let message = 'Downloading mixes requires an active PRO subscription.';
       if (access.gate === 'repost') {
         message = 'Download is only active for users who reposted this mix.';
@@ -1589,14 +1599,14 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
       return fail(res, 400, 'No audio file available for this mix.');
     }
 
-    // Require authentication and check download permissions
-    if (!req.user) {
-      return fail(res, 401, 'Please log in to download mixes.', { requiresAuth: true });
-    }
-
+    // Check download access (supports authenticated users and guest instant download for public mixes)
     const access = await checkDownloadAccess(mix, req.user);
 
     if (!access.allowed) {
+      if (!req.user || access.gate === 'auth') {
+        return fail(res, 401, 'Please log in to download mixes.', { requiresAuth: true });
+      }
+
       const errorResponse: any = {
         success: false,
         error: 'Downloading mixes requires an active PRO subscription.',

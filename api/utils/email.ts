@@ -1,6 +1,154 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 const { getFrontendUrl } = require('./url');
 import logger from './logger';
+
+/**
+ * Known fake, test, dummy, and disposable email domain blocklist.
+ */
+const BLOCKED_DOMAINS = new Set([
+  'test.com',
+  'test.org',
+  'test.net',
+  'test.co',
+  'example.com',
+  'example.org',
+  'example.net',
+  'localhost',
+  'invalid',
+  'fake.com',
+  'dummy.com',
+  'sample.com',
+  'foo.com',
+  'bar.com',
+  'tempmail.com',
+  'mailinator.com',
+  'guerrillamail.com',
+  '10minutemail.com',
+  'dispostable.com',
+  'trashmail.com',
+  'yopmail.com',
+  'sharklasers.com',
+  'getairmail.com',
+  'throwawaymail.com',
+  'temp-mail.org',
+  'tempmail.net',
+  'burnermail.io',
+  'nada.ltd',
+  'mohmal.com',
+  'crazymailing.com',
+  'mytemp.email',
+  'fakemailgenerator.com',
+  'emailondeck.com',
+]);
+
+const BLOCKED_TLDS = new Set([
+  'local',
+  'test',
+  'invalid',
+  'localhost',
+  'example',
+]);
+
+// In-memory cache for validated domains (TTL: 24h for valid, 1h for invalid)
+const domainValidationCache = new Map<string, { valid: boolean; expiresAt: number }>();
+
+// Pre-populate trusted major providers for zero-latency lookup
+const TRUSTED_DOMAINS = [
+  'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com',
+  'decksalone.com', 'protonmail.com', 'aol.com', 'rocketmail.com',
+  'live.com', 'msn.com', 'zoho.com', 'gmx.com', 'mail.com', 'yandex.com'
+];
+for (const d of TRUSTED_DOMAINS) {
+  domainValidationCache.set(d, { valid: true, expiresAt: Date.now() + 365 * 24 * 3600 * 1000 });
+}
+
+/**
+ * Validates recipient email address deliverability:
+ * 1. Checks RFC email syntax
+ * 2. Blocks known test/disposable/fake domains
+ * 3. Verifies domain DNS MX and A records
+ */
+export async function isDeliverableEmailAddress(email: string): Promise<{ deliverable: boolean; reason?: string }> {
+  if (!email || typeof email !== 'string') {
+    return { deliverable: false, reason: 'Email address is missing or not a string' };
+  }
+
+  const clean = email.trim().toLowerCase();
+  const atIdx = clean.lastIndexOf('@');
+  if (atIdx <= 0 || atIdx === clean.length - 1) {
+    return { deliverable: false, reason: 'Invalid email format' };
+  }
+
+  const domain = clean.slice(atIdx + 1);
+  const userPart = clean.slice(0, atIdx);
+
+  // Basic syntax validation
+  if (!/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(userPart)) {
+    return { deliverable: false, reason: 'Invalid characters in email username' };
+  }
+
+  const parts = domain.split('.');
+  if (parts.length < 2) {
+    return { deliverable: false, reason: 'Domain must contain a valid top-level domain' };
+  }
+
+  const tld = parts[parts.length - 1];
+  if (!tld || tld.length < 2 || BLOCKED_TLDS.has(tld)) {
+    return { deliverable: false, reason: `Invalid or reserved top-level domain (.${tld})` };
+  }
+
+  if (BLOCKED_DOMAINS.has(domain)) {
+    return { deliverable: false, reason: `Domain ${domain} is a known test or disposable domain` };
+  }
+
+  // Check in-memory validation cache
+  const cached = domainValidationCache.get(domain);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (!cached.valid) {
+      return { deliverable: false, reason: `Domain ${domain} has no valid DNS or mail server (cached)` };
+    }
+    return { deliverable: true };
+  }
+
+  // Perform fast DNS check with 2.5s timeout
+  try {
+    const dnsCheck = async (): Promise<boolean> => {
+      try {
+        const mx = await dns.resolveMx(domain);
+        if (mx && mx.length > 0) return true;
+      } catch (e: any) {
+        if (e.code === 'ENOTFOUND' || e.code === 'NODATA' || e.code === 'NXDOMAIN' || e.code === 'ESERVFAIL') {
+          try {
+            const a = await dns.resolve4(domain);
+            if (a && a.length > 0) return true;
+          } catch {
+            return false;
+          }
+        }
+      }
+      return false;
+    };
+
+    const isResolvable = await Promise.race([
+      dnsCheck(),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 2500)),
+    ]);
+
+    domainValidationCache.set(domain, {
+      valid: isResolvable,
+      expiresAt: Date.now() + (isResolvable ? 24 * 3600 * 1000 : 3600 * 1000),
+    });
+
+    if (!isResolvable) {
+      return { deliverable: false, reason: `Domain ${domain} does not have valid mail exchange (MX) or DNS records` };
+    }
+
+    return { deliverable: true };
+  } catch {
+    return { deliverable: true };
+  }
+}
 
 /**
  * Escape HTML special characters to prevent XSS in email templates.
@@ -63,6 +211,17 @@ function getTransporter() {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
+  if (!options || !options.to) {
+    return { success: false, error: 'Recipient email address missing' };
+  }
+
+  // Pre-flight check to prevent bounces and mail server reputation issues
+  const check = await isDeliverableEmailAddress(options.to);
+  if (!check.deliverable) {
+    logger.warn(`[Email] Dropped undeliverable email to ${options.to} (${check.reason}). Skipping SMTP relay to avoid bounce notifications.`);
+    return { success: false, error: check.reason };
+  }
+
   const from = process.env.EMAIL_FROM;
   const transport = getTransporter();
 

@@ -27,6 +27,12 @@ export default function NotificationPermissionPrompt() {
           return;
         }
 
+        // Don't stack on top of the location prompt — wait until the user
+        // has made a location choice before asking for notifications.
+        if (!localStorage.getItem('deck-salone-location-preference')) {
+          return;
+        }
+
         // Check platform permission status
         if (Capacitor.isNativePlatform()) {
           const status = await LocalNotifications.checkPermissions();
@@ -151,10 +157,12 @@ export default function NotificationPermissionPrompt() {
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          initial={{ opacity: 0, y: 50, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 40, scale: 0.95 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+          // Fade-only entrance/exit: keep prompt (and its buttons) stable
+          // while visible — positional springs caused click instability.
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
           className="fixed bottom-24 md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 pointer-events-auto"
         >
           <div className="relative overflow-hidden rounded-2xl bg-[#121212]/95 backdrop-blur-xl border border-white/10 p-4 shadow-2xl ring-1 ring-white/5">
@@ -196,14 +204,18 @@ export default function NotificationPermissionPrompt() {
             {/* Action buttons */}
             <div className="mt-4 flex items-center gap-2 pt-2 border-t border-white/5">
               <button
+                type="button"
                 onClick={handleDecline}
+                aria-label="Not Now"
                 className="flex-1 py-2 px-3 rounded-xl text-xs font-medium text-text-muted hover:text-white hover:bg-white/5 transition-colors"
               >
                 Not Now
               </button>
               <button
+                type="button"
                 onClick={handleAllow}
                 disabled={requesting}
+                aria-label="Allow Alerts"
                 className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-[#f4e059] text-black hover:bg-[#e5d045] active:scale-[0.98] transition-all shadow-md shadow-[#f4e059]/20 flex items-center justify-center gap-1.5"
               >
                 <Bell className="w-3.5 h-3.5 fill-black" />

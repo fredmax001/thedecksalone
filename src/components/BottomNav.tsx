@@ -117,11 +117,12 @@ export default function BottomNav() {
           </Link>
         ) : (
           <Link
-            to="/register"
-            className="relative flex h-full w-full flex-col items-center justify-center space-y-0.5"
+            to="/login"
+            aria-label="Sign In"
+            className="relative flex h-full w-full flex-col items-center justify-center space-y-0.5 group"
           >
-            <User className="w-4 h-4 text-text-muted" />
-            <span className="text-[9px] font-bold uppercase tracking-tight text-text-muted">Sign Up</span>
+            <User className="w-4 h-4 text-text-muted group-hover:text-gold transition-colors" />
+            <span className="text-[9px] font-bold uppercase tracking-tight text-text-muted group-hover:text-gold transition-colors">Sign In</span>
           </Link>
         )}
       </div>

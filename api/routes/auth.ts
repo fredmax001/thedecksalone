@@ -9,7 +9,7 @@ const { signToken } = require('../utils/jwt');
 const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter, loginRateLimiter } = require('../utils/rateLimiter');
-const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail } = require('../utils/email');
+const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail, isDeliverableEmailAddress } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
 const { RESERVED_USERNAMES, isValidUsername, generateUsername } = require('../utils/username');
@@ -79,6 +79,11 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   let { username } = parsed.data;
 
   email = email.toLowerCase();
+
+  const emailCheck = await isDeliverableEmailAddress(email);
+  if (!emailCheck.deliverable) {
+    return fail(res, 400, 'Please enter a valid, active email address.');
+  }
 
   // Platform is open to African countries only
   if (country && !isAfricanCountry(country)) {
@@ -295,6 +300,12 @@ router.post('/email/send-otp', authLimiter, asyncHandler(async (req, res) => {
 
   const { email } = parsed.data;
   const normalizedEmail = email.toLowerCase().trim();
+
+  const emailCheck = await isDeliverableEmailAddress(normalizedEmail);
+  if (!emailCheck.deliverable) {
+    return fail(res, 400, 'Please enter a valid, active email address.');
+  }
+
   const code = generateEmailOtp();
 
   await saveEmailOtp(normalizedEmail, code);
@@ -369,10 +380,17 @@ router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
   }
 
   const { email } = parsed.data;
-  const user = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = email.toLowerCase().trim();
 
   // Always return the same response to prevent user enumeration
   const successResponse = { success: true, data: { message: 'If an account exists, a reset email has been sent.' } };
+
+  const emailCheck = await isDeliverableEmailAddress(normalizedEmail);
+  if (!emailCheck.deliverable) {
+    return res.json(successResponse);
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
   if (!user) {
     return res.json(successResponse);

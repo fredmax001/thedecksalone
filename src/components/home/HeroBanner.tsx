@@ -247,6 +247,10 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
                 <div className="pt-2">
                   <button
                     type="button"
+                    id="hero-explore-btn"
+                    data-testid="hero-explore-btn"
+                    aria-label={currentSlide.cta}
+                    aria-expanded={currentSlide.type === 'ad' ? showAdDropdown : undefined}
                     onClick={handleCta}
                     className="btn-press inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full bg-gold hover:brightness-110 active:scale-95 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-[0_0_24px_rgba(244,224,89,0.35)]"
                   >
@@ -265,6 +269,10 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
                 <AnimatePresence>
                   {showAdDropdown && currentSlide.type === 'ad' && (
                     <motion.div
+                      id="sponsored-campaign-details"
+                      data-testid="sponsored-campaign-details"
+                      role="region"
+                      aria-label="Sponsored Campaign Details"
                       initial={{ opacity: 0, height: 0, y: -10 }}
                       animate={{ opacity: 1, height: 'auto', y: 0 }}
                       exit={{ opacity: 0, height: 0, y: -10 }}
@@ -280,6 +288,8 @@ export default function HeroBanner({ djs, events, mixes, paidAds }: HeroBannerPr
                           </h3>
                         </div>
                         <button
+                          type="button"
+                          aria-label="Close details"
                           onClick={() => setShowAdDropdown(false)}
                           className="p-1 rounded-full text-text-muted hover:text-white hover:bg-white/10"
                         >

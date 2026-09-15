@@ -166,6 +166,63 @@ const setItemSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+/**
+ * Calculates comprehensive platform revenue earned in a time window across all income streams:
+ * 1. Pro / Pro+ DJ subscriptions (approved)
+ * 2. Event ticket sales (paid / approved / checked-in)
+ * 3. Booking transactions (completed / deposit paid)
+ * 4. General completed platform payments
+ * 5. Completed PayPal payments
+ */
+async function getPeriodRevenue(windowStart: Date, windowEnd: Date): Promise<number> {
+  const [subRev, ticketRev, bookingRev, paymentRev, paypalRev] = await Promise.all([
+    prisma.proSubscriptionRequest.aggregate({
+      where: { createdAt: { gte: windowStart, lt: windowEnd }, status: 'approved' },
+      _sum: { amount: true },
+    }),
+    prisma.eventTicket.aggregate({
+      where: {
+        createdAt: { gte: windowStart, lt: windowEnd },
+        OR: [{ paymentStatus: 'paid' }, { status: { in: ['approved', 'checked_in'] } }],
+      },
+      _sum: { amount: true },
+    }),
+    prisma.booking.aggregate({
+      where: {
+        createdAt: { gte: windowStart, lt: windowEnd },
+        status: { in: ['COMPLETED', 'DEPOSIT_PAID'] },
+      },
+      _sum: { finalPrice: true, deposit: true },
+    }),
+    prisma.payment.aggregate({
+      where: {
+        createdAt: { gte: windowStart, lt: windowEnd },
+        status: 'COMPLETED',
+      },
+      _sum: { amount: true },
+    }),
+    prisma.payPalPayment.aggregate({
+      where: {
+        createdAt: { gte: windowStart, lt: windowEnd },
+        status: 'COMPLETED',
+      },
+      _sum: { amountSle: true },
+    }),
+  ]);
+
+  const bookingTotal = Math.max(
+    (bookingRev._sum.finalPrice || 0) + (bookingRev._sum.deposit || 0),
+    paymentRev._sum.amount || 0
+  );
+
+  return Math.round(
+    (subRev._sum.amount || 0) +
+    (ticketRev._sum.amount || 0) +
+    bookingTotal +
+    (paypalRev._sum.amountSle || 0)
+  );
+}
+
 // GET /api/admin/stats - Platform-wide stats (cached 30s)
 router.get('/stats', asyncHandler(async (req, res) => {
   const data = await withCache('admin:stats', 30000, async () => {
@@ -199,23 +256,13 @@ router.get('/stats', asyncHandler(async (req, res) => {
       prisma.appDownload.count(),
     ]);
 
-    const bookingRevenue = await prisma.booking.aggregate({
-      where: { status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-      _sum: { finalPrice: true },
-    });
-
-    const totalPayments = await prisma.payment.aggregate({
-      where: { status: 'COMPLETED' },
-      _sum: { amount: true },
-    });
-
-    const activeBattles = await prisma.battle.count({ where: { status: 'ACTIVE' } });
-
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [totalVisitsToday, totalVisitsMonth, uniqueVisitorsToday] = await Promise.all([
+    const [allTimeRevenue, monthRevenue, totalVisitsToday, totalVisitsMonth, uniqueVisitorsToday] = await Promise.all([
+      getPeriodRevenue(new Date(0), new Date(now.getFullYear() + 1, 0, 1)),
+      getPeriodRevenue(startOfMonth, new Date(now.getFullYear(), now.getMonth() + 1, 1)),
       prisma.siteVisit.count({ where: { createdAt: { gte: startOfDay } } }),
       prisma.siteVisit.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.siteVisit.groupBy({
@@ -224,6 +271,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
         _count: { ipHash: true },
       }).then((rows) => rows.length),
     ]);
+
+    const activeBattles = await prisma.battle.count({ where: { status: 'ACTIVE' } });
 
     return {
       totalUsers,
@@ -239,8 +288,9 @@ router.get('/stats', asyncHandler(async (req, res) => {
       totalPlaylists,
       totalFeedPosts,
       totalAppDownloads,
-      estimatedRevenue: bookingRevenue._sum.finalPrice || 0,
-      totalPayments: totalPayments._sum.amount || 0,
+      estimatedRevenue: monthRevenue,
+      totalPayments: allTimeRevenue,
+      totalRevenue: allTimeRevenue,
       activeBattles,
       totalVisitsToday,
       totalVisitsMonth,
@@ -803,10 +853,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           prisma.djProfile.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           prisma.mix.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           prisma.booking.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
-          prisma.booking.aggregate({
-            where: { createdAt: { gte: dStart, lt: dEnd }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-            _sum: { finalPrice: true },
-          }),
+          getPeriodRevenue(dStart, dEnd),
           prisma.siteVisit.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
         ]);
 
@@ -817,7 +864,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           djs,
           mixes,
           bookings,
-          revenue: Math.round(revenue._sum.finalPrice || 0),
+          revenue,
           visits,
         });
       }
@@ -833,10 +880,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           prisma.djProfile.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           prisma.mix.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           prisma.booking.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
-          prisma.booking.aggregate({
-            where: { createdAt: { gte: mStart, lt: mEnd }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-            _sum: { finalPrice: true },
-          }),
+          getPeriodRevenue(mStart, mEnd),
           prisma.siteVisit.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
         ]);
 
@@ -847,7 +891,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           djs,
           mixes,
           bookings,
-          revenue: Math.round(revenue._sum.finalPrice || 0),
+          revenue,
           visits,
         });
 
@@ -855,15 +899,12 @@ router.get('/analytics', asyncHandler(async (req, res) => {
       }
     }
 
-    const [totalUsers, totalDjs, totalMixes, totalBookings, totalRevenueAgg, totalVisits] = await Promise.all([
+    const [totalUsers, totalDjs, totalMixes, totalBookings, totalRevenue, totalVisits] = await Promise.all([
       prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
-      prisma.booking.aggregate({
-        where: { createdAt: { gte: start, lt: end }, status: { in: ['COMPLETED', 'DEPOSIT_PAID'] } },
-        _sum: { finalPrice: true },
-      }),
+      getPeriodRevenue(start, end),
       prisma.siteVisit.count({ where: { createdAt: { gte: start, lt: end } } }),
     ]);
 
@@ -946,7 +987,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
         totalDjs,
         totalMixes,
         totalBookings,
-        totalRevenue: Math.round(totalRevenueAgg._sum.finalPrice || 0),
+        totalRevenue,
         totalVisits,
       },
       demographics: {

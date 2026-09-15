@@ -82,8 +82,8 @@ function toEventItem(event: any): EventItem {
     venue: event.venue || event.location?.split(',')[0] || 'TBA',
     city: event.city || 'Unknown',
     type: event.type || 'Event',
-    image: event.image || '/placeholder.jpg',
-    djs: event.dj ? [event.dj.stageName] : [],
+    image: event.image || event.poster || event.banner || '/og-banner.png',
+    djs: event.dj ? [event.dj.stageName] : (event.organizerName ? [event.organizerName] : ['Deck Salone']),
     djCount: event.slots || 0,
     ticketUrl: event.ticketUrl || null,
     dj: event.dj || null,
@@ -117,24 +117,32 @@ export default function Events() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
 
-  const { data: eventsData, isLoading, error } = useEvents({ limit: 50, status: 'upcoming' });
+  const { data: eventsData, isLoading, error } = useEvents({
+    limit: 100,
+    status: 'upcoming',
+    city: activeCity !== 'All Cities' ? activeCity : undefined,
+    type: activeType !== 'All Types' ? activeType : undefined,
+  });
   const { data: typesData = [] } = useEventTypes();
   const { data: openSlotsData } = useEvents({ isOpenSlot: true, limit: 6 });
 
   const eventTypes = useMemo(() => ['All Types', ...typesData.map((t: any) => t.name || t)], [typesData]);
 
   const events = useMemo(() => {
-    let result = (eventsData?.data || [])
-      .filter((event: any) => event.djId && event.dj);
+    let result = (eventsData?.data || []);
 
     if (activeType !== 'All Types') {
-      result = result.filter((e: any) => e.type.toLowerCase() === activeType.toLowerCase());
+      result = result.filter((e: any) => e.type?.toLowerCase() === activeType.toLowerCase());
     }
     if (activeCity !== 'All Cities') {
-      result = result.filter((e: any) => e.city === activeCity);
+      const normalizedTarget = activeCity.trim().toLowerCase();
+      result = result.filter((e: any) => {
+        const eventCity = (e.city || '').trim().toLowerCase();
+        return eventCity === normalizedTarget || eventCity.startsWith(normalizedTarget);
+      });
     }
     if (sortBy === 'Alphabetical') {
-      result.sort((a: any, b: any) => a.title.localeCompare(b.title));
+      result.sort((a: any, b: any) => (a.title || '').localeCompare(b.title || ''));
     }
     // 'Soonest' uses the API's default date-ascending order
 
@@ -142,7 +150,14 @@ export default function Events() {
   }, [eventsData, activeType, activeCity, sortBy]);
 
   const featured = events.slice(0, 2);
-  const openSlots = (openSlotsData?.data || []).map(toEventItem);
+  const openSlots = (openSlotsData?.data || [])
+    .filter((e: any) => {
+      if (activeCity === 'All Cities') return true;
+      const normalizedTarget = activeCity.trim().toLowerCase();
+      const eventCity = (e.city || '').trim().toLowerCase();
+      return eventCity === normalizedTarget || eventCity.startsWith(normalizedTarget);
+    })
+    .map(toEventItem);
 
   const showSkeleton = useDelayedLoading(isLoading);
   if (isLoading && showSkeleton) return <PageSkeleton />;
@@ -215,7 +230,15 @@ export default function Events() {
               ))}
             </div>
             <div className="w-px h-6 bg-dark-gray hidden sm:block" />
-            <select value={activeCity} onChange={(e) => setActiveCity(e.target.value)} className="h-8 px-3 bg-black-surface border border-dark-gray rounded-lg text-xs text-text-primary focus:outline-none focus:border-gold cursor-pointer">
+            <select
+              id="city-filter"
+              name="city"
+              data-testid="city-filter"
+              aria-label="Filter events by city"
+              value={activeCity}
+              onChange={(e) => setActiveCity(e.target.value)}
+              className="h-8 px-3 bg-black-surface border border-dark-gray rounded-lg text-xs text-text-primary focus:outline-none focus:border-gold cursor-pointer"
+            >
               {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="h-8 px-3 bg-black-surface border border-dark-gray rounded-lg text-xs text-text-primary focus:outline-none focus:border-gold cursor-pointer">

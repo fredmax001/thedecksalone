@@ -20,7 +20,14 @@ const bookingFilterSchema = z.object({
 const createBookingSchema = z.object({
   djId: z.string(),
   eventType: z.string().min(1),
-  eventDate: z.string().datetime(),
+  eventDate: z.preprocess((val) => {
+    if (val instanceof Date) return val.toISOString();
+    if (typeof val === 'string') {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? undefined : d.toISOString();
+    }
+    return undefined;
+  }, z.string().datetime()),
   timeSlot: z.string().optional(),
   eventLocation: z.string().min(1),
   duration: z.number().int().min(1),
@@ -409,23 +416,25 @@ router.post('/', softAuthMiddleware, bookingLimiter, asyncHandler(async (req, re
     data: { totalBookings: { increment: 1 } },
   });
 
-  // Notify DJ about new booking
-  await createNotificationForDj({
+  console.log(`[Booking API] Successfully created booking ${booking.id} for DJ: ${data.djId} by user: ${req.user?.id || 'guest'}`);
+
+  // Notify DJ about new booking asynchronously (non-blocking)
+  createNotificationForDj({
     djId: data.djId,
     type: 'BOOKING_CREATED',
     title: 'New Booking Request',
-    body: `${booking.client?.email || 'Someone'} requested you for ${data.eventType} on ${new Date(data.eventDate).toLocaleDateString()}`,
+    body: `${booking.client?.email || data.guestName || 'Someone'} requested you for ${data.eventType} on ${new Date(data.eventDate).toLocaleDateString()}`,
     actionUrl: `/dashboard/bookings`,
     entityId: booking.id,
     entityType: 'booking',
     metadata: { eventType: data.eventType, eventDate: data.eventDate, location: data.eventLocation },
     sendEmail: true,
     emailSubject: 'New Booking Request - Deck Salone',
-  });
+  }).catch((err) => console.error('[Booking Notification Error (DJ)]:', err));
 
   // Notify client about booking confirmation
   if (req.user) {
-    await createNotification({
+    createNotification({
       userId: req.user.id,
       type: 'BOOKING_CREATED',
       title: 'Booking Request Sent',
@@ -434,7 +443,7 @@ router.post('/', softAuthMiddleware, bookingLimiter, asyncHandler(async (req, re
       entityId: booking.id,
       entityType: 'booking',
       metadata: { djId: data.djId, djName: dj.stageName },
-    });
+    }).catch((err) => console.error('[Booking Notification Error (Client)]:', err));
   }
 
   return res.status(201).json({ success: true, data: booking });

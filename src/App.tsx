@@ -471,6 +471,7 @@ export default function App() {
             <Route path="events/:id/onsite/tools" element={<OnsiteTools />} />
             <Route path="hall-of-fame" element={<HallOfFame />} />
             <Route path="library" element={<Library />} />
+            <Route path="my-library" element={<Library />} />
             <Route path="feed" element={<Feed />} />
             <Route path="account" element={<AccountPage />} />
             <Route path="terms" element={<Terms />} />

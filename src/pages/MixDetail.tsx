@@ -94,10 +94,6 @@ export default function MixDetail() {
 
   const handleDownload = async () => {
     if (!mix) return;
-    if (!isAuthenticated) {
-      setDownloadModalMode('auth');
-      return;
-    }
     try {
       setDownloading(true);
       toast.info(`Preparing download for "${mix.title}"...`);

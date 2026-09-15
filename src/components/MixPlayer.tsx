@@ -706,6 +706,10 @@ export default function MixPlayer() {
                         <SkipBack size={16} />
                       </button>
                       <button
+                        type="button"
+                        id="player-play-pause-btn"
+                        data-testid="player-play-pause-btn"
+                        aria-label={isPlaying ? 'Pause' : 'Play'}
                         onClick={togglePlayHandler}
                         className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_12px_rgba(244,224,89,0.3)]"
                       >

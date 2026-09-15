@@ -374,12 +374,22 @@ export default function Layout() {
                   </DropdownMenu>
                 </div>
               ) : (
-                <Link
-                  to="/login"
-                  className="shrink-0 rounded-full bg-gold-gradient text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all"
-                >
-                  Join
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to="/login"
+                    aria-label="Sign In"
+                    className="shrink-0 rounded-full border border-gold/40 text-gold hover:bg-gold/10 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    to="/register"
+                    aria-label="Join"
+                    className="shrink-0 rounded-full bg-gold-gradient text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all hidden sm:inline-flex shadow-sm"
+                  >
+                    Join
+                  </Link>
+                </div>
               )}
             </div>
           </div>

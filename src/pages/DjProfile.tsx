@@ -24,6 +24,7 @@ import {
   Loader2,
   UserPlus,
   UserCheck,
+  CheckCircle2,
   Zap,
   Download,
   Maximize2,
@@ -296,6 +297,7 @@ function BookingModal({
   const currentUser = useAuthStore((state) => state.user);
   const createBooking = useCreateBooking();
 
+  const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     eventType: "",
     date: new Date().toISOString().split('T')[0],
@@ -346,12 +348,51 @@ function BookingModal({
 
     createBooking.mutate(data, {
       onSuccess: () => {
-        setTimeout(onClose, 1500);
+        // Keep the confirmation visible until the user dismisses it —
+        // auto-closing after 1.5s meant users (and tests) missed the success state.
+        setSuccess(true);
       },
     });
   };
 
   if (!isOpen) return null;
+
+  // Persistent success state — stays until the user closes the modal.
+  if (success || createBooking.isSuccess) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            className="relative w-full max-w-md bg-black-elevated border border-dark-gray rounded-2xl p-8 text-center"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+          >
+            <div className="w-16 h-16 rounded-full bg-green/10 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-green" />
+            </div>
+            <h3 className="text-lg font-display font-bold text-text-primary uppercase tracking-wide">
+              Booking Request Sent
+            </h3>
+            <p className="text-sm text-text-secondary mt-2">
+              Your request has been sent to {dj.stageName}. You&apos;ll be contacted shortly to confirm details.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-6 px-8 py-3 rounded-full bg-gold-gradient text-black text-sm font-semibold uppercase hover:scale-[1.02] transition-transform btn-press"
+            >
+              Done
+            </button>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -569,11 +610,6 @@ function BookingModal({
             </div>
 
             {/* Feedback */}
-            {createBooking.isSuccess && (
-              <div className="rounded-lg bg-green/15 text-green px-4 py-3 text-sm">
-                Booking request sent successfully!
-              </div>
-            )}
             {createBooking.isError && (
               <div className="rounded-lg bg-red-500/15 text-red-400 px-4 py-3 text-sm">
                 {createBooking.error instanceof Error
