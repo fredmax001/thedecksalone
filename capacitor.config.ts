@@ -9,6 +9,13 @@ const config: CapacitorConfig = {
     cleartext: true,
     allowNavigation: ['decksalone.com', '*.decksalone.com'],
   },
+  ios: {
+    contentInset: 'automatic',
+    backgroundColor: '#000000',
+    preferredContentMode: 'mobile',
+    scheme: 'Deck Salone',
+    handleApplicationURL: true,
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 3000,
@@ -20,6 +27,15 @@ const config: CapacitorConfig = {
       showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true,
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#000000',
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'DARK',
+      resizeOnFullScreen: true,
     },
   },
 };

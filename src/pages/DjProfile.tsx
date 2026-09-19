@@ -49,6 +49,7 @@ import ShareButton from "@/components/ShareButton";
 import DjSupportModal from "@/components/DjSupportModal";
 import { BookingCalendar } from "@/components/BookingCalendar";
 import { getAvatarImageUrl } from '@/lib/utils';
+import SEOHead from '@/components/SEOHead';
 import { PageSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import {
@@ -2033,6 +2034,11 @@ export default function DjProfile() {
 
   return (
     <div className="min-h-[100dvh] bg-black">
+      <SEOHead
+        title={dj?.stageName || 'DJ Profile'}
+        description={dj?.bio || `Check out ${dj?.stageName || 'this DJ'} on Deck Salone.`}
+        image={dj?.avatar ? getMediaUrl(dj.avatar) : undefined}
+      />
       {/* ══════ Section 1: Profile Header ══════ */}
 
       {/* Cover Banner */}

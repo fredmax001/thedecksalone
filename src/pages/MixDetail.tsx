@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, Heart, Clock, Music, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2 } from 'lucide-react';
+import { Play, Heart, Clock, Music, ArrowLeft, Calendar, UserCheck, Flag, Download, Edit2, ListPlus } from 'lucide-react';
 import { useMix, useLikeMix, useMixLike } from '@/hooks/useMixes';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAuthStore } from '@/stores/authStore';
@@ -9,6 +9,7 @@ import ShareButton from '@/components/ShareButton';
 import { RepostButton } from '@/components/RepostButton';
 import ReportModal from '@/components/ReportModal';
 import MixDownloadModal from '@/components/MixDownloadModal';
+import AddToPlaylistModal from '@/components/AddToPlaylistModal';
 import DjSupportModal from '@/components/DjSupportModal';
 import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
 import MixComments from '@/components/MixComments';
@@ -40,15 +41,16 @@ export default function MixDetail() {
   const { mutate: likeMix } = useLikeMix();
   const { data: likeState } = useMixLike(mix?.id, mix?.likes || 0);
   const [showReportModal, setShowReportModal] = useState(false);
-  const [downloadModalMode, setDownloadModalMode] = useState<'auth' | 'subscribe' | 'repost' | 'follow' | null>(null);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [downloadModalMode, setDownloadModalMode] = useState<'repost' | 'follow' | 'subscribe' | 'auth' | null>(null);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const mixUrl = mix ? getMixShareUrl(mix, baseUrl) : `${baseUrl}/mix/${mixIdentifier || ''}`;
 
   const title = useMemo(
-    () => (mix ? `${mix.title} by ${mix.dj?.stageName || 'DJ'} — Deck Salone` : 'Mix — Deck Salone'),
+    () => (mix ? `${mix.title}` : 'Mix Details'),
     [mix]
   );
   const description = useMemo(
@@ -278,6 +280,13 @@ export default function MixDetail() {
                 </Button>
                 <Button
                   variant="outline"
+                  onClick={() => setShowPlaylistModal(true)}
+                  className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
+                >
+                  <ListPlus size={15} className="mr-1.5 text-gold" /> <span>Add to Playlist</span>
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={handleDownload}
                   disabled={downloading}
                   className="border-white/20 text-text-primary hover:border-gold hover:text-gold text-xs font-semibold rounded-full px-5"
@@ -418,6 +427,27 @@ export default function MixDetail() {
           <MixRecommendations mixId={mix.id} djName={djProfile?.stageName} />
         </div>
       </section>
+
+      {/* Add To Playlist Modal */}
+      {mix && (
+        <AddToPlaylistModal
+          isOpen={showPlaylistModal}
+          onClose={() => setShowPlaylistModal(false)}
+          track={{
+            id: mix.id,
+            title: mix.title,
+            dj: mix.dj?.stageName || 'DJ',
+            duration: mix.duration || 0,
+            cover: mix.coverImage || '/mix-placeholder.jpg',
+            genre: mix.genre || mix.category || 'Mix',
+            audioUrl: mix.audioUrl,
+            audioSource: mix.audioSource,
+            originalUrl: mix.originalUrl,
+            plays: mix.plays || 0,
+            djTier: mix.dj?.subscriptionTier,
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -8,18 +8,20 @@ import {
   Volume2,
   VolumeX,
   Heart,
-  ListMusic,
   X,
   Maximize2,
   Repeat,
   Shuffle,
   ChevronDown,
+  ListPlus,
 } from 'lucide-react';
 import api, { getMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import ShareButton from '@/components/ShareButton';
 import { getMixShareUrl } from '@/lib/slug';
+import { triggerHaptic } from '@/lib/haptics';
+import AddToPlaylistModal from '@/components/AddToPlaylistModal';
 
 function isEmbedSource(source?: string, audioUrl?: string): boolean {
   const sourceLower = (source || '').toLowerCase();
@@ -287,6 +289,7 @@ export default function MixPlayer() {
   const [isShuffled, setIsShuffled] = useState(false);
   const [isRepeating, setIsRepeating] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playTrackedRef = useRef(false);
@@ -325,13 +328,10 @@ export default function MixPlayer() {
   // Handle document title updates
   useEffect(() => {
     if (currentTrack && isPlaying) {
-      document.title = `▶ ${currentTrack.title} - Deck Salone`;
-    } else {
-      document.title = 'Deck Salone - DJ Booking & Mix Streaming';
+      document.title = `▶ ${currentTrack.title} | Deck Salone`;
+    } else if (document.title.startsWith('▶ ')) {
+      document.title = 'Deck Salone';
     }
-    return () => {
-      document.title = 'Deck Salone - DJ Booking & Mix Streaming';
-    };
   }, [currentTrack, isPlaying]);
   // Reset internal tracking on track change
   useEffect(() => {
@@ -476,6 +476,7 @@ export default function MixPlayer() {
   );
 
   const togglePlayHandler = useCallback(() => {
+    triggerHaptic();
     if (embed) {
       setIsExpanded(true);
       return;
@@ -969,36 +970,71 @@ export default function MixPlayer() {
                     >
                       {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
                     </button>
-                    {/* Mobile-friendly volume slider — no overflow-hidden clipping */}
-                    <div className="relative flex-1 h-8 flex items-center">
-                      {/* Visual fill track */}
-                      <div className="absolute left-0 right-0 h-1 bg-white/10 rounded-full pointer-events-none">
+                    {/* Direct touch/click volume bar optimized for iOS & desktop */}
+                    <div
+                      className="relative flex-1 h-8 flex items-center cursor-pointer select-none touch-none"
+                      onMouseDown={(e) => {
+                        const target = e.currentTarget;
+                        const update = (moveEvent: MouseEvent) => {
+                          const rect = target.getBoundingClientRect();
+                          const pct = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+                          setVolume(pct);
+                          if (isMuted) setMuted(false);
+                        };
+                        update(e.nativeEvent);
+                        const handleUp = () => {
+                          window.removeEventListener('mousemove', update);
+                          window.removeEventListener('mouseup', handleUp);
+                        };
+                        window.addEventListener('mousemove', update);
+                        window.addEventListener('mouseup', handleUp);
+                      }}
+                      onTouchStart={(e) => {
+                        const target = e.currentTarget;
+                        const touch = e.touches[0];
+                        if (touch) {
+                          const rect = target.getBoundingClientRect();
+                          const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+                          setVolume(pct);
+                          if (isMuted) setMuted(false);
+                        }
+                      }}
+                      onTouchMove={(e) => {
+                        const target = e.currentTarget;
+                        const touch = e.touches[0];
+                        if (touch) {
+                          const rect = target.getBoundingClientRect();
+                          const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+                          setVolume(pct);
+                          if (isMuted) setMuted(false);
+                        }
+                      }}
+                    >
+                      {/* Background track */}
+                      <div className="w-full h-1.5 bg-white/10 rounded-full relative overflow-hidden">
                         <div
                           className="h-full bg-gold rounded-full transition-all duration-75"
                           style={{ width: `${isMuted ? 0 : volume * 100}%` }}
                         />
                       </div>
-                      {/* Actual slider — full touch area, z-index above visual */}
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={isMuted ? 0 : volume}
-                        onChange={(e) => setVolume(parseFloat(e.target.value))}
-                        className="relative w-full h-8 opacity-0 cursor-pointer z-10"
-                        style={{ touchAction: 'none' }}
+                      {/* Drag thumb */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-gold rounded-full shadow-[0_0_10px_rgba(244,224,89,0.7)] pointer-events-none transition-all duration-75"
+                        style={{
+                          left: `${(isMuted ? 0 : volume) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
                       />
                     </div>
                   </div>
                 )}
 
                 {/* Action buttons footer */}
-                <div className="flex items-center justify-center gap-4 mt-6 border-t border-white/5 pt-6">
+                <div className="flex items-center justify-center gap-3 mt-6 border-t border-white/5 pt-6 flex-wrap">
                   <button
                     onClick={toggleLike}
                     className={cn(
-                      'btn-press flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold uppercase tracking-wider transition-colors',
+                      'btn-press flex items-center gap-2 px-3.5 py-2 rounded-full border text-xs font-semibold uppercase tracking-wider transition-colors',
                       liked
                         ? 'border-red/30 text-red bg-red/5'
                         : 'border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
@@ -1007,6 +1043,15 @@ export default function MixPlayer() {
                     <Heart size={14} className={liked ? 'fill-red' : ''} />
                     <span>{liked ? 'Liked' : 'Like'}</span>
                   </button>
+
+                  <button
+                    onClick={() => setShowPlaylistModal(true)}
+                    className="btn-press flex items-center gap-2 px-3.5 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider"
+                  >
+                    <ListPlus size={14} />
+                    <span>Playlist</span>
+                  </button>
+
                   {currentTrack && (
                     <ShareButton
                       url={getMixShareUrl(currentTrack as any)}
@@ -1027,16 +1072,18 @@ export default function MixPlayer() {
                       }}
                     />
                   )}
-                  <button className="btn-press flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider">
-                    <ListMusic size={14} />
-                    <span>Queue</span>
-                  </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
       </AnimatePresence>
+
+      <AddToPlaylistModal
+        isOpen={showPlaylistModal}
+        onClose={() => setShowPlaylistModal(false)}
+        track={currentTrack}
+      />
     </>
   );
 }

@@ -47,13 +47,31 @@ export function useNotifications(options?: { page?: number; limit?: number; unre
   });
 }
 
+/**
+ * Updates application icon badge on iOS PWA / WebKit
+ */
+export function updateAppBadge(count: number) {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+  try {
+    if (count > 0 && 'setAppBadge' in navigator) {
+      (navigator as any).setAppBadge(count).catch(() => {});
+    } else if ('clearAppBadge' in navigator) {
+      (navigator as any).clearAppBadge().catch(() => {});
+    }
+  } catch {
+    // Ignore unsupported browser errors
+  }
+}
+
 /* ─── Fetch unread count only ─── */
 export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: async () => {
       const res = await api.get('/notifications/unread-count');
-      return (res.data.data?.count || 0) as number;
+      const count = (res.data.data?.count || 0) as number;
+      updateAppBadge(count);
+      return count;
     },
     refetchInterval: 30000, // Poll every 30 seconds
   });

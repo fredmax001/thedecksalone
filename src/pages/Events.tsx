@@ -18,6 +18,7 @@ import { PageSkeleton } from '@/components/ui/page-skeletons';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import SEOHead from '@/components/SEOHead';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -176,6 +177,10 @@ export default function Events() {
 
   return (
     <div className="min-h-[100dvh] bg-bg-page">
+      <SEOHead
+        title="Events"
+        description="Browse upcoming events, club nights, concerts, and DJ gigs across Sierra Leone."
+      />
       {/* Hero */}
       <section className="hero-banner relative w-full py-8 lg:py-10 border-b border-dark-gray">
         <div className="max-w-container mx-auto px-4 sm:px-6">

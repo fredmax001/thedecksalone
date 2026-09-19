@@ -17,6 +17,7 @@ import { useEventAvailability, usePurchaseTicket } from '@/hooks/useEventTicketi
 import PayPalButton from '@/components/PayPalButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import SEOHead from '@/components/SEOHead';
 
 // ─── Countdown Component ───────────────────────────────────────────────────────
 function useCountdown(targetDate: Date) {
@@ -373,6 +374,11 @@ export default function EventDetail() {
 
   return (
     <div className="min-h-[100dvh] bg-black">
+      <SEOHead
+        title={event.title}
+        description={event.description || `Event details for ${event.title} on Deck Salone.`}
+        image={event.image ? getMediaUrl(event.image) : undefined}
+      />
       {/* Back button & Share */}
       <div className="max-w-container mx-auto px-6 pt-6 flex items-center justify-between">
         <button onClick={() => navigate('/events')} className="btn-press-subtle flex items-center gap-2 text-text-muted hover:text-gold transition-colors text-sm">

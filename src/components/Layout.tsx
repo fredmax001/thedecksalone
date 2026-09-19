@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   BookOpen,
@@ -11,32 +11,21 @@ import {
   Info,
   Library,
   ListMusic,
-  LogOut,
   Radio,
   Search,
-  Sparkles,
   Upload,
   Users,
-  Shield,
   Rss,
 } from 'lucide-react';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useAuthStore } from '@/stores/authStore';
 import NotificationBell from '@/components/NotificationBell';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import UserDropdownMenu from '@/components/UserDropdownMenu';
 import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
 import { cn } from '@/lib/utils';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import SearchModal from '@/components/SearchModal';
-import { getAvatarImageUrl } from '@/lib/utils';
 import { useUserRole } from '@/hooks/useUserRole';
 
 const browseItems = [
@@ -59,35 +48,53 @@ const studioItems = [
 ];
 
 
+const ROUTE_TITLE_MAP: Record<string, string> = {
+  '/': 'Deck Salone',
+  '/discover': 'Deck Salone | Discover',
+  '/rankings': 'Deck Salone | Rankings',
+  '/mixes': 'Deck Salone | Mixes',
+  '/playlists': 'Deck Salone | Playlists',
+  '/feed': 'Deck Salone | Feed',
+  '/events': 'Deck Salone | Events',
+  '/library': 'Deck Salone | My Library',
+  '/my-library': 'Deck Salone | My Library',
+  '/request-dj': 'Deck Salone | Request DJ',
+  '/booking': 'Deck Salone | Book a DJ',
+  '/pricing': 'Deck Salone | Pricing',
+  '/subscription': 'Deck Salone | Pricing',
+  '/hall-of-fame': 'Deck Salone | Hall of Fame',
+  '/account': 'Deck Salone | Account',
+  '/terms': 'Deck Salone | Terms of Service',
+  '/privacy': 'Deck Salone | Privacy Policy',
+  '/help': 'Deck Salone | Help & Support',
+  '/blog': 'Deck Salone | Blog',
+};
+
 export default function Layout() {
   const location = useLocation();
-  const navigate = useNavigate();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const { isDj } = useUserRole();
-  const isModerator = user?.role === 'MODERATOR';
   const subscriptionTier = user?.djProfile?.subscriptionTier || 'free';
   const shouldShowGetPro = isDj && subscriptionTier === 'free';
-  const displayName = user?.djProfile?.stageName || user?.name || user?.username || user?.email?.split('@')[0] || 'Account';
-  const avatarUrl = getAvatarImageUrl(user?.djProfile?.avatar || user?.avatar);
-  const profilePath = isDj ? '/dashboard/profile' : '/user/profile';
-  const dashboardPath = isDj ? '/dashboard' : '/user/dashboard';
-  const isNativeApp = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Scroll to top on route change
+  // Scroll to top on route change & set fallback title
   useEffect(() => {
     window.scrollTo(0, 0);
+    if (!document.title.startsWith('▶ ')) {
+      const routeTitle = ROUTE_TITLE_MAP[location.pathname];
+      if (routeTitle) {
+        document.title = routeTitle;
+      } else if (location.pathname === '/') {
+        document.title = 'Deck Salone';
+      }
+    }
   }, [location.pathname]);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
   };
 
   return (
@@ -291,88 +298,7 @@ export default function Layout() {
               )}
 
               {isAuthenticated ? (
-                <div className="shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center justify-center rounded-full p-0.5 focus:outline-none hover:ring-2 hover:ring-gold/40 transition-all">
-                        <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border border-gold/40">
-                          <AvatarImage src={avatarUrl} alt={displayName} />
-                          <AvatarFallback className="bg-black-surface">
-                            <img src="/default-avatar.jpg" alt="avatar" className="w-full h-full object-cover rounded-full" />
-                          </AvatarFallback>
-                        </Avatar>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="border-dark-gray bg-black-surface w-52 shadow-2xl z-50">
-                      <div className="px-3 py-2 border-b border-dark-gray">
-                        <p className="text-xs font-bold text-text-primary truncate">{displayName}</p>
-                        <p className="text-[10px] text-gold uppercase tracking-wider font-semibold">{user?.role || 'Member'}</p>
-                      </div>
-                      <DropdownMenuItem asChild>
-                        <Link to={profilePath} className="btn-press-subtle cursor-pointer text-xs">Profile</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to={dashboardPath} className="btn-press-subtle cursor-pointer text-xs">Dashboard</Link>
-                      </DropdownMenuItem>
-                      {isDj && (
-                        <DropdownMenuItem asChild>
-                          <Link to="/dashboard" className="btn-press-subtle cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
-                            <Radio className="w-3.5 h-3.5" /> DJ Studio
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-                      {isModerator && (
-                        <DropdownMenuItem asChild>
-                          <Link to="/moderator" className="btn-press-subtle cursor-pointer text-xs font-semibold text-gold flex items-center gap-1.5">
-                            <Shield className="w-3.5 h-3.5" /> Moderator Console
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem asChild>
-                        <Link to={isDj ? '/dashboard/settings' : '/user/settings'} className="btn-press-subtle cursor-pointer text-xs">Settings</Link>
-                      </DropdownMenuItem>
-                      {!isNativeApp && (
-                        <DropdownMenuItem asChild>
-                          <Link to="/install" className="btn-press-subtle cursor-pointer text-xs text-gold font-semibold flex items-center gap-1.5">
-                            Install App
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuSeparator className="bg-dark-gray" />
-                      <DropdownMenuItem asChild>
-                        <Link to="/about" className="btn-press-subtle cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
-                          <Info className="w-3.5 h-3.5" /> About Deck Salone
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/help" className="btn-press-subtle cursor-pointer text-xs text-text-secondary flex items-center gap-1.5">
-                          <HelpCircle className="w-3.5 h-3.5" /> Help & DJ Guide
-                        </Link>
-                      </DropdownMenuItem>
-                      {shouldShowGetPro && (
-                        <>
-                          <DropdownMenuSeparator className="bg-dark-gray" />
-                          <div className="px-2 py-2">
-                            <Link
-                              to="/dashboard/subscription"
-                              className="flex items-center gap-2 w-full rounded-lg bg-gold/10 border border-gold/25 px-3 py-2 hover:bg-gold/20 transition-colors"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
-                              <div>
-                                <p className="text-[10px] font-extrabold text-gold uppercase tracking-wide">Upgrade to Pro</p>
-                                <p className="text-[9px] text-text-muted">Unlock analytics & more</p>
-                              </div>
-                            </Link>
-                          </div>
-                        </>
-                      )}
-                      <DropdownMenuSeparator className="bg-dark-gray" />
-                      <DropdownMenuItem onClick={handleLogout} className="btn-press-subtle cursor-pointer text-red text-xs">
-                        <LogOut className="w-3.5 h-3.5 mr-2" /> Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                <UserDropdownMenu align="end" className="shrink-0" />
               ) : (
                 <div className="flex items-center gap-2">
                   <Link

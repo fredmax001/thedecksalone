@@ -40,6 +40,7 @@ import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getAvatarImageUrl } from '@/lib/utils';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import SEOHead from '@/components/SEOHead';
 
 const EVENT_TYPES = [
   'Wedding',
@@ -773,6 +774,10 @@ export default function Booking() {
 
   return (
     <div className="min-h-[100dvh] bg-black">
+      <SEOHead
+        title="Book a DJ"
+        description="Book verified Sierra Leonean DJs for your wedding, club party, corporate event, or private ceremony."
+      />
       {/* ══════ Section 1: Page Hero ══════ */}
       <section className="pt-16 sm:pt-20 pb-12 sm:pb-14">
         <div className="container-main text-center">

@@ -368,7 +368,7 @@ export default function Discover() {
   return (
     <div className="min-h-[100dvh] bg-black pb-32 text-white">
       <SEOHead
-        title="Discover DJs & Hits — Deck Salone"
+        title="Discover"
         description="Discover top trending Sierra Leonean DJs, today's hits, recently added mixes, and book verified DJs."
       />
 

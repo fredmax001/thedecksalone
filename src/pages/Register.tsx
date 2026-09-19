@@ -28,6 +28,9 @@ import PasswordStrength from '@/components/PasswordStrength';
 import { passwordSchema } from '@/lib/schemas';
 import { redirectAfterAuth } from '@/lib/navigation';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import SEOHead from '@/components/SEOHead';
+import TurnstileWidget from '@/components/TurnstileWidget';
+import { getStoredUtmParameters } from '@/lib/utm';
 import { AFRICAN_COUNTRIES } from '@/lib/africanCountries';
 
 /* ─── Constants ─── */
@@ -146,6 +149,7 @@ export default function Register() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [bioLength, setBioLength] = useState(0);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string>('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   /* ─── DJ Step 1 Form ─── */
@@ -189,8 +193,18 @@ export default function Register() {
       setIsSubmitting(true);
       setError(null);
       const step1 = watchDj1();
+      const utm = getStoredUtmParameters();
 
-      const result = await register(step1.email, step1.password, 'DJ', step1.phone, step1.gender, step1.country);
+      const result = await register(
+        step1.email,
+        step1.password,
+        'DJ',
+        step1.phone,
+        step1.gender,
+        step1.country,
+        turnstileToken,
+        utm
+      );
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -220,15 +234,25 @@ export default function Register() {
       setCompleted(true);
       setTimeout(() => navigate('/dashboard'), 1500);
     },
-    [register, navigate, watchDj1]
+    [register, navigate, watchDj1, turnstileToken]
   );
 
   const onUserSubmit = useCallback(
     async (data: UserForm) => {
       setIsSubmitting(true);
       setError(null);
+      const utm = getStoredUtmParameters();
 
-      const result = await register(data.email, data.password, 'USER', data.phone, data.gender, data.country);
+      const result = await register(
+        data.email,
+        data.password,
+        'USER',
+        data.phone,
+        data.gender,
+        data.country,
+        turnstileToken,
+        utm
+      );
       if (!result.success) {
         setIsSubmitting(false);
         setError(result.error || 'Registration failed');
@@ -247,7 +271,7 @@ export default function Register() {
       setCompleted(true);
       setTimeout(() => navigate('/discover'), 1500);
     },
-    [register, navigate]
+    [register, navigate, turnstileToken]
   );
 
   const toggleGenre = useCallback(
@@ -330,6 +354,7 @@ export default function Register() {
   if (!accountType) {
     return (
       <AuthLayout quote="Your stage is waiting. Create your profile and let the world hear your sound.">
+        <SEOHead title="Create Account" description="Join Deck Salone as a DJ, Organizer, or Fan." />
         <div className="bg-black-surface border border-dark-gray rounded-2xl p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
           <div className="text-center mb-8">
             <h1 className="text-[28px] sm:text-[36px] font-semibold uppercase tracking-tight text-text-primary font-display">
@@ -524,6 +549,16 @@ export default function Register() {
                   className="w-full h-[48px] bg-black-surface border border-medium-gray rounded-lg pl-11 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none transition-all duration-200 focus:border-gold focus:shadow-[0_0_0_3px_rgba(244, 224, 89,0.1)]"
                 />
               </div>
+              <label className="flex items-start gap-2 cursor-pointer mt-2">
+                <input
+                  type="checkbox"
+                  name="phoneConsent"
+                  className="accent-gold w-3.5 h-3.5 mt-0.5 rounded"
+                />
+                <span className="text-[12px] text-text-secondary leading-snug">
+                  I consent to receiving account notifications and ticket updates via SMS or WhatsApp.
+                </span>
+              </label>
             </motion.div>
 
             {/* Gender */}
@@ -620,6 +655,9 @@ export default function Register() {
                 </motion.p>
               )}
             </motion.div>
+
+            {/* Security Verification */}
+            <TurnstileWidget onVerify={(t) => setTurnstileToken(t)} />
 
             {/* Submit */}
             <motion.div variants={fadeUpItem} initial="hidden" animate="show" className="flex flex-col gap-3">

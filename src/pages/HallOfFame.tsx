@@ -21,6 +21,7 @@ import {
 import FadeIn from '../components/FadeIn';
 import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
+import SEOHead from '@/components/SEOHead';
 import { useHallOfFameDJs, useHallOfFameLegends, type HallOfFameLegend } from '../hooks/useDJs';
 import { useHallOfFameMixes } from '../hooks/useMixes';
 import {
@@ -486,6 +487,10 @@ export default function HallOfFame() {
 
   return (
     <div className="bg-black min-h-[100dvh]">
+      <SEOHead
+        title="Hall of Fame"
+        description="Legendary Sierra Leonean DJs, pioneer selectors, and iconic historical mixes."
+      />
       {/* ═══════════════ ADMIN BAR ═══════════════ */}
       {isAdmin && (
         <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/10">

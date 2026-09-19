@@ -344,8 +344,30 @@ async function serveAppWithMeta(req, res) {
     return `https://decksalone.com${u.startsWith('/') ? '' : '/'}${u}`;
   };
 
+  // Static route titles mapping
+  const staticRouteTitles: Record<string, string> = {
+    '/': 'Deck Salone',
+    '/discover': 'Deck Salone | Discover',
+    '/rankings': 'Deck Salone | Rankings',
+    '/mixes': 'Deck Salone | Mixes',
+    '/events': 'Deck Salone | Events',
+    '/playlists': 'Deck Salone | Playlists',
+    '/library': 'Deck Salone | My Library',
+    '/feed': 'Deck Salone | Feed',
+    '/pricing': 'Deck Salone | Pricing',
+    '/booking': 'Deck Salone | Book a DJ',
+    '/request-dj': 'Deck Salone | Request DJ',
+    '/hall-of-fame': 'Deck Salone | Hall of Fame',
+    '/account': 'Deck Salone | Account',
+    '/terms': 'Deck Salone | Terms of Service',
+    '/privacy': 'Deck Salone | Privacy Policy',
+    '/login': 'Deck Salone | Sign In',
+    '/register': 'Deck Salone | Create Account',
+    '/reset-password': 'Deck Salone | Reset Password',
+  };
+
   // Default site metadata fallback
-  let title = "Deck Salone — Sierra Leone's Official DJ Platform";
+  let title = staticRouteTitles[req.path] || (req.path === '/' || !req.path ? 'Deck Salone' : 'Deck Salone');
   let description = "Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone.";
   let image = "https://decksalone.com/logo-web.png";
   let pageUrl = `https://decksalone.com${req.path}`;
@@ -411,7 +433,7 @@ async function serveAppWithMeta(req, res) {
 
       if (mix) {
         const djName = mix.dj?.stageName || 'DJ';
-        title = `🎵 ${mix.title} by ${djName} — Deck Salone`;
+        title = `Deck Salone | ${mix.title}`;
         description = mix.description
           ? mix.description.slice(0, 160)
           : `Listen to "${mix.title}" by ${djName} (${mix.genre || 'Mix'}). ${mix.plays || 0} plays on Deck Salone.`;
@@ -432,7 +454,7 @@ async function serveAppWithMeta(req, res) {
           include: { user: true },
         });
         if (dj) {
-          title = `🎧 ${dj.stageName} — Official DJ Profile on Deck Salone`;
+          title = `Deck Salone | ${dj.stageName}`;
           description = dj.bio
             ? dj.bio.slice(0, 160)
             : `Book ${dj.stageName} for events, listen to mixes, and explore official DJ rankings on Deck Salone.`;
@@ -450,7 +472,7 @@ async function serveAppWithMeta(req, res) {
         });
         if (user) {
           const nameStr = user.djProfile?.stageName || user.name || user.username;
-          title = `👤 ${nameStr} (@${user.username}) — Deck Salone`;
+          title = `Deck Salone | ${nameStr}`;
           description = user.bio
             ? user.bio.slice(0, 160)
             : `Check out ${nameStr}'s profile on Deck Salone, Sierra Leone's #1 DJ platform.`;
@@ -467,8 +489,7 @@ async function serveAppWithMeta(req, res) {
           include: { dj: true },
         });
         if (event) {
-          const djStr = event.dj ? ` by ${event.dj.stageName}` : '';
-          title = `🎉 ${event.title}${djStr} — Event on Deck Salone`;
+          title = `Deck Salone | ${event.title}`;
           description = event.description
             ? event.description.slice(0, 160)
             : `Get tickets and details for ${event.title} at ${event.venue || event.city || 'Sierra Leone'} on Deck Salone.`;
@@ -476,9 +497,25 @@ async function serveAppWithMeta(req, res) {
         }
       }
 
-      // 5. Hall of Fame Route: /hall-of-fame
+      // 5. Official Playlists / Playlist Detail Route: /playlists/:id or /playlist/:id
+      const playlistMatch = req.path.match(/^\/(?:playlists|playlist)\/([a-zA-Z0-9_-]+)/);
+      if (playlistMatch) {
+        const playlistId = playlistMatch[1];
+        const playlist = await prisma.officialPlaylist.findUnique({
+          where: { id: playlistId },
+        });
+        if (playlist) {
+          title = `Deck Salone | ${playlist.title}`;
+          description = playlist.description
+            ? playlist.description.slice(0, 160)
+            : `Listen to "${playlist.title}" curated on Deck Salone.`;
+          image = makeAbsoluteUrl(playlist.coverImage);
+        }
+      }
+
+      // 6. Hall of Fame Route: /hall-of-fame
       if (req.path.startsWith('/hall-of-fame')) {
-        title = `👑 Hall of Fame — Deck Salone Legends`;
+        title = `Deck Salone | Hall of Fame`;
         description = `Celebrating Sierra Leone's most legendary DJs and iconic mixes of all time on Deck Salone.`;
         const legendDj = await prisma.djProfile.findFirst({
           where: { isPublic: true },
@@ -487,9 +524,9 @@ async function serveAppWithMeta(req, res) {
         image = makeAbsoluteUrl(legendDj?.avatar || legendDj?.coverBanner);
       }
 
-      // 6. Rankings Route: /rankings
+      // 7. Rankings Route: /rankings
       if (req.path.startsWith('/rankings')) {
-        title = `🏆 Official DJ Rankings — Deck Salone`;
+        title = `Deck Salone | Rankings`;
         description = `Top rated DJs in Sierra Leone based on weekly streams, gig bookings, community votes, and activity.`;
         const topDj = await prisma.djProfile.findFirst({
           where: { isPublic: true },
@@ -542,6 +579,7 @@ app.use((req, res) => {
 });
 
 const { logSystemError, checkAndSendDailyBugReport } = require('./utils/bugReport');
+const { sendErrorAlert } = require('./utils/logger');
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -549,8 +587,16 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   const message = status >= 500 ? 'Internal server error' : (err.message || 'Internal server error');
 
-  // Log 500 server errors into SystemErrorLog
+  // Log 500 server errors into SystemErrorLog and dispatch instant ops alert
   if (status >= 500) {
+    sendErrorAlert({
+      message: err.message || 'Internal server error',
+      stack: err.stack,
+      path: req.path,
+      method: req.method,
+      statusCode: status,
+    }).catch(() => {});
+
     logSystemError({
       level: 'ERROR',
       source: 'API',

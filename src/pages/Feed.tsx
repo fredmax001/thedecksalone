@@ -212,7 +212,7 @@ export default function Feed() {
   return (
     <div className="min-h-screen bg-black text-text-primary pb-32">
       <SEOHead
-        title="Feed — Deck Salone"
+        title="Feed"
         description="Explore the latest mixtape releases, personalized daily blends, recommended DJs, and live events across Sierra Leone."
       />
 

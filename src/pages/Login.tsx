@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
 import { openGoogleAuth } from '@/lib/googleAuth';
 import {
@@ -12,9 +13,11 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  UserPlus,
 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import { redirectAfterAuth } from '@/lib/navigation';
+import SEOHead from '@/components/SEOHead';
 
 /* ─── Schema ─── */
 const loginSchema = z.object({
@@ -44,6 +47,7 @@ const fadeUpItem = {
 
 export default function Login() {
   const [searchParams] = useSearchParams();
+  const isAddAccount = searchParams.get('mode') === 'add_account' || searchParams.get('addAccount') === 'true';
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,10 +57,10 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated && user?.id) {
+    if (!isAddAccount && isAuthenticated && user?.id) {
       redirectAfterAuth(user?.role, navigate);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, isAddAccount]);
 
   const {
     register,
@@ -114,8 +118,11 @@ export default function Login() {
     const result = await login(data.email, data.password);
     setIsSubmitting(false);
     if (result.success) {
-      const user = useAuthStore.getState().user;
-      redirectAfterAuth(user?.role, navigate);
+      const activeUser = useAuthStore.getState().user;
+      if (isAddAccount) {
+        toast.success(`Account added: ${activeUser?.name || activeUser?.username || activeUser?.email || 'Logged in'}`);
+      }
+      redirectAfterAuth(activeUser?.role, navigate);
     } else {
       setError(result.error || 'Login failed');
     }
@@ -135,19 +142,43 @@ export default function Login() {
       quote="Join verified DJs shaping the sound of Sierra Leone."
       statLine="Upload mixes, get booked, grow your audience"
     >
+      <SEOHead
+        title={isAddAccount ? 'Add Another Account' : 'Sign In'}
+        description={isAddAccount ? 'Add an additional account to switch anytime.' : 'Sign in to your Deck Salone account.'}
+      />
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease }}
         className="bg-black-surface border border-dark-gray rounded-2xl p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative"
       >
+        {isAddAccount && (
+          <div className="mb-6 p-3.5 rounded-xl bg-gold/10 border border-gold/30 flex items-start gap-3">
+            <UserPlus className="w-5 h-5 text-gold shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <p className="font-semibold text-gold">Add Another Account</p>
+              <p className="text-text-secondary mt-0.5">
+                Sign in to link another account to this device. You can quickly switch between saved accounts from the menu.
+              </p>
+              {user && (
+                <p className="text-[11px] text-text-muted mt-1.5">
+                  Currently active:{' '}
+                  <span className="text-text-primary font-medium">
+                    {user.name || user.username || user.email}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-[28px] sm:text-[36px] font-semibold uppercase tracking-tight text-text-primary font-display">
-            Welcome Back
+            {isAddAccount ? 'Add Account' : 'Welcome Back'}
           </h1>
           <p className="mt-2 text-sm text-text-muted">
-            Sign in to your account
+            {isAddAccount ? 'Sign in to add and switch to this account' : 'Sign in to your account'}
           </p>
         </div>
 
@@ -280,6 +311,8 @@ export default function Login() {
             >
               {isSubmitting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isAddAccount ? (
+                'Add & Switch Account'
               ) : (
                 'Sign In'
               )}

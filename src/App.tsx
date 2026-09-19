@@ -20,6 +20,8 @@ import LocationPrompt from './components/LocationPrompt';
 import ResumeListeningModal from './components/ResumeListeningModal';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import PopupManager from './components/PopupManager';
+import CookieConsent from './components/CookieConsent';
+import { captureUtmParameters } from '@/lib/utm';
 
 // Lazy loaded pages for better code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -115,6 +117,7 @@ function AuthInitializer() {
 
   useEffect(() => {
     init();
+    captureUtmParameters();
   }, [init]);
 
   return null;
@@ -205,6 +208,8 @@ function DeepLinkHandler() {
             }
           } catch (e) {
             console.warn('[DeepLink] Immediate /auth/me fetch failed, falling back to /auth/callback:', e);
+            // Dead token — clear it so we don't loop with a stale session
+            try { localStorage.removeItem('token'); } catch (err) {}
           }
 
           navigate(`/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`, {
@@ -223,27 +228,19 @@ function DeepLinkHandler() {
       }
     };
 
+    // appUrlOpen is a retained event: on cold start via deep link the bridge
+    // replays it to this listener, so no separate getLaunchUrl() handling is
+    // needed (which would double-handle and re-process stale launch URLs).
     let listener: { remove: () => Promise<void> } | null = null;
 
-    // Listen for app being resumed via deep link while running
     CapacitorApp.addListener('appUrlOpen', (event) => {
       handleAuthUrl(event.url);
     }).then((l) => {
       listener = l;
     });
 
-    // Also handle the URL that launched the app (cold start)
-    CapacitorApp.getLaunchUrl().then((launchUrl) => {
-      if (launchUrl?.url) {
-        handleAuthUrl(launchUrl.url);
-      }
-    }).catch((e) => {
-      console.error('[DeepLink] Failed to get launch URL:', e);
-    });
-
     return () => {
       listener?.remove().catch(() => {});
-      CapacitorApp.removeAllListeners();
     };
   }, [navigate]);
 
@@ -462,6 +459,7 @@ export default function App() {
             <Route path="mixes/:djIdentifier/:slug" element={<MixDetail />} />
             <Route path="playlists" element={<OfficialPlaylists />} />
             <Route path="playlist/:slug" element={<OfficialPlaylistDetail />} />
+            <Route path="playlists/:slug" element={<OfficialPlaylistDetail />} />
             <Route path="pricing" element={<Pricing />} />
             <Route path="subscription" element={<Pricing />} />
             <Route path="user/:username" element={<UserPublicProfile />} />
@@ -492,6 +490,7 @@ export default function App() {
         <LocationPrompt />
         <ResumeListeningModal />
         <NotificationPermissionPrompt />
+        <CookieConsent />
       </Suspense>
     </BrowserRouter>
   );

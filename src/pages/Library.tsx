@@ -12,9 +12,14 @@ import {
   Compass,
   ExternalLink,
   MapPin,
+  Plus,
+  Trash2,
+  Music,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
+import { usePlaylistStore, type UserPlaylist } from '@/stores/playlistStore';
 import { useLikedMixes, useFollowing, useUserActivity } from '@/hooks/useUserDashboard';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -61,8 +66,13 @@ function toMixTrack(mix: any): MixTrack {
 
 export default function Library() {
   const [activeTab, setActiveTab] = useState<LibraryTab>('likes');
+  const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
+
   const { isAuthenticated } = useAuthStore();
   const { play, setQueue } = usePlayerStore();
+  const { playlists: userPlaylists, createPlaylist, deletePlaylist } = usePlaylistStore();
 
   const { data: likedMixes = [], isLoading: likesLoading } = useLikedMixes();
   const { data: following = [], isLoading: followingLoading } = useFollowing();
@@ -101,10 +111,25 @@ export default function Library() {
     play(tracks[0]);
   };
 
+  const handlePlayUserPlaylist = (playlist: UserPlaylist) => {
+    if (playlist.tracks.length === 0) return;
+    setQueue(playlist.tracks);
+    play(playlist.tracks[0]);
+  };
+
+  const handleCreatePlaylistSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPlaylistTitle.trim()) return;
+    createPlaylist(newPlaylistTitle.trim(), newPlaylistDesc.trim());
+    setNewPlaylistTitle('');
+    setNewPlaylistDesc('');
+    setShowCreatePlaylistModal(false);
+  };
+
   return (
     <div className="min-h-[100dvh] bg-bg-page pb-32">
       <SEOHead
-        title="My Library — Deck Salone"
+        title="My Library"
         description="Your personal music collection on Deck Salone. Access your liked mixtapes, followed DJs, saved playlists, and streaming activity."
       />
 
@@ -148,7 +173,7 @@ export default function Library() {
               let badgeCount: number | null = null;
               if (tab.id === 'likes' && isAuthenticated) badgeCount = likedMixes.length;
               if (tab.id === 'following' && isAuthenticated) badgeCount = following.length;
-              if (tab.id === 'playlists') badgeCount = allPlaylists.length;
+              if (tab.id === 'playlists') badgeCount = userPlaylists.length + allPlaylists.length;
 
               return (
                 <button
@@ -270,53 +295,157 @@ export default function Library() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25 }}
-              className="space-y-6"
+              className="space-y-8"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                  Playlists ({allPlaylists.length})
-                </span>
-                <Link
-                  to="/playlists"
-                  className="text-xs font-bold uppercase tracking-wider text-gold hover:underline flex items-center gap-1"
-                >
-                  View All <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
-              </div>
+              {/* Custom User Playlists */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                      Your Playlists ({userPlaylists.length})
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Custom collections created on your device
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowCreatePlaylistModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New Playlist
+                  </button>
+                </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {allPlaylists.map((pl) => {
-                  const trackCount = pl._count?.items || pl.items?.length || pl.trackCount || 0;
-                  return (
-                    <Link
-                      key={pl.id}
-                      to={`/playlist/${pl.slug || pl.id}`}
-                      className="group block rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-3 transition-all shadow-lg flex flex-col justify-between"
-                    >
-                      <PlaylistCoverArt
-                        playlist={pl}
-                        aspect="square"
-                        showPlayButton={false}
-                        className="mb-3"
-                      />
-                      <div className="flex-1 flex flex-col justify-between">
-                        <div>
-                          <h4 className="font-display text-sm font-bold uppercase text-white truncate group-hover:text-gold transition-colors">
-                            {pl.title}
-                          </h4>
-                          {pl.description && (
-                            <p className="text-[11px] text-text-secondary line-clamp-2 mt-0.5 leading-relaxed">
-                              {pl.description}
-                            </p>
+                {userPlaylists.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {userPlaylists.map((pl) => (
+                      <div
+                        key={pl.id}
+                        className="group relative rounded-2xl bg-[#141412] hover:bg-[#1a1917] border border-white/[0.08] hover:border-gold/40 p-3 transition-all shadow-lg flex flex-col justify-between"
+                      >
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-black/40 mb-3 border border-white/5">
+                          {pl.coverImage || pl.tracks[0]?.cover ? (
+                            <img
+                              src={pl.coverImage || pl.tracks[0]?.cover}
+                              alt={pl.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#24221b] to-black text-gold/60">
+                              <Music className="w-10 h-10 mb-1" />
+                              <span className="text-[10px] font-mono tracking-wider uppercase text-text-muted">Custom</span>
+                            </div>
+                          )}
+
+                          {/* Play overlay button */}
+                          {pl.tracks.length > 0 && (
+                            <button
+                              onClick={() => handlePlayUserPlaylist(pl)}
+                              title="Play Playlist"
+                              className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-gold text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 active:scale-95"
+                            >
+                              <Play className="w-5 h-5 fill-current ml-0.5" />
+                            </button>
                           )}
                         </div>
-                        <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-semibold text-text-muted">
-                          <span className="text-gold font-bold">{trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}</span>
+
+                        <div className="flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-display text-sm font-bold uppercase text-white truncate group-hover:text-gold transition-colors">
+                              {pl.title}
+                            </h4>
+                            {pl.description && (
+                              <p className="text-[11px] text-text-secondary line-clamp-2 mt-0.5 leading-relaxed">
+                                {pl.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-semibold text-text-muted">
+                            <span className="text-gold font-bold">
+                              {pl.tracks.length} {pl.tracks.length === 1 ? 'Mix' : 'Mixes'}
+                            </span>
+                            <button
+                              onClick={() => deletePlaylist(pl.id)}
+                              title="Delete Playlist"
+                              className="p-1 rounded-lg text-white/30 hover:text-red hover:bg-red/10 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </Link>
-                  );
-                })}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center space-y-3">
+                    <p className="text-xs text-text-muted">
+                      You don't have any custom playlists yet. Create one or click "+ Add" on any mixtape!
+                    </p>
+                    <button
+                      onClick={() => setShowCreatePlaylistModal(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all shadow-md"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Create Playlist
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Official & Featured Playlists */}
+              <div className="space-y-4 pt-4 border-t border-white/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                      Featured & Curated ({allPlaylists.length})
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Handcrafted mixes and genre essentials
+                    </p>
+                  </div>
+                  <Link
+                    to="/playlists"
+                    className="text-xs font-bold uppercase tracking-wider text-gold hover:underline flex items-center gap-1"
+                  >
+                    View All <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {allPlaylists.map((pl) => {
+                    const trackCount = pl._count?.items || pl.items?.length || pl.trackCount || 0;
+                    return (
+                      <Link
+                        key={pl.id}
+                        to={`/playlist/${pl.slug || pl.id}`}
+                        className="group block rounded-2xl bg-[#121110] hover:bg-[#181816] border border-white/[0.08] hover:border-gold/40 p-3 transition-all shadow-lg flex flex-col justify-between"
+                      >
+                        <PlaylistCoverArt
+                          playlist={pl}
+                          aspect="square"
+                          showPlayButton={false}
+                          className="mb-3"
+                        />
+                        <div className="flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-display text-sm font-bold uppercase text-white truncate group-hover:text-gold transition-colors">
+                              {pl.title}
+                            </h4>
+                            {pl.description && (
+                              <p className="text-[11px] text-text-secondary line-clamp-2 mt-0.5 leading-relaxed">
+                                {pl.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-semibold text-text-muted">
+                            <span className="text-gold font-bold">{trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}</span>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             </motion.div>
           )}
@@ -469,6 +598,89 @@ export default function Library() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Create Playlist Modal */}
+      <AnimatePresence>
+        {showCreatePlaylistModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-md bg-[#121110] border border-gold/30 rounded-3xl p-6 shadow-2xl space-y-5"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gold/10 border border-gold/30 flex items-center justify-center text-gold">
+                    <ListMusic className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold uppercase tracking-wide text-white">
+                      Create Playlist
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Save and organize your favorite mixtapes
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCreatePlaylistModal(false)}
+                  className="p-1.5 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreatePlaylistSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5">
+                    Playlist Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Afrobeats Vibez 2026"
+                    value={newPlaylistTitle}
+                    onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 focus:border-gold focus:outline-none text-sm text-white placeholder:text-text-muted/40"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    placeholder="What's the vibe of this playlist?"
+                    value={newPlaylistDesc}
+                    onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                    rows={2}
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 focus:border-gold focus:outline-none text-sm text-white placeholder:text-text-muted/40 resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePlaylistModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newPlaylistTitle.trim()}
+                    className="px-5 py-2.5 rounded-xl bg-gold hover:brightness-110 disabled:opacity-40 text-black font-bold text-xs uppercase tracking-wider transition-all shadow-md"
+                  >
+                    Create Playlist
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

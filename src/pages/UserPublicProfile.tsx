@@ -21,7 +21,7 @@ export default function UserPublicProfile() {
   const profileUrl = `${baseUrl}/user/${username}`;
 
   const title = useMemo(
-    () => (profile ? `${profile.name || profile.username} — The Deck Salone` : 'User — The Deck Salone'),
+    () => (profile ? `${profile.name || profile.username}` : 'User Profile'),
     [profile]
   );
   const description = useMemo(

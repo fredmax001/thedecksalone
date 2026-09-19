@@ -283,7 +283,7 @@ export default function Rankings() {
   return (
     <div className="min-h-[100dvh] bg-bg-page pb-32 text-white">
       <SEOHead
-        title="Official DJ Rankings — Deck Salone"
+        title="Rankings"
         description="Live verified Sierra Leonean DJ rankings and weekly leaderboard based on performance, stream volume, and live sets."
       />
 

@@ -196,7 +196,7 @@ export default function Pricing() {
   return (
     <div className="min-h-screen bg-[#080808] text-text-primary pb-32">
       <SEOHead
-        title="Membership & Pro Subscription Plans — Deck Salone"
+        title="Pricing"
         description="Upgrade to Deck Salone Pro or Pro+ VIP. Unlimited 320kbps MP3 downloads, ad-free streaming, exclusive mixes, and DJ monetization."
       />
 

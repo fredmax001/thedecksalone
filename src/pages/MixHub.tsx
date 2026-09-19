@@ -518,7 +518,7 @@ export default function MixHub() {
   return (
     <div className="min-h-[100dvh] bg-bg-page pb-32">
       <SEOHead
-        title="Mixes — Deck Salone"
+        title="Mixes"
         description="Stream and download high quality Sierra Leonean DJ mixes, Afrobeats, Amapiano, Dancehall, and Salone club sets."
       />
 

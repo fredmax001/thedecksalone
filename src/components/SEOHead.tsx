@@ -11,8 +11,45 @@ interface SEOHeadProps {
   noIndex?: boolean;
 }
 
+export function formatPageTitle(rawTitle?: string): string {
+  if (!rawTitle) return 'Deck Salone';
+
+  const trimmed = rawTitle.trim();
+
+  // If already exactly 'Deck Salone' or home-specific phrases
+  if (
+    trimmed === 'Deck Salone' ||
+    trimmed === "Deck Salone — Sierra Leone's Official DJ Platform" ||
+    trimmed === "Deck Salone - Sierra Leone's Official DJ Platform" ||
+    trimmed.toLowerCase() === 'home' ||
+    trimmed.toLowerCase() === 'home — deck salone' ||
+    trimmed.toLowerCase() === 'home - deck salone' ||
+    trimmed.toLowerCase() === 'deck salone | home'
+  ) {
+    return 'Deck Salone';
+  }
+
+  // If already formatted like 'Deck Salone | Something'
+  if (/^Deck\s+Salone\s*\|\s*/i.test(trimmed)) {
+    const section = trimmed.replace(/^Deck\s+Salone\s*\|\s*/i, '').trim();
+    return section ? `Deck Salone | ${section}` : 'Deck Salone';
+  }
+
+  // Strip trailing platform suffixes like " — Deck Salone", " - Deck Salone", " — The Deck Salone", etc.
+  let cleanName = trimmed
+    .replace(/\s*[—–|-]\s*(The\s+)?Deck\s+Salone.*$/i, '')
+    .replace(/^(The\s+)?Deck\s+Salone\s*[—–|-]\s*/i, '')
+    .trim();
+
+  if (!cleanName || cleanName.toLowerCase() === 'home') {
+    return 'Deck Salone';
+  }
+
+  return `Deck Salone | ${cleanName}`;
+}
+
 export default function SEOHead({
-  title = "Deck Salone — Sierra Leone's Official DJ Platform",
+  title = 'Deck Salone',
   description = "Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone.",
   image = `${DOMAIN}/og-image.jpg?v=5`,
   type = 'website',
@@ -28,8 +65,9 @@ export default function SEOHead({
     }
     const canonicalUrl = `${DOMAIN}${cleanPath}`;
 
-    // 2. Set Document Title
-    document.title = title;
+    // 2. Format Page Title
+    const formattedTitle = formatPageTitle(title);
+    document.title = formattedTitle;
 
     // 3. Helper to create or update meta/link elements
     const setMetaTag = (selector: string, attrName: string, attrVal: string, content: string) => {
@@ -46,7 +84,7 @@ export default function SEOHead({
     setMetaTag('meta[name="description"]', 'name', 'description', description);
 
     // 5. Update OpenGraph Tags
-    setMetaTag('meta[property="og:title"]', 'property', 'og:title', title);
+    setMetaTag('meta[property="og:title"]', 'property', 'og:title', formattedTitle);
     setMetaTag('meta[property="og:description"]', 'property', 'og:description', description);
     setMetaTag('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
     setMetaTag('meta[property="og:image"]', 'property', 'og:image', image);
@@ -54,7 +92,7 @@ export default function SEOHead({
 
     // 6. Update Twitter Cards
     setMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary_large_image');
-    setMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', title);
+    setMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', formattedTitle);
     setMetaTag('meta[name="twitter:description"]', 'name', 'twitter:description', description);
     setMetaTag('meta[name="twitter:image"]', 'name', 'twitter:image', image);
 

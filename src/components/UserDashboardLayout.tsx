@@ -10,7 +10,6 @@ import {
   LogOut,
   Search,
   Settings,
-  Smartphone,
   User,
   Users,
   MessageSquare,
@@ -22,15 +21,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import MobileTabBar from '@/components/MobileTabBar';
 import NotificationBell from '@/components/NotificationBell';
-import { Button } from '@/components/ui/button';
+import UserDropdownMenu from '@/components/UserDropdownMenu';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { getAvatarImageUrl } from '@/lib/utils';
@@ -259,38 +251,7 @@ export default function UserDashboardLayout() {
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 h-8 sm:h-9 px-1.5 sm:px-2 hover:bg-black-elevated">
-                    <Avatar className="w-7 h-7 border border-gold/30">
-                      <AvatarImage src={avatarUrl} />
-                      <AvatarFallback className="bg-gold/20 text-gold text-[10px] font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden md:inline text-xs font-semibold text-text-primary">{displayName}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-48 shadow-2xl z-50">
-                  <DropdownMenuItem asChild>
-                    <Link to="/user/profile" className="cursor-pointer text-xs">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/user/settings" className="cursor-pointer text-xs">Settings</Link>
-                  </DropdownMenuItem>
-                  {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
-                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <UserDropdownMenu align="end" />
             </div>
           </div>
         </header>

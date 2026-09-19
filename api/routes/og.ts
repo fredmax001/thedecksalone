@@ -32,7 +32,7 @@ function renderMetaHtml(params: {
   <meta property="og:image" content="${safeImage}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:site_name" content="The Deck Salone">
+  <meta property="og:site_name" content="Deck Salone">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${safeTitle}">
   <meta name="twitter:description" content="${safeDescription}">
@@ -76,10 +76,10 @@ router.get('/dj/:identifier', async (req, res) => {
     }
 
     const profileUrl = `${baseUrl}/dj/${dj.user.username || dj.id}`;
-    const title = `${dj.stageName} — The Deck Salone`;
+    const title = `Deck Salone | ${dj.stageName}`;
     const description =
       dj.bio?.slice(0, 200) ||
-      `Check out ${dj.stageName} on The Deck Salone, Sierra Leone's premier DJ platform.`;
+      `Check out ${dj.stageName} on Deck Salone, Sierra Leone's premier DJ platform.`;
     const image = dj.avatar || dj.coverBanner || `${baseUrl}/cover-placeholder.jpg`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -111,10 +111,10 @@ router.get('/mix/:id', async (req, res) => {
 
     const mixUrl = `${baseUrl}/mix/${mix.id}`;
     const djName = mix.dj?.stageName || 'DJ';
-    const title = `${mix.title} by ${djName} — The Deck Salone`;
+    const title = `Deck Salone | ${mix.title}`;
     const description =
       mix.description?.slice(0, 200) ||
-      `Listen to "${mix.title}" by ${djName} on The Deck Salone.`;
+      `Listen to "${mix.title}" by ${djName} on Deck Salone.`;
     const image = mix.coverImage || mix.dj?.avatar || `${baseUrl}/mix-placeholder.jpg`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -151,10 +151,10 @@ router.get('/user/:username', async (req, res) => {
 
     const profileUrl = `${baseUrl}/user/${user.username}`;
     const displayName = user.name || user.username;
-    const title = `${displayName} — The Deck Salone`;
+    const title = `Deck Salone | ${displayName}`;
     const description =
       user.bio?.slice(0, 200) ||
-      `Check out ${displayName}'s profile on The Deck Salone.`;
+      `Check out ${displayName}'s profile on Deck Salone.`;
     const image = user.avatar || `${baseUrl}/default-avatar.jpg`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -188,11 +188,11 @@ router.get('/playlist/:slug', async (req, res) => {
     }
 
     const playlistUrl = `${baseUrl}/playlist/${playlist.slug}`;
-    const title = `${playlist.title} — Official Deck Salone Playlist`;
+    const title = `Deck Salone | ${playlist.title}`;
     const trackCount = playlist._count?.items || 0;
     const description =
       playlist.description?.slice(0, 200) ||
-      `Listen to "${playlist.title}" (${trackCount} ${trackCount === 1 ? 'mix' : 'mixes'}) curated by Deck Salone Moderators.`;
+      `Listen to "${playlist.title}" (${trackCount} ${trackCount === 1 ? 'mix' : 'mixes'}) curated on Deck Salone.`;
     const image = playlist.coverImage || `${baseUrl}/cover-placeholder.jpg`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

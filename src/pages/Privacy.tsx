@@ -23,6 +23,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import SEOHead from '@/components/SEOHead';
 
 interface PolicySection {
   number: number;
@@ -678,6 +679,10 @@ export default function Privacy() {
 
   return (
     <div className="bg-black min-h-[100dvh] text-white">
+      <SEOHead
+        title="Privacy Policy"
+        description="Privacy policy, data protection, and user privacy standards on Deck Salone."
+      />
       {/* ═══════════════ HERO ═══════════════ */}
       <section className="relative py-20 sm:py-24 lg:py-28 overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-hero-overlay opacity-60" />

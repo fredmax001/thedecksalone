@@ -21,6 +21,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import SEOHead from '@/components/SEOHead';
 
 interface TermSection {
   number: number;
@@ -495,7 +496,11 @@ export default function Terms() {
   });
 
   return (
-    <div className="bg-black min-h-[100dvh] text-white">
+    <div className="bg-bg-page min-h-screen">
+      <SEOHead
+        title="Terms of Service"
+        description="Terms of Service, user agreements, and legal guidelines for Deck Salone."
+      />
       {/* ═══════════════ HERO ═══════════════ */}
       <section className="relative py-20 sm:py-24 lg:py-28 overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-hero-overlay opacity-60" />

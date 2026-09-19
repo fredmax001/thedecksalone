@@ -87,8 +87,8 @@ async function optimize() {
   try {
     sharp = require('sharp');
   } catch (err) {
-    console.error('sharp is not installed. Run: npm install sharp');
-    process.exit(1);
+    console.warn('sharp is not installed in current environment. Skipping image optimization.');
+    return;
   }
 
   for (const item of CONFIG) {

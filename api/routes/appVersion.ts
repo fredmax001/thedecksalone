@@ -11,9 +11,9 @@ const PLAY_STORE_BASE_URL = 'https://play.google.com/store/apps/details?id=decks
 // Latest release info. Override via env vars when shipping a new release —
 // keep APP_LATEST_VERSION_CODE in sync with versionCode in android/app/build.gradle.
 const DEFAULTS = {
-  latestVersion: '1.1.0',
-  latestVersionCode: 11,
-  releaseNotes: 'Bug fixes and performance improvements.',
+  latestVersion: '1.2.0',
+  latestVersionCode: 12,
+  releaseNotes: 'User playlists support, smooth iOS volume controls, enhanced navigation dropdowns, and performance improvements.',
   playStoreUrl: PLAY_STORE_BASE_URL,
   apkUrl: '/api/app/download',
 };
@@ -25,7 +25,7 @@ function latestVersion() {
 // The APK lives in the persistent uploads volume: <UPLOADS_DIR>/apk/<filename>
 function apkFilePath() {
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads');
-  const filename = process.env.APP_APK_FILENAME || 'DeckSalone-1.1.0.apk';
+  const filename = process.env.APP_APK_FILENAME || 'DeckSalone-1.2.0.apk';
   return path.join(uploadsDir, 'apk', filename);
 }
 

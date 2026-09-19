@@ -14,6 +14,8 @@ function formatTime(s: number): string {
 
 export default function ResumeListeningModal() {
   const lastSession = usePlayerStore((s) => s.lastSession);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const play = usePlayerStore((s) => s.play);
   const clearSession = usePlayerStore((s) => s.clearSession);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -21,7 +23,20 @@ export default function ResumeListeningModal() {
 
   const [open, setOpen] = useState(false);
 
+  // If user is currently playing any music or has an active track loaded, dismiss & close
   useEffect(() => {
+    if (isPlaying || currentTrack) {
+      setOpen(false);
+    }
+  }, [isPlaying, currentTrack]);
+
+  useEffect(() => {
+    // 0. If user already playing music, never prompt
+    if (isPlaying || currentTrack) {
+      setOpen(false);
+      return;
+    }
+
     // 1. Check if user globally disabled resume popups
     try {
       if (localStorage.getItem('decksalone_disable_resume_popup') === 'true') {
@@ -57,7 +72,7 @@ export default function ResumeListeningModal() {
     }
 
     setOpen(true);
-  }, [isAuthenticated, user, lastSession]);
+  }, [isAuthenticated, user, lastSession, isPlaying, currentTrack]);
 
   const markSessionDismissed = () => {
     try {

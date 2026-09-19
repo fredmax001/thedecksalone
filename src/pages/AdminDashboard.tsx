@@ -6956,7 +6956,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <button
-                onClick={logout}
+                onClick={() => logout()}
                 className="p-1.5 text-text-muted hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10"
                 title="Logout"
               >

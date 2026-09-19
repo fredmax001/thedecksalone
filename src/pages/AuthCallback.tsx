@@ -55,7 +55,10 @@ export default function AuthCallback() {
         })
         .catch((err) => {
           console.error('[Google Auth] Failed to fetch user profile:', err);
-          navigate('/discover', { replace: true });
+          // Dead token — clear it before navigating so ProtectedRoute
+          // doesn't bounce us into a login loop
+          try { localStorage.removeItem('token'); } catch (e) {}
+          navigate('/login?error=session_failed', { replace: true });
         });
     } else {
       navigate('/login', { replace: true });

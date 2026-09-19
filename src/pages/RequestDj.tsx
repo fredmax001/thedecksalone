@@ -145,7 +145,7 @@ export default function RequestDj() {
   return (
     <div className="min-h-[100dvh] bg-bg-page pb-32">
       <SEOHead
-        title="Request DJ — Deck Salone"
+        title="Request DJ"
         description="Submit a DJ booking request and get connected with verified Sierra Leonean DJs for your event."
       />
 

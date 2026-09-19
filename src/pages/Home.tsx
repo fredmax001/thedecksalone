@@ -68,7 +68,7 @@ export default function Home() {
   return (
     <div className="bg-black min-h-screen">
       <SEOHead
-        title="Deck Salone — Sierra Leone's Official DJ Platform"
+        title="Deck Salone"
         description="Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone."
       />
 

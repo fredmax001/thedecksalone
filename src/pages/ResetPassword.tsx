@@ -10,6 +10,7 @@ import PasswordStrength from '@/components/PasswordStrength';
 import api from '@/lib/api';
 import { passwordSchema } from '@/lib/schemas';
 import { getApiErrorMessage } from '@/lib/apiErrors';
+import SEOHead from '@/components/SEOHead';
 
 const resetPasswordSchema = z
   .object({
@@ -143,6 +144,7 @@ export default function ResetPassword() {
       quote="Join verified DJs shaping the sound of Sierra Leone."
       statLine="Upload mixes, get booked, grow your audience"
     >
+      <SEOHead title="Reset Password" description="Reset your Deck Salone password." />
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

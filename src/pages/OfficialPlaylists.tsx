@@ -259,7 +259,7 @@ export function OfficialPlaylists() {
   return (
     <div className="min-h-[100dvh] bg-bg-page pb-32">
       <SEOHead
-        title="Playlists — Deck Salone"
+        title="Playlists"
         description="Stream curated DJ mixtapes and smart mood, genre & energy playlists from Sierra Leone."
       />
 

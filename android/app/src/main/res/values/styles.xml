@@ -15,6 +15,11 @@
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
         <item name="android:windowBackground">@color/splashBackground</item>
+        <!-- targetSdk 36 enforces edge-to-edge (status bar drawn over the WebView).
+             Opt out so content lays out below the status bar; the Android WebView's
+             env(safe-area-inset-top) only reflects the display cutout, not the
+             status bar height, so CSS alone cannot fix the overlap. -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <item name="android:statusBarColor">@color/colorPrimaryDark</item>
         <item name="android:navigationBarColor">@color/colorPrimaryDark</item>
     </style>

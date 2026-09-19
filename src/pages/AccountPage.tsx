@@ -96,7 +96,7 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-[100dvh] bg-black pb-24 md:pb-8">
-      <SEOHead title="Account — Deck Salone" />
+      <SEOHead title="Account" />
 
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-gold/10 bg-black/95 backdrop-blur-2xl">

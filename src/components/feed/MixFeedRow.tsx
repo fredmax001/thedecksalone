@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import api, { getMediaUrl, downloadMixFile } from '@/lib/api';
 import { toast } from 'sonner';
 import MixDownloadModal from '@/components/MixDownloadModal';
+import AddToPlaylistModal from '@/components/AddToPlaylistModal';
 import ShareButton from '@/components/ShareButton';
 import { ReupButton } from '@/components/ReupButton';
 import { RepostButton } from '@/components/RepostButton';
@@ -83,6 +84,7 @@ export default function MixFeedRow({
   const likesCount = likeState?.likes ?? mix.likes ?? 0;
   const [downloadsCount, setDownloadsCount] = useState<number>(mix.downloads || 0);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [userReactions, setUserReactions] = useState<{ pos: number; emoji: string }[]>([]);
@@ -518,11 +520,22 @@ export default function MixFeedRow({
                 </button>
 
                 {showAddMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-44 rounded-xl bg-[#1a1a1a] border border-white/10 shadow-2xl p-1.5 z-30 space-y-1">
+                  <div className="absolute left-0 bottom-full mb-1 w-48 rounded-xl bg-[#1a1a1a] border border-white/10 shadow-2xl p-1.5 z-30 space-y-1">
+                    <button
+                      onClick={() => {
+                        setShowPlaylistModal(true);
+                        setShowAddMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2 font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-gold" />
+                      Add to Playlist
+                    </button>
                     <button
                       onClick={() => {
                         addToQueue(convertedTrack);
                         setShowAddMenu(false);
+                        toast.success(`Added "${convertedTrack.title}" to play queue`);
                       }}
                       className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white hover:bg-white/10 flex items-center gap-2"
                     >
@@ -656,6 +669,13 @@ export default function MixFeedRow({
         mix={mix}
         onOpenDjSupport={onOpenDjSupport}
         onActionComplete={() => handleDownload({ stopPropagation: () => {} } as React.MouseEvent)}
+      />
+
+      {/* Add To Playlist Modal */}
+      <AddToPlaylistModal
+        isOpen={showPlaylistModal}
+        onClose={() => setShowPlaylistModal(false)}
+        track={convertedTrack}
       />
     </motion.div>
   );

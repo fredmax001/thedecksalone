@@ -9,6 +9,7 @@ const { signToken } = require('../utils/jwt');
 const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
 const { authLimiter, loginRateLimiter } = require('../utils/rateLimiter');
+const { verifyTurnstile } = require('../middleware/turnstile');
 const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail, isDeliverableEmailAddress } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
 const { getCache, setCache, clearCache } = require('../utils/redis');
@@ -32,6 +33,7 @@ const registerSchema = z.object({
   country: z.string().max(100).optional(),
   role: z.enum(['USER', 'DJ']).optional(),
   gender: z.enum(GENDER_VALUES).optional(),
+  turnstileToken: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -69,7 +71,7 @@ const passwordResetConfirmSchema = z.object({
 });
 
 // POST /api/auth/register
-router.post('/register', authLimiter, asyncHandler(async (req, res) => {
+router.post('/register', authLimiter, verifyTurnstile, asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });

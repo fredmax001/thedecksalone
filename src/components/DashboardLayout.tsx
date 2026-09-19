@@ -12,7 +12,6 @@ import {
   Music,
   Search,
   Settings,
-  Smartphone,
   User,
   Users,
   MessageSquare,
@@ -30,23 +29,15 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
-import api from '@/lib/api';
 import MobileTabBar from '@/components/MobileTabBar';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import UserDropdownMenu from '@/components/UserDropdownMenu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getAvatarImageUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { useUpgradeModalStore } from '@/stores/upgradeModalStore';
 import TrialBanner from '@/components/TrialBanner';
-import { getAvatarImageUrl } from '@/lib/utils';
 import { useUserRole } from '@/hooks/useUserRole';
 
 const navItems = [
@@ -81,9 +72,13 @@ export default function DashboardLayout() {
   const isProPlus = user?.djProfile?.subscriptionTier === 'legend';
   const djProfile = user?.djProfile;
   const djName = djProfile?.stageName || user?.email?.split('@')[0] || 'User';
-  const [localAvatarUrl, setLocalAvatarUrl] = useState<string>('');
-  const avatarUrl = getAvatarImageUrl(djProfile?.avatar || localAvatarUrl || user?.avatar);
+  const avatarUrl = getAvatarImageUrl(djProfile?.avatar || user?.avatar);
   const initials = djName.slice(0, 2).toUpperCase();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   // Redirect Moderators to Moderator Console
   useEffect(() => {
@@ -92,27 +87,9 @@ export default function DashboardLayout() {
     }
   }, [user, navigate]);
 
-  // Fetch DJ profile directly if auth store doesn't have avatar yet
-  useEffect(() => {
-    if (isDj && !djProfile?.avatar) {
-      api.get('/djs/me')
-        .then((res) => {
-          if (res.data.success && res.data.data?.avatar) {
-            setLocalAvatarUrl(res.data.data.avatar);
-          }
-        })
-        .catch(() => {}); // 404 means no DJ profile yet
-    }
-  }, [isDj, djProfile?.avatar]);
-
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === '/dashboard';
     return location.pathname.startsWith(path);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
   };
 
 
@@ -330,38 +307,7 @@ export default function DashboardLayout() {
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 h-8 sm:h-9 px-1.5 sm:px-2 hover:bg-black-elevated">
-                    <Avatar className="w-7 h-7 border border-gold/30">
-                      <AvatarImage src={avatarUrl} />
-                      <AvatarFallback className="bg-gold/20 text-gold text-[10px] font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden md:inline text-xs font-semibold text-text-primary">{djName}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-black-surface border-dark-gray w-48 shadow-2xl z-50">
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard/profile" className="cursor-pointer text-xs">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard/settings" className="cursor-pointer text-xs">Settings</Link>
-                  </DropdownMenuItem>
-                  {!(typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.())) && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/install" className="cursor-pointer text-xs text-gold font-semibold flex items-center">
-                        <Smartphone className="w-3.5 h-3.5 mr-2" /> Install App
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator className="bg-dark-gray" />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red text-xs">
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <UserDropdownMenu align="end" />
             </div>
           </div>
         </header>

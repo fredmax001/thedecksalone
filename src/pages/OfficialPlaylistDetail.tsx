@@ -16,6 +16,7 @@ import { formatCompactNumber } from '@/lib/formatting';
 import { ListSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import PlaylistCoverArt from '@/components/playlists/PlaylistCoverArt';
+import SEOHead from '@/components/SEOHead';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
@@ -60,8 +61,13 @@ export function OfficialPlaylistDetail() {
       } catch {
         // fall through to smart playlists
       }
-      const res = await api.get(`/smart-playlists/${slug}`);
-      return res.data?.data ?? null;
+      try {
+        const res = await api.get(`/smart-playlists/${slug}`);
+        if (res.data?.data) return res.data.data;
+      } catch {
+        // not found
+      }
+      return null;
     },
     enabled: !!slug,
     retry: false,
@@ -149,6 +155,10 @@ export function OfficialPlaylistDetail() {
 
   return (
     <div className="min-h-screen bg-[#080808] text-text-primary py-8 px-4 sm:px-6 max-w-7xl mx-auto space-y-8 pb-32">
+      <SEOHead
+        title={playlist.title}
+        description={playlist.description || `Listen to ${playlist.title} on Deck Salone.`}
+      />
       {/* Back Button */}
       <Link
         to="/playlists"
