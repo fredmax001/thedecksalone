@@ -12,8 +12,8 @@ const PLAY_STORE_BASE_URL = 'https://play.google.com/store/apps/details?id=decks
 // keep APP_LATEST_VERSION_CODE in sync with versionCode in android/app/build.gradle.
 const DEFAULTS = {
   latestVersion: '1.2.0',
-  latestVersionCode: 12,
-  releaseNotes: 'User playlists support, smooth iOS volume controls, enhanced navigation dropdowns, and performance improvements.',
+  latestVersionCode: 13,
+  releaseNotes: 'Liquid Glass UI system, specular highlight docks, enhanced mobile navigation, and visual performance improvements.',
   playStoreUrl: PLAY_STORE_BASE_URL,
   apkUrl: '/api/app/download',
 };
@@ -26,7 +26,17 @@ function latestVersion() {
 function apkFilePath() {
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads');
   const filename = process.env.APP_APK_FILENAME || 'DeckSalone-1.2.0.apk';
-  return path.join(uploadsDir, 'apk', filename);
+  const target = path.join(uploadsDir, 'apk', filename);
+  if (fs.existsSync(target)) return target;
+  // Fallback to any available APK in the directory
+  try {
+    const apkDir = path.join(uploadsDir, 'apk');
+    if (fs.existsSync(apkDir)) {
+      const files = fs.readdirSync(apkDir).filter((f: string) => f.endsWith('.apk'));
+      if (files.length > 0) return path.join(apkDir, files[0]);
+    }
+  } catch {}
+  return target;
 }
 
 router.get('/version', (req, res) => {

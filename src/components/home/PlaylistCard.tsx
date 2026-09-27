@@ -103,19 +103,14 @@ export default function PlaylistCard({ playlist, index = 0 }: PlaylistCardProps)
             showPlayButton={true}
           />
 
-          <div className="mt-3 sm:mt-4 flex-1 flex flex-col min-w-0">
+          <div className="mt-3 flex items-center justify-between gap-2 min-w-0">
             <h3 className="font-display font-bold text-xs sm:text-sm text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
               {playlist.title}
             </h3>
-            <p className="text-[10px] sm:text-xs text-text-secondary line-clamp-2 mt-1 flex-1">
-              {playlist.description || 'Curated mix selections for the sound of Sierra Leone.'}
-            </p>
-            <div className="pt-3 mt-3 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-semibold text-text-muted">
-              <span className="flex items-center gap-1.5 text-gold">
-                <Music className="w-3.5 h-3.5" />
-                <span>{trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}</span>
-              </span>
-            </div>
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-gold shrink-0">
+              <Music className="w-3.5 h-3.5" />
+              <span>{trackCount} {trackCount === 1 ? 'Mix' : 'Mixes'}</span>
+            </span>
           </div>
         </div>
       </Link>

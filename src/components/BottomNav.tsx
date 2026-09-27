@@ -60,7 +60,7 @@ export default function BottomNav() {
   const isProfileActive = location.pathname === profilePath;
 
   return (
-    <nav className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] left-4 right-4 z-50 backdrop-blur-2xl border border-gold/25 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.85)] bg-black/90 px-2 py-1">
+    <nav className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] left-4 right-4 z-50 rounded-full liquid-glass-dock px-2 py-1 shadow-2xl">
       <div className="flex items-center justify-around h-12">
         {mainItems.map((item) => {
           const isActive = isMainActive(item.path);
@@ -73,7 +73,7 @@ export default function BottomNav() {
               {isActive && (
                 <motion.div
                   layoutId="bottomNavPill"
-                  className="absolute inset-0 bg-gold/15 rounded-full border border-gold/40 shadow-[0_0_12px_rgba(244,224,89,0.3)]"
+                  className="absolute inset-0 rounded-full liquid-glass-pill"
                   transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                 />
               )}
@@ -99,7 +99,7 @@ export default function BottomNav() {
             className="relative flex h-full w-full flex-col items-center justify-center space-y-0.5"
           >
             {isProfileActive && (
-              <div className="absolute inset-0 bg-gold/15 rounded-full border border-gold/40 shadow-[0_0_12px_rgba(244,224,89,0.3)]" />
+              <div className="absolute inset-0 rounded-full liquid-glass-pill" />
             )}
             <div className="relative z-10">
               <Avatar className={`h-5 w-5 transition-all duration-200 ${

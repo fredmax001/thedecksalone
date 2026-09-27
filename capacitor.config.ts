@@ -7,7 +7,12 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     cleartext: true,
-    allowNavigation: ['decksalone.com', '*.decksalone.com'],
+    allowNavigation: [
+      'decksalone.com',
+      '*.decksalone.com',
+      'https://decksalone.com',
+      'https://*.decksalone.com'
+    ],
   },
   ios: {
     contentInset: 'automatic',

@@ -167,8 +167,8 @@ function DeepLinkHandler() {
 
     const handleAuthUrl = async (rawUrl: string) => {
       try {
-        // Always close any open in-app browser tab when deep link arrives
-        await Browser.close().catch(() => {});
+        // Close any open in-app browser tab asynchronously when deep link arrives
+        Browser.close().catch(() => {});
 
         // Robust parsing: handle decksalone://auth/callback?token=...#token=...
         let token: string | null = null;

@@ -119,7 +119,7 @@ interface AuthState {
   savedAccounts: SavedAccount[];
   setAuth: (user: User, token: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, role: UserRole, phone?: string, gender?: string, country?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, role: UserRole, phone?: string, gender?: string, country?: string, turnstileToken?: string, utmParams?: UtmParameters) => Promise<{ success: boolean; error?: string }>;
   switchAccount: (accountId: string) => Promise<boolean>;
   removeSavedAccount: (accountId: string) => void;
   logout: (all?: boolean) => void;
@@ -132,6 +132,7 @@ import { queryClient } from '@/lib/queryClient';
 import { clearPersistedQueryCache } from '@/lib/queryPersistence';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { unregisterPushTokens } from '@/lib/pushNotifications';
+import type { UtmParameters } from '@/lib/utm';
 
 export const useAuthStore = create<AuthState>()(
   persist(

@@ -107,8 +107,16 @@ app.use((req, res, next) => {
 });
 
 function isAllowedOrigin(origin: string | undefined) {
-  if (!origin) return true; // Allow requests without Origin header (mobile apps, curl, etc.)
+  if (!origin || origin === 'null') return true; // Allow requests without Origin header or null (mobile apps, curl, etc.)
   if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Capacitor & Ionic mobile app origins in production
+  if (
+    origin === 'https://localhost' ||
+    origin === 'http://localhost' ||
+    origin.startsWith('capacitor://') ||
+    origin.startsWith('ionic://') ||
+    /^https?:\/\/localhost(:\d+)?$/.test(origin)
+  ) return true;
   // In production, only explicitly-listed origins are allowed. Do NOT use wildcard
   // subdomain regex — a compromised subdomain could make credentialed requests.
   return process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);

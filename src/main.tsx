@@ -9,8 +9,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { ErrorBoundary } from 'react-error-boundary';
 import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
 
+import { isCapacitorNative } from '@/lib/api';
+
 // Only register PWA service worker on web/browser — NOT inside native Capacitor app
-const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.();
+const isNativeApp = isCapacitorNative();
 
 if (!isNativeApp) {
   import('virtual:pwa-register').then(({ registerSW }) => {

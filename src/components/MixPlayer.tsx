@@ -604,27 +604,27 @@ export default function MixPlayer() {
               ? 'bottom-0 h-[100dvh]'
               // Mobile: floating pill above the mobile tab bar
               // Desktop/Tablet (md+): full-width bar docked flush at the very bottom
-              : 'bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] h-[68px] mx-3 mb-1 rounded-2xl border border-gold/25 glass-dock md:bottom-0 md:h-[80px] md:mx-0 md:mb-0 md:rounded-none md:border-t md:border-x-0 md:border-b-0 md:border-gold/25'
+              : 'bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] h-[68px] mx-3 mb-1 rounded-2xl border border-gold/30 liquid-glass-dock shadow-2xl md:bottom-0 md:h-[80px] md:mx-0 md:mb-0 md:rounded-none md:border-t md:border-x-0 md:border-b-0 md:border-gold/25'
           )}
         >
           {/* Background and Blur */}
           <div
-            className="absolute inset-0 transition-all duration-300"
+            className="absolute inset-0 transition-all duration-300 pointer-events-none"
             style={{
               borderRadius: isExpanded ? '0px' : 'inherit',
               background: isExpanded
-                ? 'linear-gradient(180deg, rgba(5,5,5,0.98) 0%, rgba(10,10,10,0.99) 100%)'
-                : 'rgba(15, 15, 15, 0.90)',
-              backdropFilter: 'blur(20px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                ? 'radial-gradient(ellipse at 50% 25%, rgba(244, 224, 89, 0.12) 0%, rgba(12, 12, 10, 0.96) 55%, rgba(0, 0, 0, 0.99) 100%)'
+                : undefined,
+              backdropFilter: isExpanded ? 'blur(36px) saturate(200%)' : undefined,
+              WebkitBackdropFilter: isExpanded ? 'blur(36px) saturate(200%)' : undefined,
             }}
           />
 
           {/* Thin Progress bar at top of mini player for Mobile */}
           {!isExpanded && (
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/10 rounded-t-2xl md:hidden overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-white/10 rounded-t-2xl md:hidden overflow-hidden">
               <div
-                className="h-full bg-gold transition-all duration-100"
+                className="h-full bg-gradient-to-r from-amber-500 via-gold to-yellow-200 transition-all duration-100 shadow-[0_0_10px_rgba(244,224,89,0.9)]"
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
@@ -839,31 +839,39 @@ export default function MixPlayer() {
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className="h-full flex flex-col justify-between pt-[calc(env(safe-area-inset-top,0px)+1.75rem)] pb-6 px-6 md:p-12 relative max-w-xl md:max-w-2xl mx-auto z-[110]"
               >
+                {/* Ambient liquid glow layer */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
+                  <div
+                    className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] rounded-full blur-[90px] opacity-25"
+                    style={{ background: 'radial-gradient(circle, #f4e059 0%, #ceb100 45%, transparent 75%)' }}
+                  />
+                </div>
+
                 {/* Header Row — Clearance for phone status bar */}
                 <div className="flex items-center justify-between pt-1">
                   <button
                     onClick={() => setIsExpanded(false)}
                     aria-label="Minimize Player"
-                    className="p-2.5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 rounded-full transition-all active:scale-95 shadow-sm"
+                    className="p-2.5 text-white/70 hover:text-white liquid-glass rounded-full transition-all active:scale-95 shadow-md"
                   >
                     <ChevronDown size={22} />
                   </button>
-                  <p className="text-[10px] font-extrabold text-gold/80 uppercase tracking-[0.35em] bg-gold/10 border border-gold/20 px-3 py-1 rounded-full">
+                  <p className="text-[10px] font-extrabold text-gold uppercase tracking-[0.35em] liquid-glass-pill px-4 py-1.5 rounded-full">
                     Now Playing
                   </p>
                   <button
                     onClick={close}
                     aria-label="Close Player"
-                    className="p-2.5 text-white/60 hover:text-red hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 rounded-full transition-all active:scale-95 shadow-sm"
+                    className="p-2.5 text-white/70 hover:text-red hover:border-red-500/30 liquid-glass rounded-full transition-all active:scale-95 shadow-md"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
-                {/* Track Album Art / CD Spinner */}
+                {/* Track Album Art / CD Spinner with Liquid Glass Rim */}
                 <div className="flex flex-col items-center justify-center my-6">
                   <motion.div
-                    className="w-56 h-56 sm:w-72 sm:h-72 rounded-full overflow-hidden shadow-[0_0_80px_rgba(244,224,89,0.15)] border-4 border-white/5 relative"
+                    className="w-56 h-56 sm:w-72 sm:h-72 rounded-full overflow-hidden shadow-[0_0_70px_rgba(244,224,89,0.22),inset_0_2px_3px_rgba(255,255,255,0.45)] border-4 border-gold/35 relative"
                     animate={isPlaying ? { rotate: 360 } : {}}
                     transition={isPlaying ? { duration: 18, repeat: Infinity, ease: 'linear' } : {}}
                   >
@@ -873,7 +881,7 @@ export default function MixPlayer() {
                       className="w-full h-full object-cover select-none"
                     />
                     {/* Vinyl Center Hole */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black border border-white/10" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black border border-white/20 shadow-inner" />
                   </motion.div>
                 </div>
 
@@ -915,11 +923,12 @@ export default function MixPlayer() {
                       <span>{formatTime(currentTrack.duration)}</span>
                     </div>
 
-                    {/* Controls Row */}
-                    <div className="flex items-center justify-between px-4 mt-2">
+                    {/* Controls Row in Liquid Glass Capsule */}
+                    <div className="flex items-center justify-between px-6 py-2.5 mt-3 liquid-glass-dock rounded-3xl">
                       <button
                         onClick={() => setIsShuffled(!isShuffled)}
-                        className={`btn-press p-2 transition-colors ${isShuffled ? 'text-gold' : 'text-white/20'}`}
+                        className={`btn-press p-2 transition-colors ${isShuffled ? 'text-gold' : 'text-white/40 hover:text-white/80'}`}
+                        aria-label="Shuffle"
                       >
                         <Shuffle size={18} />
                       </button>
@@ -928,13 +937,15 @@ export default function MixPlayer() {
                         <button
                           onClick={prev}
                           disabled={queue.length <= 1}
-                          className="p-2 text-white/50 hover:text-white/90 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                          className="p-2 text-white/60 hover:text-white active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                          aria-label="Previous Track"
                         >
                           <SkipBack size={26} />
                         </button>
                         <button
                           onClick={togglePlayHandler}
-                          className="w-14 h-14 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_24px_rgba(244,224,89,0.4)]"
+                          className="w-14 h-14 rounded-full bg-gold flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(244,224,89,0.5),inset_0_1.5px_1px_rgba(255,255,255,0.7)]"
+                          aria-label={isPlaying ? 'Pause' : 'Play'}
                         >
                           {isPlaying ? (
                             <Pause size={24} className="text-black" />
@@ -945,7 +956,8 @@ export default function MixPlayer() {
                         <button
                           onClick={next}
                           disabled={queue.length <= 1}
-                          className="p-2 text-white/50 hover:text-white/90 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                          className="p-2 text-white/60 hover:text-white active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                          aria-label="Next Track"
                         >
                           <SkipForward size={26} />
                         </button>
@@ -953,7 +965,8 @@ export default function MixPlayer() {
 
                       <button
                         onClick={() => setIsRepeating(!isRepeating)}
-                        className={`btn-press p-2 transition-colors ${isRepeating ? 'text-gold' : 'text-white/20'}`}
+                        className={`btn-press p-2 transition-colors ${isRepeating ? 'text-gold' : 'text-white/40 hover:text-white/80'}`}
+                        aria-label="Repeat"
                       >
                         <Repeat size={18} />
                       </button>
@@ -1029,15 +1042,15 @@ export default function MixPlayer() {
                   </div>
                 )}
 
-                {/* Action buttons footer */}
+                {/* Action buttons footer with Liquid Glass */}
                 <div className="flex items-center justify-center gap-3 mt-6 border-t border-white/5 pt-6 flex-wrap">
                   <button
                     onClick={toggleLike}
                     className={cn(
-                      'btn-press flex items-center gap-2 px-3.5 py-2 rounded-full border text-xs font-semibold uppercase tracking-wider transition-colors',
+                      'btn-press flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider transition-all',
                       liked
-                        ? 'border-red/30 text-red bg-red/5'
-                        : 'border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
+                        ? 'border border-red/40 text-red bg-red/10 shadow-[0_0_14px_rgba(239,68,68,0.25)]'
+                        : 'liquid-glass text-white/70 hover:text-white'
                     )}
                   >
                     <Heart size={14} className={liked ? 'fill-red' : ''} />
@@ -1046,7 +1059,7 @@ export default function MixPlayer() {
 
                   <button
                     onClick={() => setShowPlaylistModal(true)}
-                    className="btn-press flex items-center gap-2 px-3.5 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors text-xs font-semibold uppercase tracking-wider"
+                    className="btn-press flex items-center gap-2 px-4 py-2 rounded-full liquid-glass text-white/70 hover:text-white transition-all text-xs font-semibold uppercase tracking-wider"
                   >
                     <ListPlus size={14} />
                     <span>Playlist</span>

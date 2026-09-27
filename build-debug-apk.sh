@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-export VITE_API_URL=https://app.decksalone.com/api
+export VITE_API_URL=https://decksalone.com/api
 
 echo "==> Building web app with VITE_API_URL=$VITE_API_URL"
 npm run build

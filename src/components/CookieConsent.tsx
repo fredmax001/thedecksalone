@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Cookie, X, Check, Lock } from 'lucide-react';
+import { Cookie, X, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const CONSENT_STORAGE_KEY = 'decksalone_cookie_consent_v2';

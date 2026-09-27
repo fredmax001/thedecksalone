@@ -1,9 +1,33 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
 
+export const isCapacitorNative = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const win = window as any;
+  // Direct native bridges injected before scripts run
+  if (win.androidBridge || win.webkit?.messageHandlers?.bridge) return true;
+  if (win.Capacitor && typeof win.Capacitor.isNativePlatform === 'function') {
+    try {
+      if (win.Capacitor.isNativePlatform()) return true;
+    } catch {}
+  }
+  // Capacitor library check
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+  } catch {}
+  // WebView URL protocol and hostname indicators
+  const proto = win.location?.protocol;
+  const host = win.location?.hostname;
+  if (proto === 'capacitor:' || proto === 'ionic:') return true;
+  if ((host === 'localhost' || host === '127.0.0.1') && !import.meta.env.DEV) {
+    return true;
+  }
+  return false;
+};
+
 const getApiUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (Capacitor.isNativePlatform()) {
+  if (isCapacitorNative()) {
     return 'https://decksalone.com/api';
   }
   return '/api';

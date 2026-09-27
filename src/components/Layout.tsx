@@ -257,7 +257,7 @@ export default function Layout() {
       </aside>
 
       <div className="min-h-[100dvh] min-w-0 overflow-x-hidden md:ml-[260px] lg:ml-[300px]">
-        <header className="sticky top-0 z-30 border-b border-gold/10 bg-black/95 backdrop-blur-2xl shadow-[0_1px_20px_rgba(0,0,0,0.5)] pt-[env(safe-area-inset-top,0px)]">
+        <header className="sticky top-0 z-30 liquid-glass-header pt-[env(safe-area-inset-top,0px)]">
           <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-6 lg:px-10">
             <Link to="/" className="flex shrink-0 items-center md:hidden">
               <img src="/logo-mobile.png?v=3" alt="Deck Salone" className="h-9 w-auto object-contain" />
@@ -275,7 +275,7 @@ export default function Layout() {
 
               <button
                 onClick={() => setSearchOpen(true)}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 text-text-muted hover:text-gold hover:border-gold/40 transition-all shadow-inner"
+                className="flex items-center justify-center w-9 h-9 rounded-full liquid-glass text-text-muted hover:text-gold hover:border-gold/40 transition-all shadow-sm"
                 aria-label="Search"
               >
                 <Search className="w-4 h-4 text-gold" />
@@ -285,7 +285,7 @@ export default function Layout() {
               {isDj && (
                 <Link
                   to="/dashboard/mixes"
-                  className="flex items-center justify-center w-9 h-9 rounded-full bg-black-surface/80 border border-white/10 hover:border-gold/40 text-gold hover:brightness-110 active:scale-95 transition-all shadow-inner shrink-0"
+                  className="flex items-center justify-center w-9 h-9 rounded-full liquid-glass hover:border-gold/40 text-gold hover:brightness-110 active:scale-95 transition-all shadow-sm shrink-0"
                   title="Upload Mix"
                   aria-label="Upload Mix"
                 >

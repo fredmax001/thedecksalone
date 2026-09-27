@@ -265,6 +265,71 @@
     box-shadow: 0 10px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(244, 224, 89, 0.08);
   }
 
+  /* ═══════════════════════════════════════════════════════════════ */
+  /*  LIQUID GLASS SYSTEM (PWA, APK, AAB & WEB)                     */
+  /*  High-index optical refraction, specular highlights, and fluid */
+  /*  translucent depth.                                            */
+  /* ═══════════════════════════════════════════════════════════════ */
+  .liquid-glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(12, 12, 12, 0.72) 40%, rgba(5, 5, 5, 0.85) 100%);
+    backdrop-filter: blur(28px) saturate(190%) contrast(105%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%) contrast(105%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.28),
+                inset 0 -1px 1px 0 rgba(0, 0, 0, 0.5),
+                0 16px 36px -6px rgba(0, 0, 0, 0.8),
+                0 0 16px rgba(244, 224, 89, 0.05);
+  }
+
+  .liquid-glass-dock {
+    background: linear-gradient(180deg, rgba(28, 26, 16, 0.82) 0%, rgba(10, 10, 10, 0.92) 40%, rgba(5, 5, 5, 0.96) 100%);
+    backdrop-filter: blur(32px) saturate(210%) contrast(108%);
+    -webkit-backdrop-filter: blur(32px) saturate(210%) contrast(108%);
+    border: 1px solid rgba(244, 224, 89, 0.28);
+    box-shadow: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38),
+                inset 0 -1px 1.5px 0 rgba(244, 224, 89, 0.15),
+                0 12px 40px rgba(0, 0, 0, 0.85),
+                0 0 25px rgba(244, 224, 89, 0.14);
+  }
+
+  .liquid-glass-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.06) 0%, rgba(18, 18, 18, 0.75) 45%, rgba(10, 10, 10, 0.88) 100%);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.2),
+                0 10px 30px rgba(0, 0, 0, 0.5),
+                0 0 15px rgba(244, 224, 89, 0.04);
+  }
+
+  .liquid-glass-gold {
+    background: linear-gradient(135deg, rgba(244, 224, 89, 0.18) 0%, rgba(20, 18, 10, 0.82) 50%, rgba(10, 10, 10, 0.92) 100%);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid rgba(244, 224, 89, 0.38);
+    box-shadow: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.32),
+                inset 0 -1px 1px 0 rgba(244, 224, 89, 0.2),
+                0 10px 32px rgba(0, 0, 0, 0.6),
+                0 0 20px rgba(244, 224, 89, 0.18);
+  }
+
+  .liquid-glass-pill {
+    background: linear-gradient(180deg, rgba(244, 224, 89, 0.24) 0%, rgba(244, 224, 89, 0.10) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(244, 224, 89, 0.45);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.4),
+                0 0 14px rgba(244, 224, 89, 0.25);
+  }
+
+  .liquid-glass-header {
+    background: linear-gradient(180deg, rgba(5, 5, 5, 0.94) 0%, rgba(10, 10, 10, 0.86) 100%);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border-bottom: 1px solid rgba(244, 224, 89, 0.16);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  }
+
   .glass-card {
     background: rgba(18, 18, 18, 0.7);
     backdrop-filter: blur(16px);
@@ -616,6 +681,29 @@ html[data-theme="light"] .glass-card-gold {
 
 html[data-theme="light"] .gold-glow {
   box-shadow: 0 0 20px rgba(166, 124, 0, 0.18) !important;
+}
+
+html[data-theme="light"] .liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 245, 245, 0.88) 100%) !important;
+  border-color: rgba(206, 177, 0, 0.3) !important;
+  box-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.95), 0 12px 32px rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .liquid-glass-dock {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 248, 246, 0.92) 100%) !important;
+  border-color: rgba(166, 124, 0, 0.35) !important;
+  box-shadow: inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.95), 0 14px 38px rgba(0, 0, 0, 0.12), 0 0 20px rgba(244, 224, 89, 0.15) !important;
+}
+
+html[data-theme="light"] .liquid-glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 248, 248, 0.9) 100%) !important;
+  border-color: #E5E7EB !important;
+}
+
+html[data-theme="light"] .liquid-glass-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 250, 0.92) 100%) !important;
+  border-bottom-color: rgba(206, 177, 0, 0.25) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
 }
 
 /* ─── Light mode: admin dashboard hardcoded dark background overrides ─── */

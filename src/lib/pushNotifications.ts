@@ -5,20 +5,21 @@ import api from '@/lib/api';
 /**
  * Firebase Cloud Messaging (FCM) push notifications — native Android app only.
  *
- * - Registers listeners once, requests permission, and sends the FCM token
- *   to the backend (`POST /notifications/push-token`).
- * - Tapping a notification navigates to its `actionUrl` (in-app deep link).
- * - Until real Firebase keys are added (see PUSH_NOTIFICATIONS_SETUP.md),
- *   registration simply never fires and the existing local-notification
- *   poller keeps working as the fallback.
+ * NOTE: Until real Firebase keys (google-services.json) are configured,
+ * FCM registration must NOT be called, because FirebaseMessaging.getInstance()
+ * throws an unhandled IllegalStateException on Android when FirebaseApp is not
+ * initialized, which fatal-crashes the app process on login.
  */
+
+// Keep disabled until google-services.json is added to app/android/app/
+const FCM_ENABLED = false;
 
 let listenersRegistered = false;
 
 export async function initPushNotifications(
   navigate: (path: string) => void
 ): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
+  if (!Capacitor.isNativePlatform() || !FCM_ENABLED) return;
 
   try {
     if (!listenersRegistered) {
