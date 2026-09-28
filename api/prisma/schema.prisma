@@ -30,6 +30,7 @@ model User {
   name                    String?
   passwordResetExpiry     DateTime?
   passwordResetToken      String?
+  tokenVersion            Int          @default(0) // bumped on password change/reset to revoke existing JWTs (AUTH-1)
   socialLinks             Json?
   status                  UserStatus   @default(ACTIVE)
   referralCode            String?      @unique  // e.g. "DJ-XMAN-A1B2"

@@ -58,7 +58,9 @@ function sanitizeAuthPayload<T extends Record<string, any>>(body: T): T {
 function checkAccountLockout(email: string, ip: string): { isLocked: boolean; delayMs: number } {
   const normalizedEmail = email ? email.toLowerCase().trim() : '';
   const key = `${normalizedEmail}:${ip}`;
-  const record = failedAttemptStore.get(key) || failedAttemptStore.get(normalizedEmail);
+  // AUTH-2: per email:ip records only — no email-wide shared record (prevents
+  // targeted account-lockout DoS from rotating IPs).
+  const record = failedAttemptStore.get(key);
 
   if (!record) {
     return { isLocked: false, delayMs: 0 };
@@ -74,7 +76,6 @@ function checkAccountLockout(email: string, ip: string): { isLocked: boolean; de
   // If lockout expired, reset
   if (record.lockoutUntil && now >= record.lockoutUntil) {
     failedAttemptStore.delete(key);
-    failedAttemptStore.delete(normalizedEmail);
     return { isLocked: false, delayMs: 0 };
   }
 
@@ -116,9 +117,6 @@ async function recordFailedAttempt(email: string, ip: string): Promise<void> {
   }
 
   failedAttemptStore.set(key, record);
-  if (normalizedEmail) {
-    failedAttemptStore.set(normalizedEmail, record);
-  }
 }
 
 /**
@@ -128,9 +126,6 @@ function recordSuccessfulLogin(email: string, ip: string): void {
   const normalizedEmail = email ? email.toLowerCase().trim() : '';
   const key = `${normalizedEmail}:${ip}`;
   failedAttemptStore.delete(key);
-  if (normalizedEmail) {
-    failedAttemptStore.delete(normalizedEmail);
-  }
 }
 
 /**

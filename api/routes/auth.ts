@@ -139,7 +139,7 @@ router.post('/register', authLimiter, verifyTurnstile, asyncHandler(async (req, 
     console.error('[Auth] Failed to create welcome notification:', err);
   });
 
-  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  const token = signToken({ id: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion ?? 0 });
   return res.status(201).json({ success: true, data: { user, token } });
 }));
 
@@ -180,7 +180,7 @@ router.post('/login', loginRateLimiter, asyncHandler(async (req, res) => {
 
   recordSuccessfulLogin(email, clientIp);
 
-  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  const token = signToken({ id: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion ?? 0 });
   return ok(res, {
       user: { id: user.id, email: user.email, username: user.username, role: user.role },
       token,
@@ -241,7 +241,7 @@ router.post('/phone/verify', authLimiter, asyncHandler(async (req, res) => {
     });
   }
 
-  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  const token = signToken({ id: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion ?? 0 });
   return ok(res, {
       user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
       token,
@@ -459,14 +459,19 @@ router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   const hashedPassword = await hashPassword(newPassword);
 
   // Update password and immediately invalidate the reset token (single-use)
+  // Bump tokenVersion to revoke all existing sessions — AUTH-1
   await prisma.user.update({
     where: { id: user.id },
     data: {
       password: hashedPassword,
       passwordResetToken: null,
       passwordResetExpiry: null,
+      tokenVersion: { increment: 1 },
     },
   });
+
+  // Revoke cached auth sessions immediately (bypass the 30s auth cache)
+  invalidateUserAuthCache(user.id);
 
   return ok(res, { message: 'Password updated successfully' });
 }));
@@ -640,7 +645,7 @@ router.get('/google/callback', async (req, res, next) => {
 
       console.log('[Google OAuth] User authenticated:', { id: user.id, email: user.email, role: user.role, isMobile });
 
-      const token = signToken({ id: user.id, email: user.email, role: user.role });
+      const token = signToken({ id: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion ?? 0 });
       if (isMobile) {
         const mobileUrl = mobileSuccessUrl(token);
         console.log('[Google OAuth] Mobile redirect URL:', mobileUrl);
@@ -903,8 +908,11 @@ router.post('/change-password', authMiddleware, asyncHandler(async (req, res) =>
   const hashedPassword = await hashPassword(newPassword);
   await prisma.user.update({
     where: { id: req.user.id },
-    data: { password: hashedPassword },
+    data: { password: hashedPassword, tokenVersion: { increment: 1 } },
   });
+
+  // Revoke all existing sessions immediately (bypass the 30s auth cache) — AUTH-1
+  invalidateUserAuthCache(req.user.id);
 
   return ok(res, { message: 'Password updated successfully' });
 }));

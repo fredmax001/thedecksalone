@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
 const { searchLimiter, purchaseLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
@@ -613,8 +613,11 @@ router.put('/password', authMiddleware, asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({
     where: { id: req.user.id },
-    data: { password: hashedPassword },
+    data: { password: hashedPassword, tokenVersion: { increment: 1 } },
   });
+
+  // Revoke all existing sessions immediately (bypass the 30s auth cache) — AUTH-1
+  invalidateUserAuthCache(req.user.id);
 
   return ok(res, { message: 'Password updated successfully' });
 }));

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { fail } = require('../utils/response');
+const { getClientIp } = require('../utils/rateLimiter');
 import logger from '../utils/logger';
 
 /**
@@ -8,9 +9,22 @@ import logger from '../utils/logger';
  */
 export async function verifyTurnstile(req: any, res: any, next: any) {
   const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  const isProduction = process.env.NODE_ENV === 'production';
 
-  // In test or development environments without secret key, bypass verification
-  if (!secretKey || secretKey === '1x0000000000000000000000000000000AA') {
+  // AUTH-5: the public test key is only acceptable outside production.
+  if (secretKey === '1x0000000000000000000000000000000AA') {
+    if (!isProduction) {
+      return next();
+    }
+    // Fail closed in production — a test key configured in prod means captcha is not really configured.
+    return fail(res, 500, 'Captcha not configured');
+  }
+
+  // AUTH-5: missing secret — fail closed in production, skip in non-production.
+  if (!secretKey) {
+    if (isProduction) {
+      return fail(res, 500, 'Captcha not configured');
+    }
     return next();
   }
 
@@ -20,12 +34,14 @@ export async function verifyTurnstile(req: any, res: any, next: any) {
   }
 
   try {
-    const remoteIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
+    // AUTH-5: rightmost XFF entry is the real peer IP behind our trusted proxy
+    // (the leftmost entry is client-spoofable) — same resolution as the rate limiter.
+    const remoteIp = getClientIp(req);
     const formData = new URLSearchParams();
     formData.append('secret', secretKey);
     formData.append('response', token);
     if (remoteIp) {
-      formData.append('remoteip', String(remoteIp).split(',')[0].trim());
+      formData.append('remoteip', remoteIp);
     }
 
     const response = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', formData.toString(), {

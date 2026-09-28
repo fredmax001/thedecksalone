@@ -9,23 +9,32 @@ async function getActiveUserFromToken(token) {
   const userId = decoded.id || decoded.userId;
   if (!userId) return null;
 
+  // Tokens issued before tokenVersion existed have no version claim — treat as 0 (AUTH-1)
+  const payloadTokenVersion = typeof decoded.tokenVersion === 'number' ? decoded.tokenVersion : 0;
+
   const cacheKey = `auth_user:${userId}`;
   const cached = await getCache(cacheKey);
   if (cached && cached.id && cached.role && cached.status === 'ACTIVE') {
+    const cachedTokenVersion = typeof cached.tokenVersion === 'number' ? cached.tokenVersion : 0;
+    if (cachedTokenVersion !== payloadTokenVersion) return null;
     return cached;
   }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, role: true, status: true },
+    select: { id: true, email: true, role: true, status: true, tokenVersion: true },
   });
   if (!user || user.status !== 'ACTIVE') return null;
+
+  const userTokenVersion = typeof user.tokenVersion === 'number' ? user.tokenVersion : 0;
+  if (userTokenVersion !== payloadTokenVersion) return null;
 
   const authUser = {
     id: user.id,
     email: user.email,
     role: user.role,
     status: user.status,
+    tokenVersion: userTokenVersion,
   };
 
   // Cache user auth session for 30 seconds to limit stale role/status windows
