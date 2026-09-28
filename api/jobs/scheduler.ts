@@ -74,13 +74,16 @@ export function startScheduledJobs() {
           await tx.message.deleteMany({ where: { senderId: userId } });
           await tx.message.deleteMany({ where: { receiverId: userId } });
           await tx.review.deleteMany({ where: { userId } });
-          await tx.payment.deleteMany({ where: { clientId: userId } });
+          // DB-3: payments are the financial ledger — never erase rows.
+          // Anonymize by detaching the purged user instead of deleting.
+          await tx.payment.updateMany({ where: { clientId: userId }, data: { clientId: null } });
           await tx.booking.deleteMany({ where: { clientId: userId } });
 
           if (user.djProfile) {
             const djId = user.djProfile.id;
             await tx.review.deleteMany({ where: { djId } });
-            await tx.payment.deleteMany({ where: { djId } });
+            // DB-3: anonymize the ledger instead of destroying it.
+            await tx.payment.updateMany({ where: { djId }, data: { djId: null } });
             await tx.booking.deleteMany({ where: { djId } });
             await tx.event.deleteMany({ where: { djId } });
             await tx.battleEntry.deleteMany({ where: { djId } });

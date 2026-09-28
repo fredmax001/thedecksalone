@@ -708,9 +708,9 @@ model Message {
 
 model Payment {
   id          String        @id @default(cuid())
-  bookingId   String
-  clientId    String
-  djId        String
+  bookingId   String?
+  clientId    String?
+  djId        String?
   amount      Float
   currency    String        @default("SLE")
   type        PaymentType   @default(DEPOSIT)
@@ -720,8 +720,10 @@ model Payment {
   paidAt      DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  client      User          @relation("ClientPayments", fields: [clientId], references: [id])
+  // DB-3: payments are the financial ledger — account purge and booking
+  // deletion must NEVER erase rows, only detach them (SET NULL).
+  booking     Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  client      User?         @relation("ClientPayments", fields: [clientId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
   @@index([clientId])
@@ -761,7 +763,7 @@ model ProSubscriptionRequest {
 
 model PayPalPayment {
   id         String    @id @default(cuid())
-  userId     String
+  userId     String?
   orderId    String    @unique // PayPal order ID — also our idempotency key
   purpose    String    @default("SUBSCRIPTION") // SUBSCRIPTION | TICKET | BOOKING | SUPPORT
   refId      String? // purpose-specific reference (ticket ids, bookingId, djId)
@@ -775,7 +777,8 @@ model PayPalPayment {
   capturedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // DB-3: keep the PayPal ledger row when the user is purged — detach, don't erase.
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@map("paypal_payments")
@@ -1469,7 +1472,7 @@ model DjSupport {
 
 model PayoutRequest {
   id              String        @id @default(cuid())
-  djId            String
+  djId            String?
   amount          Float
   currency        String        @default("SLE")
   status          String        @default("PENDING") // PENDING, PROCESSED, REJECTED
@@ -1479,7 +1482,9 @@ model PayoutRequest {
   processedAt     DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  dj              DjProfile     @relation(fields: [djId], references: [id], onDelete: Cascade)
+  // DB-3: payout requests are financial records — the account purge deletes the
+  // DJ profile, which must not cascade away the payout ledger row.
+  dj              DjProfile?    @relation(fields: [djId], references: [id], onDelete: SetNull)
 
   @@index([djId])
   @@index([status])

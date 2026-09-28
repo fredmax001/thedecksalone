@@ -3,6 +3,8 @@
  *   DB-1  — migration exists for EventTicket.idempotencyKey (idempotent form)
  *   DB-6  — sanity: ranking_history (djId, week) unique migration exists
  *   DB-4  — account purge deletes SupportTicket replies + tickets before user.delete()
+ *   DB-3  — account purge anonymizes payments (updateMany clientId/djId = null),
+ *            never deleteMany; migration keeps the ledger via ON DELETE SET NULL
  *   INFRA-7 — deploy.sh no longer uses `prisma db push --accept-data-loss`
  *   INFRA-2/4 — Dockerfile runs as non-root via USER; entrypoint exec's node
  */
@@ -112,7 +114,10 @@ describe('DB-4: purge job detaches support tickets before deleting the user', ()
       follow: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       message: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       review: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      payment: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      payment: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       booking: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       supportTicketReply: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       supportTicket: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -134,6 +139,117 @@ describe('DB-4: purge job detaches support tickets before deleting the user', ()
     const userOrder = tx.user.delete.mock.invocationCallOrder[0];
     expect(repliesOrder).toBeLessThan(userOrder);
     expect(ticketsOrder).toBeLessThan(userOrder);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DB-3: account purge must not destroy the financial ledger
+// ---------------------------------------------------------------------------
+describe('DB-3: purge job anonymizes payments instead of deleting them', () => {
+  const DAILY_PURGE_CRON = '0 3 * * *'; // CRON_JOBS.dailyAccountPurge
+
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  it('detaches clientId/djId via updateMany and never calls payment.deleteMany', async () => {
+    startScheduledJobs();
+    const purge = mockScheduled[DAILY_PURGE_CRON];
+    expect(purge).toBeDefined();
+
+    prisma.user.findMany.mockResolvedValue([{ id: 'user-1', djProfile: { id: 'dj-1' } }]);
+
+    const tx = {
+      notification: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      battleVote: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      mixLike: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      follow: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      message: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      review: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      payment: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      booking: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      event: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      battleEntry: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      mix: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      djPhoto: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      streamingPlatform: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      rankingHistory: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      gigApplication: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      proSubscriptionRequest: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      oppApplications: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      supportTicketReply: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      supportTicket: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      djProfile: { delete: jest.fn().mockResolvedValue({ id: 'dj-1' }) },
+      user: { delete: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+    };
+    prisma.$transaction.mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
+
+    await purge();
+
+    // Ledger rows are anonymized (detached), never erased.
+    expect(tx.payment.updateMany).toHaveBeenCalledWith({
+      where: { clientId: 'user-1' },
+      data: { clientId: null },
+    });
+    expect(tx.payment.updateMany).toHaveBeenCalledWith({
+      where: { djId: 'dj-1' },
+      data: { djId: null },
+    });
+    expect(tx.payment.deleteMany).not.toHaveBeenCalled();
+
+    // PayPal ledger rows are detached by ON DELETE SET NULL on user.delete() —
+    // the purge must never explicitly delete them.
+    expect((tx as Record<string, unknown>).payPalPayment).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DB-3: migration retains the financial ledger (SET NULL FKs + nullable owners)
+// ---------------------------------------------------------------------------
+describe('DB-3: retain_financial_ledger_on_purge migration', () => {
+  const migrationDir = path.join(MIGRATIONS_DIR, '20260928103000_retain_financial_ledger_on_purge');
+  const migrationPath = path.join(migrationDir, 'migration.sql');
+  const sql = fs.existsSync(migrationPath) ? fs.readFileSync(migrationPath, 'utf8') : '';
+  // Statement-level assertions run against code only (comment lines stripped) so
+  // the rollback documentation block can't produce false matches.
+  const code = sql
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n');
+
+  it('migration file exists', () => {
+    expect(fs.existsSync(migrationDir)).toBe(true);
+    expect(fs.existsSync(migrationPath)).toBe(true);
+  });
+
+  it('makes payments owner columns nullable (DROP NOT NULL)', () => {
+    expect(code).toMatch(/ALTER TABLE "payments" ALTER COLUMN "clientId" DROP NOT NULL/);
+    expect(code).toMatch(/ALTER TABLE "payments" ALTER COLUMN "djId" DROP NOT NULL/);
+    expect(code).toMatch(/ALTER TABLE "payments" ALTER COLUMN "bookingId" DROP NOT NULL/);
+  });
+
+  it('switches payments booking/client FKs to ON DELETE SET NULL (no cascade wipe)', () => {
+    expect(code).toMatch(/ADD CONSTRAINT "payments_bookingId_fkey"[\s\S]*ON DELETE SET NULL/);
+    expect(code).toMatch(/ADD CONSTRAINT "payments_clientId_fkey"[\s\S]*ON DELETE SET NULL/);
+    expect(code).not.toMatch(/ADD CONSTRAINT "payments_bookingId_fkey"[^;]*ON DELETE CASCADE/);
+  });
+
+  it('switches PayPalPayment and PayoutRequest owner FKs to ON DELETE SET NULL', () => {
+    expect(code).toMatch(/ADD CONSTRAINT "paypal_payments_userId_fkey"[\s\S]*ON DELETE SET NULL/);
+    expect(code).toMatch(/ADD CONSTRAINT "payout_requests_djId_fkey"[\s\S]*ON DELETE SET NULL/);
+  });
+
+  it('guards drifted tables idempotently (prod was db push\'d)', () => {
+    expect(code).toMatch(/ALTER TABLE IF EXISTS "paypal_payments"/);
+    expect(code).toMatch(/ALTER TABLE IF EXISTS "payout_requests"/);
+    expect(code).toMatch(/DROP CONSTRAINT IF EXISTS "payments_bookingId_fkey"/);
   });
 });
 
