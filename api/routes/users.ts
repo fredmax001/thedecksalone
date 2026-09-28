@@ -6,7 +6,7 @@ const { searchLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
-const { uploadBuffer, deleteFile } = require('../utils/storage');
+const { uploadBuffer, deleteFile, isSafeUploadUrl } = require('../utils/storage');
 const { sendAccountDeletionEmail } = require('../utils/email');
 const { isValidUsername } = require('../utils/username');
 const { parsePagination } = require('../utils/pagination');
@@ -421,7 +421,11 @@ const updateProfileSchema = z.object({
   location: z.string().max(100).optional().nullable().or(z.literal('')),
   gender: z.string().max(50).optional().nullable().or(z.literal('')),
   dateOfBirth: z.string().optional().nullable().or(z.literal('')),
-  avatar: z.string().optional().nullable().or(z.literal('')),
+  // UPL-3: avatar must be an http(s) URL or a contained /uploads/... path.
+  avatar: z.string().optional().nullable().or(z.literal('')).refine(
+    (v) => v === undefined || v === null || v === '' || isSafeUploadUrl(v),
+    { message: 'Invalid avatar URL' }
+  ),
   favoriteGenres: z.array(z.string()).optional().nullable(),
   social: z.object({
     instagram: z.string().optional().nullable().or(z.literal('')),

@@ -255,31 +255,47 @@ app.use('/api/developers', developerRoutes);
 app.use('/api/hall-of-fame', hallOfFameRoutes);
 app.use('/api/app', appVersionRoutes);
 
-// Safe image proxy endpoint to allow Canvas export without CORS/tainting issues
+// Safe image proxy endpoint to allow Canvas export without CORS/tainting issues.
+// Hardened against SSRF (UPL-4 / INFRA-5): host allowlist, private-IP block after
+// DNS resolution, no redirect following, 5 MB cap, image content-types only.
 app.get('/api/proxy-image', async (req, res) => {
+  const { assertSafeProxyUrl, ProxyUrlError, PROXY_ALLOWED_CONTENT_TYPES } = require('./utils/imageProxy');
   try {
     const imageUrl = req.query.url;
-    if (!imageUrl || typeof imageUrl !== 'string' || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+    if (!imageUrl || typeof imageUrl !== 'string') {
       return res.status(400).send('Invalid image URL');
     }
 
+    const parsed = await assertSafeProxyUrl(imageUrl);
+
     const axios = require('axios');
-    const response = await axios.get(imageUrl, {
+    // maxRedirects: 0 — a 3xx is rejected by validateStatus, so redirect-to-internal
+    // bypasses are impossible; each hop would re-validate the allowlist anyway.
+    const response = await axios.get(parsed.toString(), {
       responseType: 'arraybuffer',
       timeout: 10000,
+      maxContentLength: 5 * 1024 * 1024,
+      maxRedirects: 0,
+      validateStatus: (s: number) => s >= 200 && s < 300,
       headers: {
         'User-Agent': 'DeckSalone/1.0 ImageProxy',
       },
     });
 
-    const contentType = response.headers['content-type'] || 'image/jpeg';
+    const contentType = String(response.headers['content-type'] || '')
+      .split(';')[0].trim().toLowerCase();
+    if (!PROXY_ALLOWED_CONTENT_TYPES.has(contentType)) {
+      return res.status(502).send('Upstream returned an unsupported content type');
+    }
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.send(Buffer.from(response.data));
   } catch (error) {
-    return res.status(500).send('Failed to proxy image');
+    if (error instanceof ProxyUrlError || (error && error.statusCode === 400)) {
+      return res.status(400).send((error && error.message) || 'Invalid image URL');
+    }
+    return res.status(502).send('Failed to proxy image');
   }
 });
 

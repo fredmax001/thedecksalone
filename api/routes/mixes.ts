@@ -1558,7 +1558,8 @@ router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
     }
     const safeSuffix = path.normalize(relativeMatch[1]).replace(/^(\.\.(\/|\\|$))+/, '');
     const filePath = path.join(uploadsDir, safeSuffix);
-    if (!filePath.startsWith(uploadsDir)) {
+    // UPL-10: separator-aware containment check (plain startsWith matches /app/uploads2)
+    if (!filePath.startsWith(path.resolve(uploadsDir) + path.sep)) {
       return res.status(400).send('Invalid audio file path.');
     }
     return res.download(filePath, filename, (err) => {
