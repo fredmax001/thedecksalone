@@ -6,10 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    cleartext: true,
     allowNavigation: [
-      'decksalone.com',
-      '*.decksalone.com',
       'https://decksalone.com',
       'https://*.decksalone.com'
     ],

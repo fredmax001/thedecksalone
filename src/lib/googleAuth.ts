@@ -27,7 +27,9 @@ export const openGoogleAuth = async () => {
     // (Chrome Custom Tabs do not always reliably send the state cookie back to the callback).
     const deviceId = getOrCreateDeviceId();
     const url = `${API_BASE}/api/v1/auth/google/mobile?device_id=${encodeURIComponent(deviceId)}`;
-    console.log('[Google Auth] Opening mobile OAuth:', url);
+    if (import.meta.env.DEV) {
+      console.log('[Google Auth] Opening mobile OAuth:', url);
+    }
     await Browser.open({ url });
   } else {
     // Web: keep the existing same-origin redirect behavior.

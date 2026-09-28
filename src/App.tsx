@@ -217,10 +217,14 @@ function DeepLinkHandler() {
             state: { token },
           });
         } else if (error) {
-          console.warn('[DeepLink] Extracted error from URL:', error);
+          if (import.meta.env.DEV) {
+            console.warn('[DeepLink] Extracted error from URL:', error);
+          }
           navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true, state: { error } });
         } else if (rawUrl.includes('decksalone') || rawUrl.includes('auth')) {
-          console.warn('[DeepLink] Callback received without token or error');
+          if (import.meta.env.DEV) {
+            console.warn('[DeepLink] Callback received without token or error');
+          }
           navigate('/login?error=google_auth_failed', { replace: true });
         }
       } catch (e) {
