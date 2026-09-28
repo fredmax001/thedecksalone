@@ -7,6 +7,7 @@ const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { getSubscriptionConfig } = require('../utils/subscriptionConfig');
 const { getSubscriptionState } = require('../utils/subscription');
 const { ok, fail } = require('../utils/response');
+const { purchaseLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
@@ -94,7 +95,7 @@ router.get('/pro-subscription/current', authMiddleware, async (req, res) => {
 });
 
 // POST /api/payments/pro-subscription - Submit Orange Money proof for Pro review
-router.post('/pro-subscription', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+router.post('/pro-subscription', authMiddleware, purchaseLimiter, uploadDocument.single('proof'), async (req, res) => {
   try {
     const parsed = proSubscriptionSchema.safeParse(req.body);
     if (!parsed.success) {

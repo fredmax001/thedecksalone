@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { prisma } = require('../utils/prisma');
 const { softAuthMiddleware } = require('../middleware/auth');
 const { ok, fail } = require('../utils/response');
+const { analyticsVisitLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ function hashIp(ip: string | undefined) {
 }
 
 // POST /api/analytics/visit - lightweight public beacon
-router.post('/visit', softAuthMiddleware, async (req, res) => {
+router.post('/visit', softAuthMiddleware, analyticsVisitLimiter, async (req, res) => {
   try {
     const { path, city, country, referrer } = req.body || {};
     const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.socket?.remoteAddress || req.ip;
@@ -29,9 +30,15 @@ router.post('/visit', softAuthMiddleware, async (req, res) => {
       visitCountry = user?.djProfile?.country || null;
     }
 
+    // SOC-10: cap path length to prevent DB write amplification via oversized values
+    const rawPath = path || req.headers.referer || '/';
+    if (typeof rawPath !== 'string' || rawPath.length > 500) {
+      return fail(res, 400, 'Invalid path');
+    }
+
     await prisma.siteVisit.create({
       data: {
-        path: path || req.headers.referer || '/',
+        path: rawPath,
         userId: req.user?.id || null,
         ipHash: hashIp(ip),
         city: visitCity,

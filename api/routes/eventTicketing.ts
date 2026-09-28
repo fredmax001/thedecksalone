@@ -282,12 +282,15 @@ function extractTicketIdentifiers(rawPayload: string): ExtractedTicketIdentifier
 function buildCsv(rows: Record<string, any>[]): string {
   if (rows.length === 0) return '';
   const headers = Object.keys(rows[0]);
+  // ETK-8: neutralize spreadsheet formula injection (=, +, -, @ prefixes)
+  const sanitizeFormula = (str: string) => (/^[=+\-@]/.test(str) ? `'${str}` : str);
   const escape = (val: any) => {
     const str = val === null || val === undefined ? '' : String(val);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`;
+    const safe = sanitizeFormula(str);
+    if (safe.includes(',') || safe.includes('"') || safe.includes('\n')) {
+      return `"${safe.replace(/"/g, '""')}"`;
     }
-    return str;
+    return safe;
   };
   return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
 }
@@ -1726,3 +1729,4 @@ router.post('/onsite/walkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, asyn
 });
 
 module.exports = router;
+module.exports.buildCsv = buildCsv;

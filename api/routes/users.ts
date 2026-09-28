@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
-const { searchLimiter } = require('../utils/rateLimiter');
+const { searchLimiter, purchaseLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
@@ -1079,7 +1079,7 @@ router.get('/subscription/status', authMiddleware, async (req, res) => {
 });
 
 // POST /api/users/subscription/request - Upgrade listener/user/DJ to Pro or Pro+
-router.post('/subscription/request', authMiddleware, uploadDocument.single('proof'), async (req, res) => {
+router.post('/subscription/request', authMiddleware, purchaseLimiter, uploadDocument.single('proof'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { plan, amount, currency = 'SLE', paymentReference } = req.body;
@@ -1105,14 +1105,6 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
       return fail(res, 400, 'Please provide a payment screenshot or transaction reference');
     }
 
-    let proofUrl = req.body.paymentProofUrl || '';
-    if (req.file) {
-      proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
-        ext: extFromMime(req.file.mimetype, req.file.originalname),
-        contentType: req.file.mimetype,
-      });
-    }
-
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { djProfile: true },
@@ -1127,15 +1119,24 @@ router.post('/subscription/request', authMiddleware, uploadDocument.single('proo
       return fail(res, 403, 'Subscriptions are only available for DJ accounts. Fans can stream and download for free.');
     }
 
-    const djId = user.djProfile?.id || null;
-
-    // Prevent duplicate pending requests for the same user
+    // PAY-8: check for a duplicate pending request BEFORE uploading the proof
+    // file so a 409 does not orphan the uploaded storage object.
     const existingPending = await prisma.proSubscriptionRequest.findFirst({
       where: { userId: user.id, status: 'pending' },
     });
     if (existingPending) {
       return fail(res, 409, 'You already have a pending subscription request. Please wait for admin approval.', { data: existingPending });
     }
+
+    let proofUrl = req.body.paymentProofUrl || '';
+    if (req.file) {
+      proofUrl = await uploadBuffer(req.file.buffer, 'subscription-proofs', {
+        ext: extFromMime(req.file.mimetype, req.file.originalname),
+        contentType: req.file.mimetype,
+      });
+    }
+
+    const djId = user.djProfile?.id || null;
 
     const subRequest = await prisma.proSubscriptionRequest.create({
       data: {

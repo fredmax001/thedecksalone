@@ -169,13 +169,14 @@ async function createNotification({
     if (sendEmail && emailEnabled) {
       try {
         const { sendEmail: sendEmailFn } = require('./email');
+        // SOC-8: user-controlled content must NEVER be sent as raw HTML.
+        // Send plain text only — no html pass-through.
         const content = emailBody || body || '';
         const isHtml = looksLikeHtml(content);
         await sendEmailFn({
           to: user.email,
           subject: emailSubject || title,
           text: isHtml ? htmlToText(content) : content,
-          html: isHtml ? content : undefined,
         });
       } catch (emailErr) {
         console.warn('[Notification] Failed to send email:', emailErr.message);

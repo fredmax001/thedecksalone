@@ -153,6 +153,62 @@ const purchaseLimiter = rateLimit({
   ...getRedisStore('purchase'),
 });
 
+// Report submission limiter — cap anonymous report spam / admin email bomb (SOC-7)
+const reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  keyGenerator: (req: any) => (req.user?.id ? `report:${req.user.id}` : `report_ip:${getClientIp(req)}`),
+  message: {
+    success: false,
+    error: 'Too many reports submitted. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('report'),
+});
+
+// Message sending limiter — cap mass-messaging spam (SOC-9)
+const messageLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 20,
+  keyGenerator: (req: any) => (req.user?.id ? `message:${req.user.id}` : `message_ip:${getClientIp(req)}`),
+  message: {
+    success: false,
+    error: 'Too many messages sent. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('message'),
+});
+
+// Analytics beacon limiter — cap unauthenticated DB write amplification (SOC-10)
+const analyticsVisitLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  keyGenerator: (req: any) => `analytics:${getClientIp(req)}`,
+  message: {
+    success: false,
+    error: 'Too many analytics requests.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('analytics'),
+});
+
+// Developer application limiter — cap unauthenticated admin notification/email spam (SOC-17)
+const developerApplyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  keyGenerator: (req: any) => (req.user?.id ? `devapply:${req.user.id}` : `devapply_ip:${getClientIp(req)}`),
+  message: {
+    success: false,
+    error: 'Too many application attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('devapply'),
+});
+
 // Search / discovery limiter — cap expensive text-search queries
 const searchLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -179,4 +235,4 @@ function conditionalSearchLimiter(req: any, res: any, next: any) {
   next();
 }
 
-module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter };
+module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter, reportLimiter, messageLimiter, analyticsVisitLimiter, developerApplyLimiter };

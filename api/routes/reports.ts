@@ -5,6 +5,7 @@ const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { softAuthMiddleware } = require('../middleware/auth');
 const { sendAdminViolationAlertEmail } = require('../utils/email');
+const { reportLimiter } = require('../utils/rateLimiter');
 
 const createReportSchema = z.object({
   targetUserId: z.string().optional(),
@@ -21,11 +22,11 @@ const createReportSchema = z.object({
     'privacy_violation',
     'other',
   ]),
-  details: z.string().min(10, 'Please provide at least 10 characters explaining the violation'),
+  details: z.string().min(10, 'Please provide at least 10 characters explaining the violation').max(2000, 'Details must be at most 2000 characters'),
 });
 
 // POST /api/v1/reports - Submit a Terms / Privacy violation report
-router.post('/', softAuthMiddleware, async (req: any, res: any) => {
+router.post('/', softAuthMiddleware, reportLimiter, async (req: any, res: any) => {
   try {
     const parsed = createReportSchema.safeParse(req.body);
     if (!parsed.success) {

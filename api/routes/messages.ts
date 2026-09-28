@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma } = require('../utils/prisma');
 const { authMiddleware } = require('../middleware/auth');
+const { messageLimiter } = require('../utils/rateLimiter');
 
 const { createNotification } = require('../utils/notifications');
 const { ok, fail } = require('../utils/response');
@@ -144,7 +145,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
 });
 
 // POST /api/messages - Send message
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, messageLimiter, async (req, res) => {
   try {
     const parsed = messageSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -163,6 +164,12 @@ router.post('/', authMiddleware, async (req, res) => {
     const receiver = await prisma.user.findUnique({ where: { id: receiverId } });
     if (!receiver) {
       return fail(res, 404, 'Receiver not found');
+    }
+
+    // SOC-9: enforce the receiver's privacy preference (default: allow messages)
+    const receiverPrefs = (receiver.privacyPreferences as Record<string, boolean> | null) || {};
+    if (receiverPrefs.allowMessages === false) {
+      return fail(res, 403, 'This user is not accepting messages');
     }
 
     // Verify booking if provided

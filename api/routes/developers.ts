@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { prisma } = require('../utils/prisma');
 const { softAuthMiddleware } = require('../middleware/auth');
 const { sendDeveloperApplicationEmails } = require('../utils/email');
+const { developerApplyLimiter } = require('../utils/rateLimiter');
 const logger = require('../utils/logger').default || require('../utils/logger');
 
 const developerApplicationSchema = z.object({
@@ -37,7 +38,7 @@ const developerApplicationSchema = z.object({
 });
 
 // POST /api/developers/apply — Submit Developer API access request
-router.post('/apply', softAuthMiddleware, async (req: any, res: any) => {
+router.post('/apply', softAuthMiddleware, developerApplyLimiter, async (req: any, res: any) => {
   try {
     const parsed = developerApplicationSchema.safeParse(req.body);
     if (!parsed.success) {
