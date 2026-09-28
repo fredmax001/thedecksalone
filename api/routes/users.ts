@@ -299,10 +299,10 @@ router.get('/notifications', authMiddleware, asyncHandler(async (req, res) => {
     take: 30,
     include: {
       sender: {
+        // SOC-5: never expose the sender's email in the notification feed
         select: {
           id: true,
           username: true,
-          email: true,
           djProfile: { select: { stageName: true, avatar: true } },
         },
       },
@@ -387,7 +387,7 @@ router.get('/notifications', authMiddleware, asyncHandler(async (req, res) => {
     type: 'new_message',
     createdAt: m.createdAt,
     read: false,
-    title: `New message from ${m.sender.djProfile?.stageName || m.sender.username || m.sender.email}`,
+    title: `New message from ${m.sender.djProfile?.stageName || m.sender.username}`,
     body: m.content.slice(0, 120),
     data: { messageId: m.id, senderId: m.sender.id },
   }));

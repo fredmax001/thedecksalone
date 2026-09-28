@@ -1,6 +1,6 @@
 const express = require('express');
 const { z } = require('zod');
-const { prisma } = require('../utils/prisma');
+const { prisma, DJ_PROFILE_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { requirePro } = require('../middleware/permissions');
 const { uploadAvatar, uploadCover, uploadDjProfileImages, uploadDocument } = require('../utils/upload');
@@ -313,7 +313,8 @@ router.get('/', conditionalSearchLimiter, asyncHandler(async (req, res) => {
       orderBy,
       skip,
       take: limitNum,
-      include: {
+      select: {
+        ...DJ_PROFILE_PUBLIC_SELECT,
         user: { select: { username: true } },
         mixes: { select: { plays: true } },
         streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
@@ -351,7 +352,8 @@ router.get('/hall-of-fame', asyncHandler(async (req, res) => {
     where: { hallOfFame: true, isPublic: true },
     orderBy: { rankingScore: 'desc' },
     take: limitNum,
-    include: {
+    select: {
+      ...DJ_PROFILE_PUBLIC_SELECT,
       user: { select: { username: true } },
       mixes: { select: { plays: true } },
       streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
@@ -365,7 +367,8 @@ router.get('/hall-of-fame', asyncHandler(async (req, res) => {
       where: { verified: true, isPublic: true },
       orderBy: { rankingScore: 'desc' },
       take: limitNum,
-      include: {
+      select: {
+        ...DJ_PROFILE_PUBLIC_SELECT,
         user: { select: { username: true } },
         mixes: { select: { plays: true } },
         streamingPlatforms: { select: { platform: true, followers: true, streams: true } },
@@ -485,7 +488,10 @@ router.post('/verification-request', authMiddleware, uploadDocument.single('docu
 router.get('/:identifier', asyncHandler(async (req, res) => {
   const identifier = req.params.identifier;
 
-  const commonInclude = {
+  // SOC-1: shared public-field select — never leaks KYC/payout/private fields.
+  // SOC-2: every lookup is restricted to public profiles.
+  const commonSelect = {
+    ...DJ_PROFILE_PUBLIC_SELECT,
     user: { select: { id: true, username: true } },
     mixes: {
       where: { isPublic: true },
@@ -541,21 +547,14 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
   };
 
   let dj = await prisma.djProfile.findUnique({
-    where: { id: identifier },
-    include: commonInclude,
+    where: { id: identifier, isPublic: true },
+    select: commonSelect,
   });
 
   if (!dj) {
     dj = await prisma.djProfile.findFirst({
-      where: { user: { username: { equals: identifier, mode: 'insensitive' } } },
-      include: commonInclude,
-    });
-  }
-
-  if (!dj) {
-    dj = await prisma.djProfile.findFirst({
-      where: { userId: identifier },
-      include: commonInclude,
+      where: { user: { username: { equals: identifier, mode: 'insensitive' } }, isPublic: true },
+      select: commonSelect,
     });
   }
 
@@ -563,6 +562,7 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
     const decoded = decodeURIComponent(identifier);
     dj = await prisma.djProfile.findFirst({
       where: {
+        isPublic: true,
         OR: [
           { stageName: { equals: identifier, mode: 'insensitive' } },
           { stageName: { equals: identifier.replace(/-/g, ' '), mode: 'insensitive' } },
@@ -570,7 +570,7 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
           { stageName: { equals: decoded.replace(/-/g, ' '), mode: 'insensitive' } },
         ],
       },
-      include: commonInclude,
+      select: commonSelect,
     });
   }
 
@@ -848,13 +848,12 @@ router.get('/me/followers', authMiddleware, asyncHandler(async (req, res) => {
       take: limitNum,
       include: {
         user: {
+          // SOC-3: never expose followers' email or location to DJs
           select: {
             id: true,
             name: true,
             username: true,
-            email: true,
             avatar: true,
-            location: true,
             createdAt: true,
           },
         },
@@ -865,11 +864,9 @@ router.get('/me/followers', authMiddleware, asyncHandler(async (req, res) => {
 
   const data = followers.map((f) => ({
     id: f.user.id,
-    name: f.user.name || f.user.username || f.user.email.split('@')[0],
+    name: f.user.name || f.user.username,
     username: f.user.username,
-    email: f.user.email,
     avatar: f.user.avatar,
-    location: f.user.location,
     followedAt: f.createdAt,
   }));
 

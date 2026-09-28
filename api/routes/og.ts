@@ -55,7 +55,9 @@ router.get('/dj/:identifier', async (req, res) => {
     const baseUrl = getFrontendUrl();
 
     const dj = await prisma.djProfile.findFirst({
+      // SOC-2: never serve OG metadata for private profiles
       where: {
+        isPublic: true,
         OR: [
           { id: identifier },
           { user: { username: { equals: identifier, mode: 'insensitive' } } },

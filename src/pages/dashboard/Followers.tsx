@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Users,
-  MapPin,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -25,9 +24,7 @@ interface Follower {
   id: string;
   name: string;
   username: string;
-  email: string;
   avatar: string | null;
-  location: string | null;
   followedAt: string;
 }
 
@@ -266,12 +263,6 @@ function FollowerListItem({ follower }: { follower: Follower }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted mt-0.5">
-                  {follower.location && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-gold/70" />
-                      {follower.location}
-                    </span>
-                  )}
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-text-muted" />
                     Followed {formatDate(follower.followedAt)}
@@ -314,12 +305,6 @@ function FollowerCard({ follower }: { follower: Follower }) {
                   {follower.name}
                 </h3>
               </Link>
-              {follower.location && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3 h-3 text-text-muted" />
-                  <span className="text-xs text-text-muted truncate">{follower.location}</span>
-                </div>
-              )}
               <div className="flex items-center gap-1 mt-1">
                 <Calendar className="w-3 h-3 text-text-muted" />
                 <span className="text-xs text-text-muted">

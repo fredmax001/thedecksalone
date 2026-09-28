@@ -48,7 +48,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         const [partner, lastMessage, unreadCount] = await Promise.all([
           prisma.user.findUnique({
             where: { id: partnerId },
-            select: { id: true, username: true, email: true, djProfile: { select: { stageName: true, avatar: true } } },
+            select: { id: true, username: true, djProfile: { select: { stageName: true, avatar: true } } },
           }),
           prisma.message.findFirst({
             where: {
@@ -71,7 +71,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
 
         if (!partner) return null;
 
-        const displayName = partner.djProfile?.stageName || partner.username || partner.email;
+        const displayName = partner.djProfile?.stageName || partner.username;
 
         return {
           userId: partner.id,
@@ -100,7 +100,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
     // Verify partner exists
     const partner = await prisma.user.findUnique({
       where: { id: partnerId },
-      select: { id: true, username: true, email: true, djProfile: { select: { stageName: true, avatar: true } } },
+      select: { id: true, username: true, djProfile: { select: { stageName: true, avatar: true } } },
     });
     if (!partner) {
       return fail(res, 404, 'User not found');
@@ -133,7 +133,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       data: messages,
       partner: {
         id: partner.id,
-        name: partner.djProfile?.stageName || partner.username || partner.email,
+        name: partner.djProfile?.stageName || partner.username,
         avatar: partner.djProfile?.avatar || null,
       },
     });

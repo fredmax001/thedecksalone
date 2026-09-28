@@ -1,6 +1,6 @@
 const express = require('express');
 const { z } = require('zod');
-const { prisma } = require('../utils/prisma');
+const { prisma, DJ_PROFILE_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { conditionalSearchLimiter } = require('../utils/rateLimiter');
 const {
@@ -145,7 +145,8 @@ router.get('/djs', conditionalSearchLimiter, asyncHandler(async (req, res) => {
     getActiveCampaigns('profile'),
     prisma.djProfile.findMany({
       where: { ...where, campaigns: { some: { targetType: 'profile', status: 'active' } } },
-      include: {
+      select: {
+        ...DJ_PROFILE_PUBLIC_SELECT,
         user: { select: { username: true } },
         mixes: { select: { plays: true } },
         streamingPlatforms: { select: { streams: true } },
@@ -160,7 +161,8 @@ router.get('/djs', conditionalSearchLimiter, asyncHandler(async (req, res) => {
       orderBy,
       skip,
       take: limitNum,
-      include: {
+      select: {
+        ...DJ_PROFILE_PUBLIC_SELECT,
         user: { select: { username: true } },
         mixes: { select: { plays: true } },
         streamingPlatforms: { select: { streams: true } },
@@ -267,7 +269,6 @@ router.get('/users', conditionalSearchLimiter, asyncHandler(async (req, res) => 
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
       { username: { contains: search, mode: 'insensitive' } },
-      { email: { contains: search, mode: 'insensitive' } },
       { location: { contains: search, mode: 'insensitive' } },
     ];
   }
