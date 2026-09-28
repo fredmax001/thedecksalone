@@ -27,12 +27,12 @@ const DEFAULTS: SubscriptionConfig = {
   paymentMethod: process.env.SUBSCRIPTION_PAYMENT_METHOD || 'Orange Money',
   paymentNumber: process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156',
   whatsappNumber: process.env.PLATFORM_WHATSAPP_NUMBER || process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156',
-  proPrice: Number(process.env.PRO_SUBSCRIPTION_PRICE) || 200,
-  legendPrice: Number(process.env.LEGEND_SUBSCRIPTION_PRICE) || 350,
+  proPrice: Number(process.env.PRO_SUBSCRIPTION_PRICE) || 150,
+  legendPrice: Number(process.env.LEGEND_SUBSCRIPTION_PRICE) || 250,
   // PAY-4: annual defaults mirror the PayPal flow (what paying users are
   // actually charged) so every rail validates against the same price.
-  proPriceAnnual: Number(process.env.PRO_SUBSCRIPTION_PRICE_ANNUAL) || 2000,
-  legendPriceAnnual: Number(process.env.LEGEND_SUBSCRIPTION_PRICE_ANNUAL) || 4000,
+  proPriceAnnual: Number(process.env.PRO_SUBSCRIPTION_PRICE_ANNUAL) || 1000,
+  legendPriceAnnual: Number(process.env.LEGEND_SUBSCRIPTION_PRICE_ANNUAL) || 1500,
   currency: process.env.SUBSCRIPTION_CURRENCY || 'SLE',
   plans: [],
 };

@@ -223,10 +223,10 @@ describe('PAY-4: single subscription price source', () => {
     const { getSubscriptionConfig } = require('../utils/subscriptionConfig');
     const config = await getSubscriptionConfig();
 
-    expect(config.proPrice).toBe(200);
-    expect(config.legendPrice).toBe(350);
-    expect(config.proPriceAnnual).toBe(2000);
-    expect(config.legendPriceAnnual).toBe(4000);
+    expect(config.proPrice).toBe(150);
+    expect(config.legendPrice).toBe(250);
+    expect(config.proPriceAnnual).toBe(1000);
+    expect(config.legendPriceAnnual).toBe(1500);
   });
 
   it('getSubscriptionConfig reads DB-overridden annual prices', async () => {
