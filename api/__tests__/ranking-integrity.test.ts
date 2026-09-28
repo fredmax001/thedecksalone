@@ -276,8 +276,22 @@ describe('RANK-2: monthlyListeners counts distinct listeners, excludes self-play
     expect(authCall.by).toEqual(['userId']);
     expect(authCall.where.djId).toBe('dj1');
     expect(authCall.where.createdAt.gte).toBeInstanceOf(Date);
-    // excludes null userIds AND the DJ's own userId
-    expect(authCall.where.userId).toEqual({ AND: [{ not: null }, { not: 'dj-user-1' }] });
+    // Prisma's groupBy where REJECTS AND-combined scalar filters at runtime
+    // (PrismaClientValidationError — proven against the real client), so the
+    // own-user exclusion must be a plain `not`; the null (anonymous) group
+    // is dropped post-query.
+    expect(authCall.where.userId).toEqual({ not: 'dj-user-1' });
+  });
+
+  it('drops the anonymous (null userId) group after grouping', async () => {
+    const p = prismaMock();
+    p.djProfile.findUnique.mockResolvedValue({ userId: 'dj-user-1' });
+    p.mixPlay.groupBy.mockResolvedValue([{ userId: 'u1' }, { userId: null }]);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getMonthlyListeners } = require('../utils/monthlyListeners');
+    const count = await getMonthlyListeners('dj1');
+    expect(count).toBe(1);
   });
 
   it('does not exclude any userId when the DJ profile has no linked user', async () => {
@@ -290,7 +304,9 @@ describe('RANK-2: monthlyListeners counts distinct listeners, excludes self-play
     const count = await getMonthlyListeners('dj1');
     expect(count).toBe(0);
     const authCall = p.mixPlay.groupBy.mock.calls[0][0];
-    expect(authCall.where.userId).toEqual({ AND: [{ not: null }] });
+    // No userId filter at all when there's no own-user to exclude; the null
+    // (anonymous) group is filtered after grouping.
+    expect(authCall.where.userId).toBeUndefined();
   });
 });
 

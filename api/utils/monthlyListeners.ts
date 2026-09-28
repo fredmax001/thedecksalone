@@ -100,21 +100,20 @@ async function getMonthlyListeners(djId: string): Promise<number> {
   // Distinct AUTHENTICATED listeners only (by userId), over the trailing 30
   // days. Anonymous plays are recorded for analytics but are excluded here:
   // only authenticated listeners count toward ranking.
-  const authListeners = await mixPlay.groupBy({
+  // NOTE: Prisma's groupBy where rejects AND-combined scalar filters
+  // (PrismaClientValidationError at runtime — mocks don't catch this), so
+  // the own-user exclusion uses a plain `not` and the anonymous (null)
+  // group is dropped after grouping.
+  const groups = await mixPlay.groupBy({
     by: ['userId'],
     where: {
       djId,
       createdAt: { gte: thirtyDaysAgo },
-      userId: {
-        AND: [
-          { not: null },
-          ...(ownUserId ? [{ not: ownUserId }] : []),
-        ],
-      },
+      ...(ownUserId ? { userId: { not: ownUserId } } : {}),
     },
   });
 
-  return authListeners.length;
+  return groups.filter((g: { userId: string | null }) => g.userId !== null).length;
 }
 
 async function recalculateMonthlyListeners(djId: string): Promise<number> {
