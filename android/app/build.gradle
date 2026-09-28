@@ -18,10 +18,12 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('deck-salone-release.keystore')
-            storePassword 'decksalone2026'
-            keyAlias 'decksalone'
-            keyPassword 'decksalone2026'
+            // Passwords are read from ~/.gradle/gradle.properties or environment
+            // (deckSaloneStorePassword / deckSaloneKeyPassword) — do NOT hardcode.
+            storeFile file(project.findProperty('deckSaloneKeystorePath') ?: 'deck-salone-release.keystore')
+            storePassword System.getenv('DECK_SALONE_STORE_PASSWORD') ?: project.findProperty('deckSaloneStorePassword') as String
+            keyAlias System.getenv('DECK_SALONE_KEY_ALIAS') ?: (project.findProperty('deckSaloneKeyAlias') ?: 'decksalone') as String
+            keyPassword System.getenv('DECK_SALONE_KEY_PASSWORD') ?: project.findProperty('deckSaloneKeyPassword') as String
             v1SigningEnabled true
             v2SigningEnabled true
         }
