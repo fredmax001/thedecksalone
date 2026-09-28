@@ -928,7 +928,8 @@ router.post('/rankings/adjust', async (req: any, res: any) => {
       data: updateData,
     });
 
-    // Record entry in RankingHistory for historical audit
+    // Record entry in RankingHistory for historical audit. `week` is required
+    // (DateTime) and mirrors the weekly ranking job's `week: now` semantics.
     await prisma.rankingHistory.create({
       data: {
         djId,
@@ -936,8 +937,11 @@ router.post('/rankings/adjust', async (req: any, res: any) => {
         score: updated.rankingScore,
         communityScore: dj.rankingScore,
         industryScore: 0,
+        week: new Date(),
       },
-    }).catch(() => {});
+    }).catch((historyErr: any) => {
+      logger.error('Failed to record ranking history:', historyErr?.message || historyErr);
+    });
 
     // Mandatory Moderator Audit Log
     await createModeratorLog({

@@ -172,10 +172,9 @@ describe('Event ticketing security (ETK-1, ETK-2, TKT-3 PII-read)', () => {
     p.eventTicket.aggregate.mockResolvedValue({ _sum: { quantity: 0, amount: 0 } });
     p.eventTicket.groupBy.mockResolvedValue([]);
     p.eventTicket.findMany.mockResolvedValue([]);
-    // NOTE: the /dashboard handler destructures 12 Promise.all values into 11
-    // names (pre-existing off-by-one), so the scan-log count lands in the
-    // `typeBreakdown` slot and must be array-like for `.map` to survive.
-    p.eventScanLog.count.mockResolvedValue([] as unknown as number);
+    // C6 fix: the /dashboard handler now destructures all 12 Promise.all
+    // values, so the scan-log count lands in its own (unused) slot.
+    p.eventScanLog.count.mockResolvedValue(0);
     p.eventTicketType.findMany.mockResolvedValue([]);
   });
 

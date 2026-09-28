@@ -1202,19 +1202,19 @@ router.post('/:id/play', softAuthMiddleware, playLimiter, asyncHandler(async (re
     select: { plays: true },
   });
 
-  // RANK-1: anonymous plays still bump the public counter (UX) but must not
-  // feed the ranking economy (MixPlay rows / monthly listeners / engagement).
-  if (req.user?.id) {
-    // INFRA-16: rank/analytics identity also uses the rightmost-trusted XFF
-    // entry — req.ip is the client-spoofable leftmost entry under `trust proxy`.
-    recordMixPlay(mix.id, mix.djId, {
-      userId: req.user.id,
-      ip: getClientIp(req),
-    }).catch(() => {});
+  // RANK-1: anonymous plays still bump the public counter (UX) and are
+  // recorded for analytics (MixPlay row with null userId + ipHash). Ranking
+  // integrity is enforced in getMonthlyListeners, which counts only distinct
+  // authenticated userIds — anonymous rows never influence ranking.
+  // INFRA-16: analytics identity also uses the rightmost-trusted XFF entry —
+  // req.ip is the client-spoofable leftmost entry under `trust proxy`.
+  recordMixPlay(mix.id, mix.djId, {
+    userId: req.user?.id,
+    ip: getClientIp(req),
+  }).catch(() => {});
 
-    // Update cached monthly listener count asynchronously (do not block response)
-    recalculateMonthlyListeners(mix.djId).catch(() => {});
-  }
+  // Update cached monthly listener count asynchronously (do not block response)
+  recalculateMonthlyListeners(mix.djId).catch(() => {});
 
   return ok(res, { plays: updated.plays });
 }));

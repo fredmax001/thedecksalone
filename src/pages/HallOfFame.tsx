@@ -615,7 +615,7 @@ export default function HallOfFame() {
                                 </div>
                               </div>
                               <button
-                                onClick={() => toggleDjHof.mutate(dj.id)}
+                                onClick={() => toggleDjHof.mutate({ id: dj.id, value: !dj.hallOfFame })}
                                 disabled={toggleDjHof.isPending}
                                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
                                   dj.hallOfFame
@@ -679,7 +679,7 @@ export default function HallOfFame() {
                                 </div>
                               </div>
                               <button
-                                onClick={() => toggleMixHof.mutate(mix.id)}
+                                onClick={() => toggleMixHof.mutate({ id: mix.id, value: !mix.hallOfFame })}
                                 disabled={toggleMixHof.isPending}
                                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
                                   mix.hallOfFame

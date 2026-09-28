@@ -97,34 +97,24 @@ async function getMonthlyListeners(djId: string): Promise<number> {
   }).catch(() => null);
   const ownUserId = dj?.userId;
 
-  // Distinct authenticated listeners (by userId) + distinct anonymous
-  // listeners (by ipHash), over the trailing 30 days.
-  const [authListeners, anonListeners] = await Promise.all([
-    mixPlay.groupBy({
-      by: ['userId'],
-      where: {
-        djId,
-        createdAt: { gte: thirtyDaysAgo },
-        userId: {
-          AND: [
-            { not: null },
-            ...(ownUserId ? [{ not: ownUserId }] : []),
-          ],
-        },
+  // Distinct AUTHENTICATED listeners only (by userId), over the trailing 30
+  // days. Anonymous plays are recorded for analytics but are excluded here:
+  // only authenticated listeners count toward ranking.
+  const authListeners = await mixPlay.groupBy({
+    by: ['userId'],
+    where: {
+      djId,
+      createdAt: { gte: thirtyDaysAgo },
+      userId: {
+        AND: [
+          { not: null },
+          ...(ownUserId ? [{ not: ownUserId }] : []),
+        ],
       },
-    }),
-    mixPlay.groupBy({
-      by: ['ipHash'],
-      where: {
-        djId,
-        createdAt: { gte: thirtyDaysAgo },
-        userId: null,
-        ipHash: { not: null },
-      },
-    }),
-  ]);
+    },
+  });
 
-  return authListeners.length + anonListeners.length;
+  return authListeners.length;
 }
 
 async function recalculateMonthlyListeners(djId: string): Promise<number> {

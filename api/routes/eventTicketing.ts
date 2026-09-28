@@ -304,8 +304,9 @@ function extractTicketIdentifiers(rawPayload: string): ExtractedTicketIdentifier
 function buildCsv(rows: Record<string, any>[]): string {
   if (rows.length === 0) return '';
   const headers = Object.keys(rows[0]);
-  // ETK-8: neutralize spreadsheet formula injection (=, +, -, @ prefixes)
-  const sanitizeFormula = (str: string) => (/^[=+\-@]/.test(str) ? `'${str}` : str);
+  // ETK-8: neutralize spreadsheet formula injection (=, +, -, @ prefixes),
+  // including after leading whitespace (space/tab/CR) which Excel still executes.
+  const sanitizeFormula = (str: string) => (/^\s*[=+\-@]/.test(str) ? `'${str}` : str);
   const escape = (val: any) => {
     const str = val === null || val === undefined ? '' : String(val);
     const safe = sanitizeFormula(str);
@@ -656,7 +657,7 @@ router.get('/dashboard', authMiddleware, requireProOrAdmin, async (req: any, res
     if (!event) return fail(res, 404, 'Event not found');
     if (!assertOwnerOrAdmin(isOwner, isAdmin, res)) return;
 
-    const [totalTickets, pending, approvedCount, checkedInCount, rejected, cancelled, soldSeats, checkedInSeats, revenue, typeBreakdown, recentSales] = await Promise.all([
+    const [totalTickets, pending, approvedCount, checkedInCount, rejected, cancelled, soldSeats, checkedInSeats, revenue, validScanCount, typeBreakdown, recentSales] = await Promise.all([
       prisma.eventTicket.count({ where: { eventId: event.id } }),
       prisma.eventTicket.count({ where: { eventId: event.id, status: 'pending' } }),
       prisma.eventTicket.count({ where: { eventId: event.id, status: 'approved' } }),
@@ -1152,6 +1153,7 @@ router.get('/customers/export', authMiddleware, requireProOrAdmin, async (req: a
     const tickets = await prisma.eventTicket.findMany({
       where: { eventId: event.id },
       orderBy: { createdAt: 'desc' },
+      take: 10000, // bound the export so huge guest lists cannot exhaust memory
       include: { user: { select: { name: true, email: true, phone: true } }, ticketType: { select: { name: true } } },
     });
 

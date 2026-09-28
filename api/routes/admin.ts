@@ -768,27 +768,41 @@ router.put('/mixes/:id/feature', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandl
   return ok(res, mix);
 }));
 
-// PUT /api/admin/djs/:id/hall-of-fame - Toggle DJ Hall of Fame status
+// PUT /api/admin/djs/:id/hall-of-fame - Toggle or set DJ Hall of Fame status.
+// An explicit boolean `value` makes the operation idempotent (safe to retry);
+// omitting it preserves the legacy toggle behavior.
+const hallOfFameSchema = z.object({ value: z.boolean().optional() });
+
 router.put('/djs/:id/hall-of-fame', requireRole('ADMIN'), asyncHandler(async (req, res) => {
+  const parsed = hallOfFameSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
+  }
+
   const dj = await prisma.djProfile.findUnique({ where: { id: req.params.id } });
   if (!dj) return fail(res, 404, 'DJ not found');
 
   const updated = await prisma.djProfile.update({
     where: { id: req.params.id },
-    data: { hallOfFame: !dj.hallOfFame },
+    data: { hallOfFame: parsed.data.value !== undefined ? parsed.data.value : !dj.hallOfFame },
   });
 
   return ok(res, { id: updated.id, hallOfFame: updated.hallOfFame, stageName: updated.stageName });
 }));
 
-// PUT /api/admin/mixes/:id/hall-of-fame - Toggle Mix Hall of Fame status
+// PUT /api/admin/mixes/:id/hall-of-fame - Toggle or set Mix Hall of Fame status
 router.put('/mixes/:id/hall-of-fame', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
+  const parsed = hallOfFameSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return fail(res, 400, 'Invalid input');
+  }
+
   const mix = await prisma.mix.findUnique({ where: { id: req.params.id } });
   if (!mix) return fail(res, 404, 'Mix not found');
 
   const updated = await prisma.mix.update({
     where: { id: req.params.id },
-    data: { hallOfFame: !mix.hallOfFame },
+    data: { hallOfFame: parsed.data.value !== undefined ? parsed.data.value : !mix.hallOfFame },
   });
 
   return ok(res, { id: updated.id, hallOfFame: updated.hallOfFame, title: updated.title });

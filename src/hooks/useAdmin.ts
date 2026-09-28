@@ -1304,8 +1304,9 @@ export function useUpdateRanking() {
 export function useToggleDjHallOfFame() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.put(`/admin/djs/${id}/hall-of-fame`);
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      // Absolute value (not server-side toggle) so retries are idempotent.
+      const res = await api.put(`/admin/djs/${id}/hall-of-fame`, { value });
       return res.data.data;
     },
     onSuccess: () => {
@@ -1319,8 +1320,9 @@ export function useToggleDjHallOfFame() {
 export function useToggleMixHallOfFame() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.put(`/admin/mixes/${id}/hall-of-fame`);
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      // Absolute value (not server-side toggle) so retries are idempotent.
+      const res = await api.put(`/admin/mixes/${id}/hall-of-fame`, { value });
       return res.data.data;
     },
     onSuccess: () => {

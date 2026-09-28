@@ -374,36 +374,49 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
       return fail(res, 404, 'Battle not found');
     }
 
-    // RANK-5: atomically claim the close (ACTIVE -> CLOSED) BEFORE awarding
-    // anything, so concurrent closes cannot double-award badges/score boosts.
-    const claim = await prisma.battle.updateMany({
-      where: { id: req.params.id, status: 'ACTIVE' },
-      data: { status: 'CLOSED' },
-    });
-    if (claim.count === 0) {
-      return fail(res, 400, 'Battle is already closed');
-    }
-
     // Sort entries by final score
     const sortedEntries = [...battle.entries].sort((a, b) => b.finalScore - a.finalScore);
 
-    // Award badges to top 3
-    const badgeUpdates = [];
-    for (let i = 0; i < Math.min(3, sortedEntries.length); i++) {
-      const entry = sortedEntries[i];
-      const badge = i === 0 ? 'Battle Champion' : i === 1 ? 'Battle Runner-Up' : 'Battle Third Place';
+    // RANK-5: atomically claim the close (ACTIVE -> CLOSED) AND award badges
+    // in ONE interactive transaction. If a badge update fails, the whole
+    // transaction rolls back — the battle stays ACTIVE and can be retried,
+    // instead of being stuck CLOSED forever with no winners.
+    try {
+      await prisma.$transaction(async (tx: any) => {
+        const claim = await tx.battle.updateMany({
+          where: { id: req.params.id, status: 'ACTIVE' },
+          data: { status: 'CLOSED' },
+        });
+        if (claim.count === 0) {
+          // Sentinel: another request already closed this battle. Throwing is
+          // the only way to abort an interactive transaction early.
+          throw { code: 'ALREADY_CLOSED' };
+        }
 
-      badgeUpdates.push(prisma.djProfile.update({
-        where: { id: entry.djId },
-        data: {
-          badges: { push: badge },
-          // Small ranking boost for winning
-          rankingScore: { increment: i === 0 ? 2 : i === 1 ? 1 : 0.5 },
-        },
-      }));
-    }
-    if (badgeUpdates.length > 0) {
-      await prisma.$transaction(badgeUpdates);
+        // Award badges to top 3
+        const badgeUpdates = [];
+        for (let i = 0; i < Math.min(3, sortedEntries.length); i++) {
+          const entry = sortedEntries[i];
+          const badge = i === 0 ? 'Battle Champion' : i === 1 ? 'Battle Runner-Up' : 'Battle Third Place';
+
+          badgeUpdates.push(tx.djProfile.update({
+            where: { id: entry.djId },
+            data: {
+              badges: { push: badge },
+              // Small ranking boost for winning
+              rankingScore: { increment: i === 0 ? 2 : i === 1 ? 1 : 0.5 },
+            },
+          }));
+        }
+        if (badgeUpdates.length > 0) {
+          await Promise.all(badgeUpdates);
+        }
+      });
+    } catch (txError: any) {
+      if (txError && txError.code === 'ALREADY_CLOSED') {
+        return fail(res, 400, 'Battle is already closed');
+      }
+      throw txError;
     }
 
     const updated = await prisma.battle.findUnique({

@@ -949,8 +949,8 @@ function MixesSection() {
     });
   };
 
-  const handleToggleHallOfFame = (id: string) => {
-    toggleHallOfFameMutation.mutate(id, {
+  const handleToggleHallOfFame = (id: string, current: boolean) => {
+    toggleHallOfFameMutation.mutate({ id, value: !current }, {
       onSuccess: () => {
         toast.success('🏛️ Hall of Fame status updated!');
         queryClient.invalidateQueries({ queryKey: ['adminMixes'] });
@@ -1143,7 +1143,7 @@ function MixesSection() {
                         </button>
 
                         <button
-                          onClick={() => handleToggleHallOfFame(mix.id)}
+                          onClick={() => handleToggleHallOfFame(mix.id, mix.hallOfFame)}
                           className={`p-2 rounded-lg transition-colors ${
                             mix.hallOfFame ? 'bg-amber-500 text-black font-bold' : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
                           }`}
@@ -5448,8 +5448,8 @@ function HallOfFameSection() {
   const adminDjs = adminDjsData?.data || [];
   const adminMixes = adminMixesData?.data || [];
 
-  const handleToggleDj = (id: string) => {
-    toggleDjHof.mutate(id, {
+  const handleToggleDj = (id: string, current: boolean) => {
+    toggleDjHof.mutate({ id, value: !current }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['admin-djs'] });
         queryClient.invalidateQueries({ queryKey: ['hall-of-fame-djs'] });
@@ -5459,8 +5459,8 @@ function HallOfFameSection() {
     });
   };
 
-  const handleToggleMix = (id: string) => {
-    toggleMixHof.mutate(id, {
+  const handleToggleMix = (id: string, current: boolean) => {
+    toggleMixHof.mutate({ id, value: !current }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['admin-mixes'] });
         queryClient.invalidateQueries({ queryKey: ['hall-of-fame-mixes'] });
@@ -5572,7 +5572,7 @@ function HallOfFameSection() {
                       </div>
                     </div>
                     <button
-                      onClick={() => handleToggleDj(dj.id)}
+                      onClick={() => handleToggleDj(dj.id, dj.hallOfFame ?? false)}
                       disabled={toggleDjHof.isPending}
                       className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                         dj.hallOfFame
@@ -5634,7 +5634,7 @@ function HallOfFameSection() {
                       </div>
                     </div>
                     <button
-                      onClick={() => handleToggleMix(mix.id)}
+                      onClick={() => handleToggleMix(mix.id, mix.hallOfFame ?? false)}
                       disabled={toggleMixHof.isPending}
                       className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                         mix.hallOfFame

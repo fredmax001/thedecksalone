@@ -1,13 +1,15 @@
 /**
  * Regression tests for RANK-1, RANK-2, RANK-4, RANK-5, RANK-10 / DB-6.
  *
- * RANK-1 (CRITICAL): play endpoint dedupes repeat plays (24h window) and only
- *   authenticated plays feed the ranking economy (MixPlay rows / monthly
- *   listeners). Anonymous plays still bump the public counter.
- * RANK-2: monthlyListeners counts distinct listeners (userId / ipHash) and
- *   excludes the DJ's own plays.
+ * RANK-1 (CRITICAL): play endpoint dedupes repeat plays (24h window); all
+ *   plays (authenticated + anonymous) are recorded as MixPlay rows, but only
+ *   authenticated plays feed the ranking economy (monthly listeners).
+ * RANK-2: monthlyListeners counts distinct authenticated listeners (userId)
+ *   only and excludes the DJ's own plays.
  * RANK-4: battle entry rejects a mixId that does not belong to the entering DJ.
- * RANK-5: battle close atomically claims ACTIVE -> CLOSED; a second close 400s.
+ * RANK-5: battle close claims ACTIVE -> CLOSED and awards badges in ONE
+ *   interactive transaction; a badge failure rolls the close back and a second
+ *   close 400s.
  * RANK-10 / DB-6: migration enforces @@unique([djId, week]) on ranking_history
  *   after removing pre-existing duplicate rows.
  */
@@ -18,9 +20,8 @@ import path from 'path';
 
 process.env.JWT_SECRET = 'test-secret-that-is-at-least-32-characters-long';
 
-jest.mock('../utils/prisma', () => ({
-  ...(jest.requireActual('../utils/prisma') as object),
-  prisma: {
+jest.mock('../utils/prisma', () => {
+  const prisma: any = {
     mix: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -51,9 +52,17 @@ jest.mock('../utils/prisma', () => ({
       findFirst: jest.fn(),
       create: jest.fn(),
     },
-    $transaction: jest.fn((ops: unknown) => Promise.all(ops as unknown[])),
-  },
-}));
+  };
+  // Supports both array-form and interactive (callback) transactions; the
+  // interactive tx delegate is the same mocked prisma object.
+  prisma.$transaction = jest.fn((arg: any) =>
+    typeof arg === 'function' ? arg(prisma) : Promise.all(arg)
+  );
+  return {
+    ...(jest.requireActual('../utils/prisma') as object),
+    prisma,
+  };
+});
 
 jest.mock('../utils/redis', () => {
   const client = { get: jest.fn(), setex: jest.fn(), del: jest.fn(), status: 'ready' };
@@ -160,12 +169,18 @@ describe('RANK-1: play dedup + authenticated ranking input', () => {
     expect(redisClientMock().setex).not.toHaveBeenCalled();
   });
 
-  it('anonymous play increments the public counter but skips MixPlay and monthly-listener recount', async () => {
+  it('anonymous play records a MixPlay row (null userId, rightmost-XFF ipHash) and triggers the monthly-listener recount', async () => {
     redisClientMock().get.mockResolvedValue(null);
     prismaMock().mix.findUnique.mockResolvedValue(mix);
     prismaMock().mix.update.mockResolvedValue({ plays: 42 });
+    prismaMock().mixPlay.groupBy.mockResolvedValue([]);
+    prismaMock().djProfile.findUnique.mockResolvedValue({ userId: 'dj-user-1' });
+    prismaMock().djProfile.update.mockResolvedValue({});
 
-    const res = await request(app).post('/api/mixes/mix1/play');
+    // Rightmost XFF entry is the dedup/analytics identity (INFRA-16).
+    const res = await request(app)
+      .post('/api/mixes/mix1/play')
+      .set('X-Forwarded-For', '203.0.113.7, 70.41.3.18');
     expect(res.status).toBe(200);
     expect(res.body.data.plays).toBe(42);
     expect(prismaMock().mix.update).toHaveBeenCalledWith(
@@ -177,10 +192,35 @@ describe('RANK-1: play dedup + authenticated ranking input', () => {
       24 * 60 * 60,
       '1'
     );
+
     await flushAsync();
-    // anonymous plays must not feed the ranking economy
+    // Anonymous plays ARE recorded for analytics (userId null, ipHash present)…
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { hashIp } = require('../utils/monthlyListeners');
+    expect(prismaMock().mixPlay.create).toHaveBeenCalledWith({
+      data: {
+        mixId: 'mix1',
+        djId: 'dj1',
+        userId: null,
+        ipHash: hashIp('70.41.3.18'),
+      },
+    });
+    // …and the monthly-listener recount ran
+    expect(prismaMock().mixPlay.groupBy).toHaveBeenCalled();
+  });
+
+  it('deduped anonymous repeat play neither increments nor records a second MixPlay row', async () => {
+    redisClientMock().get.mockResolvedValue('1'); // dedup key already present
+    prismaMock().mix.findUnique.mockResolvedValue(mix);
+
+    const res = await request(app)
+      .post('/api/mixes/mix1/play')
+      .set('X-Forwarded-For', '203.0.113.7');
+    expect(res.status).toBe(200);
+    expect(res.body.data.plays).toBe(41);
+    expect(prismaMock().mix.update).not.toHaveBeenCalled();
     expect(prismaMock().mixPlay.create).not.toHaveBeenCalled();
-    expect(prismaMock().djProfile.update).not.toHaveBeenCalled();
+    expect(redisClientMock().setex).not.toHaveBeenCalled();
   });
 
   it('authenticated play records a MixPlay row and triggers the monthly-listener recount', async () => {
@@ -215,20 +255,20 @@ describe('RANK-2: monthlyListeners counts distinct listeners, excludes self-play
     jest.clearAllMocks();
   });
 
-  it('sums distinct authenticated userIds and distinct anonymous ipHashes', async () => {
+  it('counts distinct authenticated userIds only and never groups by ipHash', async () => {
     const p = prismaMock();
     p.djProfile.findUnique.mockResolvedValue({ userId: 'dj-user-1' });
-    p.mixPlay.groupBy
-      .mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }]) // 2 distinct authenticated
-      .mockResolvedValueOnce([{ ipHash: 'h1' }]);                   // 1 distinct anonymous
+    // Only ONE groupBy is issued now: distinct non-null userIds.
+    p.mixPlay.groupBy.mockResolvedValue([{ userId: 'u1' }, { userId: 'u2' }]);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { getMonthlyListeners } = require('../utils/monthlyListeners');
     const count = await getMonthlyListeners('dj1');
-    expect(count).toBe(3);
+    expect(count).toBe(2);
 
-    // No longer a raw row count
+    // No raw row count, and no anonymous ipHash group at all
     expect(p.mixPlay.count).not.toHaveBeenCalled();
+    expect(p.mixPlay.groupBy).toHaveBeenCalledTimes(1);
 
     const authCall = p.mixPlay.groupBy.mock.calls[0][0];
     expect(authCall.by).toEqual(['userId']);
@@ -236,11 +276,6 @@ describe('RANK-2: monthlyListeners counts distinct listeners, excludes self-play
     expect(authCall.where.createdAt.gte).toBeInstanceOf(Date);
     // excludes null userIds AND the DJ's own userId
     expect(authCall.where.userId).toEqual({ AND: [{ not: null }, { not: 'dj-user-1' }] });
-
-    const anonCall = p.mixPlay.groupBy.mock.calls[1][0];
-    expect(anonCall.by).toEqual(['ipHash']);
-    expect(anonCall.where.userId).toBeNull();
-    expect(anonCall.where.ipHash).toEqual({ not: null });
   });
 
   it('does not exclude any userId when the DJ profile has no linked user', async () => {
@@ -337,7 +372,7 @@ describe('RANK-4 / RANK-5: battle entry ownership + atomic close', () => {
       prismaMock().djProfile.update.mockResolvedValue({});
     });
 
-    it('first close performs the atomic ACTIVE -> CLOSED claim and awards badges', async () => {
+    it('close claims the battle and awards badges inside one interactive transaction', async () => {
       prismaMock().battle.updateMany.mockResolvedValue({ count: 1 });
 
       const res = await request(app)
@@ -348,13 +383,13 @@ describe('RANK-4 / RANK-5: battle entry ownership + atomic close', () => {
         where: { id: 'b1', status: 'ACTIVE' },
         data: { status: 'CLOSED' },
       });
-      // badge/score updates run inside a transaction
+      // badge/score updates run inside the same interactive transaction as the claim
       expect(prismaMock().$transaction).toHaveBeenCalled();
       expect(prismaMock().djProfile.update).toHaveBeenCalledTimes(2);
       expect(res.body.data.winners).toHaveLength(2);
     });
 
-    it('second close gets 400 from the updateMany count === 0 path and awards nothing', async () => {
+    it('second close gets 400 from the ALREADY_CLOSED sentinel and awards nothing', async () => {
       prismaMock().battle.updateMany.mockResolvedValue({ count: 0 });
 
       const res = await request(app)
@@ -363,7 +398,22 @@ describe('RANK-4 / RANK-5: battle entry ownership + atomic close', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/already closed/i);
       expect(prismaMock().djProfile.update).not.toHaveBeenCalled();
-      expect(prismaMock().$transaction).not.toHaveBeenCalled();
+      // the sentinel aborts the interactive transaction, so no badges are applied
+      expect(prismaMock().$transaction).toHaveBeenCalled();
+    });
+
+    it('badge-update failure aborts the transaction: close rolls back (battle stays ACTIVE) and no success is returned', async () => {
+      prismaMock().battle.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock().djProfile.update.mockRejectedValue(new Error('db write failed'));
+
+      const res = await request(app)
+        .post('/api/battles/b1/close')
+        .set('Authorization', `Bearer ${adminToken()}`);
+      // the interactive transaction rejected, so the handler surfaces a failure
+      // instead of a 200 — in production the ACTIVE -> CLOSED claim is rolled back
+      expect(res.status).toBe(500);
+      expect(res.body.success).not.toBe(true);
+      expect(res.body.data).toBeUndefined();
     });
   });
 });

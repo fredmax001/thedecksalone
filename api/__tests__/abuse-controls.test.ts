@@ -282,5 +282,21 @@ describe('Abuse controls (SOC-7/8/9/10/17, ETK-8)', () => {
       expect(csv).toContain(`'@SUM(A1)`);
       expect(csv).toContain('plain text');
     });
+
+    it('also prefixes formula cells hidden behind leading whitespace (space/tab)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ticketing = require('../routes/eventTicketing');
+      const csv = ticketing.buildCsv([
+        { Name: 'Guest Six', Note: ' =HYPERLINK("http://evil.example","click")' },
+        { Name: 'Guest Seven', Note: '\t=1+1' },
+        { Name: 'Guest Eight', Note: '\r@SUM(A1)' },
+        { Name: 'Guest Nine', Note: '  plain text' },
+      ]);
+
+      expect(csv).toContain(`' =HYPERLINK(`);
+      expect(csv).toContain(`'\t=1+1`);
+      expect(csv).toContain(`'\r@SUM(A1)`);
+      expect(csv).toContain('  plain text');
+    });
   });
 });
