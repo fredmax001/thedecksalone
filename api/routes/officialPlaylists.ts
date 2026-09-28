@@ -2,6 +2,7 @@ const express = require('express');
 const { prisma } = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -43,7 +44,12 @@ router.get('/', async (req: any, res: any) => {
       },
     });
 
-    return ok(res, playlists);
+    return ok(res, playlists.map((pl: any) => ({
+      ...pl,
+      items: (pl.items || []).map((it: any) =>
+        it?.mix ? { ...it, mix: toPublicAudioUrl(it.mix) } : it
+      ),
+    })));
   } catch (error: any) {
     logger.error('Error fetching official playlists:', error.message);
     return fail(res, 500, 'Failed to load official playlists');
@@ -89,7 +95,12 @@ router.get('/:slug', async (req: any, res: any) => {
       return fail(res, 404, 'Official playlist not found');
     }
 
-    return ok(res, playlist);
+    return ok(res, {
+      ...playlist,
+      items: (playlist.items || []).map((it: any) =>
+        it?.mix ? { ...it, mix: toPublicAudioUrl(it.mix) } : it
+      ),
+    });
   } catch (error: any) {
     logger.error('Error fetching official playlist detail:', error.message);
     return fail(res, 500, 'Failed to load official playlist details');

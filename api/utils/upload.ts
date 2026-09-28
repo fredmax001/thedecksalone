@@ -180,11 +180,81 @@ const uploadMix = multer({
   { name: 'coverFile', maxCount: 1 },
 ]);
 
+// UPL-1 / UPL-2 — the public static mount is deliberately narrowed:
+//  - mixes/ is NEVER served here; local mix audio only flows through
+//    GET /api/mixes/:id/audio (authorized, range-capable).
+//  - documents/, subscription-proofs/, tickets/ hold KYC / payment proof
+//    material and require a staff JWT (ADMIN / SUPER_ADMIN / FINANCE_ADMIN /
+//    VERIFICATION_ADMIN). tickets/ additionally allows the event organizer
+//    (the event's DJ) and the buyer so manual payment approval keeps working.
+//  - avatars/, covers/, events/, photos/ stay public exactly as before.
+const { verifyToken } = require('./jwt');
+const { prisma } = require('./prisma');
+
+const STAFF_UPLOAD_ROLES = ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN'];
+const GATED_UPLOAD_PREFIXES = ['/documents/', '/subscription-proofs/', '/tickets/'];
+
+function extractUploadToken(req) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) return authHeader.split(' ')[1];
+  // <img>/<a>-based admin review UIs cannot send headers; accept ?token=.
+  if (typeof req.query?.token === 'string' && req.query.token) return req.query.token;
+  return null;
+}
+
+async function resolveUploadUser(req) {
+  const token = extractUploadToken(req);
+  if (!token) return null;
+  const decoded = verifyToken(token);
+  const userId = decoded && typeof decoded === 'object' ? decoded.id || decoded.userId : null;
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, status: true },
+  });
+  return user && user.status === 'ACTIVE' ? user : null;
+}
+
+async function gatedUploadsAuth(req, res, next) {
+  try {
+    const reqPath = req.path || '';
+
+    // UPL-1 core: mix bytes only stream via the authorized /api/mixes/:id/audio.
+    if (reqPath.startsWith('/mixes/')) {
+      return res.status(404).end();
+    }
+
+    const isGated = GATED_UPLOAD_PREFIXES.some((p) => reqPath.startsWith(p));
+    if (!isGated) return next(); // public folders unchanged
+
+    const user = await resolveUploadUser(req);
+    if (user && STAFF_UPLOAD_ROLES.includes(user.role)) return next();
+
+    // tickets/: the buyer or the event organizer may view their own payment
+    // screenshot (manual payment approval depends on the organizer seeing it).
+    if (user && reqPath.startsWith('/tickets/')) {
+      const basename = reqPath.slice('/tickets/'.length).split('/').pop();
+      const ticket = await prisma.eventTicket.findFirst({
+        where: { paymentScreenshot: { endsWith: `/${basename}` } },
+        select: { userId: true, event: { select: { dj: { select: { userId: true } } } } },
+      });
+      if (ticket && (ticket.userId === user.id || ticket.event?.dj?.userId === user.id)) {
+        return next();
+      }
+    }
+
+    return res.status(user ? 403 : 401).json({ success: false, error: user ? 'Forbidden' : 'Unauthorized' });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
 // Serve uploads statically (local fallback)
 function serveUploads(app) {
   const express = require('express');
   app.use(
     '/uploads',
+    gatedUploadsAuth,
     (req, res, next) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -211,5 +281,6 @@ module.exports = {
   uploadDocument,
   uploadAdminMedia,
   serveUploads,
+  gatedUploadsAuth,
   extFromMime,
 };

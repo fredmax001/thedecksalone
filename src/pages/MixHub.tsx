@@ -56,11 +56,11 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-async function triggerMixDownload(mix: { id: string; title: string }) {
+async function triggerMixDownload(mix: { id: string; title: string; audioUrl?: string }) {
   toast.info(`Preparing download for "${mix.title}"...`);
   const res = await api.post(`/mixes/${mix.id}/download`);
   const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-  await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+  await downloadMixFile(downloadEndpoint, mix.audioUrl, `${mix.title}.mp3`);
   toast.success(`Download started! Enjoy the mix.`);
 }
 

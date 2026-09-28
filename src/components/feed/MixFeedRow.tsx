@@ -169,7 +169,7 @@ export default function MixFeedRow({
       if (res.data.success) {
         setDownloadsCount((c: number) => c + 1);
         const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-        await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+        await downloadMixFile(downloadEndpoint, mix.audioUrl, `${mix.title}.mp3`);
         toast.success(`Download started! Enjoy the mix.`);
       }
     } catch (err: any) {

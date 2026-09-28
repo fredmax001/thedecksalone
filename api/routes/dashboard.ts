@@ -4,6 +4,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { computeDjScore } = require('../utils/ranking');
 const { getMonthlyListeners } = require('../utils/monthlyListeners');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -165,7 +166,8 @@ router.get('/', authMiddleware, async (req, res) => {
           liveScores,
         },
         recentBookings,
-        topMixes,
+        // UPL-1: route local audio through the authorized endpoint
+        topMixes: topMixes.map(toPublicAudioUrl),
         recentReviews,
         rankingHistory,
         recentEvents,

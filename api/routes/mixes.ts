@@ -17,6 +17,8 @@ const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
 const { generateUniqueMixSlug, slugify } = require('../utils/slug');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
+const { verifyToken } = require('../utils/jwt');
 
 const router = express.Router();
 
@@ -271,7 +273,8 @@ router.get('/', conditionalSearchLimiter, async (req, res) => {
 
     return res.json({
       success: true,
-      data: mixes,
+      // UPL-1: never hand out raw local audio paths; stream via /:id/audio
+      data: mixes.map(toPublicAudioUrl),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
@@ -314,7 +317,7 @@ router.get('/all', authMiddleware, requireRole('ADMIN', 'MODERATOR'), async (req
 
     return res.json({
       success: true,
-      data: mixes,
+      data: mixes.map(toPublicAudioUrl),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error) {
@@ -354,7 +357,7 @@ router.get('/my-mixes', authMiddleware, requireDjProfile, async (req, res) => {
       },
     });
 
-    return ok(res, mixes);
+    return ok(res, mixes.map(toPublicAudioUrl));
   } catch (error) {
     console.error('[Mixes API] Error fetching my mixes:', error.message);
     return fail(res, 500, 'Internal server error');
@@ -431,7 +434,7 @@ router.get('/hall-of-fame', asyncHandler(async (req, res) => {
     });
   }
 
-  return ok(res, mixes);
+  return ok(res, mixes.map(toPublicAudioUrl));
 }));
 
 // GET /api/mixes/categories - Get all categories (alias for genres) (cached 60s)
@@ -515,7 +518,7 @@ router.get('/trending', asyncHandler(async (req, res) => {
     },
   });
 
-  return ok(res, mixes);
+  return ok(res, mixes.map(toPublicAudioUrl));
 }));
 
 // POST /api/mixes/import-hearthis - Bulk import Hearthis.at track URLs for the authenticated DJ
@@ -744,7 +747,7 @@ router.get('/by-slug/:djIdentifier/:slug', softAuthMiddleware, asyncHandler(asyn
     }
   }
 
-  return ok(res, mix);
+  return ok(res, toPublicAudioUrl(mix));
 }));
 
 // GET /api/mixes/:id - Get single mix (by ID or Slug)
@@ -786,7 +789,7 @@ router.get('/:id', softAuthMiddleware, asyncHandler(async (req, res) => {
   }
 
   // Play tracking is handled by POST /:id/play to support dedup and analytics
-  return ok(res, mix);
+  return ok(res, toPublicAudioUrl(mix));
 }));
 
 // GET /api/mixes/:id/recommendations - Recommend similar mixes and more from the same DJ
@@ -863,8 +866,9 @@ router.get('/:id/recommendations', softAuthMiddleware, async (req: any, res: any
     });
 
     return ok(res, {
-        similar,
-        moreFromDj,
+        // UPL-1: route local audio through the authorized /:id/audio endpoint
+        similar: similar.map(toPublicAudioUrl),
+        moreFromDj: moreFromDj.map(toPublicAudioUrl),
       });
   } catch (error: any) {
     console.error('Error fetching mix recommendations:', error.message);
@@ -1502,6 +1506,96 @@ function sanitizeFilename(name) {
   return (name || 'mix').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
 }
 
+// GET /api/mixes/:id/audio - Authorized streaming endpoint for mix audio (UPL-1).
+// Replaces the public /uploads/mixes/* static door: local bytes only flow through
+// here, exclusive mixes require the same access checkDownloadAccess() enforces.
+router.get('/:id/audio', softAuthMiddleware, async (req, res) => {
+  try {
+    const mixId = req.params.id;
+
+    const mix = await prisma.mix.findUnique({
+      where: { id: mixId },
+      include: {
+        dj: {
+          select: {
+            id: true,
+            stageName: true,
+            userId: true,
+            subscriptionTier: true,
+          },
+        },
+      },
+    });
+
+    if (!mix || !mix.audioUrl) {
+      return res.status(404).send('Mix not found');
+    }
+
+    // <audio> element / mobile webview requests cannot send an Authorization
+    // header, so also accept the JWT via ?token= for this endpoint only.
+    if (!req.user && typeof req.query.token === 'string' && req.query.token) {
+      const decoded = verifyToken(req.query.token);
+      const userId = decoded && typeof decoded === 'object' ? (decoded.id || decoded.userId) : null;
+      if (userId) {
+        const tokenUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, role: true, status: true },
+        });
+        if (tokenUser && tokenUser.status === 'ACTIVE') {
+          req.user = tokenUser;
+        }
+      }
+    }
+
+    // Private mixes are only streamable by the owner or an admin (preserves the
+    // pre-existing owner-preview behavior of the public static mount).
+    if (!mix.isPublic) {
+      const isOwner = req.user?.id && mix.dj?.userId === req.user.id;
+      const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+      if (!isOwner && !isAdmin) {
+        return res.status(404).send('Mix not found');
+      }
+    }
+
+    // Exclusive mixes reuse the exact download-access predicate (owner, admin,
+    // repost/follow gates, free listeners, entitled subscribers). 403 (not 404)
+    // so the client can distinguish "exists but gated" from "missing".
+    if (mix.isExclusive) {
+      const access = await checkDownloadAccess(mix, req.user);
+      if (!access.allowed) {
+        return res.status(403).send('This exclusive mix requires an active subscription.');
+      }
+    }
+
+    // External platforms handle their own auth; redirect instead of proxying
+    // (never proxy to prevent SSRF against internal services).
+    if (/^https?:\/\//i.test(mix.audioUrl)) {
+      return res.redirect(mix.audioUrl);
+    }
+
+    // Local file: stream with Range support, same hardened containment check
+    // as download-file (UPL-10: separator-aware prefix).
+    const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
+    const relativeMatch = mix.audioUrl.match(/^\/uploads\/(.*)$/);
+    if (!relativeMatch) {
+      return res.status(400).send('Invalid audio file path.');
+    }
+    const safeSuffix = path.normalize(relativeMatch[1]).replace(/^(\.\.(\/|\\|$))+/, '');
+    const filePath = path.join(uploadsDir, safeSuffix);
+    if (!filePath.startsWith(path.resolve(uploadsDir) + path.sep)) {
+      return res.status(400).send('Invalid audio file path.');
+    }
+    return res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        return res.status(404).send('Audio file not found.');
+      }
+    });
+  } catch (error) {
+    console.error('[Mix Audio API] Error:', error);
+    return res.status(500).send('Internal server error');
+  }
+});
+
 // GET /api/mixes/:id/download-file - Stream direct MP3 file attachment to browser
 router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
   try {
@@ -1632,13 +1726,14 @@ router.post('/:id/download', softAuthMiddleware, async (req, res) => {
     const updated = await prisma.mix.update({
       where: { id: mixId },
       data: { downloads: { increment: 1 } },
-      select: { id: true, downloads: true, audioUrl: true, title: true },
+      select: { id: true, downloads: true, title: true },
     });
 
+    // UPL-8: never leak the raw audio URL; the client only gets the gated
+    // download-file endpoint (local) or follows its redirect (external).
     return res.json({
       success: true,
       downloadUrl: `/api/mixes/${mixId}/download-file`,
-      directAudioUrl: updated.audioUrl,
       downloads: updated.downloads,
     });
   } catch (error) {

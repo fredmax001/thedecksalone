@@ -56,7 +56,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import { ModeratorPlaylists } from './moderator/ModeratorPlaylists';
-import { getMediaUrl } from '@/lib/api';
+import { getMediaUrl, withAuthToken } from '@/lib/api';
 import {
   useAdminStats, useAdminAnalytics, useAdminDjs,
   useAdminRankings, useAdminMixes, useAdminBookings,
@@ -3661,7 +3661,7 @@ function VerificationSection() {
                           {dj.idDocumentUrl && (
                             <div className="md:col-span-2">
                               <a
-                                href={dj.idDocumentUrl}
+                                href={withAuthToken(dj.idDocumentUrl)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-text-secondary hover:bg-white/10 text-xs"
@@ -4355,7 +4355,7 @@ function SubscriptionsSection() {
 
                   <div className="flex flex-col gap-2">
                     <a
-                      href={request.proofUrl}
+                      href={withAuthToken(request.proofUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="px-3 py-2 bg-white/5 text-text-secondary rounded-lg text-xs font-bold hover:bg-white/10 flex items-center justify-center gap-1 transition-colors"

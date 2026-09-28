@@ -6,6 +6,7 @@ const { uploadCover } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { requireTrialOrSubscription } = require('../utils/trial');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -79,6 +80,10 @@ router.get('/mine', authMiddleware, requireDjProfile, async (req: any, res: any)
     const formatted = sets.map((s: any) => ({
       ...s,
       mixCount: s.items.length,
+      // UPL-1: route local mix audio through the authorized endpoint
+      items: (s.items || []).map((it: any) =>
+        it?.mix ? { ...it, mix: toPublicAudioUrl(it.mix) } : it
+      ),
     }));
 
     return ok(res, formatted);
@@ -122,6 +127,9 @@ router.get('/dj/:djId', async (req: any, res: any) => {
     const formatted = sets.map((s: any) => ({
       ...s,
       mixCount: s.items.length,
+      items: (s.items || []).map((it: any) =>
+        it?.mix ? { ...it, mix: toPublicAudioUrl(it.mix) } : it
+      ),
     }));
 
     return ok(res, formatted);
@@ -161,6 +169,9 @@ router.get('/:id', async (req: any, res: any) => {
     return ok(res, {
         ...set,
         mixCount: set.items.length,
+        items: (set.items || []).map((it: any) =>
+          it?.mix ? { ...it, mix: toPublicAudioUrl(it.mix) } : it
+        ),
       });
   } catch (error: any) {
     console.error('[sets.ts] Unhandled error:', error);

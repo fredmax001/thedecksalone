@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { uploadEventImage, extFromMime } = require('../utils/upload');
 const { uploadBuffer, deleteFile } = require('../utils/storage');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -72,7 +73,7 @@ router.get('/home-board', async (req: any, res: any) => {
       take: 10,
     });
 
-    return ok(res, { paidAds, events, djRankings, mixes });
+    return ok(res, { paidAds, events, djRankings, mixes: mixes.map(toPublicAudioUrl) });
   } catch (error: any) {
     console.error('[campaigns.ts] Unhandled error:', error);
     return fail(res, 500, 'Internal server error');

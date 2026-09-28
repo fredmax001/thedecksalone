@@ -50,11 +50,8 @@ export const api = axios.create({
   },
 });
 
-// Attach JWT token to every request if available
-api.interceptors.request.use((config) => {
-  const currentBaseUrl = getApiUrl();
-  config.baseURL = currentBaseUrl;
-
+// Read the stored JWT (same sources the request interceptor uses).
+export const getAuthToken = (): string | null => {
   let token = null;
   const authData = localStorage.getItem('decksalone-auth') || localStorage.getItem('soundit-auth');
   if (authData) {
@@ -62,7 +59,28 @@ api.interceptors.request.use((config) => {
       token = JSON.parse(authData).state?.token;
     } catch (e) {}
   }
-  token = token || localStorage.getItem('token');
+  return token || localStorage.getItem('token');
+};
+
+// UPL-1/UPL-2: media URLs served by gated endpoints (/api/mixes/:id/audio and
+// the auth-gated /uploads proof folders) cannot carry an Authorization header
+// from <audio>/<img>/<a> elements, so append the JWT as a query param.
+export const withAuthToken = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  const isGated = url.startsWith('/uploads/') || url.includes('/api/mixes/');
+  if (!isGated) return url;
+  const token = getAuthToken();
+  if (!token) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+};
+
+// Attach JWT token to every request if available
+api.interceptors.request.use((config) => {
+  const currentBaseUrl = getApiUrl();
+  config.baseURL = currentBaseUrl;
+
+  const token = getAuthToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -102,7 +120,9 @@ api.interceptors.response.use(
 
 export async function downloadMixFile(
   downloadUrl: string,
-  directAudioUrl: string | null | undefined,
+  // UPL-8: the mix's own audioUrl from its detail/list payload — used only to
+  // detect external URLs. The server no longer returns directAudioUrl.
+  mixAudioUrl: string | null | undefined,
   filename: string
 ) {
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -110,11 +130,11 @@ export async function downloadMixFile(
   // External URLs (e.g. Hearthis.at, SoundCloud direct links) cannot be fetched
   // with auth headers across origins, so fall back to a plain anchor download.
   const isExternal =
-    directAudioUrl &&
-    /^https?:\/\//i.test(directAudioUrl) &&
+    mixAudioUrl &&
+    /^https?:\/\//i.test(mixAudioUrl) &&
     (() => {
       try {
-        return new URL(directAudioUrl).origin !== siteOrigin;
+        return new URL(mixAudioUrl).origin !== siteOrigin;
       } catch {
         return false;
       }
@@ -122,7 +142,7 @@ export async function downloadMixFile(
 
   if (isExternal) {
     const link = document.createElement('a');
-    link.href = directAudioUrl as string;
+    link.href = mixAudioUrl as string;
     link.setAttribute('download', filename);
     link.style.display = 'none';
     document.body.appendChild(link);

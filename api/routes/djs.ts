@@ -13,6 +13,7 @@ const { CITY_TO_COMMUNITIES } = require('../utils/sierraLeoneLocations');
 const { isAfricanCountry } = require('../utils/africanCountries');
 const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 const { asyncHandler } = require('../middleware/asyncHandler');
 
 const router = express.Router();
@@ -594,7 +595,11 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
       totalStreams: computeTotalStreams(dj),
       monthlyListeners: dj.monthlyListeners,
       sets: [],
-      highlights: dj.highlights || [],
+      highlights: (dj.highlights || []).map((h: any) =>
+        h?.mix ? { ...h, mix: toPublicAudioUrl(h.mix) } : h
+      ),
+      // UPL-1: route local mix audio through the authorized /:id/audio endpoint
+      mixes: (dj.mixes || []).map(toPublicAudioUrl),
       reups: (dj.reups || []).map((r: any) => ({
         id: r.id,
         mixId: r.mix.id,
@@ -607,7 +612,7 @@ router.get('/:identifier', asyncHandler(async (req, res) => {
           genre: r.mix.genre,
           plays: r.mix.plays,
           likes: r.mix.likes,
-          audioUrl: r.mix.audioUrl,
+          audioUrl: toPublicAudioUrl(r.mix).audioUrl,
           dj: r.mix.dj,
         },
       })),
@@ -934,7 +939,7 @@ router.get('/me/highlights', authMiddleware, asyncHandler(async (req, res) => {
       },
     },
   });
-  return ok(res, highlights);
+  return ok(res, highlights.map((h: any) => (h?.mix ? { ...h, mix: toPublicAudioUrl(h.mix) } : h)));
 }));
 
 // GET /api/djs/:id/highlights - Public highlights for a DJ
@@ -950,7 +955,7 @@ router.get('/:id/highlights', asyncHandler(async (req, res) => {
       },
     },
   });
-  return ok(res, highlights);
+  return ok(res, highlights.map((h: any) => (h?.mix ? { ...h, mix: toPublicAudioUrl(h.mix) } : h)));
 }));
 
 // POST /api/djs/me/highlights - Add a mix to highlights

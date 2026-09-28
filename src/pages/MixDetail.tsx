@@ -101,7 +101,7 @@ export default function MixDetail() {
       toast.info(`Preparing download for "${mix.title}"...`);
       const res = await api.post(`/mixes/${mix.id}/download`);
       const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-      await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+      await downloadMixFile(downloadEndpoint, mix.audioUrl, `${mix.title}.mp3`);
       toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
       if (err.response?.status === 403) {
@@ -125,7 +125,7 @@ export default function MixDetail() {
       setDownloading(true);
       const res = await api.post(`/mixes/${mix.id}/download`);
       const downloadEndpoint = res.data.downloadUrl || `/api/mixes/${mix.id}/download-file`;
-      await downloadMixFile(downloadEndpoint, res.data.directAudioUrl, `${mix.title}.mp3`);
+      await downloadMixFile(downloadEndpoint, mix.audioUrl, `${mix.title}.mp3`);
       toast.success(`Download started! Enjoy the mix.`);
     } catch (err: any) {
       if (err.response?.status !== 403) {

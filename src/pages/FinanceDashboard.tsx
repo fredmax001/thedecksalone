@@ -50,7 +50,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getMediaUrl } from '@/lib/api';
+import { getMediaUrl, withAuthToken } from '@/lib/api';
 import { formatCurrency } from '@/lib/formatting';
 import { formatDate, formatDateTime } from '@/lib/dateTime';
 import { getApiErrorMessage } from '@/lib/apiErrors';
@@ -506,7 +506,7 @@ export default function FinanceDashboard() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setProofModalUrl(getMediaUrl(req.proofUrl))}
+                                    onClick={() => setProofModalUrl(withAuthToken(getMediaUrl(req.proofUrl)))}
                                     className="border-gold/30 text-gold hover:bg-gold/10 text-xs h-7 gap-1"
                                   >
                                     <Eye className="w-3.5 h-3.5" /> View Proof

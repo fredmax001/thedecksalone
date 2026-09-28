@@ -10,6 +10,7 @@ const { uploadBuffer, deleteFile, isSafeUploadUrl } = require('../utils/storage'
 const { sendAccountDeletionEmail } = require('../utils/email');
 const { isValidUsername } = require('../utils/username');
 const { parsePagination } = require('../utils/pagination');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
 
@@ -67,7 +68,7 @@ router.get('/liked-mixes', authMiddleware, asyncHandler(async (req, res) => {
     },
   });
 
-  const mixes = likes.map((l) => l.mix).filter(Boolean);
+  const mixes = likes.map((l) => toPublicAudioUrl(l.mix)).filter(Boolean);
   return ok(res, mixes);
 }));
 
@@ -239,7 +240,8 @@ router.get('/following-feed', authMiddleware, asyncHandler(async (req, res) => {
       id: `mix_${m.id}`,
       type: 'mix',
       createdAt: m.createdAt,
-      data: m,
+      // UPL-1: route local audio through the authorized endpoint
+      data: toPublicAudioUrl(m),
     })),
     ...newEvents.map((e) => ({
       id: `event_${e.id}`,

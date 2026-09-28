@@ -7,6 +7,7 @@ const { uploadBuffer } = require('../utils/storage');
 const { generateSmartPlaylistItems } = require('../services/smartPlaylist.service');
 const logger = require('../utils/logger');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -168,7 +169,7 @@ router.get('/mixes', async (req: any, res: any) => {
 
     return res.json({
       success: true,
-      data: mixes,
+      data: mixes.map(toPublicAudioUrl),
       meta: {
         total,
         page,

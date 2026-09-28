@@ -19,6 +19,7 @@ const { getActiveCampaigns, applyCampaignBoost } = require('../utils/campaignBoo
 const { withCache } = require('../utils/redis');
 const { asyncHandler } = require('../middleware/asyncHandler');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -421,7 +422,8 @@ router.get('/djs/recommended', softAuthMiddleware, async (req: any, res: any) =>
 router.get('/playlists/for-you', softAuthMiddleware, async (req: any, res: any) => {
   try {
     // 1. Fetch public mixes to build taste-based bundles
-    const mixes = await prisma.mix.findMany({
+    // UPL-1: route local audio through the authorized /api/mixes/:id/audio endpoint
+    const mixes = (await prisma.mix.findMany({
       where: { isPublic: true },
       orderBy: [{ plays: 'desc' }, { likes: 'desc' }, { createdAt: 'desc' }],
       take: 60,
@@ -436,7 +438,7 @@ router.get('/playlists/for-you', softAuthMiddleware, async (req: any, res: any) 
           },
         },
       },
-    });
+    })).map(toPublicAudioUrl);
 
     const afrobeatsMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('afro') || (m.category || '').toLowerCase().includes('afro'));
     const amapianoMixes = mixes.filter((m: any) => (m.genre || '').toLowerCase().includes('amapiano') || (m.genre || '').toLowerCase().includes('house') || (m.title || '').toLowerCase().includes('3-step'));

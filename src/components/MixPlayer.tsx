@@ -15,7 +15,7 @@ import {
   ChevronDown,
   ListPlus,
 } from 'lucide-react';
-import api, { getMediaUrl } from '@/lib/api';
+import api, { getMediaUrl, withAuthToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import ShareButton from '@/components/ShareButton';
@@ -347,7 +347,9 @@ export default function MixPlayer() {
   // Initialize audio element
   useEffect(() => {
     if (!currentTrack?.audioUrl || embed) return;
-    const audio = new Audio(currentTrack.audioUrl);
+    // UPL-1: local audio streams via the gated /api/mixes/:id/audio endpoint,
+    // which needs the JWT in the query string (<audio> cannot send headers).
+    const audio = new Audio(withAuthToken(currentTrack.audioUrl));
     audioRef.current = audio;
     audio.muted = isMuted || volume === 0;
     try {

@@ -14,6 +14,7 @@ const { processEventImage } = require('../utils/imageProcessor');
 const { calculateProfileCompletion, sendProfileNudgeEmail, nudgeIncompleteProfiles } = require('../utils/profileCompletion');
 const { parsePagination } = require('../utils/pagination');
 const { ok, fail } = require('../utils/response');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 const { asyncHandler } = require('../middleware/asyncHandler');
 
 const router = express.Router();
@@ -1507,7 +1508,7 @@ router.get('/mixes', async (req, res) => {
 
     return res.json({
       success: true,
-      data: mixes,
+      data: mixes.map(toPublicAudioUrl),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
   } catch (error: any) {

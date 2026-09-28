@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import api from '@/lib/api';
+import api, { withAuthToken } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatting';
 import { formatDate } from '@/lib/dateTime';
@@ -329,7 +329,7 @@ export default function EventTicketManagement() {
                       {/* Payment screenshot preview link if exists */}
                       {item.paymentScreenshot && (
                         <button
-                          onClick={() => setProofModalUrl(item.paymentScreenshot)}
+                          onClick={() => setProofModalUrl(withAuthToken(item.paymentScreenshot))}
                           className="inline-flex items-center gap-1 text-[11px] text-gold hover:underline mt-2"
                         >
                           <FileImage size={12} /> View Payment Receipt Proof
