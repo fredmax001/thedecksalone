@@ -1077,6 +1077,7 @@ model RankingHistory {
   week           DateTime
   dj             DjProfile @relation(fields: [djId], references: [id], onDelete: Cascade)
 
+  @@unique([djId, week])
   @@index([djId])
   @@index([week])
   @@map("ranking_history")

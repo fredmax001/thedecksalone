@@ -5,7 +5,7 @@ const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
 const { playLimiter, conditionalSearchLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
-const { recordMixPlay, recalculateMonthlyListeners } = require('../utils/monthlyListeners');
+const { recordMixPlay, recalculateMonthlyListeners, hashIp, wasPlayRecentlyRecorded } = require('../utils/monthlyListeners');
 const { uploadMix, extFromMime } = require('../utils/upload');
 const { uploadBuffer } = require('../utils/storage');
 const { processMixCover } = require('../utils/imageProcessor');
@@ -1182,19 +1182,34 @@ router.post('/:id/play', softAuthMiddleware, playLimiter, asyncHandler(async (re
     return fail(res, 404, 'Mix not found');
   }
 
+  // RANK-1: dedupe repeat plays of the same mix by the same user/IP within
+  // 24h. Duplicate plays return the current count (200) without incrementing,
+  // so the player UI keeps working.
+  const dedupIdentity = req.user?.id || hashIp(req.ip);
+  if (dedupIdentity) {
+    const alreadyPlayed = await wasPlayRecentlyRecorded(`playdedup:${mix.id}:${dedupIdentity}`);
+    if (alreadyPlayed) {
+      return ok(res, { plays: mix.plays });
+    }
+  }
+
   const updated = await prisma.mix.update({
     where: { id: req.params.id },
     data: { plays: { increment: 1 } },
     select: { plays: true },
   });
 
-  recordMixPlay(mix.id, mix.djId, {
-    userId: req.user?.id,
-    ip: req.ip,
-  }).catch(() => {});
+  // RANK-1: anonymous plays still bump the public counter (UX) but must not
+  // feed the ranking economy (MixPlay rows / monthly listeners / engagement).
+  if (req.user?.id) {
+    recordMixPlay(mix.id, mix.djId, {
+      userId: req.user.id,
+      ip: req.ip,
+    }).catch(() => {});
 
-  // Update cached monthly listener count asynchronously (do not block response)
-  recalculateMonthlyListeners(mix.djId).catch(() => {});
+    // Update cached monthly listener count asynchronously (do not block response)
+    recalculateMonthlyListeners(mix.djId).catch(() => {});
+  }
 
   return ok(res, { plays: updated.plays });
 }));

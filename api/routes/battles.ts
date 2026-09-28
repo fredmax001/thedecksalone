@@ -200,6 +200,17 @@ router.post('/:id/enter', authMiddleware, async (req, res) => {
       return fail(res, 403, 'Must be a DJ to enter battles');
     }
 
+    // RANK-4: a battle entry may only reference the entering DJ's own mix
+    if (parsed.data.mixId) {
+      const mix = await prisma.mix.findUnique({
+        where: { id: parsed.data.mixId },
+        select: { id: true, djId: true },
+      });
+      if (!mix || mix.djId !== dj.id) {
+        return fail(res, 400, 'Mix not found or does not belong to you');
+      }
+    }
+
     const battle = await prisma.battle.findUnique({
       where: { id: req.params.id },
       include: { entries: true },
@@ -363,7 +374,13 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
       return fail(res, 404, 'Battle not found');
     }
 
-    if (battle.status !== 'ACTIVE') {
+    // RANK-5: atomically claim the close (ACTIVE -> CLOSED) BEFORE awarding
+    // anything, so concurrent closes cannot double-award badges/score boosts.
+    const claim = await prisma.battle.updateMany({
+      where: { id: req.params.id, status: 'ACTIVE' },
+      data: { status: 'CLOSED' },
+    });
+    if (claim.count === 0) {
       return fail(res, 400, 'Battle is already closed');
     }
 
@@ -371,23 +388,26 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
     const sortedEntries = [...battle.entries].sort((a, b) => b.finalScore - a.finalScore);
 
     // Award badges to top 3
+    const badgeUpdates = [];
     for (let i = 0; i < Math.min(3, sortedEntries.length); i++) {
       const entry = sortedEntries[i];
       const badge = i === 0 ? 'Battle Champion' : i === 1 ? 'Battle Runner-Up' : 'Battle Third Place';
 
-      await prisma.djProfile.update({
+      badgeUpdates.push(prisma.djProfile.update({
         where: { id: entry.djId },
         data: {
           badges: { push: badge },
           // Small ranking boost for winning
           rankingScore: { increment: i === 0 ? 2 : i === 1 ? 1 : 0.5 },
         },
-      });
+      }));
+    }
+    if (badgeUpdates.length > 0) {
+      await prisma.$transaction(badgeUpdates);
     }
 
-    const updated = await prisma.battle.update({
+    const updated = await prisma.battle.findUnique({
       where: { id: req.params.id },
-      data: { status: 'CLOSED' },
     });
 
     return ok(res, {
