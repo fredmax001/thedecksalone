@@ -6,6 +6,8 @@ export interface SubscriptionConfig {
   whatsappNumber: string;
   proPrice: number;
   legendPrice: number;
+  proPriceAnnual: number;
+  legendPriceAnnual: number;
   currency: string;
   plans: Array<{ id: string; name: string; price: number }>;
 }
@@ -16,6 +18,8 @@ const CONFIG_KEYS = {
   whatsappNumber: 'subscription.whatsappNumber',
   proPrice: 'subscription.proPrice',
   legendPrice: 'subscription.legendPrice',
+  proPriceAnnual: 'subscription.proPriceAnnual',
+  legendPriceAnnual: 'subscription.legendPriceAnnual',
   currency: 'subscription.currency',
 };
 
@@ -25,6 +29,10 @@ const DEFAULTS: SubscriptionConfig = {
   whatsappNumber: process.env.PLATFORM_WHATSAPP_NUMBER || process.env.PLATFORM_PAYMENT_NUMBER || '+23272011156',
   proPrice: Number(process.env.PRO_SUBSCRIPTION_PRICE) || 200,
   legendPrice: Number(process.env.LEGEND_SUBSCRIPTION_PRICE) || 350,
+  // PAY-4: annual defaults mirror the PayPal flow (what paying users are
+  // actually charged) so every rail validates against the same price.
+  proPriceAnnual: Number(process.env.PRO_SUBSCRIPTION_PRICE_ANNUAL) || 2000,
+  legendPriceAnnual: Number(process.env.LEGEND_SUBSCRIPTION_PRICE_ANNUAL) || 4000,
   currency: process.env.SUBSCRIPTION_CURRENCY || 'SLE',
   plans: [],
 };
@@ -45,6 +53,8 @@ export async function getSubscriptionConfig(): Promise<SubscriptionConfig> {
   const whatsappNumber = map[CONFIG_KEYS.whatsappNumber] || paymentNumber;
   const proPrice = Number(map[CONFIG_KEYS.proPrice] || DEFAULTS.proPrice);
   const legendPrice = Number(map[CONFIG_KEYS.legendPrice] || DEFAULTS.legendPrice);
+  const proPriceAnnual = Number(map[CONFIG_KEYS.proPriceAnnual] || DEFAULTS.proPriceAnnual);
+  const legendPriceAnnual = Number(map[CONFIG_KEYS.legendPriceAnnual] || DEFAULTS.legendPriceAnnual);
   const currency = map[CONFIG_KEYS.currency] || DEFAULTS.currency;
 
   return {
@@ -53,6 +63,8 @@ export async function getSubscriptionConfig(): Promise<SubscriptionConfig> {
     whatsappNumber,
     proPrice,
     legendPrice,
+    proPriceAnnual,
+    legendPriceAnnual,
     currency,
     plans: [
       { id: 'pro', name: 'Pro', price: proPrice },
@@ -71,6 +83,8 @@ export async function setSubscriptionConfig(
     { key: CONFIG_KEYS.whatsappNumber, value: data.whatsappNumber },
     { key: CONFIG_KEYS.proPrice, value: data.proPrice !== undefined ? String(data.proPrice) : undefined },
     { key: CONFIG_KEYS.legendPrice, value: data.legendPrice !== undefined ? String(data.legendPrice) : undefined },
+    { key: CONFIG_KEYS.proPriceAnnual, value: data.proPriceAnnual !== undefined ? String(data.proPriceAnnual) : undefined },
+    { key: CONFIG_KEYS.legendPriceAnnual, value: data.legendPriceAnnual !== undefined ? String(data.legendPriceAnnual) : undefined },
     { key: CONFIG_KEYS.currency, value: data.currency },
   ].filter((e): e is { key: string; value: string } => e.value !== undefined && e.value !== '');
 
@@ -85,4 +99,17 @@ export async function setSubscriptionConfig(
   );
 
   return getSubscriptionConfig();
+}
+
+/**
+ * PAY-4: single price source — every purchase rail (manual request, Orange
+ * Money, PayPal) validates amounts through this helper so a plan can never be
+ * bought cheaper via whichever rail hardcodes the lowest price.
+ */
+export function getExpectedPlanAmount(config: SubscriptionConfig, plan: string): number {
+  const isAnnual = plan.includes('annual');
+  const basePlan = plan.includes('legend') ? 'legend' : 'pro';
+  return isAnnual
+    ? (basePlan === 'legend' ? config.legendPriceAnnual : config.proPriceAnnual)
+    : (basePlan === 'legend' ? config.legendPrice : config.proPrice);
 }

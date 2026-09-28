@@ -13,6 +13,7 @@ const { parsePagination } = require('../utils/pagination');
 const { toPublicAudioUrl } = require('../utils/mixAudio');
 const { ok, fail } = require('../utils/response');
 const { asyncHandler } = require('../middleware/asyncHandler');
+const { getSubscriptionConfig, getExpectedPlanAmount } = require('../utils/subscriptionConfig');
 
 function extFromMime(mimetype, fallbackName = '') {
   const fromMime = {
@@ -1029,8 +1030,6 @@ router.get('/public/:username', async (req, res) => {
 
 // Valid platform subscription plan identifiers sent by the frontend
 const VALID_PLANS = ['pro', 'pro_annual', 'legend', 'legend_annual'];
-const EXPECTED_MONTHLY_PRICE = { pro: 100, legend: 150 };
-const EXPECTED_ANNUAL_PRICE = { pro: 1000, legend: 1500 };
 
 // GET /api/users/subscription/status - Current user's platform subscription status
 router.get('/subscription/status', authMiddleware, async (req, res) => {
@@ -1088,9 +1087,10 @@ router.post('/subscription/request', authMiddleware, purchaseLimiter, uploadDocu
       return fail(res, 400, `Plan is required and must be one of: ${VALID_PLANS.join(', ')}`);
     }
 
-    const isAnnual = plan.includes('annual');
-    const basePlan = plan.includes('legend') ? 'legend' : 'pro';
-    const expectedAmount = isAnnual ? EXPECTED_ANNUAL_PRICE[basePlan] : EXPECTED_MONTHLY_PRICE[basePlan];
+    // PAY-4: expected amount comes from the single subscription config
+    // (previously hardcoded 100/150 monthly, 1000/1500 annual here).
+    const subscriptionConfig = await getSubscriptionConfig();
+    const expectedAmount = getExpectedPlanAmount(subscriptionConfig, plan);
 
     const parsedAmount = parseFloat(amount);
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {

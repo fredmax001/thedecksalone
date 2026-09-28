@@ -205,7 +205,9 @@ async function getPeriodRevenue(windowStart: Date, windowEnd: Date): Promise<num
     prisma.payPalPayment.aggregate({
       where: {
         createdAt: { gte: windowStart, lt: windowEnd },
-        status: 'COMPLETED',
+        // PAY-10: paypal.ts only ever writes CREATED/CAPTURED/FAILED —
+        // filtering on 'COMPLETED' permanently zeroed this revenue stream.
+        status: 'CAPTURED',
       },
       _sum: { amountSle: true },
     }),
@@ -1143,19 +1145,30 @@ router.post('/pro-subscription-requests/:id/approve', requireRole('ADMIN', 'FINA
     return fail(res, 404, 'Subscription request not found');
   }
 
-  const targetUserId = request.userId || request.dj?.userId;
-  if (targetUserId) {
-    await activateSubscriptionFeatures(targetUserId, request.plan);
-  }
-
-  const updated = await prisma.proSubscriptionRequest.update({
-    where: { id: request.id },
+  // PAY-1: atomic claim — only one concurrent/duplicate approval can win the
+  // transition out of 'pending'. activateSubscriptionFeatures stacks paid
+  // months, so a double-approve would grant multiples of the paid period.
+  const claim = await prisma.proSubscriptionRequest.updateMany({
+    where: { id: request.id, status: 'pending' },
     data: {
       status: 'approved',
       reviewedById: req.user.id,
       adminNote: parsed.data.note || null,
       reviewedAt: new Date(),
     },
+  });
+
+  if (claim.count === 0) {
+    return fail(res, 409, 'Request already processed');
+  }
+
+  const targetUserId = request.userId || request.dj?.userId;
+  if (targetUserId) {
+    await activateSubscriptionFeatures(targetUserId, request.plan);
+  }
+
+  const updated = await prisma.proSubscriptionRequest.findUnique({
+    where: { id: request.id },
     include: {
       dj: {
         select: {
@@ -1215,14 +1228,24 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
     return fail(res, 404, 'Subscription request not found');
   }
 
-  const updated = await prisma.proSubscriptionRequest.update({
-    where: { id: request.id },
+  // PAY-1: same atomic claim as approve — a processed request cannot be
+  // rejected again.
+  const claim = await prisma.proSubscriptionRequest.updateMany({
+    where: { id: request.id, status: 'pending' },
     data: {
       status: 'rejected',
       reviewedById: req.user.id,
       adminNote: parsed.data.note || null,
       reviewedAt: new Date(),
     },
+  });
+
+  if (claim.count === 0) {
+    return fail(res, 409, 'Request already processed');
+  }
+
+  const updated = await prisma.proSubscriptionRequest.findUnique({
+    where: { id: request.id },
     include: {
       dj: {
         select: {

@@ -143,7 +143,11 @@ router.post('/pro-subscription', authMiddleware, purchaseLimiter, uploadDocument
 
     const data = {
       plan: requestedPlan,
-      amount: plan ? (isAnnual ? plan.price * 12 : plan.price) : (basePlanId === 'legend' ? (isAnnual ? 4200 : 350) : (isAnnual ? 2400 : 200)),
+      // PAY-4: amount comes solely from the subscription config — the old
+      // fallback hardcoded 4200/350/2400/200 here.
+      amount: isAnnual
+        ? (basePlanId === 'legend' ? config.legendPriceAnnual : config.proPriceAnnual)
+        : (basePlanId === 'legend' ? config.legendPrice : config.proPrice),
       currency: config.currency,
       paymentMethod: config.paymentMethod,
       paymentNumber: config.paymentNumber,

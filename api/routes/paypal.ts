@@ -30,10 +30,6 @@ const IS_SANDBOX = (process.env.PAYPAL_ENV || 'sandbox') !== 'live';
 const PAYPAL_API = IS_SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 const SLE_USD_FALLBACK = Number(process.env.PAYPAL_SLE_USD_RATE) || 0.09; // USD per 1 SLE
 
-// Annual prices (SLE) — mirrors the frontend PLANS constants; server config
-// only tracks monthly prices.
-const ANNUAL_PRICES_SLE: Record<string, number> = { pro: 2000, legend: 4000 };
-
 const createOrderSchema = z.object({
   plan: z.enum(['pro', 'legend']),
   billingPeriod: z.enum(['monthly', 'annual']).default('monthly'),
@@ -101,8 +97,10 @@ router.post('/create-order', authMiddleware, asyncHandlerCompat(async (req: any,
 
   const { plan, billingPeriod } = parsed.data;
   const config = await getSubscriptionConfig();
+  // PAY-4: prices come solely from the subscription config — no hardcoded
+  // annual table (previously ANNUAL_PRICES_SLE = { pro: 2000, legend: 4000 }).
   const amountSle = billingPeriod === 'annual'
-    ? (ANNUAL_PRICES_SLE[plan] ?? (plan === 'legend' ? config.legendPrice : config.proPrice) * 12)
+    ? (plan === 'legend' ? config.legendPriceAnnual : config.proPriceAnnual)
     : (plan === 'legend' ? config.legendPrice : config.proPrice);
   const storedPlan = billingPeriod === 'annual' ? `${plan}_annual` : plan;
 
@@ -160,10 +158,20 @@ router.post('/capture-order', authMiddleware, asyncHandlerCompat(async (req: any
   } catch (err: any) {
     const status = err.response?.status;
     const detail = err.response?.data?.message || err.message;
-    await prisma.payPalPayment.update({
-      where: { orderId },
-      data: { status: status === 422 ? 'FAILED' : record.status },
-    }).catch(() => {});
+    if (status === 422) {
+      // PAY-2: 422 means the order was already captured — a concurrent capture
+      // may have just marked it CAPTURED. Only fail records not yet captured;
+      // never overwrite a successful capture with FAILED.
+      await prisma.payPalPayment.updateMany({
+        where: { orderId, status: { not: 'CAPTURED' } },
+        data: { status: 'FAILED' },
+      }).catch(() => {});
+    } else {
+      await prisma.payPalPayment.update({
+        where: { orderId },
+        data: { status: record.status },
+      }).catch(() => {});
+    }
     return fail(res, 502, `PayPal capture failed: ${detail}`);
   }
 
@@ -295,7 +303,12 @@ async function captureVerifiedOrder(req: any, orderId: string, purpose: string) 
     const status = err.response?.status;
     const detail = err.response?.data?.message || err.message;
     if (status === 422) {
-      await prisma.payPalPayment.update({ where: { orderId }, data: { status: 'FAILED' } }).catch(() => {});
+      // PAY-2: only fail records not yet CAPTURED so a concurrent capture
+      // cannot be clobbered by this FAILED write.
+      await prisma.payPalPayment.updateMany({
+        where: { orderId, status: { not: 'CAPTURED' } },
+        data: { status: 'FAILED' },
+      }).catch(() => {});
     }
     return { error: [502, `PayPal capture failed: ${detail}`] as const };
   }
