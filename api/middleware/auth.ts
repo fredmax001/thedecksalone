@@ -43,9 +43,11 @@ async function getActiveUserFromToken(token) {
   return authUser;
 }
 
-function invalidateUserAuthCache(userId) {
+async function invalidateUserAuthCache(userId) {
   if (!userId) return;
-  clearCache(`auth_user:${userId}`);
+  // AUTH-1: await the deletion so callers can rely on the cache actually being
+  // cleared before they respond (clearCache now returns its promise).
+  await clearCache(`auth_user:${userId}`);
 }
 
 

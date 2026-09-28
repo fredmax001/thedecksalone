@@ -210,9 +210,15 @@ async function resolveUploadUser(req) {
   if (!userId) return null;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, status: true },
+    select: { id: true, role: true, status: true, tokenVersion: true },
   });
-  return user && user.status === 'ACTIVE' ? user : null;
+  if (!user || user.status !== 'ACTIVE') return null;
+  // AUTH-1 residual: gated uploads must honor tokenVersion — a revoked session's
+  // JWT (?token= or Bearer) must not unlock KYC / payment-proof documents.
+  const payloadTokenVersion = typeof decoded.tokenVersion === 'number' ? decoded.tokenVersion : 0;
+  const userTokenVersion = typeof user.tokenVersion === 'number' ? user.tokenVersion : 0;
+  if (userTokenVersion !== payloadTokenVersion) return null;
+  return user;
 }
 
 async function gatedUploadsAuth(req, res, next) {

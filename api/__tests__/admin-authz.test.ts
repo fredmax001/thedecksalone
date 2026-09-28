@@ -18,6 +18,11 @@ jest.mock('../utils/prisma', () => ({
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    booking: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      update: jest.fn(),
+    },
     message: {
       findMany: jest.fn(),
     },
@@ -227,6 +232,50 @@ describe('Admin authorization hardening (ADM-1, ADM-2, ADM-3, MOD-1, AUTH-7)', (
         .send({ name: 'x' });
       expect(res.status).toBe(403);
       expect(prismaMock().adCampaign.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('ADM-3 residual: FINANCE_ADMIN gets 403 on PUT /bookings/:id/status (money control)', async () => {
+      const res = await request(app)
+        .put('/api/admin/bookings/booking-1/status')
+        .set(auth('finance-admin'))
+        .send({ status: 'CONFIRMED' });
+      expect(res.status).toBe(403);
+      expect(prismaMock().booking.update).not.toHaveBeenCalled();
+    });
+
+    it('ADM-3 residual: FINANCE_ADMIN can still read GET /bookings', async () => {
+      const p = prismaMock();
+      p.booking.findMany.mockResolvedValue([]);
+      p.booking.count.mockResolvedValue(0);
+      const res = await request(app).get('/api/admin/bookings').set(auth('finance-admin'));
+      expect(res.status).toBe(200);
+      expect(p.booking.findMany).toHaveBeenCalled();
+    });
+
+    it('ADM-3 residual: MODERATOR gets 403 on GET /security-logs', async () => {
+      const res = await request(app).get('/api/admin/security-logs').set(auth('moderator'));
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('ADM-5: POST /notifications returns counts only, never phone numbers', () => {
+    it('whatsapp send keeps working but the response has no per-user phone list', async () => {
+      const p = prismaMock();
+      p.user.findMany.mockResolvedValue([
+        { id: 'dj-1', username: 'djone', phone: '23272011156', djProfile: { stageName: 'DJ One', whatsappNumber: null } },
+        { id: 'dj-2', username: 'djtwo', phone: null, djProfile: null },
+      ]);
+
+      const res = await request(app)
+        .post('/api/admin/notifications')
+        .set(auth('plain-admin'))
+        .send({ type: 'WhatsApp', target: 'All Users', title: 'Hello', message: 'World' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.whatsappCount).toBe(1);
+      expect(res.body.data.notificationCount).toBe(0);
+      expect(res.body.data.whatsappTargets).toBeUndefined();
+      expect(JSON.stringify(res.body)).not.toContain('23272011156');
     });
   });
 

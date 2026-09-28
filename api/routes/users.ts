@@ -617,7 +617,7 @@ router.put('/password', authMiddleware, asyncHandler(async (req, res) => {
   });
 
   // Revoke all existing sessions immediately (bypass the 30s auth cache) — AUTH-1
-  invalidateUserAuthCache(req.user.id);
+  await invalidateUserAuthCache(req.user.id); // AUTH-1
 
   return ok(res, { message: 'Password updated successfully' });
 }));

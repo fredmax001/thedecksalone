@@ -282,8 +282,12 @@ router.get('/:id', asyncHandler(async (req: any, res: any) => {
   const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'VERIFICATION_ADMIN', 'MODERATOR'];
   const isAdmin = req.user?.role && adminRoles.includes(req.user.role);
 
-  // Only hide onsitePassword from public visitors / other listeners
-  const safeEvent = (isOwner || isAdmin) ? event : (({ onsitePassword: _, ...rest }: any) => rest)(event);
+  // ETK-1 residual: the on-site staff password must NEVER leave the API — not
+  // even to the owner or admin roles (legacy rows store it in plaintext). The
+  // owner only gets a `set?` boolean; clients send a NEW password when rotating
+  // and never need the old value back.
+  const { onsitePassword: _onsitePassword, ...restEvent }: any = event;
+  const safeEvent = isOwner ? { ...restEvent, onsitePasswordSet: !!event.onsitePassword } : restEvent;
   return ok(res, { ...safeEvent, userRsvp: !!userRsvp, userTicket, isOwner: !!isOwner });
 }));
 

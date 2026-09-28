@@ -230,6 +230,28 @@ async function canReadGuestList(req: any, event: any): Promise<boolean> {
   return false;
 }
 
+/**
+ * ETK-2 residual: scan responses must not hand the attendee's email to any
+ * Pro+ DJ scanning an event they do not own. Only the event owner, ADMIN, or
+ * MODERATOR may see it; everyone else gets name/username/avatar only (enough
+ * for verbal confirmation at the door).
+ */
+async function scannerCanSeeAttendeeEmail(req: any, event: any): Promise<boolean> {
+  if (!req.user?.id || req.user.role === 'onsite_staff') return false;
+  const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { djProfile: true } });
+  if (!user) return false;
+  const isPrivileged = user.role === 'ADMIN' || user.role === 'MODERATOR';
+  const isOwner = (!!user.djProfile && event.djId === user.djProfile.id) || (event.dj?.userId && event.dj.userId === user.id) || event.djId === req.user.id;
+  return isPrivileged || isOwner;
+}
+
+/** Strip the attendee email from a fetched ticket for scanners without rights. */
+function redactTicketAttendeeEmail(ticket: any): any {
+  if (!ticket || !ticket.user || ticket.user.email === undefined) return ticket;
+  const { email: _email, ...userWithoutEmail } = ticket.user;
+  return { ...ticket, user: userWithoutEmail };
+}
+
 interface ExtractedTicketIdentifiers {
   id?: string;
   ticketNumber?: string;
@@ -1079,9 +1101,11 @@ router.post('/tickets/:ticketId/edit-attendee', authMiddleware, requireProOrAdmi
 // GET /api/events/:id/ticketing/customers
 router.get('/customers', authMiddleware, requireProOrAdmin, async (req: any, res: any) => {
   try {
-    const { event, isOwner, isAdmin } = await getEventWithAuth(req.user.id, req.params.id);
+    const { event } = await getEventWithAuth(req.user.id, req.params.id);
     if (!event) return fail(res, 404, 'Event not found');
-    if (!assertOwnerOrAdmin(isOwner, isAdmin, res)) return;
+    // ETK-2 residual: guest-list PII is owner/ADMIN/MODERATOR (or event-bound
+    // on-site staff) only — FINANCE/VERIFICATION/SUPPORT admins and Pro+ DJs are out.
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const { search, status, page = '1', limit = '50' } = req.query;
     const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit }, { defaultLimit: 50, maxLimit: 200 });
@@ -1119,9 +1143,11 @@ router.get('/customers', authMiddleware, requireProOrAdmin, async (req: any, res
 // GET /api/events/:id/ticketing/customers/export
 router.get('/customers/export', authMiddleware, requireProOrAdmin, async (req: any, res: any) => {
   try {
-    const { event, isOwner, isAdmin } = await getEventWithAuth(req.user.id, req.params.id);
+    const { event } = await getEventWithAuth(req.user.id, req.params.id);
     if (!event) return fail(res, 404, 'Event not found');
-    if (!assertOwnerOrAdmin(isOwner, isAdmin, res)) return;
+    // ETK-2 residual: guest-list PII is owner/ADMIN/MODERATOR (or event-bound
+    // on-site staff) only — FINANCE/VERIFICATION/SUPPORT admins and Pro+ DJs are out.
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const tickets = await prisma.eventTicket.findMany({
       where: { eventId: event.id },
@@ -1226,6 +1252,7 @@ router.post('/scan', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: a
     if (!event) return fail(res, 404, 'Event not found');
     const canScan = await canScanEvent(req, event);
     if (!canScan) return fail(res, 403, 'Only event organizers or on-site staff can scan tickets');
+    const showAttendeeEmail = await scannerCanSeeAttendeeEmail(req, event);
 
     let ticket: any = null;
     const decrypted = decryptQrPayload(qrPayload);
@@ -1307,6 +1334,10 @@ router.post('/scan', authOrOnsiteMiddleware, onsiteAuthMiddleware, async (req: a
       return fail(res, 404, 'INVALID', { message: 'Invalid or unknown ticket' });
     }
 
+    // ETK-2 residual: pro-tier scanners must not see the attendee's email,
+    // including via the ALREADY_SCANNED 409 body below.
+    if (!showAttendeeEmail) ticket = redactTicketAttendeeEmail(ticket);
+
     if (ticket.status === 'checked_in') {
       await prisma.eventScanLog.create({
         data: { ticketId: ticket.id, eventId: event.id, scannedBy: req.user.id, scannerRole: req.user.role, status: 'already_used', metadata: { scannedAt: ticket.scannedAt } },
@@ -1361,12 +1392,15 @@ router.post('/scan/:ticketId/checkin', authOrOnsiteMiddleware, onsiteAuthMiddlew
     const canScan = await canScanEvent(req, event);
     if (!canScan) return fail(res, 403, 'Only event organizers or on-site staff can check in tickets');
 
-    const ticket = await prisma.eventTicket.findUnique({
+    let ticket = await prisma.eventTicket.findUnique({
       where: { id: req.params.ticketId },
       include: { user: { select: { id: true, name: true, username: true, avatar: true, email: true } }, ticketType: { select: { name: true } } },
     });
 
     if (!ticket || ticket.eventId !== event.id) return fail(res, 404, 'Ticket not found');
+
+    // ETK-2 residual: pro-tier scanners must not see the attendee's email.
+    if (!(await scannerCanSeeAttendeeEmail(req, event))) ticket = redactTicketAttendeeEmail(ticket);
     if (ticket.status === 'checked_in') return fail(res, 409, 'ALREADY_SCANNED', { message: 'Already checked in' });
     if (ticket.status !== 'approved') return fail(res, 400, 'NOT_APPROVED', { message: `Ticket status is ${ticket.status}` });
 

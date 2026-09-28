@@ -242,6 +242,27 @@ describe('Mix audio gating (UPL-1 / UPL-2 / UPL-8)', () => {
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe('https://soundcloud.com/artist/track');
     });
+
+    it('AUTH-1 residual: ?token= with a stale tokenVersion is rejected (401)', async () => {
+      prismaMock().mix.findUnique.mockResolvedValue(localMix);
+      // User bumped to tokenVersion 1 after a password change; the old token
+      // still carries tokenVersion 0.
+      prismaMock().user.findUnique.mockResolvedValue({ id: 'listener-1', role: 'USER', status: 'ACTIVE', tokenVersion: 1 });
+      const staleToken = signToken({ id: 'listener-1', role: 'USER', tokenVersion: 0 });
+
+      const res = await request(app).get(`/api/mixes/mix-local/audio?token=${staleToken}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('AUTH-1 residual: ?token= with a matching tokenVersion still streams', async () => {
+      prismaMock().mix.findUnique.mockResolvedValue(localMix);
+      prismaMock().user.findUnique.mockResolvedValue({ id: 'listener-1', role: 'USER', status: 'ACTIVE', tokenVersion: 1 });
+      const token = signToken({ id: 'listener-1', role: 'USER', tokenVersion: 1 });
+
+      const res = await request(app).get(`/api/mixes/mix-local/audio?token=${token}`);
+      expect(res.status).toBe(200);
+      expect(Buffer.from(res.body).toString()).toBe('fake-mp3-bytes');
+    });
   });
 
   describe('UPL-8: POST /api/mixes/:id/download response shape', () => {
@@ -264,7 +285,7 @@ describe('Mix audio gating (UPL-1 / UPL-2 / UPL-8)', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { gatedUploadsAuth } = jest.requireActual('../utils/upload');
 
-    const runGate = async (reqPath: string, user?: { id: string; role: string }) => {
+    const runGate = async (reqPath: string, user?: { id: string; role: string; tokenVersion?: number }) => {
       const token = user ? signToken(user) : undefined;
       const req: any = {
         path: reqPath,
@@ -306,6 +327,14 @@ describe('Mix audio gating (UPL-1 / UPL-2 / UPL-8)', () => {
       const { statusCode, nextCalled } = await runGate('/subscription-proofs/proof.png', { id: 'fin1', role: 'FINANCE_ADMIN' });
       expect(statusCode).toBe(0);
       expect(nextCalled).toBe(true);
+    });
+
+    it('AUTH-1 residual: rejects a staff token whose tokenVersion is stale (401)', async () => {
+      // User was revoked (tokenVersion bumped to 2); the old token carries 1.
+      prismaMock().user.findUnique.mockResolvedValue({ id: 'fin1', role: 'FINANCE_ADMIN', status: 'ACTIVE', tokenVersion: 2 });
+      const { statusCode, nextCalled } = await runGate('/subscription-proofs/proof.png', { id: 'fin1', role: 'FINANCE_ADMIN', tokenVersion: 1 });
+      expect(statusCode).toBe(401);
+      expect(nextCalled).toBe(false);
     });
 
     it('allows the buyer of a ticket to view their payment screenshot in tickets/', async () => {

@@ -56,9 +56,13 @@ export async function withCache<T>(key: string, ttlSeconds: number, fetcher: () 
   }
 }
 
-export function clearCache(pattern: string) {
+export async function clearCache(pattern: string): Promise<void> {
   if (!redisClient || redisClient.status !== 'ready') return;
-  redisClient.del(pattern).catch((err) => logger.error(`Failed to clear cache key ${pattern}:`, err));
+  try {
+    await redisClient.del(pattern);
+  } catch (err) {
+    logger.error(`Failed to clear cache key ${pattern}:`, err);
+  }
 }
 
 export async function getCache(key: string): Promise<any> {

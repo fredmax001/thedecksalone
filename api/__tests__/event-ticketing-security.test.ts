@@ -7,6 +7,9 @@ jest.mock('../utils/prisma', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    eventRSVP: {
+      findUnique: jest.fn(),
+    },
     user: {
       findUnique: jest.fn(),
     },
@@ -79,6 +82,16 @@ describe('Event ticketing security (ETK-1, ETK-2, TKT-3 PII-read)', () => {
     djProfile: { id: 'pro-dj', subscriptionTier: 'pro' },
   };
 
+  const financeUser = {
+    id: 'finance-user',
+    email: 'finance@example.com',
+    role: 'FINANCE_ADMIN',
+    status: 'ACTIVE',
+    djProfile: null,
+  };
+
+  let financeToken: string;
+
   const fakeEvent = {
     id: eventId,
     title: 'Test Event',
@@ -97,16 +110,34 @@ describe('Event ticketing security (ETK-1, ETK-2, TKT-3 PII-read)', () => {
     const { signToken } = require('../utils/jwt');
     ownerToken = signToken({ id: ownerUser.id, email: ownerUser.email, role: 'DJ' });
     proToken = signToken({ id: proUser.id, email: proUser.email, role: 'DJ' });
+    financeToken = signToken({ id: financeUser.id, email: financeUser.email, role: 'FINANCE_ADMIN' });
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { verifyToken } = require('../utils/jwt');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const eventTicketingRoutes = require('../routes/eventTicketing');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ticketRoutes = require('../routes/tickets');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const eventRoutes = require('../routes/events');
 
     app = express();
     app.use(express.json());
     app.use('/api/events/:id/ticketing', eventTicketingRoutes);
     app.use('/api/events/:id/tickets', ticketRoutes);
+    // The production mount runs the events router without auth middleware; this
+    // shim simulates an authenticated requester (with djProfile attached) so the
+    // owner-only branch of GET /api/events/:id is exercised.
+    app.use('/api/events', (req: any, _res: any, next: any) => {
+      const header = req.headers.authorization;
+      if (header && header.startsWith('Bearer ')) {
+        const decoded = verifyToken(header.split(' ')[1]);
+        const id = decoded && typeof decoded === 'object' ? decoded.id : null;
+        if (id === ownerUser.id) req.user = ownerUser;
+        else if (id === financeUser.id) req.user = financeUser;
+      }
+      next();
+    }, eventRoutes);
   });
 
   beforeEach(() => {
@@ -117,8 +148,11 @@ describe('Event ticketing security (ETK-1, ETK-2, TKT-3 PII-read)', () => {
     p.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
       if (where.id === ownerUser.id) return Promise.resolve(ownerUser);
       if (where.id === proUser.id) return Promise.resolve(proUser);
+      if (where.id === financeUser.id) return Promise.resolve(financeUser);
       return Promise.resolve(null);
     });
+
+    p.eventRSVP.findUnique.mockResolvedValue(null);
 
     // requireProOrAdmin subscription lookup (getUserSubscription: where userId)
     p.djProfile.findUnique.mockImplementation(({ where }: { where: { userId?: string } }) => {
@@ -225,6 +259,147 @@ describe('Event ticketing security (ETK-1, ETK-2, TKT-3 PII-read)', () => {
         .send({ qrCode: 'DS-AAAAAA-BBBBBB' });
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('ETK-1 residual: event detail never returns the staff password', () => {
+    it('owner gets onsitePasswordSet boolean but no onsitePassword', async () => {
+      const res = await request(app)
+        .get(`/api/events/${eventId}`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.onsitePassword).toBeUndefined();
+      expect(res.body.data.onsitePasswordSet).toBe(true);
+      // Staff username is intentionally retained for the client UI
+      expect(res.body.data.onsiteUsername).toBe('staff');
+      expect(JSON.stringify(res.body)).not.toContain('$2a$12$');
+    });
+
+    it('FINANCE_ADMIN gets neither onsitePassword nor the set boolean', async () => {
+      const res = await request(app)
+        .get(`/api/events/${eventId}`)
+        .set('Authorization', `Bearer ${financeToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.onsitePassword).toBeUndefined();
+      expect(res.body.data.onsitePasswordSet).toBeUndefined();
+      expect(JSON.stringify(res.body)).not.toContain('$2a$12$');
+    });
+  });
+
+  describe('ETK-2 residual: scan responses redact attendee email for non-privileged scanners', () => {
+    const scannedTicket = {
+      id: 'tkt-scan-1',
+      eventId: 'evt-1',
+      ticketNumber: 'DS-SCAN1-000001',
+      status: 'approved',
+      quantity: 1,
+      userId: 'guest-user',
+      user: { id: 'guest-user', name: 'Guest One', username: 'guestone', avatar: null, email: 'guest@example.com' },
+      ticketType: { name: 'General' },
+    };
+
+    it('pro-tier scanner POST /scan gets name but no user.email', async () => {
+      const p = prismaMock();
+      p.eventTicket.findFirst.mockResolvedValue({ ...scannedTicket });
+      p.eventTicket.updateMany.mockResolvedValue({ count: 1 });
+
+      const res = await request(app)
+        .post(`/api/events/${eventId}/ticketing/scan`)
+        .set('Authorization', `Bearer ${proToken}`)
+        .send({ qrPayload: 'DS-SCAN1-000001' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.name).toBe('Guest One');
+      expect(res.body.data.user.username).toBe('guestone');
+      expect(res.body.data.user.email).toBeUndefined();
+    });
+
+    it('event owner POST /scan still gets user.email', async () => {
+      const p = prismaMock();
+      p.eventTicket.findFirst.mockResolvedValue({ ...scannedTicket });
+      p.eventTicket.updateMany.mockResolvedValue({ count: 1 });
+
+      const res = await request(app)
+        .post(`/api/events/${eventId}/ticketing/scan`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ qrPayload: 'DS-SCAN1-000001' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.email).toBe('guest@example.com');
+    });
+
+    it('pro-tier scanner gets no user.email via the ALREADY_SCANNED 409 body', async () => {
+      const p = prismaMock();
+      p.eventTicket.findFirst.mockResolvedValue({
+        ...scannedTicket,
+        status: 'checked_in',
+        scannedAt: new Date(),
+        checkedInBy: 'owner-user',
+      });
+
+      const res = await request(app)
+        .post(`/api/events/${eventId}/ticketing/scan`)
+        .set('Authorization', `Bearer ${proToken}`)
+        .send({ qrPayload: 'DS-SCAN1-000001' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('ALREADY_SCANNED');
+      expect(res.body.data.ticket.user.name).toBe('Guest One');
+      expect(res.body.data.ticket.user.email).toBeUndefined();
+    });
+
+    it('pro-tier manual checkin redacts user.email; owner keeps it', async () => {
+      const p = prismaMock();
+      p.eventTicket.findUnique.mockResolvedValue({ ...scannedTicket });
+      p.eventTicket.updateMany.mockResolvedValue({ count: 1 });
+
+      const proRes = await request(app)
+        .post(`/api/events/${eventId}/ticketing/scan/tkt-scan-1/checkin`)
+        .set('Authorization', `Bearer ${proToken}`);
+      expect(proRes.status).toBe(200);
+      expect(proRes.body.data.user.name).toBe('Guest One');
+      expect(proRes.body.data.user.email).toBeUndefined();
+
+      p.eventTicket.findUnique.mockResolvedValue({ ...scannedTicket });
+      const ownerRes = await request(app)
+        .post(`/api/events/${eventId}/ticketing/scan/tkt-scan-1/checkin`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(ownerRes.status).toBe(200);
+      expect(ownerRes.body.data.user.email).toBe('guest@example.com');
+    });
+  });
+
+  describe('ETK-2 residual: FINANCE_ADMIN cannot read the guest list', () => {
+    it('FINANCE_ADMIN gets 403 from /customers and no ticket rows are read', async () => {
+      const res = await request(app)
+        .get(`/api/events/${eventId}/ticketing/customers`)
+        .set('Authorization', `Bearer ${financeToken}`);
+
+      expect(res.status).toBe(403);
+      expect(prismaMock().eventTicket.findMany).not.toHaveBeenCalled();
+    });
+
+    it('FINANCE_ADMIN gets 403 from /customers/export', async () => {
+      const res = await request(app)
+        .get(`/api/events/${eventId}/ticketing/customers/export`)
+        .set('Authorization', `Bearer ${financeToken}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('event owner still gets the customer list', async () => {
+      const p = prismaMock();
+      p.eventTicket.findMany.mockResolvedValue([]);
+      p.eventTicket.count.mockResolvedValue(0);
+
+      const res = await request(app)
+        .get(`/api/events/${eventId}/ticketing/customers`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(p.eventTicket.findMany).toHaveBeenCalled();
     });
   });
 });

@@ -473,7 +473,7 @@ router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   });
 
   // Revoke cached auth sessions immediately (bypass the 30s auth cache)
-  invalidateUserAuthCache(user.id);
+  await invalidateUserAuthCache(user.id); // AUTH-1
 
   return ok(res, { message: 'Password updated successfully' });
 }));
@@ -879,7 +879,7 @@ router.post('/confirm-email-change', authMiddleware, asyncHandler(async (req, re
   });
 
   await clearCache(cacheKey);
-  invalidateUserAuthCache(req.user.id);
+  await invalidateUserAuthCache(req.user.id); // AUTH-1
 
   return ok(res, user);
 }));
@@ -914,7 +914,7 @@ router.post('/change-password', authMiddleware, asyncHandler(async (req, res) =>
   });
 
   // Revoke all existing sessions immediately (bypass the 30s auth cache) — AUTH-1
-  invalidateUserAuthCache(req.user.id);
+  await invalidateUserAuthCache(req.user.id); // AUTH-1
 
   return ok(res, { message: 'Password updated successfully' });
 }));

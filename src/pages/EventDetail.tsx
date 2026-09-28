@@ -364,7 +364,8 @@ export default function EventDetail() {
   const handleCopyStaffInvite = () => {
     const link = `${window.location.origin}/events/${event.id}/onsite`;
     const username = event.onsiteUsername || 'staff';
-    const password = event.onsitePassword || '(Not set yet)';
+    // ETK-1: the API never returns the staff password — only whether one is set.
+    const password = event.onsitePasswordSet ? '(Set — see Event Dashboard)' : '(Not set yet)';
     const text = `Sound It Salone On-Site Staff Access:\nEvent: ${event.title}\nEvent Code: ${event.eventCode || event.id}\nEvent Link: ${link}\nUsername: ${username}\nPassword: ${password}`;
     navigator.clipboard.writeText(text);
     setStaffCopied(true);
@@ -472,7 +473,7 @@ export default function EventDetail() {
                 </div>
                 <div>
                   <p className="text-text-muted mb-1 text-[11px] uppercase tracking-wider font-semibold">Password:</p>
-                  <p className="text-white font-mono font-bold">{event.onsitePassword || '(Not set yet)'}</p>
+                  <p className="text-white font-mono font-bold">{event.onsitePasswordSet ? '••••••••' : '(Not set yet)'}</p>
                 </div>
               </div>
             </div>

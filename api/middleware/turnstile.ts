@@ -9,23 +9,25 @@ import logger from '../utils/logger';
  */
 export async function verifyTurnstile(req: any, res: any, next: any) {
   const secretKey = process.env.TURNSTILE_SECRET_KEY;
-  const isProduction = process.env.NODE_ENV === 'production';
+  // AUTH-5 residual: only explicit development/test environments may skip
+  // captcha. Every other case — including NODE_ENV unset — must fail closed.
+  const canSkipCaptcha = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
-  // AUTH-5: the public test key is only acceptable outside production.
+  // AUTH-5: the public test key is only acceptable in development/test.
   if (secretKey === '1x0000000000000000000000000000000AA') {
-    if (!isProduction) {
+    if (canSkipCaptcha) {
       return next();
     }
-    // Fail closed in production — a test key configured in prod means captcha is not really configured.
+    // Fail closed outside dev/test — a test key configured in prod means captcha is not really configured.
     return fail(res, 500, 'Captcha not configured');
   }
 
-  // AUTH-5: missing secret — fail closed in production, skip in non-production.
+  // AUTH-5: missing secret — fail closed outside development/test.
   if (!secretKey) {
-    if (isProduction) {
-      return fail(res, 500, 'Captcha not configured');
+    if (canSkipCaptcha) {
+      return next();
     }
-    return next();
+    return fail(res, 500, 'Captcha not configured');
   }
 
   const token = req.body?.turnstileToken || req.body?.['cf-turnstile-response'] || req.headers['cf-turnstile-response'];
@@ -57,10 +59,11 @@ export async function verifyTurnstile(req: any, res: any, next: any) {
     return fail(res, 400, 'Security check failed. Please refresh and try again.');
   } catch (error: any) {
     logger.error('[Turnstile] Verification request error:', error.message);
-    // On unexpected Cloudflare API failure, fail closed in production, open in dev
-    if (process.env.NODE_ENV === 'production') {
-      return fail(res, 500, 'Security verification service temporarily unavailable.');
+    // On unexpected Cloudflare API failure, fail closed everywhere except
+    // explicit development/test environments.
+    if (canSkipCaptcha) {
+      return next();
     }
-    return next();
+    return fail(res, 500, 'Security verification service temporarily unavailable.');
   }
 }

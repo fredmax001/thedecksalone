@@ -1559,11 +1559,16 @@ router.get('/:id/audio', softAuthMiddleware, async (req, res) => {
       if (userId) {
         const tokenUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, role: true, status: true },
+          select: { id: true, role: true, status: true, tokenVersion: true },
         });
-        if (tokenUser && tokenUser.status === 'ACTIVE') {
-          req.user = tokenUser;
+        // AUTH-1 residual: the ?token= path must honor tokenVersion too, otherwise
+        // a session revoked by password change / role change can still stream.
+        const payloadTokenVersion = decoded && typeof decoded === 'object' && typeof (decoded as any).tokenVersion === 'number' ? (decoded as any).tokenVersion : 0;
+        const userTokenVersion = typeof tokenUser?.tokenVersion === 'number' ? tokenUser.tokenVersion : 0;
+        if (!tokenUser || tokenUser.status !== 'ACTIVE' || userTokenVersion !== payloadTokenVersion) {
+          return res.status(401).send('Invalid or expired token');
         }
+        req.user = tokenUser;
       }
     }
 

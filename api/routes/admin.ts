@@ -476,7 +476,7 @@ router.put('/users/:id/role', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
     req,
   });
 
-  invalidateUserAuthCache(targetId);
+  await invalidateUserAuthCache(targetId); // AUTH-1
 
   return ok(res, updatedUser);
 }));
@@ -532,7 +532,7 @@ router.put('/users/:id/status', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandle
     req,
   });
 
-  invalidateUserAuthCache(targetId);
+  await invalidateUserAuthCache(targetId); // AUTH-1
 
   return ok(res, user);
 }));
@@ -680,7 +680,7 @@ router.put('/djs/:id/request-info', requireRole('ADMIN', 'VERIFICATION_ADMIN'), 
 }));
 
 // GET /api/admin/bookings - List all bookings
-router.get('/bookings', asyncHandler(async (req, res) => {
+router.get('/bookings', requireRole('ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'), asyncHandler(async (req, res) => {
   const { status, page, limit } = req.query;
   const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit });
 
@@ -710,7 +710,7 @@ router.get('/bookings', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/bookings/:id/status - Override booking status
-router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
+router.put('/bookings/:id/status', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = bookingStatusSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input');
@@ -1335,7 +1335,7 @@ router.get('/messages', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async 
 }));
 
 // GET /api/admin/staff - Users with elevated roles
-router.get('/staff', asyncHandler(async (req, res) => {
+router.get('/staff', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const staff = await prisma.user.findMany({
     where: {
       role: { in: ['ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN'] },
@@ -1474,6 +1474,10 @@ router.put('/djs/:id/suspend', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler
       data: { status: newUserStatus },
     }),
   ]);
+
+  // AUTH-1 residual: user.status changed — drop the cached auth session so the
+  // suspended/reinstated user cannot keep acting for up to 30s via the cache.
+  await invalidateUserAuthCache(dj.userId);
 
   await createAuditLog({
     actorId: req.user.id,
@@ -2107,6 +2111,7 @@ router.post('/notifications', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
     });
 
     if (recipients.length === 0) {
+      // ADM-5: counts only — never expose matched users' phone numbers.
       return ok(res, {
           id: `notif-${Date.now()}`,
           type, target, title, message,
@@ -2115,7 +2120,8 @@ router.post('/notifications', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
           emailsSent: 0,
           emailsFailed: 0,
           totalRecipients: 0,
-          whatsappTargets,
+          notificationCount: 0,
+          whatsappCount: whatsappTargets.length,
           info: 'No email users match the target criteria',
         });
     }
@@ -2187,14 +2193,16 @@ router.post('/notifications', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
       emailsSent,
       emailsFailed,
       totalRecipients: emailsSent + emailsFailed,
+      // ADM-5: counts only — the per-user phone/whatsappUrl list must never
+      // leave the API (it exposed every matched user's phone number).
+      notificationCount: emailsSent + emailsFailed,
       whatsappCount: whatsappTargets.length,
-      whatsappTargets,
       errors: emailErrors.slice(0, 5),
     });
 }));
 
 // GET /api/admin/security-logs - Security events from DB activity
-router.get('/security-logs', asyncHandler(async (req, res) => {
+router.get('/security-logs', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const limit = Math.min(50, parseInt(req.query.limit) || 20);
 
   const [recentUsers, roleChanges, failedBookings, suspendedDjs] = await Promise.all([
@@ -2215,7 +2223,7 @@ router.get('/security-logs', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/admin/subscriptions - Subscription overview (derived from DJ tiers)
-router.get('/subscriptions', asyncHandler(async (req, res) => {
+router.get('/subscriptions', requireRole('ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'), asyncHandler(async (req, res) => {
   const [config, djCount, proDjCount, legendDjCount, pendingRequests, approvedRevenue, activeBookings] = await Promise.all([
     getSubscriptionConfig(),
     prisma.djProfile.count(),
@@ -2947,7 +2955,7 @@ router.post('/nudge-incomplete-profiles', requireRole('ADMIN', 'SUPER_ADMIN'), a
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/trigger-birthday-emails - Trigger DJ birthday emails
 // ───────────────────────────────────────────────────────────────────
-router.post('/trigger-birthday-emails', async (req: any, res: any) => {
+router.post('/trigger-birthday-emails', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const today = new Date();
     const month = today.getMonth() + 1;
@@ -3089,7 +3097,7 @@ router.post('/events/:id/restore', requireRole('ADMIN', 'SUPER_ADMIN'), async (r
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/upload-media - Generic admin media upload
 // ───────────────────────────────────────────────────────────────────
-router.post('/upload-media', uploadAdminMedia.single('media'), async (req: any, res: any) => {
+router.post('/upload-media', requireRole('ADMIN', 'SUPER_ADMIN'), uploadAdminMedia.single('media'), async (req: any, res: any) => {
   try {
     const file = req.file;
     if (!file) {
@@ -3263,7 +3271,7 @@ router.post('/grant-plan', requireRole('ADMIN', 'FINANCE_ADMIN'), async (req: an
 // ───────────────────────────────────────────────────────────────────
 // GET /api/admin/birthdays - Upcoming DJ/user birthdays
 // ───────────────────────────────────────────────────────────────────
-router.get('/birthdays', async (req: any, res: any) => {
+router.get('/birthdays', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const today = new Date();
     const users = await prisma.user.findMany({
@@ -3389,7 +3397,7 @@ router.post('/birthdays/trigger-cron', async (req: any, res: any) => {
 // ───────────────────────────────────────────────────────────────────
 // POST /api/admin/rankings/notify-top3 - Notify top 3 ranked DJs
 // ───────────────────────────────────────────────────────────────────
-router.post('/rankings/notify-top3', async (req: any, res: any) => {
+router.post('/rankings/notify-top3', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const top3 = await prisma.djProfile.findMany({
       where: { rankingPosition: { gt: 0 } },
@@ -3512,7 +3520,7 @@ router.post('/send-custom-email', requireRole('ADMIN', 'SUPER_ADMIN'), async (re
 // ───────────────────────────────────────────────────────────────────
 // GET /api/admin/incomplete-profiles - DJs with incomplete profiles
 // ───────────────────────────────────────────────────────────────────
-router.get('/incomplete-profiles', async (req: any, res: any) => {
+router.get('/incomplete-profiles', requireRole('ADMIN', 'SUPER_ADMIN'), async (req: any, res: any) => {
   try {
     const djs = await prisma.djProfile.findMany({
       include: {
@@ -3656,7 +3664,7 @@ router.patch('/reports/:id', requireRole('ADMIN', 'SUPER_ADMIN', 'MODERATOR'), a
 }));
 
 // GET /api/admin/events/:id/scan-logs - Recent scan activity for an event
-router.get('/events/:id/scan-logs', asyncHandler(async (req, res) => {
+router.get('/events/:id/scan-logs', requireRole('ADMIN', 'SUPER_ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
   const logs = await prisma.eventScanLog.findMany({
     where: { eventId: req.params.id },
     orderBy: { createdAt: 'desc' },

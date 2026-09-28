@@ -227,6 +227,16 @@ describe('Auth lifecycle hardening (AUTH-1 / AUTH-2 / AUTH-5)', () => {
       expect(next).toHaveBeenCalled();
     });
 
+    it('AUTH-5 residual: fails closed when NODE_ENV is unset and no secret is configured', async () => {
+      delete process.env.NODE_ENV;
+      delete process.env.TURNSTILE_SECRET_KEY;
+      const next = jest.fn();
+      const res = mockRes();
+      await verifyTurnstile({ body: {}, headers: {} }, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
     it('sends the rightmost (trusted) XFF entry as remoteip', async () => {
       process.env.NODE_ENV = 'production';
       process.env.TURNSTILE_SECRET_KEY = 'real-production-secret-key';

@@ -55,15 +55,14 @@ export default function EventDashboard() {
   const [staffUsername, setStaffUsername] = useState('staff');
   const [staffPassword, setStaffPassword] = useState('');
 
-  // Sync staff username & password from event
+  // Sync staff username from event. ETK-1: the API never returns the staff
+  // password (only `onsitePasswordSet`), so the password field stays local —
+  // the user types a NEW password when rotating; the old value is never needed.
   useEffect(() => {
     if (event?.onsiteUsername) {
       setStaffUsername(event.onsiteUsername);
     }
-    if (event?.onsitePassword) {
-      setStaffPassword(event.onsitePassword);
-    }
-  }, [event?.onsiteUsername, event?.onsitePassword]);
+  }, [event?.onsiteUsername]);
 
   const handlePublishToggle = async () => {
     try {
@@ -90,7 +89,7 @@ export default function EventDashboard() {
 
   const copyOnsiteLink = () => {
     const link = `${window.location.origin}/events/${eventId}/onsite`;
-    const inviteText = `Sound It Salone Gate Staff Access:\nEvent: ${event?.title || 'Event'}\nEvent Code: ${event?.eventCode || eventId}\nEvent Link: ${link}\nUsername: ${staffUsername || 'staff'}\nPassword: ${staffPassword || event?.onsitePassword || '(Not set)'}`;
+    const inviteText = `Sound It Salone Gate Staff Access:\nEvent: ${event?.title || 'Event'}\nEvent Code: ${event?.eventCode || eventId}\nEvent Link: ${link}\nUsername: ${staffUsername || 'staff'}\nPassword: ${staffPassword || '(Set separately in the dashboard)'}`;
     navigator.clipboard.writeText(inviteText);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
