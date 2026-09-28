@@ -214,9 +214,10 @@ router.post('/scan', authMiddleware, async (req: any, res: any) => {
 
     const { dj, event } = await getDjAndEvent(req.user.id, eventId);
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MODERATOR';
-    const isProPlus = dj && ['pro', 'legend'].includes(dj.subscriptionTier?.toLowerCase());
     if (!event) return fail(res, 404, 'Event not found');
-    if (!isAdmin && !isProPlus && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
+    // TKT-3 (PII-read part): the scan response includes attendee name/username/avatar,
+    // so the Pro+ tier shortcut is not acceptable here — only the event owner or admin.
+    if (!isAdmin && (!dj || event.djId !== dj.id)) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({ where: { qrCode } });
 

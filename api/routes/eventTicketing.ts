@@ -40,6 +40,19 @@ async function getEventWithAuth(userId: string, eventId: string) {
   return { event, isOwner, isAdmin };
 }
 
+/**
+ * ETK-1: Never expose the on-site staff password hash in API responses.
+ * Returns a shallow copy with `onsitePassword` removed; the original event
+ * object is never mutated (server-side flows such as the plaintext-upgrade
+ * path still need the hash). `onsiteUsername` is intentionally kept — the
+ * client displays/pre-fills the staff username.
+ */
+function stripSensitiveEventFields(event: any) {
+  if (!event) return event;
+  const { onsitePassword, ...rest } = event;
+  return rest;
+}
+
 function assertOwnerOrAdmin(isOwner: boolean, isAdmin: boolean, res: any) {
   if (!isOwner && !isAdmin) {
     res.status(403).json({ success: false, error: 'Forbidden' });
@@ -161,6 +174,8 @@ function authOrOnsiteMiddleware(req: any, res: any, next: any) {
 /**
  * Check whether the current user may scan/check-in tickets for an event.
  * Allowed: event owner, admin/moderator, Pro+ DJ, or on-site staff with a valid token.
+ * Pro+ DJs keep a scan-only capability (physical QR check-in) — see canReadGuestList
+ * for endpoints that expose guest-list PII.
  */
 async function canScanEvent(req: any, event: any): Promise<boolean> {
   // Staff logged in via on-site tools
@@ -180,9 +195,36 @@ async function canScanEvent(req: any, event: any): Promise<boolean> {
     const isOwner = (!!user?.djProfile && event.djId === user.djProfile.id) || (event.dj?.userId && event.dj.userId === user?.id) || event.djId === req.user.id;
     if (isOwner || isAdmin) return true;
 
-    // Pro+ DJs can scan any ticketed event
+    // Pro+ DJs can scan any ticketed event (scan-only; no guest-list reads)
     const proTiers = ['pro', 'legend'];
     if (proTiers.includes(user?.djProfile?.subscriptionTier?.toLowerCase())) return true;
+  }
+
+  return false;
+}
+
+/**
+ * ETK-2: Guest-list reads (name/email/phone of every attendee) are stricter
+ * than scanning: only the event owner, admin/moderator, or on-site staff bound
+ * to this eventId. Pro+ DJs do NOT get guest-list access via their tier.
+ */
+async function canReadGuestList(req: any, event: any): Promise<boolean> {
+  // Staff logged in via on-site tools
+  const token = req.headers['x-onsite-token'] || req.headers['x_onsite_token'];
+  if (token && typeof token === 'string') {
+    const decoded = verifyOnsiteToken(token);
+    if (decoded && decoded.eventId === event.id) return true;
+  }
+
+  if (req.user?.role === 'onsite_staff' && req.onsiteEventId === event.id) {
+    return true;
+  }
+
+  if (req.user?.id) {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { djProfile: true } });
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'MODERATOR';
+    const isOwner = (!!user?.djProfile && event.djId === user.djProfile.id) || (event.dj?.userId && event.dj.userId === user?.id) || event.djId === req.user.id;
+    if (isOwner || isAdmin) return true;
   }
 
   return false;
@@ -369,7 +411,7 @@ router.post('/publish', authMiddleware, requireProOrAdmin, async (req: any, res:
       where: { id: event.id },
       data: { publishStatus: 'published', publishedAt: new Date() },
     });
-    return ok(res, updated);
+    return ok(res, stripSensitiveEventFields(updated));
   } catch (error: any) {
     console.error('[eventTicketing.ts] Unhandled error:', error);
     return fail(res, 500, 'Internal server error');
@@ -387,7 +429,7 @@ router.post('/unpublish', authMiddleware, requireProOrAdmin, async (req: any, re
       where: { id: event.id },
       data: { publishStatus: 'draft', publishedAt: null },
     });
-    return ok(res, updated);
+    return ok(res, stripSensitiveEventFields(updated));
   } catch (error: any) {
     console.error('[eventTicketing.ts] Unhandled error:', error);
     return fail(res, 500, 'Internal server error');
@@ -623,7 +665,7 @@ router.get('/dashboard', authMiddleware, requireProOrAdmin, async (req: any, res
     const attendancePct = capacity && capacity > 0 ? Math.round((ticketsCheckedIn / capacity) * 100) : 0;
 
     return ok(res, {
-        event,
+        event: stripSensitiveEventFields(event),
         summary: {
           totalRevenue: revenue._sum.amount || 0,
           ticketsSold,
@@ -1446,7 +1488,7 @@ router.get('/onsite/dashboard', authOrOnsiteMiddleware, onsiteAuthMiddleware, as
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
-    if (!(await canScanEvent(req, event))) return fail(res, 403, 'Forbidden');
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const [pending, approvedCount, checkedInCount, cancelled, soldSeats, checkedInSeats, revenue, ticketsScanned] = await Promise.all([
       prisma.eventTicket.count({ where: { eventId: event.id, status: 'pending' } }),
@@ -1464,7 +1506,7 @@ router.get('/onsite/dashboard', authOrOnsiteMiddleware, onsiteAuthMiddleware, as
     const ticketsRemaining = capacity ? Math.max(0, capacity - ticketsSold) : null;
 
     return ok(res, {
-        event,
+        event: stripSensitiveEventFields(event),
         summary: {
           ticketsSold,
           ticketsScanned,
@@ -1488,7 +1530,7 @@ router.get('/onsite/guests', authOrOnsiteMiddleware, onsiteAuthMiddleware, async
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
-    if (!(await canScanEvent(req, event))) return fail(res, 403, 'Forbidden');
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const { search, status, page = '1', limit = '50' } = req.query;
     const { page: pageNum, limit: limitNum, skip } = parsePagination({ page, limit }, { defaultLimit: 50, maxLimit: 200 });
@@ -1533,7 +1575,7 @@ router.post('/onsite/guests/:ticketId/checkin', authOrOnsiteMiddleware, onsiteAu
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
-    if (!(await canScanEvent(req, event))) return fail(res, 403, 'Forbidden');
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({
       where: { id: req.params.ticketId },
@@ -1566,7 +1608,7 @@ router.post('/onsite/guests/:ticketId/undo-checkin', authOrOnsiteMiddleware, ons
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
-    if (!(await canScanEvent(req, event))) return fail(res, 403, 'Forbidden');
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const ticket = await prisma.eventTicket.findUnique({
       where: { id: req.params.ticketId },
@@ -1611,7 +1653,7 @@ router.post('/onsite/walkin', authOrOnsiteMiddleware, onsiteAuthMiddleware, asyn
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) return fail(res, 404, 'Event not found');
-    if (!(await canScanEvent(req, event))) return fail(res, 403, 'Forbidden');
+    if (!(await canReadGuestList(req, event))) return fail(res, 403, 'Forbidden');
 
     const parsed = walkinSchema.safeParse(req.body);
     if (!parsed.success) return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
