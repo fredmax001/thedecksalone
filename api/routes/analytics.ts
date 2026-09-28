@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const { prisma } = require('../utils/prisma');
 const { softAuthMiddleware } = require('../middleware/auth');
 const { ok, fail } = require('../utils/response');
-const { analyticsVisitLimiter } = require('../utils/rateLimiter');
+const { analyticsVisitLimiter, getClientIp } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
@@ -16,7 +16,9 @@ function hashIp(ip: string | undefined) {
 router.post('/visit', softAuthMiddleware, analyticsVisitLimiter, async (req, res) => {
   try {
     const { path, city, country, referrer } = req.body || {};
-    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.socket?.remoteAddress || req.ip;
+    // INFRA-16: key analytics identity on the rightmost-trusted XFF entry
+    // (getClientIp) — the leftmost XFF entry is client-spoofable.
+    const ip = getClientIp(req);
 
     let visitCity = city || null;
     let visitCountry = country || null;

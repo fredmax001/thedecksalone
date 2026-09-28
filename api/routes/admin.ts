@@ -405,12 +405,19 @@ router.put('/users/:id/role', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(
   if (targetUser.role === 'SUPER_ADMIN' && req.user.id !== targetId) {
     return fail(res, 403, 'Forbidden: cannot modify a SUPER_ADMIN');
   }
+  // ADM-1 residual: ADMIN targets require SUPER_ADMIN — an ADMIN must never
+  // ban/demote a peer ADMIN (self-service changes to one's own account are
+  // unaffected).
+  if (targetUser.role === 'ADMIN' && req.user.id !== targetId && req.user.role !== 'SUPER_ADMIN') {
+    return fail(res, 403, 'Forbidden: cannot modify an ADMIN');
+  }
   // ADM-1/AUTH-7: refuse self-role-change for SUPER_ADMIN (prevents last-super-admin self-demotion)
   if (req.user.role === 'SUPER_ADMIN' && req.user.id === targetId) {
     return fail(res, 403, 'Forbidden: cannot change your own role');
   }
-  // ADM-2: only SUPER_ADMIN can grant the ADMIN role
-  if (role === 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+  // ADM-2: only SUPER_ADMIN can grant the ADMIN or SUPER_ADMIN role (an ADMIN
+  // must never be able to escalate themselves or others to SUPER_ADMIN).
+  if ((role === 'ADMIN' || role === 'SUPER_ADMIN') && req.user.role !== 'SUPER_ADMIN') {
     return fail(res, 403, 'Forbidden: only SUPER_ADMIN can grant the ADMIN role');
   }
 
@@ -495,6 +502,12 @@ router.put('/users/:id/status', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandle
   // ADM-1: a SUPER_ADMIN target may only be modified by that same SUPER_ADMIN
   if (targetUser.role === 'SUPER_ADMIN' && req.user.id !== targetId) {
     return fail(res, 403, 'Forbidden: cannot modify a SUPER_ADMIN');
+  }
+  // ADM-1 residual: ADMIN targets require SUPER_ADMIN — an ADMIN must never
+  // ban/demote a peer ADMIN (self-service changes to one's own account are
+  // unaffected).
+  if (targetUser.role === 'ADMIN' && req.user.id !== targetId && req.user.role !== 'SUPER_ADMIN') {
+    return fail(res, 403, 'Forbidden: cannot modify an ADMIN');
   }
 
   const [user] = await prisma.$transaction([

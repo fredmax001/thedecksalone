@@ -303,14 +303,39 @@ async function captureVerifiedOrder(req: any, orderId: string, purpose: string) 
     const status = err.response?.status;
     const detail = err.response?.data?.message || err.message;
     if (status === 422) {
-      // PAY-2: only fail records not yet CAPTURED so a concurrent capture
-      // cannot be clobbered by this FAILED write.
-      await prisma.payPalPayment.updateMany({
-        where: { orderId, status: { not: 'CAPTURED' } },
-        data: { status: 'FAILED' },
-      }).catch(() => {});
+      // PAY-2 residual self-heal: 422 usually means PayPal already captured
+      // this order (e.g. the capture succeeded but the local write crashed,
+      // and the client retried). Query the order: if it is COMPLETED, treat it
+      // as captured and continue down the normal post-capture grant path so a
+      // paid user is never left with no ticket/booking update. Any error in
+      // the verification falls back to the previous fail behavior below.
+      try {
+        const { data: order } = await axios.get(
+          `${PAYPAL_API}/v2/checkout/orders/${orderId}`,
+          { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 15000 }
+        );
+        if (order.status === 'COMPLETED') {
+          await prisma.payPalPayment.updateMany({
+            where: { orderId, status: { not: 'CAPTURED' } },
+            data: { status: 'CAPTURED', capturedAt: new Date() },
+          });
+          capture = order;
+        }
+      } catch {
+        // fall through to the FAILED marking below
+      }
+      if (capture?.status !== 'COMPLETED') {
+        // PAY-2: only fail records not yet CAPTURED so a concurrent capture
+        // cannot be clobbered by this FAILED write.
+        await prisma.payPalPayment.updateMany({
+          where: { orderId, status: { not: 'CAPTURED' } },
+          data: { status: 'FAILED' },
+        }).catch(() => {});
+        return { error: [502, `PayPal capture failed: ${detail}`] as const };
+      }
+    } else {
+      return { error: [502, `PayPal capture failed: ${detail}`] as const };
     }
-    return { error: [502, `PayPal capture failed: ${detail}`] as const };
   }
 
   if (capture.status !== 'COMPLETED') {
@@ -556,14 +581,24 @@ router.post('/booking-order', authMiddleware, asyncHandlerCompat(async (req: any
   if (parsed.data.type === 'DEPOSIT') {
     if (!(booking.deposit > 0)) return fail(res, 400, 'No deposit is set for this booking yet');
     if (booking.status !== 'CONFIRMED') return fail(res, 400, `Deposit can only be paid once the booking is confirmed (current: ${booking.status})`);
-    const existing = await prisma.payment.findFirst({ where: { bookingId: booking.id, type: 'DEPOSIT', status: 'COMPLETED' } });
-    if (existing) return fail(res, 409, 'Deposit already paid');
+    // PAY-5: match any in-flight or completed deposit, not just COMPLETED —
+    // two concurrent orders otherwise both pass and the client is charged 2×.
+    const existing = await prisma.payment.findFirst({
+      where: { bookingId: booking.id, type: 'DEPOSIT', status: { in: ['PENDING', 'PROCESSING', 'COMPLETED'] } },
+    });
+    if (existing) return fail(res, 409, 'Deposit already paid or in progress');
     amountSle = booking.deposit;
   } else {
     if (!(booking.finalPrice > 0)) return fail(res, 400, 'The final price has not been set by the DJ yet');
     if (!['CONFIRMED', 'DEPOSIT_PAID'].includes(booking.status)) {
       return fail(res, 400, `Full payment is not due for this booking yet (current: ${booking.status})`);
     }
+    // PAY-5: reject a second full payment outright (the amount check below
+    // only fires when the sums already line up).
+    const existingFull = await prisma.payment.findFirst({
+      where: { bookingId: booking.id, type: 'FULL_PAYMENT', status: 'COMPLETED' },
+    });
+    if (existingFull) return fail(res, 409, 'Full payment already completed');
     amountSle = Math.max(0, booking.finalPrice - paidSoFar);
     if (amountSle <= 0) return fail(res, 400, 'This booking is already fully paid');
   }
@@ -591,6 +626,15 @@ router.post('/capture-booking', authMiddleware, asyncHandlerCompat(async (req: a
 
   const booking = await prisma.booking.findUnique({ where: { id: record.refId }, include: { dj: true } });
   if (!booking) return fail(res, 404, 'Booking not found');
+
+  // PAY-5: re-check inside the capture flow — a concurrent capture (or a retry
+  // racing this handler) must not create a second payment for the same type.
+  const duplicate = await prisma.payment.findFirst({
+    where: { bookingId: booking.id, type: record.plan, status: { not: 'REFUND' } },
+  });
+  if (duplicate) {
+    return ok(res, { status: 'CAPTURED', alreadyCaptured: true, type: record.plan });
+  }
 
   await prisma.payment.create({
     data: {

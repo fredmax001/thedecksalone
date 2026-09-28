@@ -3,7 +3,7 @@ const path = require('path');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
-const { playLimiter, conditionalSearchLimiter } = require('../utils/rateLimiter');
+const { playLimiter, conditionalSearchLimiter, getClientIp } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners, hashIp, wasPlayRecentlyRecorded } = require('../utils/monthlyListeners');
 const { uploadMix, extFromMime } = require('../utils/upload');
@@ -1185,7 +1185,10 @@ router.post('/:id/play', softAuthMiddleware, playLimiter, asyncHandler(async (re
   // RANK-1: dedupe repeat plays of the same mix by the same user/IP within
   // 24h. Duplicate plays return the current count (200) without incrementing,
   // so the player UI keeps working.
-  const dedupIdentity = req.user?.id || hashIp(req.ip);
+  // INFRA-16: key the dedup on the rightmost-trusted XFF entry (getClientIp),
+  // not req.ip — with `trust proxy` the leftmost XFF entry is client-spoofable
+  // and defeats the 24h dedup.
+  const dedupIdentity = req.user?.id || hashIp(getClientIp(req));
   if (dedupIdentity) {
     const alreadyPlayed = await wasPlayRecentlyRecorded(`playdedup:${mix.id}:${dedupIdentity}`);
     if (alreadyPlayed) {
@@ -1202,9 +1205,11 @@ router.post('/:id/play', softAuthMiddleware, playLimiter, asyncHandler(async (re
   // RANK-1: anonymous plays still bump the public counter (UX) but must not
   // feed the ranking economy (MixPlay rows / monthly listeners / engagement).
   if (req.user?.id) {
+    // INFRA-16: rank/analytics identity also uses the rightmost-trusted XFF
+    // entry — req.ip is the client-spoofable leftmost entry under `trust proxy`.
     recordMixPlay(mix.id, mix.djId, {
       userId: req.user.id,
-      ip: req.ip,
+      ip: getClientIp(req),
     }).catch(() => {});
 
     // Update cached monthly listener count asynchronously (do not block response)

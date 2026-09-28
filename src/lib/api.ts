@@ -65,11 +65,15 @@ export const getAuthToken = (): string | null => {
 // UPL-1/UPL-2: media URLs served by gated endpoints (/api/mixes/:id/audio and
 // the auth-gated /uploads proof folders) cannot carry an Authorization header
 // from <audio>/<img>/<a> elements, so append the JWT as a query param.
+// UPL-9: the predicate is same-origin only (see ./shouldAttachToken) so the
+// JWT is never leaked to arbitrary external hosts.
+export { shouldAttachToken } from './shouldAttachToken';
+import { shouldAttachToken } from './shouldAttachToken';
+
 export const withAuthToken = (url: string | null | undefined): string => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
-  const isGated = url.startsWith('/uploads/') || url.includes('/api/mixes/');
-  if (!isGated) return url;
+  if (!shouldAttachToken(url, window.location.origin)) return url;
   const token = getAuthToken();
   if (!token) return url;
   return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;

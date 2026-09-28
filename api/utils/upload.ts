@@ -217,7 +217,24 @@ async function resolveUploadUser(req) {
 
 async function gatedUploadsAuth(req, res, next) {
   try {
-    const reqPath = req.path || '';
+    const rawPath = req.path || '';
+
+    // UPL-1/UPL-2 hardening: express.static/send decodes and normalizes the
+    // path before resolving, so the gate must do the same or attackers bypass
+    // it with encodings like `/uploads/./mixes/x.mp3` or
+    // `/uploads/mixes%2f..%2fdocuments/x.pdf`. Decode, then strictly reject
+    // any `..` segment in the decoded path (400) before normalizing.
+    let decodedPath;
+    try {
+      decodedPath = decodeURIComponent(rawPath);
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
+    if (decodedPath.split('/').includes('..')) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
+    const normalized = path.posix.normalize(decodedPath.replace(/\\/g, '/'));
+    const reqPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
 
     // UPL-1 core: mix bytes only stream via the authorized /api/mixes/:id/audio.
     if (reqPath.startsWith('/mixes/')) {

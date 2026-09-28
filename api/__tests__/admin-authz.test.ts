@@ -44,6 +44,7 @@ describe('Admin authorization hardening (ADM-1, ADM-2, ADM-3, MOD-1, AUTH-7)', (
   const users: Record<string, any> = {
     'super-admin': { id: 'super-admin', email: 'super@example.com', role: 'SUPER_ADMIN', status: 'ACTIVE' },
     'plain-admin': { id: 'plain-admin', email: 'admin@example.com', role: 'ADMIN', status: 'ACTIVE' },
+    'plain-admin-2': { id: 'plain-admin-2', email: 'admin2@example.com', role: 'ADMIN', status: 'ACTIVE' },
     'finance-admin': { id: 'finance-admin', email: 'finance@example.com', role: 'FINANCE_ADMIN', status: 'ACTIVE' },
     'verification-admin': { id: 'verification-admin', email: 'verify@example.com', role: 'VERIFICATION_ADMIN', status: 'ACTIVE' },
     'moderator': { id: 'moderator', email: 'mod@example.com', role: 'MODERATOR', status: 'ACTIVE' },
@@ -145,6 +146,15 @@ describe('Admin authorization hardening (ADM-1, ADM-2, ADM-3, MOD-1, AUTH-7)', (
       expect(res.status).toBe(403);
       expect(prismaMock().user.update).not.toHaveBeenCalled();
     });
+
+    it('ADM-1 residual: ADMIN cannot demote a peer ADMIN (403)', async () => {
+      const res = await request(app)
+        .put('/api/admin/users/plain-admin/role')
+        .set(auth('plain-admin-2'))
+        .send({ role: 'USER' });
+      expect(res.status).toBe(403);
+      expect(prismaMock().user.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('ADM-1: role hierarchy on PUT /users/:id/status', () => {
@@ -155,6 +165,28 @@ describe('Admin authorization hardening (ADM-1, ADM-2, ADM-3, MOD-1, AUTH-7)', (
         .send({ status: 'BANNED' });
       expect(res.status).toBe(403);
       expect(prismaMock().$transaction).not.toHaveBeenCalled();
+    });
+
+    it('ADM-1 residual: ADMIN cannot change another ADMIN\'s status (403)', async () => {
+      const res = await request(app)
+        .put('/api/admin/users/plain-admin/status')
+        .set(auth('plain-admin-2'))
+        .send({ status: 'BANNED' });
+      expect(res.status).toBe(403);
+      expect(prismaMock().$transaction).not.toHaveBeenCalled();
+    });
+
+    it('SUPER_ADMIN can change an ADMIN\'s status (200)', async () => {
+      const p = prismaMock();
+      p.$transaction.mockResolvedValue([{ id: 'plain-admin', email: 'admin@example.com', status: 'SUSPENDED' }]);
+      p.djProfile.updateMany.mockResolvedValue({ count: 0 });
+
+      const res = await request(app)
+        .put('/api/admin/users/plain-admin/status')
+        .set(auth('super-admin'))
+        .send({ status: 'SUSPENDED' });
+      expect(res.status).toBe(200);
+      expect(p.$transaction).toHaveBeenCalled();
     });
   });
 

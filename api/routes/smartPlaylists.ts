@@ -6,6 +6,7 @@ const {
   generateSmartPlaylistItems,
   ensureDefaultSmartPlaylists,
 } = require('../services/smartPlaylist.service');
+const { toPublicAudioUrl } = require('../utils/mixAudio');
 
 const router = express.Router();
 
@@ -35,7 +36,8 @@ async function withItems(playlist: any, take = 4) {
     items: items.slice(0, take).map((mix: any, i: number) => ({
       id: `${playlist.id}-item-${mix.id}`,
       position: i,
-      mix,
+      // UPL-1: never leak raw /uploads/mixes/... paths in API responses.
+      mix: toPublicAudioUrl(mix),
     })),
     trackCount: total,
     isSmart: true,

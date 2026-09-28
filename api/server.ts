@@ -69,8 +69,9 @@ const hallOfFameRoutes = require('./routes/hallOfFame');
 const appVersionRoutes = require('./routes/appVersion');
 
 const app = express();
-// Trust reverse proxies (Nginx / Cloudflare / Host edge) to resolve client IP correctly
-app.set('trust proxy', true);
+// Trust exactly one reverse proxy hop (nginx) — INFRA-16: `true` trusts every
+// XFF entry, making req.ip the client-spoofable leftmost entry.
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean);

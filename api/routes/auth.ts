@@ -8,7 +8,7 @@ const { prisma } = require('../utils/prisma');
 const { signToken } = require('../utils/jwt');
 const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
 const { sendOtp, verifyOtp } = require('../utils/otp');
-const { authLimiter, loginRateLimiter } = require('../utils/rateLimiter');
+const { authLimiter, loginRateLimiter, getClientIp } = require('../utils/rateLimiter');
 const { verifyTurnstile } = require('../middleware/turnstile');
 const { sendEmail, isEmailConfigured, sendWelcomeEmail, sendOtpEmail, sendPasswordResetEmail, isDeliverableEmailAddress } = require('../utils/email');
 const { getFrontendUrl } = require('../utils/url');
@@ -151,7 +151,9 @@ router.post('/login', loginRateLimiter, asyncHandler(async (req, res) => {
   }
 
   const { email, password } = parsed.data;
-  const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+  // INFRA-16: use the rightmost-trusted XFF entry — req.ip is the spoofable
+  // leftmost XFF entry when trusting proxies, which defeats the lockout.
+  const clientIp = getClientIp(req);
 
   // Check account lockout / progressive delay
   const { isLocked, delayMs } = checkAccountLockout(email, clientIp);
