@@ -641,11 +641,36 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Module-level handles for graceful shutdown (INFRA-3): the HTTP server, the
+// background setInterval/setTimeout handles, and a double-shutdown guard.
+let httpServer: import('http').Server | null = null;
+const backgroundIntervals: NodeJS.Timeout[] = [];
+const backgroundTimeouts: NodeJS.Timeout[] = [];
+let isShuttingDown = false;
+
 // Graceful shutdown
 async function shutdown() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   logger.info('Shutting down gracefully...');
+
+  // Stop background jobs from firing new work while we drain (INFRA-3).
+  backgroundIntervals.forEach((t) => clearInterval(t));
+  backgroundTimeouts.forEach((t) => clearTimeout(t));
+
+  // Stop accepting new connections and wait (bounded) for in-flight requests.
+  // server.close() only fires its callback once all sockets drain; if it
+  // doesn't within 10s we exit anyway so SIGKILL never truncates shutdown.
+  const drain = new Promise<void>((resolve) => {
+    if (!httpServer || !httpServer.listening) return resolve();
+    httpServer.close(() => resolve());
+  });
+  await Promise.race([
+    drain,
+    new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+  ]);
+
   await prisma.$disconnect();
-  // Close the server if it's attached (handled outside this function usually)
   process.exit(0);
 }
 
@@ -662,19 +687,19 @@ function startBackgroundJobs() {
 
   // Run 14-day trial notifications check on startup and every 6 hours
   checkAndSendTrialNotifications();
-  setInterval(checkAndSendTrialNotifications, 6 * 60 * 60 * 1000);
+  backgroundIntervals.push(setInterval(checkAndSendTrialNotifications, 6 * 60 * 60 * 1000));
 
   // Run daily bug report check every 24 hours (and 30 seconds after startup)
-  setTimeout(() => {
+  backgroundTimeouts.push(setTimeout(() => {
     checkAndSendDailyBugReport();
-  }, 30 * 1000);
-  setInterval(checkAndSendDailyBugReport, 24 * 60 * 60 * 1000);
+  }, 30 * 1000));
+  backgroundIntervals.push(setInterval(checkAndSendDailyBugReport, 24 * 60 * 60 * 1000));
 
   // Clean up read notifications older than 30 days every 24 hours (and on startup)
   cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
-  setInterval(() => {
+  backgroundIntervals.push(setInterval(() => {
     cleanupOldNotifications(30).catch((err: any) => logger.error('[Server] Notification cleanup failed:', err));
-  }, 24 * 60 * 60 * 1000);
+  }, 24 * 60 * 60 * 1000));
 
   // Purge any Daily System Bug Report notifications mistakenly sent to non-admin users (MODERATOR, etc.)
   prisma.notification.deleteMany({
@@ -689,7 +714,7 @@ function startBackgroundJobs() {
 }
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  httpServer = app.listen(PORT, () => {
     logger.info(`Deck Salone API running on port ${PORT}`);
     logger.info(`Health check: http://localhost:${PORT}/health`);
     startBackgroundJobs();

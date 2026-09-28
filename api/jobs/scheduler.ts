@@ -91,6 +91,16 @@ export function startScheduledJobs() {
             await tx.djProfile.delete({ where: { id: djId } });
           }
 
+          // DB-4: SupportTicket.user has ON DELETE RESTRICT (no cascade), so
+          // deleting a user who ever filed a support ticket would FK-violate and
+          // roll back the whole purge transaction — permanently sticking the
+          // purge queue. Detach replies (they cascade off the ticket, but we
+          // delete explicitly for safety) then the tickets BEFORE user.delete().
+          await tx.supportTicketReply.deleteMany({
+            where: { ticket: { userId } },
+          });
+          await tx.supportTicket.deleteMany({ where: { userId } });
+
           await tx.user.delete({ where: { id: userId } });
         });
       }
