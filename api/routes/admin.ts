@@ -66,7 +66,7 @@ const userFilterSchema = z.object({
 });
 
 const updateRoleSchema = z.object({
-  role: z.enum(['USER', 'DJ', 'ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN']),
+  role: z.enum(['USER', 'DJ', 'ADMIN', 'MODERATOR', 'FINANCE_ADMIN', 'VERIFICATION_ADMIN', 'SUPER_ADMIN']),
 });
 
 const updateUserStatusSchema = z.object({
@@ -301,8 +301,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
   return ok(res, data);
 }));
 
-// GET /api/admin/users - List all users
-router.get('/users', asyncHandler(async (req, res) => {
+// GET /api/admin/users - List all users (full PII incl. verification docs → ADMIN/SUPER_ADMIN only; ADM-3)
+router.get('/users', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = userFilterSchema.safeParse(req.query);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid filter parameters');
@@ -380,8 +380,8 @@ router.get('/users', asyncHandler(async (req, res) => {
   });
 }));
 
-// PUT /api/admin/users/:id/role - Update user role
-router.put('/users/:id/role', requireRole('ADMIN'), asyncHandler(async (req, res) => {
+// PUT /api/admin/users/:id/role - Update user role (ADM-1 / AUTH-7: hierarchy guards)
+router.put('/users/:id/role', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = updateRoleSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -396,6 +396,19 @@ router.put('/users/:id/role', requireRole('ADMIN'), asyncHandler(async (req, res
   });
   if (!targetUser) {
     return fail(res, 404, 'User not found');
+  }
+
+  // ADM-1: a SUPER_ADMIN target may only be modified by that same SUPER_ADMIN
+  if (targetUser.role === 'SUPER_ADMIN' && req.user.id !== targetId) {
+    return fail(res, 403, 'Forbidden: cannot modify a SUPER_ADMIN');
+  }
+  // ADM-1/AUTH-7: refuse self-role-change for SUPER_ADMIN (prevents last-super-admin self-demotion)
+  if (req.user.role === 'SUPER_ADMIN' && req.user.id === targetId) {
+    return fail(res, 403, 'Forbidden: cannot change your own role');
+  }
+  // ADM-2: only SUPER_ADMIN can grant the ADMIN role
+  if (role === 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+    return fail(res, 403, 'Forbidden: only SUPER_ADMIN can grant the ADMIN role');
   }
 
   const user = await prisma.user.update({
@@ -458,8 +471,8 @@ router.put('/users/:id/role', requireRole('ADMIN'), asyncHandler(async (req, res
   return ok(res, updatedUser);
 }));
 
-// PUT /api/admin/users/:id/status - Update user account status
-router.put('/users/:id/status', requireRole('ADMIN'), asyncHandler(async (req, res) => {
+// PUT /api/admin/users/:id/status - Update user account status (ADM-1: hierarchy guard)
+router.put('/users/:id/status', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = updateUserStatusSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -467,6 +480,19 @@ router.put('/users/:id/status', requireRole('ADMIN'), asyncHandler(async (req, r
 
   const { status } = parsed.data;
   const targetId = req.params.id;
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, role: true },
+  });
+  if (!targetUser) {
+    return fail(res, 404, 'User not found');
+  }
+
+  // ADM-1: a SUPER_ADMIN target may only be modified by that same SUPER_ADMIN
+  if (targetUser.role === 'SUPER_ADMIN' && req.user.id !== targetId) {
+    return fail(res, 403, 'Forbidden: cannot modify a SUPER_ADMIN');
+  }
 
   const [user] = await prisma.$transaction([
     prisma.user.update({
@@ -1039,8 +1065,8 @@ router.get('/geography', asyncHandler(async (req, res) => {
     });
 }));
 
-// GET /api/admin/payments - All payments with pagination
-router.get('/payments', asyncHandler(async (req, res) => {
+// GET /api/admin/payments - All payments with pagination (ADM-3: ADMIN/SUPER_ADMIN/FINANCE_ADMIN)
+router.get('/payments', requireRole('ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination({ page: req.query.page, limit: req.query.limit });
 
   const [payments, total] = await Promise.all([
@@ -1237,8 +1263,8 @@ router.post('/pro-subscription-requests/:id/reject', requireRole('ADMIN', 'FINAN
   return ok(res, updated);
 }));
 
-// GET /api/admin/messages - Recent message threads overview
-router.get('/messages', asyncHandler(async (req, res) => {
+// GET /api/admin/messages - Recent message threads overview (ADM-3: private DM snippets → ADMIN/SUPER_ADMIN only)
+router.get('/messages', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const messages = await prisma.message.findMany({
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -1392,7 +1418,8 @@ router.get('/djs', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/admin/djs/:id/suspend - Toggle DJ visibility (suspend)
-router.put('/djs/:id/suspend', requireRole('ADMIN', 'MODERATOR'), asyncHandler(async (req, res) => {
+// MOD-1: ADMIN only (client usage is admin-only; moderators must not write user.status / unban users)
+router.put('/djs/:id/suspend', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const targetId = req.params.id;
   const dj = await prisma.djProfile.findUnique({ where: { id: targetId } });
   if (!dj) return fail(res, 404, 'DJ not found');
@@ -2366,8 +2393,8 @@ router.delete('/ads/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(asyn
   return res.json({ success: true, message: 'Campaign deleted successfully' });
 }));
 
-// PUT /api/admin/campaigns/:id - Alias for updating campaign
-router.put('/campaigns/:id', asyncHandler(async (req, res) => {
+// PUT /api/admin/campaigns/:id - Alias for updating campaign (ADM-3: ADMIN/SUPER_ADMIN only)
+router.put('/campaigns/:id', requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (req, res) => {
   const parsed = updateAdSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
