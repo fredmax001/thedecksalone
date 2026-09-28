@@ -85,6 +85,8 @@ jest.mock('../utils/rateLimiter', () => ({
   playLimiter: (req: any, res: any, next: any) => next(),
   voteLimiter: (req: any, res: any, next: any) => next(),
   conditionalSearchLimiter: (req: any, res: any, next: any) => next(),
+  uploadLimiter: (req: any, res: any, next: any) => next(),
+  audioLimiter: (req: any, res: any, next: any) => next(),
   // INFRA-16: rightmost-trusted XFF entry, matching production getClientIp.
   getClientIp: (req: any) =>
     req.headers?.['x-forwarded-for']?.toString().split(',').pop()?.trim() ||

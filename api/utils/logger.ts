@@ -31,6 +31,15 @@ export async function sendErrorAlert(errorData: {
   } catch (e) {}
 }
 
+// Redact JWT `token` query params from URLs before they reach any log line.
+// Phase 2 puts ?token= JWTs in gated media URLs, so raw URLs must never be
+// logged (D2 / 3b structured-logging hardening). Handles `?token=` and
+// `&token=` separators on the serialized query string.
+export function redactUrlToken(url: string | undefined | null): string {
+  if (!url || typeof url !== 'string') return '';
+  return url.replace(/([?&]token=)[^&]*/gi, '$1[redacted]');
+}
+
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: combine(

@@ -5,6 +5,7 @@ const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware } = require('../middleware/auth');
 const { uploadEventImage } = require('../utils/upload');
+const { uploadLimiter } = require('../utils/rateLimiter');
 const { processEventImage } = require('../utils/imageProcessor');
 const { uploadBuffer } = require('../utils/storage');
 const { parsePagination } = require('../utils/pagination');
@@ -580,7 +581,7 @@ router.post('/:id/rsvp', authMiddleware, asyncHandler(async (req: any, res: any)
 const multerGallery = require('multer');
 const uploadGallery = multerGallery({ storage: multerGallery.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
-router.post('/:id/gallery', authMiddleware, uploadGallery.array('photos', 20), asyncHandler(async (req: any, res: any) => {
+router.post('/:id/gallery', authMiddleware, uploadLimiter, uploadGallery.array('photos', 20), asyncHandler(async (req: any, res: any) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!event) return fail(res, 404, 'Event not found');
 

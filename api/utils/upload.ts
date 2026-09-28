@@ -55,13 +55,37 @@ function extFromMime(mimetype) {
   return ext;
 }
 
+// UPL-12: fileFilter rejections are safe, user-facing text. Mark them with
+// statusCode 400 so the global error handler maps them to a 400 (not a 500).
+function uploadRejectionError(message) {
+  const err: any = new Error(message);
+  err.statusCode = 400;
+  return err;
+}
+
+// UPL-12: central MulterError/fileFilter-error mapping used by the global
+// error handler in server.ts. Returns { status, message } or null when the
+// error is not upload-related (caller keeps its existing handling).
+function getUploadErrorResponse(err) {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return { status: 413, message: 'File too large. Please upload a smaller file.' };
+    }
+    return { status: 400, message: err.message || 'Invalid upload' };
+  }
+  if (err && err.statusCode === 400 && typeof err.message === 'string' && err.message.length > 0) {
+    return { status: 400, message: err.message };
+  }
+  return null;
+}
+
 // File filter for general files
 function fileFilter(allowedMimes) {
   return (req, file, cb) => {
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type. Allowed: ${allowedMimes.join(', ')}`), false);
+      cb(uploadRejectionError(`Invalid file type. Allowed: ${allowedMimes.join(', ')}`), false);
     }
   };
 }
@@ -81,7 +105,7 @@ function imageFileFilter(req, file, cb) {
   if (ALLOWED_IMAGE_MIMES.includes(mime)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid image format. Allowed: ${ALLOWED_IMAGE_MIMES.map((m) => m.replace('image/', '')).join(', ')}`), false);
+    cb(uploadRejectionError(`Invalid image format. Allowed: ${ALLOWED_IMAGE_MIMES.map((m) => m.replace('image/', '')).join(', ')}`), false);
   }
 }
 
@@ -128,7 +152,7 @@ const uploadDocument = multer({
     if (['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid document format. Allowed: PDF, JPG, PNG, WebP'), false);
+      cb(uploadRejectionError('Invalid document format. Allowed: PDF, JPG, PNG, WebP'), false);
     }
   },
   limits: { fileSize: MAX_DOCUMENT_UPLOAD_MB * MB },
@@ -144,7 +168,7 @@ const uploadAdminMedia = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid media format. Allowed: images and videos'), false);
+      cb(uploadRejectionError('Invalid media format. Allowed: images and videos'), false);
     }
   },
   limits: { fileSize: MAX_IMAGE_UPLOAD_MB * MB },
@@ -170,7 +194,7 @@ const uploadMix = multer({
     if (file.fieldname === 'coverImage' || file.fieldname === 'cover' || file.fieldname === 'coverFile') {
       return imageFileFilter(req, file, cb);
     }
-    cb(new Error(`Unexpected field: ${file.fieldname}`), false);
+    cb(uploadRejectionError(`Unexpected field: ${file.fieldname}`), false);
   },
   limits: { fileSize: MAX_AUDIO_UPLOAD_MB * MB },
 }).fields([
@@ -250,6 +274,10 @@ async function gatedUploadsAuth(req, res, next) {
     const isGated = GATED_UPLOAD_PREFIXES.some((p) => reqPath.startsWith(p));
     if (!isGated) return next(); // public folders unchanged
 
+    // D3 (3b): gated KYC / payment-proof bytes must never be cached — set
+    // no-store as soon as the gate decides the prefix is gated.
+    res.setHeader('Cache-Control', 'no-store');
+
     const user = await resolveUploadUser(req);
     if (user && STAFF_UPLOAD_ROLES.includes(user.role)) return next();
 
@@ -306,4 +334,5 @@ module.exports = {
   serveUploads,
   gatedUploadsAuth,
   extFromMime,
+  getUploadErrorResponse,
 };

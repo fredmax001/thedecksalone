@@ -5,6 +5,7 @@ const { uploadBuffer } = require('../utils/storage');
 const { extFromMime } = require('../utils/upload');
 const multer = require('multer');
 const { ok, fail } = require('../utils/response');
+const { uploadLimiter } = require('../utils/rateLimiter');
 
 const router = express.Router();
 
@@ -21,7 +22,8 @@ const uploadPhoto = multer({
 });
 
 // POST /api/photos — Upload a photo (multipart/form-data, field name: 'photo')
-router.post('/', authMiddleware, uploadPhoto.single('photo'), async (req, res) => {
+// D6: uploadLimiter runs BEFORE multer so limited requests never parse the body.
+router.post('/', authMiddleware, uploadLimiter, uploadPhoto.single('photo'), async (req, res) => {
   try {
     const dj = await prisma.djProfile.findUnique({
       where: { userId: req.user.id },

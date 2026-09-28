@@ -12,12 +12,12 @@ const cookieParser = require('cookie-parser');
 const { prisma } = require('./utils/prisma');
 const { authMiddleware } = require('./middleware/auth');
 const { generalLimiter } = require('./utils/rateLimiter');
-const { serveUploads } = require('./utils/upload');
+const { serveUploads, getUploadErrorResponse } = require('./utils/upload');
 require('./utils/passport'); // Initialize passport strategies
 
 // NEW: Import compression and logger
 const compression = require('compression');
-const { logger } = require('./utils/logger');
+const { logger, redactUrlToken } = require('./utils/logger');
 const promClient = require('prom-client');
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -162,11 +162,11 @@ app.use((req, res, next) => {
       .labels(req.method, req.route ? req.route.path : req.path, res.statusCode)
       .observe(responseTimeInMs / 1000);
       
-    // Log request completion
+    // Log request completion (D2: token= JWTs in gated media URLs must not hit logs)
     logger.info('HTTP Request', {
       requestId: req.id,
       method: req.method,
-      url: req.originalUrl,
+      url: redactUrlToken(req.originalUrl),
       status: res.statusCode,
       duration: responseTimeInMs
     });
@@ -193,6 +193,10 @@ app.get('/health', async (req, res) => {
   }
   res.json({ success: true, message: 'Deck Salone API is running', database: 'up', timestamp: new Date().toISOString() });
 });
+
+// Readiness check (D4/3b): DB + Redis, used by the compose healthcheck.
+// Kept separate from /health above, which compose already references.
+app.get('/health/readiness', require('./utils/readiness').readinessHandler);
 
 // Expose Prometheus metrics endpoint (restricted to internal IPs or bearer token)
 app.get('/metrics', async (req, res) => {
@@ -608,7 +612,13 @@ const { sendErrorAlert } = require('./utils/logger');
 
 // Global error handler
 app.use((err, req, res, next) => {
-  logger.error('Error:', { error: err.message, stack: err.stack, path: req.path });
+  // UPL-12: multer rejections and fileFilter errors map to 413/400, not 500.
+  const uploadError = getUploadErrorResponse(err);
+  if (uploadError) {
+    return res.status(uploadError.status).json({ success: false, error: uploadError.message });
+  }
+
+  logger.error('Error:', { error: err.message, stack: err.stack, path: redactUrlToken(req.path) });
   const status = err.status || 500;
   const message = status >= 500 ? 'Internal server error' : (err.message || 'Internal server error');
 
@@ -617,7 +627,7 @@ app.use((err, req, res, next) => {
     sendErrorAlert({
       message: err.message || 'Internal server error',
       stack: err.stack,
-      path: req.path,
+      path: redactUrlToken(req.path),
       method: req.method,
       statusCode: status,
     }).catch(() => {});
@@ -627,7 +637,7 @@ app.use((err, req, res, next) => {
       source: 'API',
       message: err.message || 'Internal server error',
       stackTrace: err.stack,
-      path: req.path,
+      path: redactUrlToken(req.path),
       method: req.method,
       userId: req.user?.id || null,
       userEmail: req.user?.email || null,

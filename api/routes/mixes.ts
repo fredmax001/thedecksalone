@@ -3,7 +3,7 @@ const path = require('path');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
-const { playLimiter, conditionalSearchLimiter, getClientIp } = require('../utils/rateLimiter');
+const { playLimiter, conditionalSearchLimiter, getClientIp, uploadLimiter, audioLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners, hashIp, wasPlayRecentlyRecorded } = require('../utils/monthlyListeners');
 const { uploadMix, extFromMime } = require('../utils/upload');
@@ -877,7 +877,7 @@ router.get('/:id/recommendations', softAuthMiddleware, async (req: any, res: any
 });
 
 // POST /api/mixes - Create mix (auth required)
-router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, asyncHandler(async (req, res) => {
+router.post('/', authMiddleware, requireTrialOrSubscription, uploadLimiter, uploadMix, asyncHandler(async (req, res) => {
   const parsed = createMixSchema.safeParse(req.body);
   if (!parsed.success) {
     return fail(res, 400, 'Invalid input', { details: parsed.error.flatten() });
@@ -976,7 +976,7 @@ router.post('/', authMiddleware, requireTrialOrSubscription, uploadMix, asyncHan
 }));
 
 // PUT /api/mixes/:id - Update mix
-router.put('/:id', authMiddleware, uploadMix, asyncHandler(async (req, res) => {
+router.put('/:id', authMiddleware, uploadLimiter, uploadMix, asyncHandler(async (req, res) => {
   if (typeof req.body.tags === 'string') {
     try {
       req.body.tags = JSON.parse(req.body.tags);
@@ -1529,7 +1529,7 @@ function sanitizeFilename(name) {
 // GET /api/mixes/:id/audio - Authorized streaming endpoint for mix audio (UPL-1).
 // Replaces the public /uploads/mixes/* static door: local bytes only flow through
 // here, exclusive mixes require the same access checkDownloadAccess() enforces.
-router.get('/:id/audio', softAuthMiddleware, async (req, res) => {
+router.get('/:id/audio', softAuthMiddleware, audioLimiter, async (req, res) => {
   try {
     const mixId = req.params.id;
 
@@ -1622,7 +1622,7 @@ router.get('/:id/audio', softAuthMiddleware, async (req, res) => {
 });
 
 // GET /api/mixes/:id/download-file - Stream direct MP3 file attachment to browser
-router.get('/:id/download-file', softAuthMiddleware, async (req, res) => {
+router.get('/:id/download-file', softAuthMiddleware, audioLimiter, async (req, res) => {
   try {
     const mixId = req.params.id;
 

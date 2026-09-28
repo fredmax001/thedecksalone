@@ -59,6 +59,8 @@ jest.mock('../utils/cache', () => ({
 jest.mock('../utils/rateLimiter', () => ({
   playLimiter: (req: any, res: any, next: any) => next(),
   conditionalSearchLimiter: (req: any, res: any, next: any) => next(),
+  uploadLimiter: (req: any, res: any, next: any) => next(),
+  audioLimiter: (req: any, res: any, next: any) => next(),
 }));
 
 jest.mock('../utils/monthlyListeners', () => ({
@@ -297,6 +299,7 @@ describe('Mix audio gating (UPL-1 / UPL-2 / UPL-8)', () => {
         status(code: number) { this.statusCode = code; return this; },
         json() { return this; },
         end() { return this; },
+        setHeader() { return this; },
       };
       let nextCalled = false;
       await gatedUploadsAuth(req, res, () => { nextCalled = true; });

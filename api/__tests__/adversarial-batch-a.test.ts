@@ -208,6 +208,7 @@ describe('1. gatedUploadsAuth: encoding/normalization bypass closed (UPL-1/UPL-2
       status(code: number) { this.statusCode = code; return this; },
       json() { return this; },
       end() { return this; },
+      setHeader() { return this; },
     };
     let nextCalled = false;
     await gatedUploadsAuth(req, res, () => { nextCalled = true; });

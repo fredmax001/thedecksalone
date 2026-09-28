@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, invalidateUserAuthCache } = require('../middleware/auth');
-const { searchLimiter, purchaseLimiter } = require('../utils/rateLimiter');
+const { searchLimiter, purchaseLimiter, uploadLimiter } = require('../utils/rateLimiter');
 const bcrypt = require('bcryptjs');
 const { uploadAvatar, uploadDocument } = require('../utils/upload');
 const { processAvatar } = require('../utils/imageProcessor');
@@ -544,7 +544,7 @@ router.put('/profile', authMiddleware, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/users/avatar - Upload user avatar
-router.put('/avatar', authMiddleware, uploadAvatar.single('avatar'), asyncHandler(async (req, res) => {
+router.put('/avatar', authMiddleware, uploadLimiter, uploadAvatar.single('avatar'), asyncHandler(async (req, res) => {
   if (!req.file) {
     return fail(res, 400, 'No image file provided');
   }

@@ -228,6 +228,36 @@ const searchLimiter = rateLimit({
   ...getRedisStore('search'),
 });
 
+// Upload limiter (D6/3d) — cap multipart upload spam per IP: 30 uploads / 10 min.
+// Placed BEFORE multer on every upload route so limited requests never parse
+// the request body.
+const uploadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 30,
+  keyGenerator: (req: any) => `upload:${getClientIp(req)}`,
+  message: {
+    success: false,
+    error: 'Too many uploads. Please try again in a few minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('upload'),
+});
+
+// Audio stream limiter (D6/3d) — cap per-IP+mix streaming abuse: 120 req / min.
+const audioLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120,
+  keyGenerator: (req: any) => `audio:${getClientIp(req)}:${req.params.id}`,
+  message: {
+    success: false,
+    error: 'Too many audio requests. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('audio'),
+});
+
 function conditionalSearchLimiter(req: any, res: any, next: any) {
   if (req.query.search || req.query.q) {
     return searchLimiter(req, res, next);
@@ -235,4 +265,4 @@ function conditionalSearchLimiter(req: any, res: any, next: any) {
   next();
 }
 
-module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter, reportLimiter, messageLimiter, analyticsVisitLimiter, developerApplyLimiter };
+module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter, reportLimiter, messageLimiter, analyticsVisitLimiter, developerApplyLimiter, uploadLimiter, audioLimiter };
