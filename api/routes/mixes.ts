@@ -1196,11 +1196,17 @@ router.post('/:id/play', softAuthMiddleware, playLimiter, asyncHandler(async (re
     }
   }
 
-  const updated = await prisma.mix.update({
-    where: { id: req.params.id },
-    data: { plays: { increment: 1 } },
-    select: { plays: true },
-  });
+  const [updated] = await Promise.all([
+    prisma.mix.update({
+      where: { id: req.params.id },
+      data: { plays: { increment: 1 } },
+      select: { plays: true },
+    }),
+    prisma.djProfile.update({
+      where: { id: mix.djId },
+      data: { totalStreams: { increment: 1 } },
+    }).catch(() => null),
+  ]);
 
   // RANK-1: anonymous plays still bump the public counter (UX) and are
   // recorded for analytics (MixPlay row with null userId + ipHash). Ranking

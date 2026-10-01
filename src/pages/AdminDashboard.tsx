@@ -341,6 +341,11 @@ function DashboardSection() {
     return timelineList.map((a: any) => ({ month: a.month, mixes: a.mixes || 0 }));
   }, [timelineList]);
 
+  const streamsData = useMemo(() => {
+    if (!timelineList || timelineList.length === 0) return [];
+    return timelineList.map((a: any) => ({ month: a.month, streams: a.streams || 0 }));
+  }, [timelineList]);
+
   const djGrowthData = useMemo(() => {
     if (!timelineList || timelineList.length === 0) return [];
     return timelineList.map((a: any) => ({ month: a.month, djs: a.djs || 0 }));
@@ -531,7 +536,7 @@ function DashboardSection() {
         </motion.div>
 
         <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.475 }}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#f4e059] mb-4">Monthly Site Visits</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#EC4899] mb-4">Monthly Site Visits</p>
           {visitsData.length > 0 ? (
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -540,6 +545,24 @@ function DashboardSection() {
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
                   <Area type="monotone" dataKey="visits" stroke="#EC4899" fill="rgba(236,72,153,0.1)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center"><p className="font-mono text-text-muted">--</p></div>
+          )}
+        </motion.div>
+
+        <motion.div className="rounded-2xl p-6 border border-white/5" style={{ background: 'var(--bg-card)' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.485 }}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#F97316] mb-4">Streaming Activity Trends</p>
+          {streamsData.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={streamsData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
+                  <Area type="monotone" dataKey="streams" stroke="#F97316" fill="rgba(249,115,22,0.1)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -2456,7 +2479,7 @@ function RevenueSection() {
 function AnalyticsSection() {
   const [timeRange, setTimeRange] = useState<TimeRange>('6m');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
-  const [activeBarMetric, setActiveBarMetric] = useState<'all' | 'revenue' | 'visits' | 'mixes'>('all');
+  const [activeBarMetric, setActiveBarMetric] = useState<'all' | 'revenue' | 'visits' | 'mixes' | 'streams'>('all');
 
   const { data: analytics, isLoading, error } = useAdminAnalytics(timeRange, selectedMonth);
   const { data: rankingsData } = useAdminRankings();
@@ -2478,10 +2501,11 @@ function AnalyticsSection() {
     const totalRevenue = timeline.reduce((acc: number, item: any) => acc + (item.revenue || 0), 0);
     const totalVisits = timeline.reduce((acc: number, item: any) => acc + (item.visits || 0), 0);
     const totalMixes = timeline.reduce((acc: number, item: any) => acc + (item.mixes || 0), 0);
+    const totalStreams = timeline.reduce((acc: number, item: any) => acc + (item.streams || 0), 0);
     const totalUsers = timeline.reduce((acc: number, item: any) => acc + (item.users || 0), 0);
     const totalDjs = timeline.reduce((acc: number, item: any) => acc + (item.djs || 0), 0);
     const totalBookings = timeline.reduce((acc: number, item: any) => acc + (item.bookings || 0), 0);
-    return { totalRevenue, totalVisits, totalMixes, totalUsers, totalDjs, totalBookings };
+    return { totalRevenue, totalVisits, totalMixes, totalStreams, totalUsers, totalDjs, totalBookings };
   }, [analytics, timeline]);
 
   // Available selectable months
@@ -2722,13 +2746,21 @@ function AnalyticsSection() {
       </div>
 
       {/* Summary KPI Metrics (Exact filtered totals) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <StatCard
           label="Filtered Revenue"
           value={formatCurrency(summary?.totalRevenue || 0)}
           icon={DollarSign}
           color="#f4e059"
           change="Real-time"
+          trend="up"
+        />
+        <StatCard
+          label="Total Streams"
+          value={(summary?.totalStreams ?? timeline.reduce((acc: number, item: any) => acc + (item.streams || 0), 0)).toLocaleString()}
+          icon={Play}
+          color="#F97316"
+          change="Mix Plays"
           trend="up"
         />
         <StatCard
@@ -2796,6 +2828,7 @@ function AnalyticsSection() {
           <div className="flex items-center gap-1 bg-[#0A0A0A] p-1 rounded-xl border border-white/[0.06]">
             {[
               { id: 'all', label: 'All Activities' },
+              { id: 'streams', label: 'Streams' },
               { id: 'mixes', label: 'Mixes & DJs' },
               { id: 'revenue', label: 'Revenue' },
               { id: 'visits', label: 'Visits' },
@@ -2835,11 +2868,15 @@ function AnalyticsSection() {
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
                 {activeBarMetric === 'all' && (
                   <>
+                    <Bar dataKey="streams" name="Streams" fill="#F97316" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="mixes" name="Mixes" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="djs" name="New DJs" fill="#f4e059" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="bookings" name="Bookings" fill="#22C55E" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="users" name="Users" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                   </>
+                )}
+                {activeBarMetric === 'streams' && (
+                  <Bar dataKey="streams" name="Mix Streams" fill="#F97316" radius={[6, 6, 0, 0]} />
                 )}
                 {activeBarMetric === 'mixes' && (
                   <>

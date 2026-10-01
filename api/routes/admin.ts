@@ -21,6 +21,15 @@ const router = express.Router();
 
 const BATTLE_METRIC_TYPES = ['COMPOSITE', 'PLAYS', 'STREAMS', 'FOLLOWERS', 'LIKES'];
 
+// ─── Streaming & DJ total streams helper ──────────────────────────
+
+function computeDjTotalStreams(dj: any): number {
+  if (!dj) return 0;
+  const externalStreams = (dj.streamingPlatforms || []).reduce((sum: number, p: any) => sum + (p.streams || 0), 0);
+  const mixPlays = (dj.mixes || []).reduce((sum: number, m: any) => sum + (m.plays || 0), 0);
+  return Math.max(dj.totalStreams || 0, mixPlays + externalStreams);
+}
+
 // ─── AuditLog helper ──────────────────────────────────────────────
 
 async function createAuditLog(params: {
@@ -233,7 +242,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
       totalUsers,
       totalDjs,
       totalMixes,
-      totalStreams,
+      mixStreams,
+      externalStreams,
       totalBookings,
       totalEvents,
       totalReviews,
@@ -248,6 +258,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       prisma.djProfile.count(),
       prisma.mix.count(),
       prisma.mix.aggregate({ _sum: { plays: true } }),
+      prisma.streamingPlatform.aggregate({ _sum: { streams: true } }),
       prisma.booking.count(),
       prisma.event.count(),
       prisma.review.count(),
@@ -281,7 +292,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       totalUsers,
       totalDjs,
       totalMixes,
-      totalStreams: totalStreams._sum.plays || 0,
+      totalStreams: (mixStreams._sum.plays || 0) + (externalStreams._sum.streams || 0),
       totalBookings,
       totalEvents,
       totalReviews,
@@ -904,10 +915,11 @@ router.get('/analytics', asyncHandler(async (req, res) => {
         const dEnd = new Date(start.getFullYear(), start.getMonth(), d + 1);
         if (dStart > now) break;
 
-        const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
+        const [users, djs, mixes, streams, bookings, revenue, visits] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           prisma.djProfile.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           prisma.mix.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
+          prisma.mixPlay.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           prisma.booking.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
           getPeriodRevenue(dStart, dEnd),
           prisma.siteVisit.count({ where: { createdAt: { gte: dStart, lt: dEnd } } }),
@@ -919,6 +931,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           users,
           djs,
           mixes,
+          streams,
           bookings,
           revenue,
           visits,
@@ -931,10 +944,11 @@ router.get('/analytics', asyncHandler(async (req, res) => {
         const mEnd = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 1);
         const label = mStart.toLocaleString('en-US', { month: 'short', year: '2-digit' });
 
-        const [users, djs, mixes, bookings, revenue, visits] = await Promise.all([
+        const [users, djs, mixes, streams, bookings, revenue, visits] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           prisma.djProfile.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           prisma.mix.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
+          prisma.mixPlay.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           prisma.booking.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
           getPeriodRevenue(mStart, mEnd),
           prisma.siteVisit.count({ where: { createdAt: { gte: mStart, lt: mEnd } } }),
@@ -946,6 +960,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
           users,
           djs,
           mixes,
+          streams,
           bookings,
           revenue,
           visits,
@@ -955,10 +970,11 @@ router.get('/analytics', asyncHandler(async (req, res) => {
       }
     }
 
-    const [totalUsers, totalDjs, totalMixes, totalBookings, totalRevenue, totalVisits] = await Promise.all([
+    const [totalUsers, totalDjs, totalMixes, totalStreams, totalBookings, totalRevenue, totalVisits] = await Promise.all([
       prisma.user.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.djProfile.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.mix.count({ where: { createdAt: { gte: start, lt: end } } }),
+      prisma.mixPlay.count({ where: { createdAt: { gte: start, lt: end } } }),
       prisma.booking.count({ where: { createdAt: { gte: start, lt: end } } }),
       getPeriodRevenue(start, end),
       prisma.siteVisit.count({ where: { createdAt: { gte: start, lt: end } } }),
@@ -1042,6 +1058,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
         totalUsers,
         totalDjs,
         totalMixes,
+        totalStreams,
         totalBookings,
         totalRevenue,
         totalVisits,
@@ -1430,7 +1447,7 @@ router.get('/djs', asyncHandler(async (req, res) => {
       take: limitNum,
       include: {
         user: { select: { id: true, email: true, status: true, createdAt: true } },
-        mixes: { select: { id: true } },
+        mixes: { select: { id: true, plays: true } },
         bookingsAsDj: { select: { id: true, status: true } },
         streamingPlatforms: true,
         followers: { select: { id: true } },
@@ -1451,7 +1468,7 @@ router.get('/djs', asyncHandler(async (req, res) => {
     hallOfFame: dj.hallOfFame,
     rankingPosition: dj.rankingPosition,
     rankingScore: dj.rankingScore,
-    totalStreams: dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.streams || 0), 0),
+    totalStreams: computeDjTotalStreams(dj),
     totalFollowers: dj.followers.length,
     totalMixes: dj.mixes.length,
     totalBookings: dj.bookingsAsDj.length,
@@ -1626,6 +1643,7 @@ router.get('/rankings', asyncHandler(async (req, res) => {
     orderBy: { rankingPosition: 'asc' },
     take: 100,
     include: {
+      mixes: { select: { plays: true } },
       streamingPlatforms: { select: { streams: true } },
       followers: { select: { id: true } },
     },
@@ -1641,7 +1659,7 @@ router.get('/rankings', asyncHandler(async (req, res) => {
     digitalScore: dj.digitalScore,
     industryScore: dj.industryScore,
     communityScore: dj.communityScore,
-    totalStreams: dj.streamingPlatforms.reduce((sum: number, p: any) => sum + (p.streams || 0), 0),
+    totalStreams: computeDjTotalStreams(dj),
     totalFollowers: dj.followers.length,
     verified: dj.verified,
   }));
@@ -3170,6 +3188,8 @@ router.get('/promo', async (req: any, res: any) => {
         user: {
           select: { id: true, email: true, subscriptionTier: true, createdAt: true },
         },
+        mixes: { select: { plays: true } },
+        streamingPlatforms: true,
       },
     });
 
@@ -3181,8 +3201,8 @@ router.get('/promo', async (req: any, res: any) => {
       city: dj.city,
       verified: dj.verified,
       rankingPosition: dj.rankingPosition,
-      totalStreams: dj.totalStreams,
-      totalMixes: dj.totalMixes,
+      totalStreams: computeDjTotalStreams(dj),
+      totalMixes: dj.mixes?.length || dj.totalMixes,
       subscriptionTier: dj.user?.subscriptionTier || dj.subscriptionTier || 'free',
       eligible: (dj.user?.subscriptionTier || dj.subscriptionTier || 'free') === 'free',
     }));
