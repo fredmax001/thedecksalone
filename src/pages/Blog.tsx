@@ -1,32 +1,67 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Newspaper, Clock, ArrowRight, Sparkles } from 'lucide-react';
+import { Newspaper, Clock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import api from '@/lib/api';
+import { toast } from 'sonner';
+import { formatDate } from '@/lib/dateTime';
 
-const samplePosts = [
-  {
-    title: 'The Rise of Afrobeats in Sierra Leone',
-    excerpt: 'How Afrobeats has transformed the DJ scene and become the dominant sound at parties and events across the country.',
-    date: 'Dec 15, 2024',
-    category: 'Culture',
-    readTime: '5 min read',
-  },
-  {
-    title: 'DJ Battle Arena: Season 1 Recap',
-    excerpt: 'A look back at the most exciting battles, the rising stars, and the unforgettable moments from our first competitive season.',
-    date: 'Dec 10, 2024',
-    category: 'Battles',
-    readTime: '8 min read',
-  },
-  {
-    title: 'Tips for Aspiring DJs: Getting Started',
-    excerpt: 'From choosing your first equipment to building your brand — essential advice for anyone looking to start their DJ journey.',
-    date: 'Dec 5, 2024',
-    category: 'Guide',
-    readTime: '6 min read',
-  },
-];
+interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  readTime: string;
+  author: string;
+  publishedAt: string;
+}
 
 export default function Blog() {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const res = await api.get('/blog');
+      if (res.data.success) {
+        setPosts(res.data.data || []);
+      }
+    } catch {
+      // Fallback handled smoothly
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await api.post('/blog/subscribe', { email });
+      if (res.data.success) {
+        toast.success(res.data.message || 'Subscribed successfully!');
+        setEmail('');
+      }
+    } catch {
+      toast.error('Failed to subscribe. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="bg-black min-h-[100dvh]">
       {/* ═══════════════ HERO ═══════════════ */}
@@ -72,7 +107,7 @@ export default function Blog() {
         </div>
       </section>
 
-      {/* ═══════════════ SAMPLE POSTS ═══════════════ */}
+      {/* ═══════════════ POSTS ═══════════════ */}
       <section className="py-12 sm:py-16 pb-24">
         <div className="container-main">
           <div className="max-w-3xl mx-auto">
@@ -82,39 +117,47 @@ export default function Blog() {
               </h2>
             </FadeIn>
 
-            <div className="space-y-6">
-              {samplePosts.map((post, index) => (
-                <FadeIn key={post.title} delay={0.1 * index}>
-                  <motion.article
-                    className="group p-6 sm:p-8 bg-black-elevated rounded-2xl border border-white/5 hover:border-gold/30 transition-all duration-300 cursor-pointer"
-                    whileHover={{ y: -2 }}
-                  >
-                    <div className="flex flex-wrap items-center gap-3 mb-4">
-                      <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gold/10 text-gold rounded-full">
-                        {post.category}
-                      </span>
-                      <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                        <Clock className="w-3.5 h-3.5" />
-                        {post.readTime}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 text-gold animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {posts.map((post, index) => (
+                  <FadeIn key={post.id || post.title} delay={0.1 * index}>
+                    <motion.article
+                      className="group p-6 sm:p-8 bg-black-elevated rounded-2xl border border-white/5 hover:border-gold/30 transition-all duration-300 cursor-pointer"
+                      whileHover={{ y: -2 }}
+                    >
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gold/10 text-gold rounded-full">
+                          {post.category}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                          <Clock className="w-3.5 h-3.5" />
+                          {post.readTime}
+                        </div>
+                        <span className="text-xs text-text-muted">
+                          {formatDate(post.publishedAt)}
+                        </span>
                       </div>
-                      <span className="text-xs text-text-muted">{post.date}</span>
-                    </div>
 
-                    <h3 className="font-display text-lg font-semibold text-text-primary group-hover:text-gold transition-colors uppercase tracking-tight">
-                      {post.title}
-                    </h3>
-                    <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-                      {post.excerpt}
-                    </p>
+                      <h3 className="font-display text-lg font-semibold text-text-primary group-hover:text-gold transition-colors uppercase tracking-tight">
+                        {post.title}
+                      </h3>
+                      <p className="mt-2 text-sm text-text-secondary leading-relaxed">
+                        {post.excerpt}
+                      </p>
 
-                    <div className="mt-4 flex items-center gap-2 text-sm text-gold font-semibold">
-                      <span className="uppercase text-xs tracking-wider">Read more</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </motion.article>
-                </FadeIn>
-              ))}
-            </div>
+                      <div className="mt-4 flex items-center gap-2 text-sm text-gold font-semibold">
+                        <span className="uppercase text-xs tracking-wider">Read more</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </motion.article>
+                  </FadeIn>
+                ))}
+              </div>
+            )}
 
             {/* Newsletter CTA */}
             <FadeIn delay={0.4}>
@@ -126,16 +169,24 @@ export default function Blog() {
                 <p className="mt-2 text-sm text-text-secondary max-w-md mx-auto">
                   Get the latest stories, DJ tips, and platform updates delivered to your inbox.
                 </p>
-                <div className="mt-5 flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                <form onSubmit={handleSubscribe} className="mt-5 flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
                   <input
                     type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
+                    required
                     className="flex-1 bg-black-surface border border-dark-gray rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:ring-1 focus:ring-gold/10 outline-none transition-colors"
                   />
-                  <button className="px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-lg hover:scale-[1.02] transition-transform flex-shrink-0">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-6 py-3 bg-gold-gradient text-black font-semibold uppercase text-sm rounded-lg hover:scale-[1.02] transition-transform flex-shrink-0 flex items-center justify-center gap-2"
+                  >
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     Subscribe
                   </button>
-                </div>
+                </form>
               </div>
             </FadeIn>
           </div>

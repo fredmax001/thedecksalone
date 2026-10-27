@@ -12,7 +12,7 @@ const config: CapacitorConfig = {
     ],
   },
   ios: {
-    contentInset: 'automatic',
+    contentInset: 'never',
     backgroundColor: '#000000',
     preferredContentMode: 'mobile',
     scheme: 'Deck Salone',

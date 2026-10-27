@@ -75,6 +75,24 @@ async function seedDefaultLegendsIfEmpty() {
   });
 }
 
+const DEFAULT_TIMELINE = [
+  { year: '1985', title: 'First Sound System in Freetown', description: 'Mobile sound systems appear in Freetown. DJs begin playing at weddings and community events using vinyl records and basic mixers.' },
+  { year: '1990', title: 'Rise of Mobile DJ Culture', description: 'DJs take their setups on the road, playing at events across the city. Mobile DJ culture becomes the heartbeat of celebrations.' },
+  { year: '1995', title: 'First DJ Battle at Lumley Beach', description: 'The first DJ battle takes place at Lumley Beach, Freetown. Two DJs go head-to-head, launching the competitive DJ scene.' },
+  { year: '2000', title: 'Digital Mixing Arrives', description: 'CDJs replace turntables. Digital recording allows DJs to produce higher-quality mixes and reach wider audiences.' },
+  { year: '2005', title: 'Mixtape Culture Explosion', description: 'The first widely-circulated mixtapes spread across Sierra Leone. DJs become household names through cassette culture.' },
+  { year: '2010', title: 'Social Media Changes DJ Promotion', description: 'Platforms like Facebook transform how DJs promote events and share mixes. The digital revolution reshapes the industry.' },
+  { year: '2015', title: 'Afrobeats Fusion Era Begins', description: 'Afrobeats takes center stage. Sierra Leonean DJs blend global sounds with local Salone music, creating a unique fusion.' },
+  { year: '2018', title: 'First National DJ Competition', description: 'The first national DJ competition brings together talent from across the country, crowning Sierra Leone\'s best DJ.' },
+  { year: '2020', title: 'Streaming Platforms Transform Reach', description: 'COVID-19 forces innovation. DJs master livestreaming, reaching diaspora communities worldwide through digital platforms.' },
+  { year: '2026', title: 'Deck Salone Platform Launches', description: 'The first official digital ecosystem for Sierra Leonean DJs is born, backed by Sound It Entertainment.' },
+];
+
+// GET /api/hall-of-fame/timeline - Public historical timeline events
+router.get('/timeline', (req, res) => {
+  return ok(res, DEFAULT_TIMELINE);
+});
+
 // GET /api/hall-of-fame/legends - Public list of legacy legends
 router.get('/legends', async (req, res) => {
   try {

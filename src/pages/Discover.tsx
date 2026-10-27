@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Play,
@@ -7,6 +7,9 @@ import {
   Star,
   MapPin,
   ChevronRight,
+  RefreshCw,
+  AlertCircle,
+  Disc3,
 } from 'lucide-react';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import SEOHead from '@/components/SEOHead';
@@ -17,11 +20,13 @@ import { usePlayerStore, type MixTrack } from '@/stores/playerStore';
 import { imageFallback, getAvatarImageUrl } from '@/lib/utils';
 import { getMediaUrl } from '@/lib/api';
 import { formatCurrency } from '@/lib/formatting';
+import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
+import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 
 /* ─────────────────── Helpers ─────────────────── */
 
-function formatNumber(n: number | null | undefined): string {
-  const num = n ?? 0;
+function formatNumber(n: number | string | null | undefined): string {
+  const num = typeof n === 'number' ? n : parseFloat(String(n || 0)) || 0;
   if (num >= 1_000_000) {
     return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   }
@@ -32,8 +37,9 @@ function formatNumber(n: number | null | undefined): string {
 }
 
 function formatPrice(dj: any): string {
-  const min = dj.bookingFeeMin ?? 0;
-  const max = dj.bookingFeeMax;
+  if (!dj) return 'Contact for Rates';
+  const min = typeof dj.bookingFeeMin === 'number' ? dj.bookingFeeMin : parseFloat(dj.bookingFeeMin) || 0;
+  const max = typeof dj.bookingFeeMax === 'number' ? dj.bookingFeeMax : parseFloat(dj.bookingFeeMax) || 0;
   if (max && max > min) {
     return `${formatCurrency(min)} - ${formatCurrency(max)}`;
   }
@@ -44,14 +50,26 @@ function formatPrice(dj: any): string {
 }
 
 function toMixTrack(m: any): MixTrack {
+  if (!m) {
+    return {
+      id: '',
+      title: 'Mix',
+      dj: 'DJ',
+      duration: 0,
+      cover: '',
+      genre: '',
+      plays: 0,
+      audioUrl: '',
+    };
+  }
   return {
-    id: m.id,
-    title: m.title,
+    id: m.id || '',
+    title: m.title || 'Mix',
     dj: m.dj?.stageName || m.dj || 'DJ',
     duration: typeof m.duration === 'number' ? m.duration : parseInt(m.duration) || 0,
     cover: getMediaUrl(m.coverImage || m.cover) || '',
     genre: m.genre || '',
-    plays: m.plays || 0,
+    plays: typeof m.plays === 'number' ? m.plays : parseInt(m.plays) || 0,
     audioUrl: getMediaUrl(m.audioUrl) || '',
     djAvatar: m.dj?.avatar,
     djUsername: m.dj?.username,
@@ -94,22 +112,24 @@ function RecommendedDjCard({
   dj: any;
   onPlay: (dj: any, e: React.MouseEvent) => void;
 }) {
+  if (!dj) return null;
   const avatarUrl = getAvatarImageUrl(dj.avatar);
   const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Sierra Leone';
   const followersCount = dj.totalFollowers || dj._count?.followers || 0;
   const playsCount = dj.totalPlays || 0;
   const mixesCount = dj.totalMixes || dj._count?.mixes || 0;
+  const djIdentifier = dj.user?.username || dj.username || dj.id || '';
 
   return (
     <div className="w-full rounded-2xl sm:rounded-3xl bg-black border border-white/10 hover:border-gold/40 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all duration-300 hover:shadow-card group">
       {/* Left Avatar */}
       <Link
-        to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+        to={`/dj/${djIdentifier}`}
         className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl sm:rounded-2xl overflow-hidden shrink-0 bg-neutral-900 border border-white/5 block"
       >
         <img
           src={avatarUrl}
-          alt={dj.stageName}
+          alt={dj.stageName || 'DJ'}
           onError={imageFallback}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
@@ -120,11 +140,11 @@ function RecommendedDjCard({
       <div className="flex-1 min-w-0 flex flex-col justify-center">
         <div className="flex items-center gap-1.5 min-w-0">
           <Link
-            to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+            to={`/dj/${djIdentifier}`}
             className="block min-w-0"
           >
             <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors">
-              {dj.stageName}
+              {dj.stageName || 'DJ'}
             </h3>
           </Link>
           {dj.verified && <VerifiedBadge dj={dj} size={15} className="shrink-0" />}
@@ -143,14 +163,14 @@ function RecommendedDjCard({
         {/* Action Row */}
         <div className="flex items-center gap-2 mt-2 sm:mt-2.5">
           <Link
-            to={`/dj/${dj.user?.username || dj.username || dj.id}`}
+            to={`/dj/${djIdentifier}`}
             className="px-3 sm:px-4 py-1.5 rounded-full bg-gold hover:brightness-110 text-black text-xs font-bold uppercase tracking-wider transition-transform hover:scale-105 shrink-0"
           >
             VIEW PROFILE
           </Link>
           <button
             onClick={(e) => onPlay(dj, e)}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gold hover:brightness-110 flex items-center justify-center text-black shrink-0 transition-transform hover:scale-105 shadow"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gold hover:brightness-110 flex items-center justify-center text-black shrink-0 transition-transform hover:scale-105 shadow cursor-pointer"
             title="Play Top Mix"
           >
             <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
@@ -170,6 +190,7 @@ function RoundedMixCard({
   mix: any;
   onClick: (mix: any) => void;
 }) {
+  if (!mix) return null;
   const coverUrl = getMediaUrl(mix.coverImage || mix.cover) || '/images/genres/salone-mix.jpg';
   const title = mix.genre || mix.title || 'Mix';
   const subtitle = mix.title || `${mix.genre || 'Afrobeats'} Mix`;
@@ -212,12 +233,15 @@ function RoundedMixCard({
 /* ─────────────────── Ranked DJ Leaderboard Row ─────────────────── */
 
 function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
+  if (!dj) return null;
   const avatarUrl = getAvatarImageUrl(dj.avatar);
   const location = [dj.community, dj.city].filter(Boolean).join(', ') || 'Sierra Leone';
   const followersCount = dj.totalFollowers || dj._count?.followers || 0;
   const mixesCount = dj.totalMixes || dj._count?.mixes || 0;
-  const rating = dj.averageRating || 0.0;
+  const rawRating = dj.averageRating ?? dj.rating ?? 0;
+  const ratingNum = typeof rawRating === 'number' ? rawRating : parseFloat(String(rawRating)) || 0;
   const genres = Array.isArray(dj.genres) ? dj.genres : [];
+  const djIdentifier = dj.user?.username || dj.username || dj.id || '';
 
   return (
     <div className="rounded-2xl bg-black hover:bg-[#141414] border border-white/10 hover:border-gold/40 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all duration-300 shadow-md group">
@@ -228,12 +252,12 @@ function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
 
       {/* DJ Avatar */}
       <Link
-        to={`/dj/${dj.username || dj.id}`}
+        to={`/dj/${djIdentifier}`}
         className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden shrink-0 border border-white/10 block"
       >
         <img
           src={avatarUrl}
-          alt={dj.stageName}
+          alt={dj.stageName || 'DJ'}
           onError={imageFallback}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
@@ -244,10 +268,10 @@ function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <Link
-            to={`/dj/${dj.username || dj.id}`}
+            to={`/dj/${djIdentifier}`}
             className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-tight truncate group-hover:text-gold transition-colors"
           >
-            {dj.stageName}
+            {dj.stageName || 'DJ'}
           </Link>
           {dj.verified && <VerifiedBadge dj={dj} size={15} className="shrink-0" />}
         </div>
@@ -287,7 +311,7 @@ function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
         </div>
         <div className="flex items-center gap-1" title="Rating">
           <Star className="w-3.5 h-3.5 text-gold fill-gold/20" />
-          <span>{rating.toFixed(1)}</span>
+          <span>{ratingNum.toFixed(1)}</span>
         </div>
       </div>
 
@@ -297,7 +321,7 @@ function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
           {formatPrice(dj)}
         </span>
         <Link
-          to={`/dj/${dj.username || dj.id}`}
+          to={`/dj/${djIdentifier}`}
           className="px-4 sm:px-5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full border border-gold text-gold hover:bg-gold hover:text-black transition-colors shrink-0"
         >
           BOOK
@@ -311,12 +335,21 @@ function RankedDjRow({ dj, rank }: { dj: any; rank: number }) {
 
 export default function Discover() {
   const { play, setQueue } = usePlayerStore();
+  const [forceShow, setForceShow] = useState(false);
+
+  // Safety net: never block the page for more than 4s under poor network conditions
+  useEffect(() => {
+    const timer = setTimeout(() => setForceShow(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   /* ── 1. Recommended DJs ── */
-  const { data: recommendedDjs = [] } = useRecommendedDjs(6);
+  const recDjsQuery = useRecommendedDjs(6);
+  const recommendedDjs = recDjsQuery.data || [];
 
   /* ── 2. All/Top DJs for circular avatars & leaderboard ── */
-  const djsQuery = useDJs({ limit: 16, sortBy: 'ranking' });
+  const djsFilter = useMemo(() => ({ limit: 16, sortBy: 'ranking' }), []);
+  const djsQuery = useDJs(djsFilter);
   const djs: any[] = (djsQuery.data as any)?.data || [];
 
   /* ── 3. Todays Hits (Trending Mixes) ── */
@@ -324,7 +357,8 @@ export default function Discover() {
   const trendingMixes: any[] = (trendingQuery.data as any) || [];
 
   /* ── 4. Recently Added (Newest Mixes) ── */
-  const newestMixesQuery = useMixes({ sortBy: 'newest', limit: 10 });
+  const newestFilter = useMemo(() => ({ sortBy: 'newest', limit: 10 }), []);
+  const newestMixesQuery = useMixes(newestFilter);
   const newestMixes: any[] = (newestMixesQuery.data as any)?.data || [];
 
   /* ── 5. Recently Played (from store or popular mixes fallback) ── */
@@ -332,7 +366,7 @@ export default function Discover() {
   const recentlyPlayedList = useMemo(() => {
     const list = Object.values(playerHistory || {})
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-      .map((item) => item.track)
+      .map((item) => item?.track)
       .filter(Boolean);
 
     if (list.length > 0) return list.slice(0, 10);
@@ -342,10 +376,11 @@ export default function Discover() {
 
   /* ── Playback Handlers ── */
   const handlePlayMix = (mix: any) => {
+    if (!mix) return;
     const track = toMixTrack(mix);
     const queue = [
       track,
-      ...trendingMixes.map(toMixTrack).filter((t) => t.id !== track.id),
+      ...trendingMixes.map(toMixTrack).filter((t) => t.id && t.id !== track.id),
     ];
     setQueue(queue);
     play(track);
@@ -354,35 +389,132 @@ export default function Discover() {
   const handlePlayDj = (dj: any, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (dj.mixes && dj.mixes.length > 0) {
+    if (dj?.mixes && Array.isArray(dj.mixes) && dj.mixes.length > 0) {
       const topMix = dj.mixes[0];
       handlePlayMix(topMix);
       return;
     }
-    // Fallback: play first available trending mix or first mix
+    // Fallback: play first available trending mix
     if (trendingMixes.length > 0) {
       handlePlayMix(trendingMixes[0]);
     }
   };
 
+  const handleRefetchAll = () => {
+    recDjsQuery.refetch?.();
+    djsQuery.refetch?.();
+    trendingQuery.refetch?.();
+    newestMixesQuery.refetch?.();
+  };
+
+  /* ── Loading and Error States ── */
+  const isInitialLoading =
+    !forceShow &&
+    djs.length === 0 &&
+    trendingMixes.length === 0 &&
+    (djsQuery.isLoading || trendingQuery.isLoading || newestMixesQuery.isLoading);
+
+  const showSkeleton = useDelayedLoading(isInitialLoading);
+
+  const isAllError =
+    !isInitialLoading &&
+    djs.length === 0 &&
+    trendingMixes.length === 0 &&
+    newestMixes.length === 0 &&
+    (djsQuery.isError && trendingQuery.isError);
+
+  const hasAnyContent =
+    recommendedDjs.length > 0 ||
+    djs.length > 0 ||
+    trendingMixes.length > 0 ||
+    recentlyPlayedList.length > 0 ||
+    newestMixes.length > 0;
+
   return (
     <div className="min-h-[100dvh] bg-black pb-32 text-white">
       <SEOHead
         title="Discover"
-        description="Discover top trending Sierra Leonean DJs, today's hits, recently added mixes, and book verified DJs."
+        description="Discover top trending Sierra Leonean DJs, today's hits, recently added mixes, and book verified DJs on Deck Salone."
       />
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-10 sm:space-y-12">
         {/* ════════ Page Header: Discover ════════ */}
-        <div>
+        <div className="flex items-center justify-between">
           <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight text-white">
             Discover
           </h1>
+          {/* Subtle refresh button */}
+          <button
+            onClick={handleRefetchAll}
+            className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.1] text-text-muted hover:text-gold transition-colors cursor-pointer"
+            title="Refresh Feed"
+            aria-label="Refresh Feed"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
 
+        {/* ════════ SKELETON LOADER ════════ */}
+        {showSkeleton && (
+          <div className="space-y-10">
+            <FeedSectionSkeleton sections={2} />
+          </div>
+        )}
+
+        {/* ════════ ERROR STATE FALLBACK ════════ */}
+        {!showSkeleton && isAllError && (
+          <div className="rounded-3xl border border-red-500/20 bg-red-950/10 p-8 sm:p-12 text-center space-y-4 max-w-xl mx-auto">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
+              Unable to load discover feed
+            </h3>
+            <p className="text-sm text-text-muted">
+              Please check your internet connection and try refreshing again.
+            </p>
+            <button
+              onClick={handleRefetchAll}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gold text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-md shadow-gold/20 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* ════════ EMPTY CONTENT FALLBACK ════════ */}
+        {!showSkeleton && !isAllError && !hasAnyContent && (
+          <div className="rounded-3xl border border-white/10 bg-neutral-900/50 p-8 sm:p-12 text-center space-y-4 max-w-xl mx-auto">
+            <div className="w-12 h-12 rounded-full bg-gold/10 text-gold flex items-center justify-center mx-auto">
+              <Disc3 className="w-6 h-6" />
+            </div>
+            <h3 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
+              Discover Sierra Leone DJs & Mixes
+            </h3>
+            <p className="text-sm text-text-muted">
+              Explore the hottest mixes, official playlists, and verified DJs across Sierra Leone.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Link
+                to="/mixes"
+                className="px-5 py-2.5 rounded-full bg-gold text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-md shadow-gold/20"
+              >
+                Browse Mix Hub
+              </Link>
+              <Link
+                to="/rankings"
+                className="px-5 py-2.5 rounded-full border border-white/20 text-white hover:border-gold hover:text-gold font-bold text-xs uppercase tracking-wider transition-all"
+              >
+                View Rankings
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* ════════ Section 1: Recommended for You ════════ */}
-        {recommendedDjs.length > 0 && (
+        {!showSkeleton && recommendedDjs.length > 0 && (
           <section className="space-y-4">
             <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-white">
               Recommended for You
@@ -398,36 +530,39 @@ export default function Discover() {
         )}
 
         {/* ════════ Section 2: DJs (Circular Avatars) ════════ */}
-        {djs.length > 0 && (
+        {!showSkeleton && djs.length > 0 && (
           <section>
             <DiscoverSectionHeader title="DJs" viewAllLink="/rankings" />
             <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto scrollbar-hide py-2">
-              {djs.map((dj: any) => (
-                <Link
-                  key={dj.id}
-                  to={`/dj/${dj.username || dj.id}`}
-                  className="flex flex-col items-center gap-2 shrink-0 group"
-                >
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-gold transition-all duration-300 group-hover:scale-105 shadow-md bg-neutral-900">
-                    <img
-                      src={getAvatarImageUrl(dj.avatar)}
-                      alt={dj.stageName}
-                      onError={imageFallback}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-text-secondary group-hover:text-gold transition-colors truncate max-w-[90px] sm:max-w-[110px] text-center">
-                    {dj.stageName}
-                  </span>
-                </Link>
-              ))}
+              {djs.map((dj: any) => {
+                const djIdentifier = dj.user?.username || dj.username || dj.id || '';
+                return (
+                  <Link
+                    key={dj.id}
+                    to={`/dj/${djIdentifier}`}
+                    className="flex flex-col items-center gap-2 shrink-0 group"
+                  >
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-gold transition-all duration-300 group-hover:scale-105 shadow-md bg-neutral-900">
+                      <img
+                        src={getAvatarImageUrl(dj.avatar)}
+                        alt={dj.stageName || 'DJ'}
+                        onError={imageFallback}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-text-secondary group-hover:text-gold transition-colors truncate max-w-[90px] sm:max-w-[110px] text-center">
+                      {dj.stageName || 'DJ'}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </section>
         )}
 
         {/* ════════ Section 3: Todays hits ════════ */}
-        {trendingMixes.length > 0 && (
+        {!showSkeleton && trendingMixes.length > 0 && (
           <section>
             <DiscoverSectionHeader title="Todays hits" viewAllLink="/mixes?sortBy=trending" />
             <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
@@ -439,7 +574,7 @@ export default function Discover() {
         )}
 
         {/* ════════ Section 4: Recently Played ════════ */}
-        {recentlyPlayedList.length > 0 && (
+        {!showSkeleton && recentlyPlayedList.length > 0 && (
           <section>
             <DiscoverSectionHeader title="Recently Played" viewAllLink="/library" />
             <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
@@ -451,7 +586,7 @@ export default function Discover() {
         )}
 
         {/* ════════ Section 5: Recently Added ════════ */}
-        {newestMixes.length > 0 && (
+        {!showSkeleton && newestMixes.length > 0 && (
           <section>
             <DiscoverSectionHeader title="Recently Added" viewAllLink="/mixes?sortBy=newest" />
             <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto scrollbar-hide py-1">
@@ -463,7 +598,7 @@ export default function Discover() {
         )}
 
         {/* ════════ Section 6: Ranked DJs Leaderboard ════════ */}
-        {djs.length > 0 && (
+        {!showSkeleton && djs.length > 0 && (
           <section className="space-y-3 pt-4">
             <DiscoverSectionHeader title="Top Rated DJs" viewAllLink="/rankings" />
             <div className="space-y-3">

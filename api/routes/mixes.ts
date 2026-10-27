@@ -3,7 +3,7 @@ const path = require('path');
 const { z } = require('zod');
 const { prisma, DJ_PUBLIC_SELECT } = require('../utils/prisma');
 const { authMiddleware, softAuthMiddleware, requireRole } = require('../middleware/auth');
-const { playLimiter, conditionalSearchLimiter, getClientIp, uploadLimiter, audioLimiter } = require('../utils/rateLimiter');
+const { playLimiter, downloadLimiter, conditionalSearchLimiter, getClientIp, uploadLimiter, audioLimiter } = require('../utils/rateLimiter');
 const { requirePro } = require('../middleware/permissions');
 const { recordMixPlay, recalculateMonthlyListeners, hashIp, wasPlayRecentlyRecorded } = require('../utils/monthlyListeners');
 const { uploadMix, extFromMime } = require('../utils/upload');
@@ -1699,7 +1699,7 @@ router.get('/:id/download-file', softAuthMiddleware, audioLimiter, async (req, r
 });
 
 // POST /api/mixes/:id/download - Verify permissions, increment count & get download URL
-router.post('/:id/download', softAuthMiddleware, async (req, res) => {
+router.post('/:id/download', softAuthMiddleware, downloadLimiter, async (req, res) => {
   try {
     const mixId = req.params.id;
 

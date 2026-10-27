@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import FadeIn from '../components/FadeIn';
+import api from '@/lib/api';
 import { FeedSectionSkeleton } from '@/components/ui/page-skeletons';
 import { useDelayedLoading } from '@/hooks/use-delayed-loading';
 import SEOHead from '@/components/SEOHead';
@@ -378,6 +379,15 @@ export default function HallOfFame() {
   const [legendForm, setLegendForm] = useState<HallOfFameLegendInput>(emptyLegendForm);
   const [editingLegendId, setEditingLegendId] = useState<string | null>(null);
   const [legendImageFile, setLegendImageFile] = useState<File | null>(null);
+  const [timelineList, setTimelineList] = useState(timelineEvents);
+
+  useEffect(() => {
+    api.get('/hall-of-fame/timeline').then((res: any) => {
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setTimelineList(res.data.data);
+      }
+    }).catch(() => {});
+  }, []);
   const [legendImagePreview, setLegendImagePreview] = useState<string | null>(null);
 
   const resetLegendForm = () => {
@@ -1259,7 +1269,7 @@ export default function HallOfFame() {
             />
 
             <div className="space-y-12 lg:space-y-16">
-              {timelineEvents.map((event, index) => {
+              {timelineList.map((event, index) => {
                 const isLeft = index % 2 === 0;
                 return (
                   <motion.div

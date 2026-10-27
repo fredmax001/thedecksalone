@@ -26,10 +26,12 @@ export const isCapacitorNative = (): boolean => {
 };
 
 const getApiUrl = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  // Native apps must use the absolute API origin — a relative '/api' would
+  // resolve against the WebView's capacitor://localhost origin and fail.
   if (isCapacitorNative()) {
     return 'https://decksalone.com/api';
   }
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   return '/api';
 };
 

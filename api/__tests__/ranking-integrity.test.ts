@@ -83,6 +83,7 @@ jest.mock('../utils/cache', () => ({
 
 jest.mock('../utils/rateLimiter', () => ({
   playLimiter: (req: any, res: any, next: any) => next(),
+  downloadLimiter: (req: any, res: any, next: any) => next(),
   voteLimiter: (req: any, res: any, next: any) => next(),
   conditionalSearchLimiter: (req: any, res: any, next: any) => next(),
   uploadLimiter: (req: any, res: any, next: any) => next(),

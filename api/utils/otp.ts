@@ -17,6 +17,8 @@ function generateOtp() {
   return crypto.randomInt(100000, 999999).toString();
 }
 
+const inMemoryOtpStore = new Map<string, { code: string; expiry: number; attempts: number }>();
+
 function getOtpKey(phone: string): string {
   return `otp:${phone.trim().replace(/\s/g, '')}`;
 }
@@ -25,19 +27,20 @@ function getOtpKey(phone: string): string {
  * Send OTP to a phone number via Sent.dm SMS.
  */
 async function sendOtp(phone: string) {
-  if (!redisClient) {
-    throw new Error('Redis is not configured. OTP service unavailable.');
-  }
-
   const normalizedPhone = formatPhoneNumber(phone) || phone.trim().replace(/\s/g, '');
   const code = generateOtp();
   const expiry = Date.now() + OTP_EXPIRY_MS;
+  const key = getOtpKey(normalizedPhone);
 
-  await redisClient.setex(
-    getOtpKey(normalizedPhone),
-    OTP_EXPIRY_SECONDS,
-    JSON.stringify({ code, expiry, attempts: 0 })
-  );
+  if (redisClient && redisClient.status === 'ready') {
+    await redisClient.setex(
+      key,
+      OTP_EXPIRY_SECONDS,
+      JSON.stringify({ code, expiry, attempts: 0 })
+    );
+  } else {
+    inMemoryOtpStore.set(key, { code, expiry, attempts: 0 });
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[OTP] Generated code ${code} for ${normalizedPhone}`);
@@ -66,46 +69,63 @@ async function sendOtp(phone: string) {
 /**
  * Verify OTP and return a result object.
  */
-async function verifyOtp(phone, code) {
-  if (!redisClient) {
-    return { valid: false, error: 'OTP service unavailable.' };
-  }
-
+async function verifyOtp(phone: string, code: string) {
   const key = getOtpKey(phone);
-  const data = await redisClient.get(key);
+  let record: { code: string; expiry: number; attempts: number } | null = null;
 
-  if (!data) {
-    return { valid: false, error: 'OTP not found or expired. Request a new one.' };
+  if (redisClient && redisClient.status === 'ready') {
+    const data = await redisClient.get(key);
+    if (data) {
+      try {
+        record = JSON.parse(data);
+      } catch {
+        await redisClient.del(key);
+      }
+    }
+  } else {
+    record = inMemoryOtpStore.get(key) || null;
   }
 
-  let record;
-  try {
-    record = JSON.parse(data);
-  } catch {
-    await redisClient.del(key);
+  if (!record) {
     return { valid: false, error: 'OTP not found or expired. Request a new one.' };
   }
 
   if (Date.now() > record.expiry) {
-    await redisClient.del(key);
+    if (redisClient && redisClient.status === 'ready') {
+      await redisClient.del(key);
+    } else {
+      inMemoryOtpStore.delete(key);
+    }
     return { valid: false, error: 'OTP expired. Request a new one.' };
   }
 
   if (record.attempts >= MAX_ATTEMPTS) {
-    await redisClient.del(key);
+    if (redisClient && redisClient.status === 'ready') {
+      await redisClient.del(key);
+    } else {
+      inMemoryOtpStore.delete(key);
+    }
     return { valid: false, error: 'Too many attempts. Request a new OTP.' };
   }
 
   record.attempts += 1;
 
   if (record.code !== code) {
-    const remainingTtl = Math.max(1, Math.ceil((record.expiry - Date.now()) / 1000));
-    await redisClient.setex(key, remainingTtl, JSON.stringify(record));
+    if (redisClient && redisClient.status === 'ready') {
+      const remainingTtl = Math.max(1, Math.ceil((record.expiry - Date.now()) / 1000));
+      await redisClient.setex(key, remainingTtl, JSON.stringify(record));
+    } else {
+      inMemoryOtpStore.set(key, record);
+    }
     return { valid: false, error: 'Invalid OTP code.' };
   }
 
   // OTP is valid - clean up
-  await redisClient.del(key);
+  if (redisClient && redisClient.status === 'ready') {
+    await redisClient.del(key);
+  } else {
+    inMemoryOtpStore.delete(key);
+  }
   return { valid: true };
 }
 

@@ -1,18 +1,22 @@
-import React, { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 
 const BAR_COUNT = 40;
 
 function WaveformAnimation({ className }: { className?: string }) {
-  const bars = React.useMemo(
+  const bars = useMemo(
     () =>
-      Array.from({ length: BAR_COUNT }, (_, i) => ({
-        id: i,
-        initialHeight: 20 + Math.random() * 40,
-        delay: Math.random() * 2,
-        duration: 1.5 + Math.random() * 1.5,
-        x: i * 10,
-      })),
+      Array.from({ length: BAR_COUNT }, (_, i) => {
+        const initialHeight = 20 + Math.random() * 40;
+        return {
+          id: i,
+          initialHeight,
+          targetHeight: initialHeight + Math.random() * 60 + 20,
+          delay: Math.random() * 2,
+          duration: 1.5 + Math.random() * 1.5,
+          x: i * 10,
+        };
+      }),
     []
   );
 
@@ -30,7 +34,7 @@ function WaveformAnimation({ className }: { className?: string }) {
           animate={{
             height: [
               bar.initialHeight,
-              bar.initialHeight + Math.random() * 60 + 20,
+              bar.targetHeight,
               bar.initialHeight,
             ],
           }}

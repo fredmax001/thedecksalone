@@ -115,16 +115,20 @@ const voteLimiter = rateLimit({
   ...getRedisStore('vote'),
 });
 
-// Mix play limiter — cap play-count inflation per mix per IP/user
+// Mix play limiter — cap play-count inflation per mix per IP/user.
+// SEC-2 (2026-10 audit): anonymous clients may only count a play once per
+// hour per mix (the 24h dedup already blocks repeat increments; this is the
+// request-level backstop). Logged-in users get a generous cap so the player
+// UI is never blocked for legit listeners.
 const playLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: (req: any) => (req.user ? 30 : 5),
   skip: (req: any) => {
     if (process.env.NODE_ENV === 'production') return false;
     const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
   },
-  keyGenerator: (req: any) => `play:${req.user?.id || getClientIp(req)}:${req.params.id}`, 
+  keyGenerator: (req: any) => `play:${req.user?.id || getClientIp(req)}:${req.params.id}`,
   message: {
     success: false,
     error: 'Too many plays. Please try again later.',
@@ -265,4 +269,24 @@ function conditionalSearchLimiter(req: any, res: any, next: any) {
   next();
 }
 
-module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter, reportLimiter, messageLimiter, analyticsVisitLimiter, developerApplyLimiter, uploadLimiter, audioLimiter };
+// Mix download limiter — SEC-2 (2026-10 audit): the download counter must not
+// be inflatable by anonymous repeated requests. Cap per mix per IP/user.
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: (req: any) => (req.user ? 20 : 5),
+  skip: (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = getClientIp(req);
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  },
+  keyGenerator: (req: any) => `download:${req.user?.id || getClientIp(req)}:${req.params.id}`,
+  message: {
+    success: false,
+    error: 'Too many download attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...getRedisStore('download'),
+});
+
+module.exports = { getClientIp, generalLimiter, loginRateLimiter, authLimiter, bookingLimiter, voteLimiter, playLimiter, downloadLimiter, purchaseLimiter, searchLimiter, conditionalSearchLimiter, reportLimiter, messageLimiter, analyticsVisitLimiter, developerApplyLimiter, uploadLimiter, audioLimiter };

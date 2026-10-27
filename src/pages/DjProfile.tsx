@@ -1025,7 +1025,7 @@ function MixesTab({ dj }: { dj: DJ }) {
               {/* Mini waveform */}
               <div className="mt-3 h-10 flex items-end gap-[2px]">
                 {Array.from({ length: 30 }).map((_, wi) => {
-                  const height = 20 + Math.sin(wi * 0.8) * 15 + Math.random() * 15;
+                  const height = 25 + Math.sin(wi * 0.8) * 20 + ((wi * 7) % 15);
                   return (
                     <div
                       key={wi}

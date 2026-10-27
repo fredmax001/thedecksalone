@@ -67,6 +67,7 @@ const smartPlaylistRoutes = require('./routes/smartPlaylists');
 const developerRoutes = require('./routes/developers');
 const hallOfFameRoutes = require('./routes/hallOfFame');
 const appVersionRoutes = require('./routes/appVersion');
+const blogRoutes = require('./routes/blog');
 
 const app = express();
 // Trust exactly one reverse proxy hop (nginx) — INFRA-16: `true` trusts every
@@ -258,6 +259,7 @@ app.use('/api/sets', setRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/developers', developerRoutes);
 app.use('/api/hall-of-fame', hallOfFameRoutes);
+app.use('/api/blog', blogRoutes);
 app.use('/api/app', appVersionRoutes);
 
 // Safe image proxy endpoint to allow Canvas export without CORS/tainting issues.
