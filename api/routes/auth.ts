@@ -143,6 +143,18 @@ router.post('/register', authLimiter, verifyTurnstile, asyncHandler(async (req, 
   return res.status(201).json({ success: true, data: { user, token } });
 }));
 
+// GET /api/auth/login - Gracefully handle browser navigation or invalid GET calls
+router.get('/login', (req, res) => {
+  if (req.accepts('html')) {
+    return res.redirect(302, '/login');
+  }
+  return res.status(405).json({
+    success: false,
+    error: 'Method Not Allowed. Use POST /api/auth/login with { email, password } to authenticate.',
+    allowedMethods: ['POST'],
+  });
+});
+
 // POST /api/auth/login
 router.post('/login', loginRateLimiter, asyncHandler(async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
