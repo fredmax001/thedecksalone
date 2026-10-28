@@ -64,7 +64,7 @@ export default function MixCard({ mix, index = 0 }: MixCardProps) {
         <button
           type="button"
           onClick={handlePlay}
-          className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gold text-black flex items-center justify-center shadow-2xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hover:scale-110 active:scale-95 z-10"
+          className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gold text-black flex items-center justify-center shadow-2xl opacity-100 sm:opacity-0 sm:translate-y-2 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 transition-all duration-300 hover:scale-110 active:scale-95 z-10"
           aria-label={`Play ${mix.title}`}
         >
           <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-black ml-0.5" />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
+import { Sparkles, ArrowRight } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { useHomeData } from '@/hooks/useHomeData';
 import { useAuthStore } from '@/stores/authStore';
@@ -86,6 +87,42 @@ export default function Home() {
             action={{ label: 'See all', to: '/mixes' }}
           />
         </section>
+
+        {/* ─── GUEST CONVERSION BANNER (Sign Up Free & Unlock Features) ─── */}
+        {!isAuthenticated && (
+          <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
+            <div className="relative overflow-hidden rounded-3xl border border-[#f4e059]/30 bg-gradient-to-r from-[#17140b] via-[#12110e] to-[#0a0a0a] p-6 sm:p-8 shadow-2xl">
+              <div className="absolute -right-20 -top-20 w-72 h-72 rounded-full bg-[#f4e059]/10 blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-2 max-w-xl">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#f4e059]/10 text-[#f4e059] border border-[#f4e059]/30">
+                    <Sparkles className="w-3 h-3" /> Join Sierra Leone's #1 DJ Hub
+                  </span>
+                  <h3 className="font-display text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
+                    Listen Freely. Follow Top DJs. Never Miss a Drop.
+                  </h3>
+                  <p className="text-xs sm:text-sm text-text-muted leading-relaxed">
+                    Create a free account in 10 seconds to save your favorite mixes, build playlists, follow top Sierra Leonean DJs, and get tickets to exclusive events.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                  <Link
+                    to="/register"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gold-gradient text-black px-6 py-3.5 text-xs font-black uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-gold/25"
+                  >
+                    Create Free Account <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    to="/mixes"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 hover:border-gold/40 text-text-secondary hover:text-white px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Browse All Mixes
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-10">
           <DjCarousel

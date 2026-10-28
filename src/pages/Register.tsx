@@ -644,9 +644,9 @@ export default function Register() {
                 />
                 <span className="text-sm text-text-secondary leading-relaxed">
                   I agree to the{' '}
-                  <a href="#" className="text-gold hover:text-gold-light underline">Terms of Service</a>{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-light underline">Terms of Service</a>{' '}
                   and{' '}
-                  <a href="#" className="text-gold hover:text-gold-light underline">Privacy Policy</a>
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-light underline">Privacy Policy</a>
                 </span>
               </label>
               {errUser.terms && (
@@ -921,9 +921,9 @@ export default function Register() {
                   <input type="checkbox" {...regDj1('terms')} className="accent-gold w-4 h-4 mt-0.5 rounded" />
                   <span className="text-sm text-text-secondary leading-relaxed">
                     I agree to the{' '}
-                    <a href="#" className="text-gold hover:text-gold-light underline">Terms of Service</a>{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-light underline">Terms of Service</a>{' '}
                     and{' '}
-                    <a href="#" className="text-gold hover:text-gold-light underline">Privacy Policy</a>
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-light underline">Privacy Policy</a>
                   </span>
                 </label>
                 {errDj1.terms && (

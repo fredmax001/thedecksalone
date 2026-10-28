@@ -12,12 +12,23 @@ import {
   MessageCircle,
   FileText,
   Calendar,
+  RotateCcw,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -158,6 +169,11 @@ export default function Subscription() {
   const [note, setNote] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('monthly');
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelPendingOnly, setCancelPendingOnly] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const { fetchMe, user } = useAuthStore();
   const sierraLeonePayer = isSierraLeoneUser(user);
   const currentPlan = status?.activePlan || (status?.isPro ? 'pro' : 'free');
@@ -347,6 +363,65 @@ export default function Subscription() {
     await fetchMe();
   };
 
+  const handleRestorePurchase = async () => {
+    try {
+      setIsRestoring(true);
+      const res = await api.post('/payments/pro-subscription/restore');
+      if (res.data?.success) {
+        const data = res.data.data;
+        setStatus({
+          isPro: data.isPro,
+          activePlan: data.activePlan,
+          subscriptionState: data.subscriptionState,
+          subscriptionActivatedAt: data.subscriptionActivatedAt,
+          subscriptionExpiresAt: data.subscriptionExpiresAt,
+          latestRequest: data.latestRequest,
+        });
+        await fetchMe();
+        if (data.restored) {
+          toast.success(res.data.message || 'Subscription purchase restored successfully!');
+        } else {
+          toast.info(res.data.message || 'No active subscription purchases found to restore.');
+        }
+      }
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to restore purchase'));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleCancelSubscription = async (pendingOnly = false) => {
+    try {
+      setIsCancelling(true);
+      const res = await api.post('/payments/pro-subscription/cancel', {
+        cancelPendingOnly: pendingOnly,
+        reason: cancelReason.trim() || undefined,
+      });
+      if (res.data?.success) {
+        const data = res.data.data;
+        setStatus({
+          isPro: data.isPro,
+          activePlan: data.activePlan,
+          subscriptionState: data.subscriptionState,
+          subscriptionActivatedAt: data.subscriptionActivatedAt,
+          subscriptionExpiresAt: data.subscriptionExpiresAt,
+          latestRequest: data.latestRequest,
+        });
+        setRequestSent(false);
+        setSelectedProof(null);
+        await fetchMe();
+        toast.success(res.data.message || (pendingOnly ? 'Pending request cancelled' : 'Subscription cancelled'));
+        setShowCancelDialog(false);
+        setCancelReason('');
+      }
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to cancel subscription'));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const hasPendingRequest = latestRequest?.status === 'pending';
   const isSelectedCurrentPaidPlan = !!selectedPlanId && selectedPlanId !== 'free' && selectedPlanId === currentPlan;
   const shouldShowPaymentPanel = (!!selectedPlanId && selectedPlanId !== 'free') || !!latestRequest || (status?.isPro && currentPlan !== 'free');
@@ -410,7 +485,42 @@ export default function Subscription() {
             Subscription
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Restore Purchase */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleRestorePurchase}
+            disabled={isRestoring}
+            className="border-white/10 hover:border-gold/40 text-text-secondary hover:text-white text-xs h-9"
+            title="Restore previous subscription purchase"
+          >
+            {isRestoring ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+            ) : (
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-gold" />
+            )}
+            Restore Purchase
+          </Button>
+
+          {/* Cancel Subscription / Cancel Request */}
+          {(currentPlan !== 'free' || hasPendingRequest) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCancelPendingOnly(currentPlan === 'free' && hasPendingRequest);
+                setShowCancelDialog(true);
+              }}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs h-9"
+            >
+              <XCircle className="w-3.5 h-3.5 mr-1.5 text-red-400" />
+              {currentPlan !== 'free' ? 'Cancel Subscription' : 'Cancel Request'}
+            </Button>
+          )}
+
           {/* Billing Period Toggle */}
           <div className="flex items-center bg-black-elevated border border-dark-gray rounded-xl p-1">
             <button
@@ -561,12 +671,27 @@ export default function Subscription() {
 
                 {(requestSent || hasPendingRequest) && !isSelectedCurrentPaidPlan && latestRequest?.plan === selectedPlanId && (
                   <div className="mb-4 rounded-lg border border-orange/20 bg-orange/10 p-3 text-xs text-orange">
-                    <div className="flex items-start gap-2">
-                      <span className="text-lg">⏳</span>
-                      <div>
-                        <p className="font-semibold">Request Sent!</p>
-                        <p>Your subscription is pending admin confirmation. We'll check within 24 hours and notify you via email.</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg">⏳</span>
+                        <div>
+                          <p className="font-semibold">Request Sent!</p>
+                          <p>Your subscription is pending admin confirmation. We'll check within 24 hours and notify you via email.</p>
+                        </div>
                       </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isCancelling}
+                        onClick={() => {
+                          setCancelPendingOnly(true);
+                          setShowCancelDialog(true);
+                        }}
+                        className="text-orange hover:text-red-400 hover:bg-red-500/10 text-xs shrink-0 h-auto py-1 px-2 border border-orange/30 hover:border-red-500/30"
+                      >
+                        Cancel Request
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -746,20 +871,35 @@ export default function Subscription() {
 
                   {/* CTA */}
                   <Button
-                    onClick={() => handleSubscribe(plan.id)}
-                    disabled={isCurrent || loading === plan.id}
+                    onClick={() => {
+                      if (plan.id === 'free' && currentPlan !== 'free') {
+                        setCancelPendingOnly(false);
+                        setShowCancelDialog(true);
+                      } else {
+                        handleSubscribe(plan.id);
+                      }
+                    }}
+                    disabled={(isCurrent && plan.id === 'free') || loading === plan.id}
                     className={`w-full font-semibold uppercase ${plan.highlighted
                       ? 'bg-gold-gradient text-black hover:opacity-90'
                       : isCurrent
                         ? 'bg-black-elevated border border-dark-gray text-text-muted cursor-default'
-                        : 'bg-black-elevated border border-dark-gray text-text-primary hover:border-gold/30'
+                        : plan.id === 'free' && currentPlan !== 'free'
+                          ? 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20'
+                          : 'bg-black-elevated border border-dark-gray text-text-primary hover:border-gold/30'
                       }`}
                   >
                     {loading === plan.id ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     ) : null}
-                    {isCurrent ? 'Current Plan' : isPendingPlan ? 'Pending Review' : plan.cta}
-                    {!isCurrent && displayPrice > 0 && billingPeriod === 'annual' && (
+                    {plan.id === 'free' && currentPlan !== 'free'
+                      ? 'Downgrade to Free'
+                      : isCurrent
+                        ? 'Current Plan'
+                        : isPendingPlan
+                          ? 'Pending Review'
+                          : plan.cta}
+                    {!isCurrent && displayPrice > 0 && billingPeriod === 'annual' && plan.id !== 'free' && (
                       <span className="ml-1 text-xs opacity-70">(Annual)</span>
                     )}
                   </Button>
@@ -803,6 +943,84 @@ export default function Subscription() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cancel Subscription / Request Confirmation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="bg-black-surface border-dark-gray text-text-primary max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-text-primary flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              {cancelPendingOnly ? 'Cancel Pending Request?' : 'Cancel Subscription?'}
+            </DialogTitle>
+            <DialogDescription className="text-text-secondary text-xs mt-1">
+              {cancelPendingOnly
+                ? 'Are you sure you want to cancel your pending subscription upgrade request?'
+                : `Are you sure you want to cancel your ${PLANS.find((p) => p.id === currentPlan)?.name || 'Pro'} subscription and downgrade to the Free plan?`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {!cancelPendingOnly && (
+              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 space-y-1.5">
+                <p className="font-semibold text-red-400">What happens when you downgrade:</p>
+                <ul className="list-disc list-inside space-y-1 text-text-secondary">
+                  <li>Your account will revert to the Free tier immediately.</li>
+                  <li>Existing mixes you already published remain live on Deck Salone.</li>
+                  <li>New mix uploads will be subject to the Free plan limit (up to 5 mixes).</li>
+                  <li>Pro badges and verified DJ eligibility will be paused.</li>
+                  <li>You can restore your purchase or upgrade again anytime.</li>
+                </ul>
+              </div>
+            )}
+
+            {!cancelPendingOnly && (
+              <div className="space-y-1.5">
+                <label className="text-xs text-text-muted">Reason for cancelling (optional):</label>
+                <input
+                  type="text"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="e.g. Taking a break, switching plans..."
+                  className="w-full px-3 py-2 rounded-lg bg-black-elevated border border-white/10 text-xs text-text-primary focus:outline-none focus:border-gold/40"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowCancelDialog(false);
+                setCancelReason('');
+              }}
+              disabled={isCancelling}
+              className="border-dark-gray text-text-secondary"
+            >
+              Keep {cancelPendingOnly ? 'Request' : 'Subscription'}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleCancelSubscription(cancelPendingOnly)}
+              disabled={isCancelling}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold text-xs uppercase"
+            >
+              {isCancelling ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                  {cancelPendingOnly ? 'Confirm Cancel Request' : 'Confirm & Downgrade'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

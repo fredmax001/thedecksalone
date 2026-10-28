@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
@@ -76,6 +76,7 @@ export default function MixFeedRow({
   onOpenDjSupport,
 }: MixFeedRowProps) {
   const { user, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
   const { currentTrack, isPlaying, currentTime, play, pause, setCurrentTime, addToQueue } = usePlayerStore();
   const { mutate: likeMix } = useLikeMix();
 
@@ -144,12 +145,17 @@ export default function MixFeedRow({
       e.preventDefault();
       e.stopPropagation();
       if (!isAuthenticated) {
-        toast.info('Sign in to like mixes');
+        toast.info('Sign up free to like and save mixes', {
+          action: {
+            label: 'Join Free',
+            onClick: () => navigate('/register'),
+          },
+        });
         return;
       }
       likeMix(mix.id);
     },
-    [mix.id, isAuthenticated, likeMix]
+    [mix.id, isAuthenticated, likeMix, navigate]
   );
 
   const handleAddReaction = (emoji: string, e: React.MouseEvent) => {

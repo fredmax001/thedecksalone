@@ -18,7 +18,18 @@ router.get('/', async (req: any, res: any) => {
       }).catch(() => []),
       prisma.mix.findMany({
         where: { isPublic: true },
-        select: { id: true, updatedAt: true },
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          updatedAt: true,
+          dj: {
+            select: {
+              stageName: true,
+              user: { select: { username: true } },
+            },
+          },
+        },
         take: 500,
       }).catch(() => []),
       prisma.event.findMany({
@@ -74,11 +85,13 @@ router.get('/', async (req: any, res: any) => {
       xml += `  </url>\n`;
     }
 
-    // Dynamic Mix Detail URLs
+    // Dynamic Mix Detail URLs (Canonical Hearthis-style route: /:dj/:slug)
     for (const mix of mixes) {
       const lastMod = mix.updatedAt ? new Date(mix.updatedAt).toISOString().split('T')[0] : today;
+      const djPart = mix.dj?.user?.username || (mix.dj?.stageName ? mix.dj.stageName.toLowerCase().replace(/[^a-z0-9_-]/g, '') : 'dj');
+      const mixSlug = mix.slug || (mix.title ? mix.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-') : mix.id);
       xml += `  <url>\n`;
-      xml += `    <loc>${DOMAIN}/mix/${mix.id}</loc>\n`;
+      xml += `    <loc>${DOMAIN}/${encodeURIComponent(djPart)}/${encodeURIComponent(mixSlug)}</loc>\n`;
       xml += `    <lastmod>${lastMod}</lastmod>\n`;
       xml += `    <changefreq>monthly</changefreq>\n`;
       xml += `    <priority>0.7</priority>\n`;

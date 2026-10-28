@@ -14,6 +14,7 @@ import {
   PhoneCall,
   Radio,
   Heart,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
@@ -132,6 +133,32 @@ export default function Pricing() {
   const [paymentReference, setPaymentReference] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleRestorePurchase = async () => {
+    if (!isAuthenticated) {
+      toast.info('Please log in first to restore your subscription purchase.');
+      navigate('/login?redirect=/pricing');
+      return;
+    }
+    try {
+      setIsRestoring(true);
+      const res = await api.post('/payments/pro-subscription/restore');
+      if (res.data?.success) {
+        await useAuthStore.getState().fetchMe();
+        if (res.data.data?.restored) {
+          toast.success(res.data.message || 'Subscription purchase restored successfully!');
+          navigate(user?.role === 'DJ' ? '/dashboard/subscription' : '/user/dashboard');
+        } else {
+          toast.info(res.data.message || 'No active subscription purchases found to restore.');
+        }
+      }
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to restore purchase'));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   const handleSelectPlan = (plan: PlanDetails) => {
     if (plan.id === 'free') {
@@ -280,6 +307,34 @@ export default function Pricing() {
                 </span>
               </button>
             </div>
+          </div>
+
+          {/* Restore & Manage Subscription link */}
+          <div className="flex items-center justify-center gap-4 mt-6 text-xs text-text-muted">
+            <button
+              type="button"
+              onClick={handleRestorePurchase}
+              disabled={isRestoring}
+              className="inline-flex items-center gap-1.5 hover:text-[#f4e059] transition-colors underline-offset-4 hover:underline"
+            >
+              {isRestoring ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#f4e059]" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5 text-[#f4e059]" />
+              )}
+              <span>Already subscribed? Restore Purchase</span>
+            </button>
+            {isAuthenticated && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'legend') && (
+              <>
+                <span>•</span>
+                <Link
+                  to={user?.role === 'DJ' ? '/dashboard/subscription' : '/user/settings'}
+                  className="hover:text-red-400 transition-colors underline-offset-4 hover:underline"
+                >
+                  Manage or Cancel Subscription
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>

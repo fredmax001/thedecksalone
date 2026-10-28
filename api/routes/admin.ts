@@ -1044,6 +1044,210 @@ router.get('/analytics', asyncHandler(async (req, res) => {
       }),
     ]);
 
+    // ─── Engagement, Page Breakdown, Traffic Sources & Activity ───
+    const uniqueVisitorsGroup = await prisma.siteVisit.groupBy({
+      by: ['ipHash'],
+      where: { createdAt: { gte: start, lt: end }, ipHash: { not: null } },
+      _count: { id: true },
+    });
+    const uniqueVisitors = uniqueVisitorsGroup.length || Math.min(totalVisits, 1);
+    const pagesPerVisitor = uniqueVisitors > 0 ? Number((totalVisits / uniqueVisitors).toFixed(1)) : 1;
+    const streamConversionRate = uniqueVisitors > 0 ? Number(((totalStreams / uniqueVisitors) * 100).toFixed(1)) : 0;
+
+    const topPagesRaw = await prisma.siteVisit.groupBy({
+      by: ['path'],
+      where: { createdAt: { gte: start, lt: end }, path: { not: null } },
+      _count: { path: true },
+      orderBy: { _count: { path: 'desc' } },
+      take: 10,
+    });
+
+    const formatPageMeta = (rawPath: string) => {
+      const clean = (rawPath || '/').split('?')[0].replace(/\/+$/, '') || '/';
+      if (clean === '/') return { label: 'Home Page', category: 'Landing' };
+      if (clean === '/discover') return { label: 'Discover / Feed', category: 'Music' };
+      if (clean === '/mixes') return { label: 'Mix Hub', category: 'Music' };
+      if (clean.startsWith('/mixes/')) return { label: `Mix: ${clean.replace('/mixes/', '')}`, category: 'Music' };
+      if (clean === '/djs') return { label: 'DJ Directory', category: 'DJs' };
+      if (clean.startsWith('/djs/')) return { label: `DJ Profile: ${clean.replace('/djs/', '')}`, category: 'DJs' };
+      if (clean === '/rankings') return { label: 'Leaderboard & Rankings', category: 'Charts' };
+      if (clean === '/events') return { label: 'Events Hub', category: 'Events' };
+      if (clean.startsWith('/events/')) return { label: 'Event Details & Tickets', category: 'Events' };
+      if (clean === '/playlists') return { label: 'Official Playlists', category: 'Music' };
+      if (clean === '/hall-of-fame') return { label: 'Hall of Fame', category: 'Charts' };
+      if (clean === '/pricing') return { label: 'Pro Pricing & Upgrades', category: 'Pro' };
+      if (clean === '/login' || clean === '/register') return { label: 'Auth & Onboarding', category: 'Account' };
+      if (clean.startsWith('/dashboard')) return { label: 'DJ Portal', category: 'Portal' };
+      if (clean.startsWith('/user')) return { label: 'User Dashboard', category: 'Portal' };
+      return { label: clean, category: 'General' };
+    };
+
+    const topPages = topPagesRaw.map((p: any) => {
+      const meta = formatPageMeta(p.path);
+      const visits = p._count.path;
+      const percentage = totalVisits > 0 ? Math.round((visits / totalVisits) * 100) : 0;
+      return {
+        path: p.path,
+        label: meta.label,
+        category: meta.category,
+        visits,
+        percentage,
+      };
+    });
+
+    const recentReferrers = await prisma.siteVisit.findMany({
+      where: { createdAt: { gte: start, lt: end } },
+      select: { referrer: true },
+      take: 1000,
+    });
+
+    const sourceCounts: Record<string, number> = {
+      'Direct / App': 0,
+      'Instagram': 0,
+      'WhatsApp': 0,
+      'Facebook': 0,
+      'Google Search': 0,
+      'TikTok': 0,
+      'Twitter / X': 0,
+      'Other': 0,
+    };
+
+    recentReferrers.forEach((r: any) => {
+      const ref = (r.referrer || '').toLowerCase();
+      if (!ref || ref.includes('decksalone.com') || ref.includes('localhost')) {
+        sourceCounts['Direct / App']++;
+      } else if (ref.includes('instagram.com')) {
+        sourceCounts['Instagram']++;
+      } else if (ref.includes('whatsapp') || ref.includes('wa.me')) {
+        sourceCounts['WhatsApp']++;
+      } else if (ref.includes('facebook.com') || ref.includes('fb.me') || ref.includes('fb.com')) {
+        sourceCounts['Facebook']++;
+      } else if (ref.includes('google.')) {
+        sourceCounts['Google Search']++;
+      } else if (ref.includes('tiktok.com')) {
+        sourceCounts['TikTok']++;
+      } else if (ref.includes('twitter.com') || ref.includes('t.co') || ref.includes('x.com')) {
+        sourceCounts['Twitter / X']++;
+      } else {
+        sourceCounts['Other']++;
+      }
+    });
+
+    const totalRefSamples = recentReferrers.length || 1;
+    const sourceColors: Record<string, string> = {
+      'Direct / App': '#f4e059',
+      'Instagram': '#EC4899',
+      'WhatsApp': '#22C55E',
+      'Facebook': '#1877F2',
+      'Google Search': '#4285F4',
+      'TikTok': '#EE1D52',
+      'Twitter / X': '#1DA1F2',
+      'Other': '#8B5CF6',
+    };
+
+    const trafficSources = Object.entries(sourceCounts)
+      .filter(([_, count]) => count > 0)
+      .map(([source, count]) => ({
+        source,
+        visits: count,
+        percentage: Math.round((count / totalRefSamples) * 100),
+        color: sourceColors[source] || '#6B7280',
+      }))
+      .sort((a, b) => b.visits - a.visits);
+
+    const topMixPlays = await prisma.mixPlay.groupBy({
+      by: ['mixId'],
+      where: { createdAt: { gte: start, lt: end } },
+      _count: { mixId: true },
+      orderBy: { _count: { mixId: 'desc' } },
+      take: 6,
+    });
+
+    let topStreamedMixes: any[] = [];
+    if (topMixPlays.length > 0) {
+      const mixMap = new Map(topMixPlays.map((p: any) => [p.mixId, p._count.mixId]));
+      const mixDetails = await prisma.mix.findMany({
+        where: { id: { in: topMixPlays.map((p: any) => p.mixId) } },
+        select: {
+          id: true,
+          title: true,
+          coverImage: true,
+          genre: true,
+          plays: true,
+          dj: { select: { id: true, stageName: true, avatar: true } },
+        },
+      });
+
+      topStreamedMixes = mixDetails.map((m: any) => ({
+        id: m.id,
+        title: m.title,
+        coverImage: m.coverImage,
+        genre: m.genre,
+        djName: m.dj?.stageName || 'DJ',
+        djAvatar: m.dj?.avatar,
+        periodPlays: mixMap.get(m.id) || 0,
+        totalPlays: m.plays,
+      })).sort((a: any, b: any) => b.periodPlays - a.periodPlays);
+    }
+
+    const [recentVisitsForFeed, recentPlaysForFeed] = await Promise.all([
+      prisma.siteVisit.findMany({
+        where: { createdAt: { gte: start, lt: end } },
+        select: {
+          id: true,
+          path: true,
+          city: true,
+          country: true,
+          createdAt: true,
+          userId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      }),
+      prisma.mixPlay.findMany({
+        where: { createdAt: { gte: start, lt: end } },
+        select: {
+          id: true,
+          createdAt: true,
+          mix: {
+            select: {
+              id: true,
+              title: true,
+              coverImage: true,
+              dj: { select: { stageName: true } },
+            },
+          },
+          userId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      }),
+    ]);
+
+    const recentActivity = [
+      ...recentPlaysForFeed.map((p: any) => ({
+        id: `play-${p.id}`,
+        type: 'stream',
+        title: `Listened to "${p.mix?.title || 'Mix'}"`,
+        subtitle: p.mix?.dj?.stageName ? `by ${p.mix.dj.stageName}` : 'Audio Stream',
+        coverImage: p.mix?.coverImage,
+        timestamp: p.createdAt,
+        isRegistered: !!p.userId,
+      })),
+      ...recentVisitsForFeed.map((v: any) => {
+        const meta = formatPageMeta(v.path || '/');
+        const loc = [v.city, v.country].filter(Boolean).join(', ') || 'Global';
+        return {
+          id: `visit-${v.id}`,
+          type: 'visit',
+          title: `Browsed ${meta.label}`,
+          subtitle: loc,
+          timestamp: v.createdAt,
+          isRegistered: !!v.userId,
+        };
+      }),
+    ].sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 16);
+
     const availableMonths: { key: string; label: string; shortLabel: string }[] = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -1075,6 +1279,21 @@ router.get('/analytics', asyncHandler(async (req, res) => {
       geography: {
         countries: topCountries.map((r: any) => ({ name: r.country, visits: r._count.country })),
         cities: topCities.map((r: any) => ({ name: r.city, visits: r._count.city })),
+      },
+      engagement: {
+        funnel: {
+          totalVisits,
+          uniqueVisitors,
+          pagesPerVisitor,
+          totalStreams,
+          streamConversionRate,
+          totalUsers,
+          totalBookings,
+        },
+        topPages,
+        trafficSources,
+        topStreamedMixes,
+        recentActivity,
       },
       availableMonths,
       filteredRange: range,
@@ -1139,7 +1358,10 @@ router.get('/payments', requireRole('ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'), as
 // GET /api/admin/pro-subscription-requests - Manual Orange Money Pro requests
 router.get('/pro-subscription-requests', requireRole('ADMIN', 'FINANCE_ADMIN'), asyncHandler(async (req, res) => {
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-  const where = status && status !== 'all' ? { status } : {};
+  const where = {
+    NOT: { proofUrl: 'restorable_snapshot' },
+    ...(status && status !== 'all' ? { status } : {}),
+  };
 
   const requests = await prisma.proSubscriptionRequest.findMany({
     where,

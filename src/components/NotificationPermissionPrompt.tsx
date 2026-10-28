@@ -4,17 +4,21 @@ import { Bell, BellRing, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { useAuthStore } from '@/stores/authStore';
 
 const CHOICE_KEY = 'deck-salone-notif-prompt-choice';
 const DISMISSED_KEY = 'deck-salone-notif-prompt-dismissed-at';
 const SNOOZE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export default function NotificationPermissionPrompt() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [isVisible, setIsVisible] = useState(false);
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
-    // Check if user already responded or if notifications are already configured
+    // Only prompt registered/logged-in users, never cold anonymous visitors
+    if (!isAuthenticated) return;
+
     const checkNotificationStatus = async () => {
       try {
         const choice = localStorage.getItem(CHOICE_KEY);
@@ -152,6 +156,8 @@ export default function NotificationPermissionPrompt() {
     localStorage.setItem(DISMISSED_KEY, String(Date.now()));
     setIsVisible(false);
   };
+
+  if (!isAuthenticated || !isVisible) return null;
 
   return (
     <AnimatePresence>

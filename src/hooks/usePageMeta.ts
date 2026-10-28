@@ -29,5 +29,17 @@ export function usePageMeta(title: string, description: string, image?: string, 
     setMeta('meta[name="twitter:title"]', 'name', formattedTitle);
     setMeta('meta[name="twitter:description"]', 'name', description);
     setMeta('meta[name="twitter:image"]', 'name', image);
+
+    // Update canonical link tag
+    const canonical = url || (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname.replace(/\/$/, '') || '/'}` : '');
+    if (canonical) {
+      let canonicalLink = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+      if (!canonicalLink) {
+        canonicalLink = document.createElement('link');
+        canonicalLink.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonicalLink);
+      }
+      canonicalLink.setAttribute('href', canonical);
+    }
   }, [title, description, image, url]);
 }

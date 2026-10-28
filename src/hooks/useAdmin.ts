@@ -408,6 +408,49 @@ export interface AdminAnalyticsData {
     countries: { name: string; visits: number }[];
     cities: { name: string; visits: number }[];
   };
+  engagement?: {
+    funnel: {
+      totalVisits: number;
+      uniqueVisitors: number;
+      pagesPerVisitor: number;
+      totalStreams: number;
+      streamConversionRate: number;
+      totalUsers: number;
+      totalBookings: number;
+    };
+    topPages: {
+      path: string;
+      label: string;
+      category: string;
+      visits: number;
+      percentage: number;
+    }[];
+    trafficSources: {
+      source: string;
+      visits: number;
+      percentage: number;
+      color: string;
+    }[];
+    topStreamedMixes: {
+      id: string;
+      title: string;
+      coverImage?: string;
+      genre: string;
+      djName: string;
+      djAvatar?: string;
+      periodPlays: number;
+      totalPlays: number;
+    }[];
+    recentActivity: {
+      id: string;
+      type: 'stream' | 'visit';
+      title: string;
+      subtitle?: string;
+      coverImage?: string;
+      timestamp: string;
+      isRegistered: boolean;
+    }[];
+  };
   availableMonths: { key: string; label: string; shortLabel: string }[];
   filteredRange: string;
   filteredMonth: string | null;

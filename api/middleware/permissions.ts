@@ -309,7 +309,7 @@ export const requireProOrAdmin = async (req: Request, res: Response, next: NextF
 export const activateSubscriptionFeatures = async (
     userId: string,
     tier: SubscriptionTier | string,
-    opts?: { months?: number }
+    opts?: { months?: number; activatedAt?: Date; expiresAt?: Date | null }
 ) => {
     const normalizedTier = String(tier).includes('legend') ? SubscriptionTier.LEGEND : SubscriptionTier.PRO;
 
@@ -318,18 +318,23 @@ export const activateSubscriptionFeatures = async (
         : (String(tier).includes('annual') ? 12 : 1);
     const lifetime = months <= 0;
 
-    // Stack renewal on top of any remaining paid time
-    const [existingUser, existingDj] = await Promise.all([
-        prisma.user.findUnique({ where: { id: userId }, select: { subscriptionExpiresAt: true } }),
-        prisma.djProfile.findUnique({ where: { userId }, select: { subscriptionExpiresAt: true } }),
-    ]);
-    const currentExpiryMs = Math.max(
-        existingUser?.subscriptionExpiresAt ? new Date(existingUser.subscriptionExpiresAt).getTime() : 0,
-        existingDj?.subscriptionExpiresAt ? new Date(existingDj.subscriptionExpiresAt).getTime() : 0,
-    );
-    const base = new Date(Math.max(Date.now(), currentExpiryMs));
-    const expiresAt = lifetime ? null : addMonths(base, months);
-    const activatedAt = new Date();
+    // Stack renewal on top of any remaining paid time unless explicit expiresAt is provided
+    let expiresAt: Date | null;
+    if (opts && opts.expiresAt !== undefined) {
+        expiresAt = opts.expiresAt;
+    } else {
+        const [existingUser, existingDj] = await Promise.all([
+            prisma.user.findUnique({ where: { id: userId }, select: { subscriptionExpiresAt: true } }),
+            prisma.djProfile.findUnique({ where: { userId }, select: { subscriptionExpiresAt: true } }),
+        ]);
+        const currentExpiryMs = Math.max(
+            existingUser?.subscriptionExpiresAt ? new Date(existingUser.subscriptionExpiresAt).getTime() : 0,
+            existingDj?.subscriptionExpiresAt ? new Date(existingDj.subscriptionExpiresAt).getTime() : 0,
+        );
+        const base = new Date(Math.max(Date.now(), currentExpiryMs));
+        expiresAt = lifetime ? null : addMonths(base, months);
+    }
+    const activatedAt = opts?.activatedAt ?? new Date();
 
     // Update User table
     await prisma.user.update({
@@ -351,6 +356,7 @@ export const activateSubscriptionFeatures = async (
         };
 
         if (normalizedTier === SubscriptionTier.PRO || normalizedTier === SubscriptionTier.LEGEND) {
+            updateData.isPro = true;
             updateData.canReceivePayments = true;
             updateData.canViewAnalytics = true;
             updateData.isVerifiedEligible = true;

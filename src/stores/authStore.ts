@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '@/lib/api';
+import { safeLocalStorage, safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
 export type UserRole = 'USER' | 'DJ' | 'ADMIN' | 'MODERATOR' | 'FINANCE_ADMIN' | 'SUPPORT_ADMIN' | 'VERIFICATION_ADMIN' | 'SUPER_ADMIN';
 
@@ -286,11 +287,9 @@ export const useAuthStore = create<AuthState>()(
 
         if (all || remaining.length === 0) {
           // Clear all auth tokens & saved accounts
-          try {
-            localStorage.removeItem('decksalone-auth');
-            localStorage.removeItem('soundit-auth');
-            localStorage.removeItem('token');
-          } catch (e) {}
+          safeRemoveItem('decksalone-auth');
+          safeRemoveItem('soundit-auth');
+          safeRemoveItem('token');
 
           set({ user: null, token: null, isAuthenticated: false, savedAccounts: [] });
         } else {
@@ -329,11 +328,11 @@ export const useAuthStore = create<AuthState>()(
       init: () => {
         // Migrate legacy soundit-auth token if needed
         try {
-          const legacy = localStorage.getItem('soundit-auth');
-          const current = localStorage.getItem('decksalone-auth');
+          const legacy = safeGetItem('soundit-auth');
+          const current = safeGetItem('decksalone-auth');
           if (legacy && !current) {
-            localStorage.setItem('decksalone-auth', legacy);
-            localStorage.removeItem('soundit-auth');
+            safeSetItem('decksalone-auth', legacy);
+            safeRemoveItem('soundit-auth');
           }
         } catch (e) {}
 
@@ -352,6 +351,7 @@ export const useAuthStore = create<AuthState>()(
 
     {
       name: 'decksalone-auth',
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (state) => ({ token: state.token, savedAccounts: state.savedAccounts }),
     }
   )

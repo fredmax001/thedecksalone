@@ -3,7 +3,7 @@
   <!-- Core Landing Page -->
   <url>
     <loc>https://decksalone.com/</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -11,43 +11,43 @@
   <!-- Discover & Music -->
   <url>
     <loc>https://decksalone.com/discover</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://decksalone.com/rankings</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://decksalone.com/mixes</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://decksalone.com/events</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://decksalone.com/playlists</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://decksalone.com/hall-of-fame</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://decksalone.com/battles</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -55,13 +55,13 @@
   <!-- DJ Services & Booking -->
   <url>
     <loc>https://decksalone.com/booking</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://decksalone.com/request-dj</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -69,25 +69,25 @@
   <!-- Content & Information -->
   <url>
     <loc>https://decksalone.com/blog</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://decksalone.com/about</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://decksalone.com/help</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://decksalone.com/install</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
@@ -95,13 +95,13 @@
   <!-- Legal -->
   <url>
     <loc>https://decksalone.com/terms</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://decksalone.com/privacy</loc>
-    <lastmod>2026-08-10</lastmod>
+    <lastmod>2026-10-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>

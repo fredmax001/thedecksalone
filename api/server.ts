@@ -91,6 +91,7 @@ if (process.env.NODE_ENV !== 'production') {
 // Security headers hardened for production
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: false, // API returns JSON; CSP is enforced by the frontend
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   frameguard: { action: 'deny' },
@@ -398,10 +399,18 @@ async function serveAppWithMeta(req, res) {
   };
 
   // Default site metadata fallback
-  let title = staticRouteTitles[req.path] || (req.path === '/' || !req.path ? 'Deck Salone' : 'Deck Salone');
+  let cleanPath = req.path || '/';
+  if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+    cleanPath = cleanPath.slice(0, -1);
+  }
+  let pageUrl = `https://decksalone.com${cleanPath === '/' ? '' : cleanPath}`;
+  if (cleanPath === '/') {
+    pageUrl = 'https://decksalone.com/';
+  }
+
+  let title = staticRouteTitles[cleanPath] || (cleanPath === '/' ? 'Deck Salone' : 'Deck Salone');
   let description = "Discover top DJs, listen to exclusive Sierra Leonean mixes, book DJs for events, and experience live DJ battles on Deck Salone.";
   let image = "https://decksalone.com/logo-web.png";
-  let pageUrl = `https://decksalone.com${req.path}`;
 
   // Check cache first to avoid DB queries on every page load
   const cached = getCachedMeta(req.path);
@@ -464,6 +473,9 @@ async function serveAppWithMeta(req, res) {
 
       if (mix) {
         const djName = mix.dj?.stageName || 'DJ';
+        const djHandle = mix.dj?.user?.username || (mix.dj?.stageName ? mix.dj.stageName.toLowerCase().replace(/[^a-z0-9_-]/g, '') : 'dj');
+        const mixSlug = mix.slug || (mix.title ? mix.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-') : mix.id);
+        pageUrl = `https://decksalone.com/${djHandle}/${mixSlug}`;
         title = `Deck Salone | ${mix.title}`;
         description = mix.description
           ? mix.description.slice(0, 160)
@@ -485,6 +497,8 @@ async function serveAppWithMeta(req, res) {
           include: { user: true },
         });
         if (dj) {
+          const djHandle = dj.user?.username || dj.stageName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+          pageUrl = `https://decksalone.com/dj/${djHandle}`;
           title = `Deck Salone | ${dj.stageName}`;
           description = dj.bio
             ? dj.bio.slice(0, 160)
@@ -584,6 +598,7 @@ async function serveAppWithMeta(req, res) {
   html = html
     .replace(/<title>.*?<\/title>/gi, `<title>${safeTitle}</title>`)
     .replace(/<meta name="description" content=".*?" \/>/gi, `<meta name="description" content="${safeDesc}" />`)
+    .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/gi, `<link rel="canonical" href="${safeUrl}" />`)
     .replace(/<meta property="og:title" content=".*?" \/>/gi, `<meta property="og:title" content="${safeTitle}" />`)
     .replace(/<meta property="og:description" content=".*?" \/>/gi, `<meta property="og:description" content="${safeDesc}" />`)
     .replace(/<meta property="og:image" content=".*?" \/>/gi, `<meta property="og:image" content="${safeImage}" />`)

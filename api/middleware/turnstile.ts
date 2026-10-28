@@ -58,6 +58,14 @@ export async function verifyTurnstile(req: any, res: any, next: any) {
     logger.warn('[Turnstile] Verification failed:', response.data);
     return fail(res, 400, 'Security check failed. Please refresh and try again.');
   } catch (error: any) {
+    // A reachable Cloudflare API that rejects the call (bad/expired token,
+    // invalid secret) responds with 4xx + error-codes — surface that as an
+    // honest verification failure, not a service outage.
+    const cfData = error.response?.data;
+    if (cfData && Array.isArray(cfData['error-codes'])) {
+      logger.warn('[Turnstile] Verification rejected by Cloudflare:', cfData);
+      return fail(res, 400, 'Security check failed. Please refresh and try again.');
+    }
     logger.error('[Turnstile] Verification request error:', error.message);
     // On unexpected Cloudflare API failure, fail closed everywhere except
     // explicit development/test environments.

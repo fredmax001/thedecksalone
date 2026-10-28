@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
+import { safeLocalStorage, safeGetItem } from './safeStorage';
 
 export const isCapacitorNative = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -54,14 +55,18 @@ export const api = axios.create({
 
 // Read the stored JWT (same sources the request interceptor uses).
 export const getAuthToken = (): string | null => {
-  let token = null;
-  const authData = localStorage.getItem('decksalone-auth') || localStorage.getItem('soundit-auth');
-  if (authData) {
-    try {
-      token = JSON.parse(authData).state?.token;
-    } catch (e) {}
+  try {
+    let token = null;
+    const authData = safeGetItem('decksalone-auth', safeLocalStorage) || safeGetItem('soundit-auth', safeLocalStorage);
+    if (authData) {
+      try {
+        token = JSON.parse(authData).state?.token;
+      } catch (e) {}
+    }
+    return token || safeGetItem('token', safeLocalStorage);
+  } catch {
+    return null;
   }
-  return token || localStorage.getItem('token');
 };
 
 // UPL-1/UPL-2: media URLs served by gated endpoints (/api/mixes/:id/audio and

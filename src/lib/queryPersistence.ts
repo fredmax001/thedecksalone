@@ -1,6 +1,7 @@
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { queryClient } from './queryClient';
+import { safeLocalStorage, safeRemoveItem } from './safeStorage';
 
 export const QUERY_CACHE_STORAGE_KEY = 'decksalone-query-cache';
 
@@ -37,21 +38,25 @@ const PERSISTED_QUERY_KEYS = new Set([
   'hallOfFameMixes',
 ]);
 
-const storagePersister = createSyncStoragePersister({
-  storage: window.localStorage,
-  key: QUERY_CACHE_STORAGE_KEY,
-});
-
 export function setupQueryPersistence() {
-  persistQueryClient({
-    queryClient,
-    persister: storagePersister,
-    maxAge: 1000 * 60 * 60 * 24, // 24h — older than this, render skeletons and refetch
-    dehydrateOptions: {
-      shouldDehydrateQuery: (query) =>
-        PERSISTED_QUERY_KEYS.has(String(query.queryKey[0])),
-    },
-  });
+  try {
+    const storagePersister = createSyncStoragePersister({
+      storage: safeLocalStorage,
+      key: QUERY_CACHE_STORAGE_KEY,
+    });
+
+    persistQueryClient({
+      queryClient,
+      persister: storagePersister,
+      maxAge: 1000 * 60 * 60 * 24, // 24h — older than this, render skeletons and refetch
+      dehydrateOptions: {
+        shouldDehydrateQuery: (query) =>
+          PERSISTED_QUERY_KEYS.has(String(query.queryKey[0])),
+      },
+    });
+  } catch (err) {
+    console.warn('[QueryPersistence] Safe fallback — query persistence bypassed:', err);
+  }
 }
 
 /**
@@ -62,7 +67,7 @@ export function setupQueryPersistence() {
  */
 export function clearPersistedQueryCache() {
   try {
-    window.localStorage.removeItem(QUERY_CACHE_STORAGE_KEY);
+    safeRemoveItem(QUERY_CACHE_STORAGE_KEY, safeLocalStorage);
   } catch (e) {
     // storage unavailable (private mode etc.) — nothing persisted, nothing to clear
   }

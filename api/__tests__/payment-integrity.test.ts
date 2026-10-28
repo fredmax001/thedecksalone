@@ -42,6 +42,7 @@ jest.mock('../utils/prisma', () => ({
     eventTicket: { aggregate: jest.fn() },
     booking: { aggregate: jest.fn(), count: jest.fn() },
     payment: { aggregate: jest.fn() },
+    streamingPlatform: { aggregate: jest.fn() },
     payPalPayment: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -182,6 +183,7 @@ describe('PAY-1: admin pro-subscription approve/reject is idempotent', () => {
     p.djProfile.count.mockResolvedValue(0);
     p.mix.count.mockResolvedValue(0);
     p.mix.aggregate.mockResolvedValue({ _sum: { plays: 0 } });
+    p.streamingPlatform.aggregate.mockResolvedValue({ _sum: { streams: 0 } });
     p.booking.count.mockResolvedValue(0);
     p.event.count.mockResolvedValue(0);
     p.review.count.mockResolvedValue(0);

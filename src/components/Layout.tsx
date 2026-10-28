@@ -300,20 +300,20 @@ export default function Layout() {
               {isAuthenticated ? (
                 <UserDropdownMenu align="end" className="shrink-0" />
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <Link
                     to="/login"
                     aria-label="Sign In"
-                    className="shrink-0 rounded-full border border-gold/40 text-gold hover:bg-gold/10 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+                    className="shrink-0 rounded-full border border-white/15 hover:border-gold/40 text-text-secondary hover:text-white px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all"
                   >
                     Sign In
                   </Link>
                   <Link
                     to="/register"
-                    aria-label="Join"
-                    className="shrink-0 rounded-full bg-gold-gradient text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all hidden sm:inline-flex shadow-sm"
+                    aria-label="Join Free"
+                    className="shrink-0 rounded-full bg-gold-gradient text-black px-3.5 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-md shadow-gold/20"
                   >
-                    Join
+                    Join Free
                   </Link>
                 </div>
               )}

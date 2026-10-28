@@ -11,32 +11,52 @@ import { GlobalErrorFallback } from '@/components/GlobalErrorFallback';
 
 import { isCapacitorNative } from '@/lib/api';
 
-// Only register PWA service worker on web/browser — NOT inside native Capacitor app
+// Only register PWA service worker on web/browser after initial load — NOT inside native Capacitor app
 const isNativeApp = isCapacitorNative();
 
-if (!isNativeApp) {
-  import('virtual:pwa-register').then(({ registerSW }) => {
-    registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        // Prepare SW in background without disrupting current audio/session
-      },
-      onOfflineReady() {},
-    });
-  }).catch(() => {});
+if (!isNativeApp && typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    import('virtual:pwa-register')
+      .then(({ registerSW }) => {
+        registerSW({
+          immediate: false,
+          onNeedRefresh() {
+            // Prepare SW in background without disrupting current audio/session
+          },
+          onOfflineReady() {},
+        });
+      })
+      .catch(() => {});
+  });
 }
 
 // Restore the allowlisted public query cache from disk before first render,
-// so cold starts render content instantly and refresh behind it.
-setupQueryPersistence();
-initOfflineQueue();
+// wrapped defensively so storage/privacy errors never prevent root mount.
+try {
+  setupQueryPersistence();
+} catch (err) {
+  console.warn('[main] setupQueryPersistence failed:', err);
+}
 
-useAuthStore.getState().init();
+try {
+  initOfflineQueue();
+} catch (err) {
+  console.warn('[main] initOfflineQueue failed:', err);
+}
 
-createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary FallbackComponent={GlobalErrorFallback} onReset={() => window.location.href = '/'}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+try {
+  useAuthStore.getState().init();
+} catch (err) {
+  console.warn('[main] authStore init failed:', err);
+}
+
+const rootEl = document.getElementById('root');
+if (rootEl) {
+  createRoot(rootEl).render(
+    <ErrorBoundary FallbackComponent={GlobalErrorFallback} onReset={() => (window.location.href = '/')}>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+}

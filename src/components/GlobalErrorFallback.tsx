@@ -1,8 +1,13 @@
-// import React from 'react'; removed
+import { useEffect } from 'react';
 import { AlertTriangle, RefreshCcw, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { hideSplashScreen } from '@/lib/splashScreen';
 
 export function GlobalErrorFallback({ error, resetErrorBoundary }: { error: any; resetErrorBoundary: () => void }) {
+  useEffect(() => {
+    // Unblock the viewport immediately if the app crashed during boot
+    hideSplashScreen(0);
+  }, []);
   return (
     <div className="min-h-screen bg-deck-dark text-white flex flex-col items-center justify-center p-6 text-center">
       <div className="bg-deck-card/50 p-8 rounded-2xl border border-deck-border max-w-lg w-full backdrop-blur-sm shadow-2xl">

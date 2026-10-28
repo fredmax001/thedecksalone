@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -13,6 +14,10 @@ import {
   Loader2,
   BellRing,
   UserX,
+  Crown,
+  RotateCcw,
+  XCircle,
+  ArrowUpRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -145,6 +150,9 @@ export default function UserSettings() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [isRestoringSub, setIsRestoringSub] = useState(false);
+  const [isCancellingSub, setIsCancellingSub] = useState(false);
+  const [showCancelSubDialog, setShowCancelSubDialog] = useState(false);
 
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
@@ -273,6 +281,41 @@ export default function UserSettings() {
       setSaveError(getApiErrorMessage(err, 'Failed to delete account'));
       setIsDeletingAccount(false);
       setShowDeleteDialog(false);
+    }
+  };
+
+  const handleRestoreSub = async () => {
+    try {
+      setIsRestoringSub(true);
+      const res = await api.post('/users/subscription/restore');
+      if (res.data?.success) {
+        await fetchMe();
+        if (res.data.data?.restored) {
+          toast.success(res.data.message || 'Subscription purchase restored successfully!');
+        } else {
+          toast.info(res.data.message || 'No active subscription purchases found to restore.');
+        }
+      }
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to restore purchase'));
+    } finally {
+      setIsRestoringSub(false);
+    }
+  };
+
+  const handleCancelSub = async () => {
+    try {
+      setIsCancellingSub(true);
+      const res = await api.post('/users/subscription/cancel');
+      if (res.data?.success) {
+        await fetchMe();
+        toast.success(res.data.message || 'Subscription cancelled successfully');
+        setShowCancelSubDialog(false);
+      }
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to cancel subscription'));
+    } finally {
+      setIsCancellingSub(false);
     }
   };
 
@@ -761,6 +804,90 @@ export default function UserSettings() {
         </Button>
       )}
 
+      {/* Subscription & Membership */}
+      <Card className="bg-black-surface border-dark-gray">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-text-primary flex items-center gap-2">
+            <Crown className="w-4 h-4 text-gold" />
+            Subscription & Membership
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-black-elevated border border-white/5">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-text-primary uppercase tracking-wide">
+                  {user?.subscriptionTier === 'legend'
+                    ? 'Pro+ VIP Plan'
+                    : user?.subscriptionTier === 'pro'
+                    ? 'Pro Member Plan'
+                    : 'Free Fan Tier'}
+                </p>
+                <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded ${
+                  user?.subscriptionTier === 'legend'
+                    ? 'bg-amber-400 text-black'
+                    : user?.subscriptionTier === 'pro'
+                    ? 'bg-gold/20 text-gold border border-gold/30'
+                    : 'bg-white/10 text-text-muted'
+                }`}>
+                  {user?.subscriptionTier === 'legend' ? 'VIP' : user?.subscriptionTier === 'pro' ? 'PRO' : 'FREE'}
+                </span>
+              </div>
+              <p className="text-xs text-text-muted mt-1">
+                {user?.subscriptionTier === 'legend'
+                  ? 'Unlimited downloads, VIP mix sets, and live event perks.'
+                  : user?.subscriptionTier === 'pro'
+                  ? 'Unlimited 320kbps MP3 downloads and ad-free streaming.'
+                  : 'Free audio streaming and discovery. Upgrade to unlock offline downloads & perks.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRestoreSub}
+                disabled={isRestoringSub}
+                className="border-white/10 hover:border-gold/30 text-text-secondary hover:text-white text-xs"
+                title="Restore active purchase across devices"
+              >
+                {isRestoringSub ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-gold" />
+                )}
+                Restore Purchase
+              </Button>
+
+              {user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'legend' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCancelSubDialog(true)}
+                  className="border-red-500/20 text-red-400 hover:bg-red-500/10 text-xs"
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                  Cancel
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-gold hover:bg-gold-light text-black font-bold text-xs"
+                >
+                  <Link to={user?.role === 'DJ' ? '/dashboard/subscription' : '/pricing'}>
+                    Upgrade
+                    <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* App Updates */}
       <UpdatesSection />
 
@@ -828,6 +955,50 @@ export default function UserSettings() {
                 <UserX className="w-4 h-4 mr-2" />
               )}
               Delete My Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Subscription Dialog */}
+      <Dialog open={showCancelSubDialog} onOpenChange={setShowCancelSubDialog}>
+        <DialogContent className="bg-black-surface border-dark-gray text-text-primary max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-text-primary flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              Cancel Subscription?
+            </DialogTitle>
+            <DialogDescription className="text-text-secondary text-xs mt-1">
+              Are you sure you want to cancel your {user?.subscriptionTier?.toUpperCase()} subscription and downgrade to the Free plan?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+            <p>Your subscription will be cancelled immediately and your account will return to the Free plan. You can restore your purchase or subscribe again anytime.</p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelSubDialog(false)}
+              className="border-dark-gray text-text-secondary"
+            >
+              Keep Subscription
+            </Button>
+            <Button
+              onClick={handleCancelSub}
+              disabled={isCancellingSub}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold text-xs uppercase"
+            >
+              {isCancellingSub ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                  Confirm Cancellation
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 import { useEffect, Suspense, lazy } from 'react';
 import { hideSplashScreen } from '@/lib/splashScreen';
+import { safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
@@ -15,8 +16,6 @@ import Layout from './components/Layout';
 import DashboardLayout from './components/DashboardLayout';
 import UserDashboardLayout from './components/UserDashboardLayout';
 import MixPlayer from './components/MixPlayer';
-import TermsAcceptanceModal from './components/TermsAcceptanceModal';
-import LocationPrompt from './components/LocationPrompt';
 import ResumeListeningModal from './components/ResumeListeningModal';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import PopupManager from './components/PopupManager';
@@ -188,9 +187,7 @@ function DeepLinkHandler() {
         }
 
         if (token) {
-          try {
-            localStorage.setItem('token', token);
-          } catch (e) {}
+          safeSetItem('token', token);
 
           useAuthStore.getState().setAuth({ id: '', email: '', username: '', role: 'USER' } as any, token);
 
@@ -209,7 +206,7 @@ function DeepLinkHandler() {
           } catch (e) {
             console.warn('[DeepLink] Immediate /auth/me fetch failed, falling back to /auth/callback:', e);
             // Dead token — clear it so we don't loop with a stale session
-            try { localStorage.removeItem('token'); } catch (err) {}
+            safeRemoveItem('token');
           }
 
           navigate(`/auth/callback?token=${encodeURIComponent(token)}#token=${encodeURIComponent(token)}`, {
@@ -254,6 +251,8 @@ function DeepLinkHandler() {
 /* ─── App update checker: notifies users when a newer version is on Google Play ─── */
 function UpdateChecker() {
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
     const notifyIfUpdateAvailable = async () => {
       const available = await checkForUpdate();
       if (!available || wasUpdateToastShown()) return;
@@ -490,8 +489,6 @@ export default function App() {
           </Route>
         </Routes>
         <MixPlayer />
-        <TermsAcceptanceModal />
-        <LocationPrompt />
         <ResumeListeningModal />
         <NotificationPermissionPrompt />
         <CookieConsent />

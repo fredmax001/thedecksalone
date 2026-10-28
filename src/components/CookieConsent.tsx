@@ -66,8 +66,8 @@ export default function CookieConsent() {
         localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(gpcConsent));
         updateGoogleConsent(gpcConsent);
       } else {
-        // Show banner to allow user to make explicit choice
-        const timer = setTimeout(() => setIsOpen(true), 800);
+        // Show banner after visitor has had time to browse (8 seconds)
+        const timer = setTimeout(() => setIsOpen(true), 8000);
         return () => clearTimeout(timer);
       }
     } else {
