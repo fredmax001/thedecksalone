@@ -10,3 +10,17 @@ uploads/
 *.sql
 !api/prisma/migrations/**/*.sql
 db_dump.sql
+
+# Native build artifacts
+ios-build/
+ios-build-sim/
+ios/DerivedData/
+
+# Signing keys & secrets
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+google-services.json
+GoogleService-Info.plist
